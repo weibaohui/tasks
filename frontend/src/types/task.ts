@@ -1,0 +1,103 @@
+/**
+ * 任务状态枚举
+ */
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/**
+ * 任务类型枚举
+ */
+export type TaskType = 'data_processing' | 'file_operation' | 'api_call' | 'custom';
+
+/**
+ * 任务接口
+ */
+export interface Task {
+  id: string;
+  trace_id: string;
+  span_id: string;
+  parent_id?: string;
+  name: string;
+  description: string;
+  type: TaskType;
+  status: TaskStatus;
+  progress: Progress;
+  result?: Result;
+  error?: string;
+  metadata: Record<string, unknown>;
+  timeout: number;
+  max_retries: number;
+  priority: number;
+  created_at: number;
+  started_at?: number;
+  finished_at?: number;
+}
+
+/**
+ * 进度接口
+ */
+export interface Progress {
+  total: number;
+  current: number;
+  percentage: number;
+  stage: string;
+  detail: string;
+  updated_at: number;
+}
+
+/**
+ * 结果接口
+ */
+export interface Result {
+  data: unknown;
+  message: string;
+}
+
+/**
+ * 创建任务请求
+ */
+export interface CreateTaskRequest {
+  name: string;
+  description: string;
+  type: TaskType;
+  timeout: number;
+  max_retries: number;
+  priority: number;
+  metadata: Record<string, unknown>;
+  parent_id?: string;
+}
+
+/**
+ * WebSocket 消息类型
+ */
+export interface WSMessage {
+  type: string;
+  trace_id: string;
+  data: unknown;
+  timestamp: number;
+}
+
+/**
+ * 创建任务响应
+ */
+export interface CreateTaskResponse {
+  id: string;
+  trace_id: string;
+  span_id: string;
+  status: TaskStatus;
+}
+
+/**
+ * 任务列表响应
+ */
+export interface TaskListResponse {
+  tasks: Task[];
+  total: number;
+}
+
+/**
+ * 任务树节点
+ */
+export interface TaskTreeNode {
+  task: Task;
+  children: TaskTreeNode[];
+}
