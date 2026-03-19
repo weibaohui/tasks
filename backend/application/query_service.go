@@ -12,11 +12,11 @@ import (
 
 // QueryService 查询服务
 type QueryService struct {
-	taskRepo *domain.SQLiteTaskRepository
+	taskRepo domain.TaskRepository
 }
 
 // NewQueryService 创建查询服务
-func NewQueryService(taskRepo *domain.SQLiteTaskRepository) *QueryService {
+func NewQueryService(taskRepo domain.TaskRepository) *QueryService {
 	return &QueryService{taskRepo: taskRepo}
 }
 

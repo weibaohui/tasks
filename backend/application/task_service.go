@@ -60,8 +60,8 @@ func NewTaskApplicationService(
 // CreateTask 创建任务用例
 func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskCommand) (*domain.Task, error) {
 	// 1. 生成ID
-	taskID := domain.TaskID(s.idGenerator.Generate())
-	spanID := domain.SpanID(s.idGenerator.Generate())
+	taskID := domain.NewTaskID(s.idGenerator.Generate())
+	spanID := domain.NewSpanID(s.idGenerator.Generate())
 
 	// 2. 确定TraceID
 	var traceID domain.TraceID
@@ -72,7 +72,7 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		}
 		traceID = parent.TraceID()
 	} else {
-		traceID = domain.TraceID(s.idGenerator.Generate())
+		traceID = domain.NewTraceID(s.idGenerator.Generate())
 	}
 
 	// 3. 创建领域实体

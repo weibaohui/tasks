@@ -151,3 +151,8 @@ func (e *TaskProgressUpdatedEvent) TraceID() TraceID {
 func (e *TaskProgressUpdatedEvent) Timestamp() int64 {
 	return e.progress.UpdatedAt().Unix()
 }
+
+// GetProgress 获取进度
+func (e *TaskProgressUpdatedEvent) GetProgress() Progress {
+	return e.progress
+}

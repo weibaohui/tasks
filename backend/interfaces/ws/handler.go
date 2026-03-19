@@ -223,7 +223,7 @@ func (h *WebSocketHandler) SubscribeToEvents() {
 			h.broadcastToTrace(event.TraceID().String(), &WSMessage{
 				Type:      "TaskProgressUpdated",
 				TraceID:   event.TraceID().String(),
-				Data:      progressEvent.Progress.ToMap(),
+				Data:      progressEvent.GetProgress().ToMap(),
 				Timestamp: event.Timestamp(),
 			})
 		}

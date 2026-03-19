@@ -201,13 +201,13 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 		}
 	}
 
-	snap.Type = domain.TaskType(typeStr)
+	snap.Type, _ = domain.ParseTaskType(typeStr)
 	snap.Status = domain.TaskStatus(statusInt)
 	snap.Timeout = time.Duration(timeoutMs) * time.Millisecond
 	snap.CreatedAt = time.Unix(createdAtUnix, 0)
 
 	if parentIDStr != nil {
-		id := domain.TaskID(*parentIDStr)
+		id := domain.NewTaskID(*parentIDStr)
 		snap.ParentID = &id
 	}
 
@@ -267,13 +267,13 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 			}
 		}
 
-		snap.Type = domain.TaskType(typeStr)
+		snap.Type, _ = domain.ParseTaskType(typeStr)
 		snap.Status = domain.TaskStatus(statusInt)
 		snap.Timeout = time.Duration(timeoutMs) * time.Millisecond
 		snap.CreatedAt = time.Unix(createdAtUnix, 0)
 
 		if parentIDStr != nil {
-			id := domain.TaskID(*parentIDStr)
+			id := domain.NewTaskID(*parentIDStr)
 			snap.ParentID = &id
 		}
 

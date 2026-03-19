@@ -44,7 +44,7 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 	}
 
 	switch {
-	case errors.Is(err, domain.ErrTaskNotFound):
+	case errors.Is(err, application.ErrTaskNotFound):
 		return http.StatusNotFound, "task not found"
 	case errors.Is(err, domain.ErrInvalidStatusTransition):
 		return http.StatusConflict, "invalid status transition"
