@@ -95,7 +95,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	var parentID *domain.TaskID
 	if req.ParentID != nil {
-		id := domain.TaskID(*req.ParentID)
+		id := domain.NewTaskID(*req.ParentID)
 		parentID = &id
 	}
 
@@ -119,10 +119,10 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]interface{}{
-		"id":        task.ID().String(),
-		"trace_id":  task.TraceID().String(),
-		"span_id":   task.SpanID().String(),
-		"status":    task.Status().String(),
+		"id":         task.ID().String(),
+		"trace_id":   task.TraceID().String(),
+		"span_id":    task.SpanID().String(),
+		"status":     task.Status().String(),
 		"created_at": task.CreatedAt().Unix(),
 	}
 
@@ -139,7 +139,7 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dto, err := h.queryService.GetTask(r.Context(), domain.TaskID(taskID))
+	dto, err := h.queryService.GetTask(r.Context(), domain.NewTaskID(taskID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -157,7 +157,7 @@ func (h *TaskHandler) ListTasksByTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.queryService.ListTasksByTrace(r.Context(), domain.TraceID(traceID))
+	tasks, err := h.queryService.ListTasksByTrace(r.Context(), domain.NewTraceID(traceID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -175,7 +175,7 @@ func (h *TaskHandler) GetTaskTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tree, err := h.queryService.GetTaskTree(r.Context(), domain.TraceID(traceID))
+	tree, err := h.queryService.GetTaskTree(r.Context(), domain.NewTraceID(traceID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -193,7 +193,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.taskService.CancelTask(r.Context(), domain.TaskID(taskID)); err != nil {
+	if err := h.taskService.CancelTask(r.Context(), domain.NewTaskID(taskID)); err != nil {
 		code, message := mapDomainErrorToHTTP(err)
 		w.WriteHeader(code)
 		json.NewEncoder(w).Encode(HTTPError{Code: code, Message: message})
