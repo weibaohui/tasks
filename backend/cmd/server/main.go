@@ -70,7 +70,7 @@ func main() {
 
 	// 7. 创建 HTTP Server
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         ":8888",
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -79,7 +79,7 @@ func main() {
 
 	// 8. 启动服务器
 	go func() {
-		logger.Info("HTTP Server 启动在 :8080")
+		logger.Info("HTTP Server 启动在 :8888")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
 		}

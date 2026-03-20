@@ -208,7 +208,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 func extractTraceID(path string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
-		if part == "traces" && i+1 < len(parts) {
+		if (part == "traces" || part == "trace") && i+1 < len(parts) {
 			return parts[i+1]
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"go.uber.org/zap"
 )
 
 type mockIDGenerator struct {
@@ -84,8 +85,9 @@ func setupTestHandler() (*TaskHandler, *http.ServeMux) {
 	repo := newMockTaskRepository()
 	idGen := &mockIDGenerator{}
 	eventBus := bus.NewEventBus()
+	logger, _ := zap.NewDevelopment()
 
-	taskService := application.NewTaskApplicationService(repo, idGen, eventBus, nil)
+	taskService := application.NewTaskApplicationService(repo, idGen, eventBus, logger)
 	queryService := application.NewQueryService(repo)
 
 	handler := NewTaskHandler(taskService, queryService)

@@ -166,6 +166,7 @@ func (r *SQLiteTaskRepository) Exists(ctx context.Context, id domain.TaskID) (bo
 func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var snap domain.TaskSnapshot
 	var metadataJSON, progressJSON, resultJSON []byte
+	var idStr, traceIDStr, spanIDStr string
 	var parentIDStr *string
 	var typeStr string
 	var statusInt int
@@ -174,7 +175,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var timeoutMs int64
 
 	err := row.Scan(
-		&snap.ID, &snap.TraceID, &snap.SpanID, &parentIDStr,
+		&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
 		&snap.Name, &snap.Description, &typeStr, &metadataJSON,
 		&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
 		&progressJSON, &resultJSON, &snap.ErrorMsg, &createdAtUnix,
@@ -183,6 +184,10 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	snap.ID = domain.NewTaskID(idStr)
+	snap.TraceID = domain.NewTraceID(traceIDStr)
+	snap.SpanID = domain.NewSpanID(spanIDStr)
 
 	// 反序列化
 	if err := json.Unmarshal(metadataJSON, &snap.Metadata); err != nil {
@@ -232,6 +237,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 	for rows.Next() {
 		var snap domain.TaskSnapshot
 		var metadataJSON, progressJSON, resultJSON []byte
+		var idStr, traceIDStr, spanIDStr string
 		var parentIDStr *string
 		var typeStr string
 		var statusInt int
@@ -240,7 +246,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		var timeoutMs int64
 
 		err := rows.Scan(
-			&snap.ID, &snap.TraceID, &snap.SpanID, &parentIDStr,
+			&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
 			&snap.Name, &snap.Description, &typeStr, &metadataJSON,
 			&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
 			&progressJSON, &resultJSON, &snap.ErrorMsg, &createdAtUnix,
@@ -249,6 +255,10 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		if err != nil {
 			return nil, err
 		}
+
+		snap.ID = domain.NewTaskID(idStr)
+		snap.TraceID = domain.NewTraceID(traceIDStr)
+		snap.SpanID = domain.NewSpanID(spanIDStr)
 
 		// 反序列化
 		if err := json.Unmarshal(metadataJSON, &snap.Metadata); err != nil {

@@ -100,14 +100,15 @@ func (h *WebSocketHandler) unregisterClient(client *Client) {
 	defer h.mu.Unlock()
 
 	if clients, ok := h.clients[client.traceID]; ok {
-		delete(clients, client)
-		if len(clients) == 0 {
-			delete(h.clients, client.traceID)
+		if _, exists := clients[client]; exists {
+			delete(clients, client)
+			close(client.send)
+			if len(clients) == 0 {
+				delete(h.clients, client.traceID)
+			}
+			log.Printf("Client unregistered for trace_id: %s", client.traceID)
 		}
 	}
-
-	close(client.send)
-	log.Printf("Client unregistered for trace_id: %s", client.traceID)
 }
 
 func (h *WebSocketHandler) writePump(client *Client) {
