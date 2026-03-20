@@ -4,3 +4,6 @@ backend/backend.log
 .gitignore
 backend/tasks.db
 frontend/frontend.log
+backend/tmp/build-errors.log
+.gitignore
+backend/tmp/taskmanager

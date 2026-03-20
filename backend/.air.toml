@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+pre_cmd = ["mkdir -p tmp"]
+cmd = "go build -o ./tmp/taskmanager ./cmd/server/"
+include_ext = ["go"]
+exclude_dir = ["tmp", "vendor", "bin", "../frontend"]
+
+full_bin = "./tmp/taskmanager"
+
+[log]
+time = true
+
+[screen]
+clear_on_rebuild = true
+keep_scroll = true
