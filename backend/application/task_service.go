@@ -168,7 +168,7 @@ func (s *TaskApplicationService) CancelTask(ctx context.Context, taskID domain.T
 }
 
 // CompleteTask 完成任务
-func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain.TaskID, result *domain.Result) error {
+func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain.TaskID, result domain.Result) error {
 	// 1. 获取任务
 	task, err := s.taskRepo.FindByID(ctx, taskID)
 	if err != nil {

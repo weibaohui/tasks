@@ -93,18 +93,18 @@ func NewTask(
 }
 
 // 标识访问方法
-func (t *Task) ID() TaskID          { return t.id }
-func (t *Task) TraceID() TraceID    { return t.traceID }
-func (t *Task) SpanID() SpanID     { return t.spanID }
-func (t *Task) ParentID() *TaskID   { return t.parentID }
-func (t *Task) Name() string       { return t.name }
-func (t *Task) Description() string { return t.description }
-func (t *Task) Type() TaskType      { return t.taskType }
+func (t *Task) ID() TaskID                       { return t.id }
+func (t *Task) TraceID() TraceID                 { return t.traceID }
+func (t *Task) SpanID() SpanID                   { return t.spanID }
+func (t *Task) ParentID() *TaskID                { return t.parentID }
+func (t *Task) Name() string                     { return t.name }
+func (t *Task) Description() string              { return t.description }
+func (t *Task) Type() TaskType                   { return t.taskType }
 func (t *Task) Metadata() map[string]interface{} { return t.metadata }
-func (t *Task) Timeout() time.Duration { return t.timeout }
-func (t *Task) MaxRetries() int     { return t.maxRetries }
-func (t *Task) Priority() int       { return t.priority }
-func (t *Task) CreatedAt() time.Time { return t.createdAt }
+func (t *Task) Timeout() time.Duration           { return t.timeout }
+func (t *Task) MaxRetries() int                  { return t.maxRetries }
+func (t *Task) Priority() int                    { return t.priority }
+func (t *Task) CreatedAt() time.Time             { return t.createdAt }
 
 func (t *Task) Status() TaskStatus {
 	t.mu.RLock()
@@ -175,7 +175,7 @@ func (t *Task) Start() error {
 }
 
 // Complete 完成任务
-func (t *Task) Complete(result *Result) error {
+func (t *Task) Complete(result Result) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -186,7 +186,7 @@ func (t *Task) Complete(result *Result) error {
 	now := time.Now()
 	t.status = TaskStatusCompleted
 	t.finishedAt = &now
-	t.result = result
+	t.result = &result
 
 	t.recordEvent(NewTaskCompletedEvent(t))
 
@@ -239,10 +239,8 @@ func (t *Task) UpdateProgress(total, current int, stage, detail string) {
 	t.recordEvent(NewTaskProgressUpdatedEvent(t, t.progress))
 }
 
-// recordEvent 记录领域事件
+// recordEvent 记录领域事件（调用者需持有锁）
 func (t *Task) recordEvent(event DomainEvent) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.domainEvents = append(t.domainEvents, event)
 }
 
