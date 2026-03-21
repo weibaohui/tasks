@@ -46,7 +46,7 @@ dev:
 	@echo "========================================="
 	@(trap 'kill 0' INT; \
 		cd backend && air 2>&1 & \
-		cd ../frontend && pnpm run dev 2>&1 & \
+		cd frontend && pnpm run dev 2>&1 & \
 		wait)
 
 # 启动后端开发服务器 (air 热重载)

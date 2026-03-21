@@ -73,7 +73,7 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		Timeout:     int64(task.Timeout()),
 		MaxRetries:  task.MaxRetries(),
 		Priority:    task.Priority(),
-		CreatedAt:   task.CreatedAt().Unix(),
+		CreatedAt:   task.CreatedAt().UnixMilli(),
 	}
 
 	if task.ParentID() != nil {
@@ -82,12 +82,12 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 	}
 
 	if task.StartedAt() != nil {
-		startedAt := task.StartedAt().Unix()
+		startedAt := task.StartedAt().UnixMilli()
 		dto.StartedAt = &startedAt
 	}
 
 	if task.FinishedAt() != nil {
-		finishedAt := task.FinishedAt().Unix()
+		finishedAt := task.FinishedAt().UnixMilli()
 		dto.FinishedAt = &finishedAt
 	}
 
@@ -98,7 +98,7 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		Percentage: progress.Percentage(),
 		Stage:      progress.Stage(),
 		Detail:     progress.Detail(),
-		UpdatedAt:  progress.UpdatedAt().Unix(),
+		UpdatedAt:  progress.UpdatedAt().UnixMilli(),
 	}
 
 	if task.Result() != nil {

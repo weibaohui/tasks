@@ -131,7 +131,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		"trace_id":   task.TraceID().String(),
 		"span_id":    task.SpanID().String(),
 		"status":     task.Status().String(),
-		"created_at": task.CreatedAt().Unix(),
+		"created_at": task.CreatedAt().UnixMilli(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
