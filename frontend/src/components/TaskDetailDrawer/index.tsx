@@ -3,7 +3,7 @@
  * 展示任务详情和子任务列表
  */
 import React, { useEffect, useState } from 'react';
-import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider } from 'antd';
+import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider, Tree } from 'antd';
 import { TeamOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
@@ -19,6 +19,8 @@ interface TaskDetailDrawerProps {
 
 export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open, onClose }) => {
   const [task, setTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [traceTasks, setTraceTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [todoList, setTodoList] = useState<TodoListType | null>(null);
 
@@ -91,7 +93,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
     try {
       const [taskResponse, tasksResponse] = await Promise.all([getTask(taskId), getAllTasks()]);
       setTask(taskResponse);
-      setTodoList(buildTodoList(taskResponse, tasksResponse.tasks));
+      setSelectedTaskId((prev) => prev || taskResponse.id);
+
+      const sameTraceTasks = tasksResponse.tasks.filter((t) => t.trace_id === taskResponse.trace_id);
+      setTraceTasks(sameTraceTasks);
+
+      const currentSelectedTask = sameTraceTasks.find((t) => t.id === (selectedTaskId || taskResponse.id)) || taskResponse;
+      setTodoList(buildTodoList(currentSelectedTask, tasksResponse.tasks));
     } catch (error) {
       console.error('Failed to load task:', error);
     } finally {
@@ -105,6 +113,37 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
 
   if (!open) return null;
 
+  const activeTask = traceTasks.find((t) => t.id === selectedTaskId) || task;
+
+  const buildTreeData = (tasks: Task[]) => {
+    const map = new Map<string, Task[]>();
+    const roots: Task[] = [];
+    tasks.forEach((t) => {
+      if (!t.parent_id) {
+        roots.push(t);
+      } else {
+        const list = map.get(t.parent_id) || [];
+        list.push(t);
+        map.set(t.parent_id, list);
+      }
+    });
+
+    const convert = (node: Task): { key: string; title: React.ReactNode; children?: any[] } => ({
+      key: node.id,
+      title: (
+        <Space size={6}>
+          <StatusBadge status={node.status as TaskStatus} />
+          <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
+        </Space>
+      ),
+      children: (map.get(node.id) || []).map(convert),
+    });
+
+    return roots.map(convert);
+  };
+
+  const treeData = buildTreeData(traceTasks);
+
   return (
     <Drawer
       title={
@@ -115,7 +154,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
         </Space>
       }
       placement="right"
-      width={720}
+      width={1200}
       open={open}
       onClose={onClose}
       extra={
@@ -128,95 +167,125 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
         <div style={{ textAlign: 'center', padding: 50 }}>
           <Spin size="large" />
         </div>
-      ) : task ? (
+      ) : activeTask ? (
         <Row gutter={16}>
-          <Col span={24}>
-            <Descriptions column={2} bordered size="small" title="基本信息">
-              <Descriptions.Item label="任务ID">
-                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <StatusBadge status={task.status as TaskStatus} />
-              </Descriptions.Item>
-              <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
-              <Descriptions.Item label="类型">
-                <Tag color="blue">{task.type}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="TraceID">
-                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{task.trace_id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="SpanID">
-                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{task.span_id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="优先级">{task.priority}</Descriptions.Item>
-              <Descriptions.Item label="超时">{task.timeout}ms</Descriptions.Item>
-              <Descriptions.Item label="创建时间">
-                {new Date(task.created_at).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="开始时间">
-                {task.started_at ? new Date(task.started_at).toLocaleString() : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="完成时间">
-                {task.finished_at ? new Date(task.finished_at).toLocaleString() : '-'}
-              </Descriptions.Item>
-            </Descriptions>
+          <Col span={8}>
+            <CardTreeContainer>
+              <div style={{ fontWeight: 600, marginBottom: 12 }}>任务树</div>
+              <Tree
+                treeData={treeData}
+                selectedKeys={selectedTaskId ? [selectedTaskId] : []}
+                onSelect={(keys) => {
+                  const id = keys[0] as string | undefined;
+                  if (!id) return;
+                  setSelectedTaskId(id);
+                  const selected = traceTasks.find((t) => t.id === id);
+                  if (selected) {
+                    setTodoList(buildTodoList(selected, traceTasks));
+                  }
+                }}
+                defaultExpandAll
+                style={{ background: '#fff' }}
+              />
+            </CardTreeContainer>
           </Col>
 
-          {task.description && (
-            <Col span={24} style={{ marginTop: 16 }}>
-              <Descriptions column={1} bordered size="small" title="描述">
-                <Descriptions.Item>{task.description}</Descriptions.Item>
-              </Descriptions>
-            </Col>
-          )}
+          <Col span={16}>
+            <Descriptions column={2} bordered size="small" title="基本信息">
+              <Descriptions.Item label="任务ID">
+                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{activeTask.id}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <StatusBadge status={activeTask.status as TaskStatus} />
+              </Descriptions.Item>
+              <Descriptions.Item label="任务名称">{activeTask.name}</Descriptions.Item>
+              <Descriptions.Item label="类型">
+                <Tag color="blue">{activeTask.type}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="TraceID">
+                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{activeTask.trace_id}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="SpanID">
+                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{activeTask.span_id}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="优先级">{activeTask.priority}</Descriptions.Item>
+              <Descriptions.Item label="超时">{activeTask.timeout}ms</Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {new Date(activeTask.created_at).toLocaleString()}
+              </Descriptions.Item>
+              <Descriptions.Item label="开始时间">
+                {activeTask.started_at ? new Date(activeTask.started_at).toLocaleString() : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="完成时间">
+                {activeTask.finished_at ? new Date(activeTask.finished_at).toLocaleString() : '-'}
+              </Descriptions.Item>
+            </Descriptions>
+            <Divider />
 
-          <Col span={24} style={{ marginTop: 16 }}>
+            {activeTask.description && (
+              <Descriptions column={1} bordered size="small" title="描述">
+                <Descriptions.Item>{activeTask.description}</Descriptions.Item>
+              </Descriptions>
+            )}
+
             <Descriptions column={1} bordered size="small" title="执行进度">
               <Descriptions.Item>
-                <ProgressBar progress={task.progress} />
+                <ProgressBar progress={activeTask.progress} />
                 <div style={{ marginTop: 8 }}>
-                  <Tag color={task.progress.stage ? 'blue' : 'default'}>
-                    {task.progress.stage || '无'}
+                  <Tag color={activeTask.progress.stage ? 'blue' : 'default'}>
+                    {activeTask.progress.stage || '无'}
                   </Tag>
                   <span style={{ marginLeft: 8, color: '#666' }}>
-                    {task.progress.detail || '-'}
+                    {activeTask.progress.detail || '-'}
                   </span>
                 </div>
               </Descriptions.Item>
             </Descriptions>
-          </Col>
+            <Divider />
 
-          {task.error && (
-            <Col span={24} style={{ marginTop: 16 }}>
+            {activeTask.error && (
               <Descriptions column={1} bordered size="small" title="错误信息">
                 <Descriptions.Item>
-                  <pre style={{ color: 'red', margin: 0 }}>{task.error}</pre>
+                  <pre style={{ color: 'red', margin: 0 }}>{activeTask.error}</pre>
                 </Descriptions.Item>
               </Descriptions>
-            </Col>
-          )}
+            )}
 
-          {task.result && (
-            <Col span={24} style={{ marginTop: 16 }}>
+            {activeTask.result && (
               <Descriptions column={1} bordered size="small" title="执行结果">
                 <Descriptions.Item>
-                  <pre style={{ margin: 0 }}>{JSON.stringify(task.result, null, 2)}</pre>
+                  <pre style={{ margin: 0 }}>{JSON.stringify(activeTask.result, null, 2)}</pre>
                 </Descriptions.Item>
               </Descriptions>
-            </Col>
-          )}
+            )}
+
+            <Divider />
+            <TodoList todoList={todoList} loading={loading} />
+          </Col>
         </Row>
       ) : (
         <div style={{ textAlign: 'center', padding: 50, color: '#999' }}>
           未找到任务
         </div>
       )}
-
-      <Divider />
-
-      <TodoList todoList={todoList} loading={loading} />
     </Drawer>
   );
 };
 
 export default TaskDetailDrawer;
+
+const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      border: '1px solid #f0f0f0',
+      borderRadius: 8,
+      padding: 12,
+      minHeight: 680,
+      maxHeight: 680,
+      overflow: 'auto',
+      background: '#fafafa',
+    }}
+  >
+    {children}
+  </div>
+);

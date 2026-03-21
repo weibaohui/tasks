@@ -161,7 +161,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 func (e *AutoTaskExecutor) updateProgress(task *domain.Task, progress int, stage, detail string) {
 	task.UpdateProgress(100, progress, stage, detail)
-	e.repo.Save(context.Background(), task)
+	e.saveTaskPreservingMetadata(task)
 
 	if e.eventBus != nil {
 		evt := domain.NewTaskProgressUpdatedEvent(task, task.Progress())
@@ -186,7 +186,7 @@ func (e *AutoTaskExecutor) publishAndPersistTodoList(task *domain.Task, todoList
 		task.SetMetadata(map[string]interface{}{})
 	}
 	task.Metadata()["todo_list"] = todoList.ToJSON()
-	e.repo.Save(context.Background(), task)
+	e.saveTaskPreservingMetadata(task)
 	e.publishTodoList(task.ID().String(), task.TraceID().String(), todoList)
 }
 
@@ -257,7 +257,7 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 
 	result := domain.NewResult(resultData, "任务完成")
 	task.Complete(result)
-	e.repo.Save(context.Background(), task)
+	e.saveTaskPreservingMetadata(task)
 
 	if e.eventBus != nil {
 		evt := domain.NewTaskCompletedEvent(task)
@@ -268,7 +268,7 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 
 func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {
 	task.Fail(taskErr)
-	e.repo.Save(context.Background(), task)
+	e.saveTaskPreservingMetadata(task)
 
 	if e.eventBus != nil {
 		evt := domain.NewTaskFailedEvent(task)
@@ -334,4 +334,19 @@ func (e *AutoTaskExecutor) submitHomeworkToRoot(task *domain.Task) error {
 
 	rootTask.Metadata()["homework_submissions"] = list
 	return e.repo.Save(context.Background(), rootTask)
+}
+
+func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
+	current, err := e.repo.FindByID(context.Background(), task.ID())
+	if err == nil && current.Metadata() != nil {
+		if task.Metadata() == nil {
+			task.SetMetadata(map[string]interface{}{})
+		}
+		for k, v := range current.Metadata() {
+			if _, ok := task.Metadata()[k]; !ok {
+				task.Metadata()[k] = v
+			}
+		}
+	}
+	e.repo.Save(context.Background(), task)
 }
