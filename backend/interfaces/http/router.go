@@ -50,13 +50,20 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 	})
 
 	// POST /api/v1/tasks/{id}/cancel - 取消任务
+	// POST /api/v1/tasks/{id}/start - 启动任务
 	mux.HandleFunc("/api/v1/tasks/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if strings.HasSuffix(path, "/cancel") && r.Method == http.MethodPost {
-			handler.CancelTask(w, r)
-		} else {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		if r.Method == http.MethodPost {
+			if strings.HasSuffix(path, "/cancel") {
+				handler.CancelTask(w, r)
+				return
+			}
+			if strings.HasSuffix(path, "/start") {
+				handler.StartTask(w, r)
+				return
+			}
 		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	return mux

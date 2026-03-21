@@ -15,3 +15,4 @@ frontend/debug-03-select-open.png
 frontend/debug-04-after-select.png
 frontend/debug-05-after-submit.png
 frontend/test-results/.last-run.json
+backend/backend_exec.log

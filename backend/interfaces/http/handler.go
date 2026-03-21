@@ -193,6 +193,25 @@ func (h *TaskHandler) GetTaskTree(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tree)
 }
 
+// StartTask 启动任务
+func (h *TaskHandler) StartTask(w http.ResponseWriter, r *http.Request) {
+	taskID := extractTaskID(r.URL.Path)
+	if taskID == "" {
+		http.Error(w, "task id is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.taskService.StartTask(r.Context(), domain.NewTaskID(taskID)); err != nil {
+		code, message := mapDomainErrorToHTTP(err)
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(HTTPError{Code: code, Message: message})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "task started"})
+}
+
 // CancelTask 取消任务
 func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	taskID := extractTaskID(r.URL.Path)

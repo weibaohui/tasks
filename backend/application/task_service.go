@@ -165,17 +165,22 @@ func (s *TaskApplicationService) CancelTask(ctx context.Context, taskID domain.T
 		return ErrTaskNotFound
 	}
 
-	// 2. 取消任务
+	// 2. 取消任务（先取消运行时上下文）
+	if s.taskRuntime != nil {
+		s.taskRuntime.Cancel(taskID.String())
+	}
+
+	// 3. 取消任务
 	if err := task.Cancel(); err != nil {
 		return err
 	}
 
-	// 3. 持久化
+	// 4. 持久化
 	if err := s.taskRepo.Save(ctx, task); err != nil {
 		return fmt.Errorf("failed to save task: %w", err)
 	}
 
-	// 4. 发布领域事件
+	// 5. 发布领域事件
 	for _, event := range task.PopEvents() {
 		s.eventBus.Publish(event)
 	}

@@ -12,13 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
+	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
-	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
 )
 
@@ -46,20 +47,43 @@ func main() {
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 
-	// 4. 初始化应用服务
+	// 4. 初始化任务执行器
+	executor := application.NewTaskExecutor()
+	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
+	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
+	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
+	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
+
+	// 5. 初始化工作池
+	workerPool := application.NewWorkerPool(3, logger)
+	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
+		if err := executor.Execute(ctx, task, taskRepo); err != nil {
+			if ctx.Err() != context.Canceled {
+				logger.Error("任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+			}
+		}
+		// 确保任务状态被持久化
+		if err := taskRepo.Save(context.Background(), task); err != nil {
+			logger.Error("任务状态保存失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+		}
+	})
+	workerPool.Start()
+
+	// 6. 初始化应用服务并连接工作池
 	taskService := application.NewTaskApplicationService(
 		taskRepo,
 		idGenerator,
 		eventBus,
 		logger,
 	)
+	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
-	// 5. 初始化 HTTP Handler
+	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
 	mux := httpHandler.SetupRoutes(taskHandler)
 
-	// 6. 初始化 WebSocket
+	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
 	wsHandler.SubscribeToEvents()
 
