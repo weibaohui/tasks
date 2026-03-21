@@ -3,14 +3,13 @@
  * 展示任务详情和子任务列表
  */
 import React, { useEffect, useState } from 'react';
-import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider, Timeline } from 'antd';
-import { ArrowLeftOutlined, TeamOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider } from 'antd';
+import { TeamOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
 import { TodoList } from '../TodoList';
-import { useTaskStore } from '../../stores/taskStore';
-import { getTask as getTaskApi } from '../../api/taskApi';
-import type { Task, TodoList as TodoListType } from '../../types/task';
+import { getTask } from '../../api/taskApi';
+import type { Task, TodoList as TodoListType, TaskStatus } from '../../types/task';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -22,7 +21,6 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(false);
   const [todoList, setTodoList] = useState<TodoListType | null>(null);
-  const { fetchTask } = useTaskStore();
 
   useEffect(() => {
     if (taskId && open) {
@@ -34,7 +32,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
     if (!taskId) return;
     setLoading(true);
     try {
-      const response = await getTaskApi(taskId);
+      const response = await getTask(taskId);
       setTask(response);
 
       if (response.metadata?.todo_list) {
@@ -91,7 +89,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
                 <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.id}</span>
               </Descriptions.Item>
               <Descriptions.Item label="状态">
-                <StatusBadge status={task.status} />
+                <StatusBadge status={task.status as TaskStatus} />
               </Descriptions.Item>
               <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
               <Descriptions.Item label="类型">
