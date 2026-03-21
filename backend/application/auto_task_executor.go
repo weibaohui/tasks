@@ -187,8 +187,6 @@ func (e *AutoTaskExecutor) updateProgress(task *domain.Task, progress int, stage
 
 // collectTaskResult 收集任务执行结果到根任务
 func (e *AutoTaskExecutor) collectTaskResult(task *domain.Task, stage, detail string) {
-	log.Printf("[DEBUG] collectTaskResult: taskID=%s, status=%s, stage=%s, detail=%s",
-		task.ID().String(), task.Status().String(), stage, detail)
 	summary := TaskExecutionSummary{
 		TaskID:      task.ID().String(),
 		SpanID:      task.SpanID().String(),
@@ -198,7 +196,6 @@ func (e *AutoTaskExecutor) collectTaskResult(task *domain.Task, stage, detail st
 		CompletedAt: time.Now().UnixMilli(),
 		Status:      task.Status().String(),
 	}
-	log.Printf("[DEBUG] summary created: status=%s", summary.Status)
 
 	// 找到根任务并汇总结果
 	rootTask := task
@@ -370,9 +367,7 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	}
 
 	result := domain.NewResult(resultData, "任务完成")
-	log.Printf("[DEBUG] finishTask: about to Complete taskID=%s, current status=%s", task.ID().String(), task.Status().String())
 	task.Complete(result)
-	log.Printf("[DEBUG] finishTask: completed taskID=%s, status after Complete=%s", task.ID().String(), task.Status().String())
 	e.updateProgress(task, 100, "完成", "任务执行完成")
 	e.saveTaskPreservingMetadata(task)
 

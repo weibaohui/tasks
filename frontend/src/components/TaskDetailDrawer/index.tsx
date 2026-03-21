@@ -37,11 +37,16 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
   useEffect(() => {
     if (!taskId || !open) return;
     loadTask(false);
-    const timer = setInterval(() => {
-      loadTask(true);
-    }, 2000);
-    return () => clearInterval(timer);
   }, [taskId, open]);
+
+  // 当选择的タスク改变时，重新从数据库加载全量数据
+  useEffect(() => {
+    if (!selectedTaskId || !open) return;
+    if (selectedTaskId === taskId) return;
+
+    // 重新加载全量数据，确保获取最新状态
+    loadTask(false);
+  }, [selectedTaskId, open]);
 
   const normalizeStatus = (status: Task['status']): TodoItem['status'] => {
     if (status === 'pending') return 'distributed';
@@ -312,7 +317,6 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
   // 找到根任务（execution_summaries 存储在根任务元数据中）
   const rootTask = traceTasks.find((t) => !t.parent_id) || task;
   const summaries = parseExecutionSummaries(rootTask.metadata);
-  const childTasks = traceTasks.filter((t) => t.parent_id === task.id);
   // 获取当前任务的所有后代任务ID
   const getAllDescendantIds = (taskId: string): string[] => {
     const directChildren = traceTasks.filter((t) => t.parent_id === taskId);
@@ -324,14 +328,19 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
   };
   const descendantIds = getAllDescendantIds(task.id);
 
-  if (summaries.length === 0 && childTasks.length === 0) {
+  // 过滤出属于当前任务的汇总记录
+  const ownSummary = summaries.filter((s) => s.task_id === task.id);
+  const descendantSummaries = summaries.filter((s) => descendantIds.includes(s.task_id));
+
+  // 如果没有任何汇总记录且没有任何后代任务，则不显示
+  if (ownSummary.length === 0 && descendantSummaries.length === 0) {
     return null;
   }
 
   return (
     <Descriptions column={1} bordered size="small" title="执行结果汇总">
       <Descriptions.Item>
-        {summaries.length > 0 && (
+        {ownSummary.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>本任务执行记录：</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -345,9 +354,7 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
                 </tr>
               </thead>
               <tbody>
-                {summaries
-                  .filter((s) => s.task_id === task.id)
-                  .map((summary) => (
+                {ownSummary.map((summary) => (
                     <tr key={summary.task_id}>
                       <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
                         {summary.task_id.slice(0, 8)}...
@@ -369,7 +376,7 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
           </div>
         )}
 
-        {descendantIds.length > 0 && (
+        {descendantSummaries.length > 0 && (
           <div>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>子任务执行记录：</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -383,8 +390,7 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
                 </tr>
               </thead>
               <tbody>
-                {summaries
-                  .filter((s) => descendantIds.includes(s.task_id))
+                {descendantSummaries
                   .sort((a, b) => a.completed_at - b.completed_at)
                   .map((summary) => (
                     <tr key={summary.task_id}>
