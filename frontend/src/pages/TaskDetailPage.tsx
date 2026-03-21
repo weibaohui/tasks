@@ -50,6 +50,7 @@ export const TaskDetailPage: React.FC = () => {
         loading={loading}
         onCancel={handleCancel}
         onBack={() => navigate(-1)}
+        onViewTree={(traceId) => navigate(`/tasks/trace/${traceId}/tree`)}
       />
     </div>
   );

@@ -3,8 +3,8 @@
  * 展示任务详细信息
  */
 import React from 'react';
-import { Card, Descriptions, Button, Space, Spin } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Button, Space, Spin, Tag } from 'antd';
+import { ArrowLeftOutlined, TeamOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
 import type { Task } from '../../types/task';
@@ -14,9 +14,10 @@ interface TaskDetailProps {
   loading?: boolean;
   onCancel?: () => void;
   onBack?: () => void;
+  onViewTree?: (traceId: string) => void;
 }
 
-export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel, onBack }) => {
+export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel, onBack, onViewTree }) => {
   if (loading || !task) {
     return <Spin style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />;
   }
@@ -29,16 +30,35 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
         </Button>
       )}
 
-      <Card title="任务详情">
+      <Card
+        title="任务详情"
+        extra={onViewTree && (
+          <Button icon={<TeamOutlined />} onClick={() => onViewTree(task.trace_id)}>
+            查看任务树
+          </Button>
+        )}
+      >
         <Descriptions column={2} bordered>
           <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
           <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
           <Descriptions.Item label="状态">
             <StatusBadge status={task.status} />
           </Descriptions.Item>
-          <Descriptions.Item label="类型">{task.type}</Descriptions.Item>
+          <Descriptions.Item label="类型">
+            <Tag color="blue">{task.type}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="TraceID">
+            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.trace_id}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="SpanID">
+            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.span_id}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="父任务">
+            {task.parent_id ? <Tag color="orange">{task.parent_id}</Tag> : <span style={{ color: '#999' }}>顶级任务</span>}
+          </Descriptions.Item>
           <Descriptions.Item label="优先级">{task.priority}</Descriptions.Item>
           <Descriptions.Item label="超时时间">{task.timeout}ms</Descriptions.Item>
+          <Descriptions.Item label="最大重试">{task.max_retries}</Descriptions.Item>
           <Descriptions.Item label="创建时间">
             {new Date(task.created_at).toLocaleString()}
           </Descriptions.Item>
@@ -48,8 +68,13 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
           <Descriptions.Item label="完成时间">
             {task.finished_at ? new Date(task.finished_at).toLocaleString() : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="重试次数">{task.max_retries}</Descriptions.Item>
         </Descriptions>
+
+        {task.description && (
+          <Descriptions column={1} bordered style={{ marginTop: 16 }}>
+            <Descriptions.Item label="任务描述">{task.description}</Descriptions.Item>
+          </Descriptions>
+        )}
       </Card>
 
       <Card title="执行进度" style={{ marginTop: 16 }}>
@@ -67,6 +92,12 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
       {task.result && (
         <Card title="执行结果" style={{ marginTop: 16 }}>
           <pre>{JSON.stringify(task.result, null, 2)}</pre>
+        </Card>
+      )}
+
+      {task.metadata && Object.keys(task.metadata).length > 0 && (
+        <Card title="元数据" style={{ marginTop: 16 }}>
+          <pre>{JSON.stringify(task.metadata, null, 2)}</pre>
         </Card>
       )}
 
