@@ -20,6 +20,14 @@ const taskTypeLabels: Record<string, string> = {
   file_operation: '文件操作',
   api_call: 'API调用',
   custom: '自定义',
+  '0': '数据处理',
+  '1': '文件操作',
+  '2': 'API调用',
+  '3': '自定义',
+};
+
+const getTaskTypeLabel = (taskType: string): string => {
+  return taskTypeLabels[taskType] || taskType || '未知';
 };
 
 interface TodoItemRowProps {
@@ -27,7 +35,7 @@ interface TodoItemRowProps {
 }
 
 const TodoItemRow: React.FC<TodoItemRowProps> = ({ item }) => {
-  const config = statusConfig[item.status];
+  const config = statusConfig[item.status] || statusConfig.distributed;
   const isActive = item.status === 'running' || item.status === 'distributed';
 
   return (
@@ -42,18 +50,16 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ item }) => {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 500 }}>{item.goal}</span>
-          <Tag color={statusConfig[item.status].color === 'success' ? undefined : statusConfig[item.status].color}>
-            {taskTypeLabels[item.sub_task_type] || item.sub_task_type}
-          </Tag>
+          <span style={{ fontWeight: 500 }}>{item.goal || '未命名'}</span>
+          <Tag color="blue">{getTaskTypeLabel(item.sub_task_type)}</Tag>
           <Tag>{config.text}</Tag>
         </div>
 
         {isActive && (
           <Progress
-            percent={item.progress}
+            percent={item.progress || 0}
             size="small"
-            strokeColor={item.progress >= 50 ? '#52c41a' : '#1890ff'}
+            strokeColor={(item.progress || 0) >= 50 ? '#52c41a' : '#1890ff'}
             style={{ marginTop: 4 }}
           />
         )}

@@ -45,6 +45,7 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 			progress=excluded.progress,
 			result=excluded.result,
 			error_msg=excluded.error_msg,
+			metadata=excluded.metadata,
 			started_at=excluded.started_at,
 			finished_at=excluded.finished_at
 	`
