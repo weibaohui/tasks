@@ -141,6 +141,12 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 		e.publishTodoList(taskID, traceID, spanID, todoList)
 
+		// 保存 TodoList 到 task metadata
+		if task.Metadata() != nil {
+			task.Metadata()["todo_list"] = todoList.ToJSON()
+			e.repo.Save(context.Background(), task)
+		}
+
 		for i := 20; i <= 90; i += 10 {
 			select {
 			case <-ctx.Done():
