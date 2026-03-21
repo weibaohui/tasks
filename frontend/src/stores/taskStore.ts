@@ -11,7 +11,7 @@ interface TaskState {
   currentTask: Task | null;
   loading: boolean;
   error: string | null;
-  fetchTasks: (traceId: string) => Promise<void>;
+  fetchTasks: (traceId?: string) => Promise<void>;
   fetchTask: (taskId: string) => Promise<void>;
   updateTaskInList: (task: Task) => void;
   addTask: (task: Task) => void;
@@ -25,12 +25,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   error: null,
 
   /**
-   * 获取任务列表
+   * 获取任务列表（无 traceId 时获取全部）
    */
-  fetchTasks: async (traceId: string) => {
+  fetchTasks: async (traceId?: string) => {
     set({ loading: true, error: null });
     try {
-      const response = await taskApi.listTasksByTrace(traceId);
+      const response = traceId
+        ? await taskApi.listTasksByTrace(traceId)
+        : await taskApi.getAllTasks();
       set({ tasks: response.tasks, loading: false });
     } catch (error) {
       set({ error: '获取任务列表失败', loading: false });

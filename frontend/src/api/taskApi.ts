@@ -42,6 +42,15 @@ export async function getTask(taskId: string): Promise<Task> {
 }
 
 /**
+ * 获取任务列表（全部）
+ * GET /api/v1/tasks
+ */
+export async function getAllTasks(): Promise<TaskListResponse> {
+  const response = await apiClient.get<TaskListResponse>('/tasks');
+  return response.data;
+}
+
+/**
  * 获取任务列表（按 trace_id）
  * GET /api/v1/tasks/trace/{trace_id}
  */

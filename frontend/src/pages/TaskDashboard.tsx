@@ -7,34 +7,30 @@ import { Row, Col, Card, Statistic, Button, Space, Modal } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TaskList } from '../components/TaskList';
 import { TaskForm } from '../components/TaskForm';
-import { useTaskWebSocket } from '../hooks/useTaskWebSocket';
 import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
 
 export const TaskDashboard: React.FC = () => {
-  const traceId = 'default-trace-id';
   const { tasks, loading, fetchTasks } = useTaskStore();
   const { createTask, cancelTask } = useTaskOperations();
   const [modalVisible, setModalVisible] = useState(false);
 
-  useTaskWebSocket(traceId);
-
   useEffect(() => {
-    fetchTasks(traceId);
-  }, [fetchTasks, traceId]);
+    fetchTasks();
+  }, [fetchTasks]);
 
   const handleCreateTask = async (values: Parameters<typeof createTask>[0]) => {
-    const result = await createTask({ ...values, trace_id: traceId });
+    const result = await createTask(values);
     if (result) {
       setModalVisible(false);
-      fetchTasks(traceId);
+      fetchTasks();
     }
   };
 
   const handleCancelTask = async (taskId: string) => {
     const success = await cancelTask(taskId);
     if (success) {
-      fetchTasks(traceId);
+      fetchTasks();
     }
   };
 
@@ -74,7 +70,7 @@ export const TaskDashboard: React.FC = () => {
         title="任务列表"
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => fetchTasks(traceId)}>
+            <Button icon={<ReloadOutlined />} onClick={() => fetchTasks()}>
               刷新
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>

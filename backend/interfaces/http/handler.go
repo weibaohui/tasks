@@ -139,11 +139,11 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetTask 获取任务
+// GetTask 获取任务，或获取所有任务
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.URL.Query().Get("id")
 	if taskID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		h.ListAllTasks(w, r)
 		return
 	}
 
@@ -155,6 +155,18 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(dto)
+}
+
+// ListAllTasks 获取所有任务
+func (h *TaskHandler) ListAllTasks(w http.ResponseWriter, r *http.Request) {
+	tasks, err := h.queryService.ListAllTasks(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
 }
 
 // ListTasksByTrace 根据TraceID列任务

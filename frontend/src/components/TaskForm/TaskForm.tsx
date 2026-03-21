@@ -20,7 +20,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
   const { tasks, fetchTasks } = useTaskStore();
 
   useEffect(() => {
-    fetchTasks('default-trace-id');
+    fetchTasks();
   }, [fetchTasks]);
 
   const handleFinish = (values: CreateTaskRequest): void => {

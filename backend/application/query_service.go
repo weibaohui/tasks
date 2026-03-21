@@ -30,6 +30,21 @@ func (s *QueryService) GetTask(ctx context.Context, taskID domain.TaskID) (*GetT
 	return toGetTaskDTO(task), nil
 }
 
+// ListAllTasks 获取所有任务
+func (s *QueryService) ListAllTasks(ctx context.Context) (*ListTasksDTO, error) {
+	tasks, err := s.taskRepo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	taskDTOs := make([]*GetTaskDTO, len(tasks))
+	for i, task := range tasks {
+		taskDTOs[i] = toGetTaskDTO(task)
+	}
+
+	return &ListTasksDTO{Tasks: taskDTOs, Total: len(taskDTOs)}, nil
+}
+
 // ListTasksByTrace 获取任务列表
 func (s *QueryService) ListTasksByTrace(ctx context.Context, traceID domain.TraceID) (*ListTasksDTO, error) {
 	tasks, err := s.taskRepo.FindByTraceID(ctx, traceID)

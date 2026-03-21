@@ -49,6 +49,14 @@ func (m *mockTaskRepository) FindByID(ctx context.Context, id domain.TaskID) (*d
 	return task, nil
 }
 
+func (m *mockTaskRepository) FindAll(ctx context.Context) ([]*domain.Task, error) {
+	var result []*domain.Task
+	for _, task := range m.tasks {
+		result = append(result, task)
+	}
+	return result, nil
+}
+
 func (m *mockTaskRepository) FindByTraceID(ctx context.Context, traceID domain.TraceID) ([]*domain.Task, error) {
 	var result []*domain.Task
 	for _, task := range m.tasks {

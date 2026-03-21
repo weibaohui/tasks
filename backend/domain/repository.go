@@ -12,6 +12,8 @@ type TaskRepository interface {
 	Save(ctx context.Context, task *Task) error
 	// FindByID 根据ID查找任务
 	FindByID(ctx context.Context, id TaskID) (*Task, error)
+	// FindAll 获取所有任务
+	FindAll(ctx context.Context) ([]*Task, error)
 	// FindByTraceID 根据TraceID查找所有任务
 	FindByTraceID(ctx context.Context, traceID TraceID) ([]*Task, error)
 	// FindByParentID 根据父任务ID查找子任务
