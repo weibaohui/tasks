@@ -2,9 +2,10 @@
  * 任务表单组件
  * 用于创建新任务
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Form, Input, Select, InputNumber, Button, Space } from 'antd';
-import type { CreateTaskRequest } from '../../types/task';
+import type { CreateTaskRequest, Task } from '../../types/task';
+import { useTaskStore } from '../../stores/taskStore';
 
 const { TextArea } = Input;
 
@@ -16,6 +17,11 @@ interface TaskFormProps {
 
 export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading }) => {
   const [form] = Form.useForm<CreateTaskRequest>();
+  const { tasks, fetchTasks } = useTaskStore();
+
+  useEffect(() => {
+    fetchTasks('default-trace-id');
+  }, [fetchTasks]);
 
   const handleFinish = (values: CreateTaskRequest): void => {
     onSubmit({
@@ -26,6 +32,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
       metadata: values.metadata || {},
     });
   };
+
+  const pendingTasks = tasks.filter((t: Task) => t.status === 'pending' || t.status === 'running');
 
   return (
     <Form
@@ -55,6 +63,16 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
           <Select.Option value="file_operation">文件操作</Select.Option>
           <Select.Option value="api_call">API 调用</Select.Option>
           <Select.Option value="custom">自定义</Select.Option>
+        </Select>
+      </Form.Item>
+
+      <Form.Item name="parent_id" label="父任务 (可选)">
+        <Select placeholder="无父任务" allowClear>
+          {pendingTasks.map((task: Task) => (
+            <Select.Option key={task.id} value={task.id}>
+              {task.name} ({task.status})
+            </Select.Option>
+          ))}
         </Select>
       </Form.Item>
 
