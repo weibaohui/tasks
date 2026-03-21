@@ -27,6 +27,14 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 		}
 	})
 
+	mux.HandleFunc("/api/v1/tasks/clear", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			handler.ClearAllTasks(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// GET /api/v1/tasks/trace/{trace_id} - 获取任务列表（按 trace_id）
 	mux.HandleFunc("/api/v1/tasks/trace/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {

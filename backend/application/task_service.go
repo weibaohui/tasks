@@ -197,6 +197,28 @@ func (s *TaskApplicationService) CancelTask(ctx context.Context, taskID domain.T
 	return nil
 }
 
+// DeleteAllTasks 删除全部任务
+func (s *TaskApplicationService) DeleteAllTasks(ctx context.Context) (int, error) {
+	tasks, err := s.taskRepo.FindAll(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	deleted := 0
+	for _, task := range tasks {
+		if task.Status() == domain.TaskStatusRunning && s.taskRuntime != nil {
+			s.taskRuntime.Cancel(task.ID().String())
+		}
+		if err := s.taskRepo.Delete(ctx, task.ID()); err != nil {
+			return deleted, fmt.Errorf("failed to delete task %s: %w", task.ID().String(), err)
+		}
+		deleted++
+	}
+
+	s.logger.Info("已删除全部任务", zap.Int("deleted", deleted))
+	return deleted, nil
+}
+
 // CompleteTask 完成任务
 func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain.TaskID, result domain.Result) error {
 	// 1. 获取任务

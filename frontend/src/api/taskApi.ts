@@ -84,4 +84,9 @@ export async function startTask(taskId: string): Promise<void> {
   await apiClient.post(`/tasks/${taskId}/start`);
 }
 
+export async function clearAllTasks(): Promise<{ message: string; deleted: number }> {
+  const response = await apiClient.post<{ message: string; deleted: number }>('/tasks/clear');
+  return response.data;
+}
+
 export default apiClient;

@@ -3,7 +3,7 @@
  * 只显示根任务，点击弹出详情抽屉
  */
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal } from 'antd';
+import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal, Popconfirm, message } from 'antd';
 import { PlusOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { TaskForm } from '../components/TaskForm';
 import { TaskDetailDrawer } from '../components/TaskDetailDrawer';
@@ -11,6 +11,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
 import type { Task, TaskStatus } from '../types/task';
+import { clearAllTasks } from '../api/taskApi';
 
 export const TaskDashboard: React.FC = () => {
   const { tasks, loading, fetchTasks } = useTaskStore();
@@ -18,6 +19,7 @@ export const TaskDashboard: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     fetchTasks();
@@ -48,6 +50,22 @@ export const TaskDashboard: React.FC = () => {
   const handleDrawerClose = () => {
     setDrawerOpen(false);
     setDrawerTaskId(null);
+  };
+
+  const handleClearAllTasks = async () => {
+    setClearing(true);
+    try {
+      const result = await clearAllTasks();
+      message.success(`已清空 ${result.deleted} 个任务`);
+      if (drawerOpen) {
+        handleDrawerClose();
+      }
+      await fetchTasks();
+    } catch (error) {
+      message.error('清空任务失败');
+    } finally {
+      setClearing(false);
+    }
   };
 
   const statusCounts = {
@@ -167,6 +185,17 @@ export const TaskDashboard: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={() => fetchTasks()}>
               刷新
             </Button>
+            <Popconfirm
+              title="确认清空全部任务？"
+              description="该操作会删除所有任务数据，无法恢复。"
+              okText="确认清空"
+              cancelText="取消"
+              onConfirm={handleClearAllTasks}
+            >
+              <Button danger loading={clearing}>
+                删除全部任务
+              </Button>
+            </Popconfirm>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
               创建任务
             </Button>
