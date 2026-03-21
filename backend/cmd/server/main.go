@@ -56,10 +56,33 @@ func main() {
 
 	// 5. 初始化工作池
 	workerPool := application.NewWorkerPool(3, logger)
+
+	// 5.1 初始化自动任务执行器
+	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
+
+	// 5.2 注册任务处理器
+	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
+	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
+	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
+	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
+
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
-		if err := executor.Execute(ctx, task, taskRepo); err != nil {
-			if ctx.Err() != context.Canceled {
-				logger.Error("任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+		// 根任务（无 parent_id）使用自动执行器，会分发子任务
+		// 子任务（有 parent_id）使用普通执行器，正常执行
+		parentID := task.ParentID()
+		if parentID == nil {
+			// 根任务：使用自动执行器
+			if err := autoExecutor.ExecuteAutoTask(ctx, task); err != nil {
+				if ctx.Err() != context.Canceled {
+					logger.Error("自动任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+				}
+			}
+		} else {
+			// 子任务：使用普通执行器
+			if err := executor.Execute(ctx, task, taskRepo); err != nil {
+				if ctx.Err() != context.Canceled {
+					logger.Error("任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+				}
 			}
 		}
 		// 确保任务状态被持久化
@@ -78,6 +101,13 @@ func main() {
 	)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
+
+	// 6.1 订阅 TodoSubTaskCreatedEvent 事件
+	eventBus.Subscribe("TodoSubTaskCreated", func(event domain.DomainEvent) {
+		if e, ok := event.(*domain.TodoSubTaskCreatedEvent); ok {
+			autoExecutor.HandleSubTaskCompleted(e.SubTaskIDStr(), e.ParentTaskID().String())
+		}
+	})
 
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
