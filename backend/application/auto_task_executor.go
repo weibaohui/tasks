@@ -83,7 +83,11 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	}
 
 	// 90% 概率分发子任务，10% 概率直接完成
+	subTaskIDs := make([]string, 0)
+	hasSubTasks := false
+
 	if rand.Float32() < 0.9 {
+		hasSubTasks = true
 		e.updateProgress(task, 10, "分发子任务", "开始创建子任务")
 
 		subTasks := []struct {
@@ -96,7 +100,6 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		}
 
 		idGen := utils.NewNanoIDGenerator(21)
-		subTaskIDs := make([]string, 0, len(subTasks))
 
 		for _, st := range subTasks {
 			subTaskID := idGen.Generate()
@@ -154,7 +157,14 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		}
 
 		e.publishAndPersistTodoList(task, todoList)
+	} else {
+		hasSubTasks = false
+		e.updateProgress(task, 50, "直接完成", "10%概率选择直接完成任务")
+		time.Sleep(2 * time.Second)
+	}
 
+	// 最终检查：只有所有子任务都完成，父任务才能完成
+	if hasSubTasks {
 		allCompleted, err := e.waitChildrenDone(ctx, task, todoList, subTaskIDs)
 		if err != nil {
 			return err
@@ -162,9 +172,17 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		if !allCompleted {
 			return e.failTask(task, errors.New("存在未完成子任务"))
 		}
-	} else {
-		e.updateProgress(task, 50, "直接完成", "10%概率选择直接完成任务")
-		time.Sleep(2 * time.Second)
+	}
+
+	// 最终检查：只有所有子任务都完成，父任务才能完成
+	if len(subTaskIDs) > 0 {
+		allCompleted, err := e.waitChildrenDone(ctx, task, todoList, subTaskIDs)
+		if err != nil {
+			return err
+		}
+		if !allCompleted {
+			return e.failTask(task, errors.New("存在未完成子任务"))
+		}
 	}
 
 	return e.finishTask(task)
