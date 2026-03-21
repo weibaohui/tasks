@@ -25,7 +25,7 @@ export const TaskDashboard: React.FC = () => {
   }, [fetchTasks, traceId]);
 
   const handleCreateTask = async (values: Parameters<typeof createTask>[0]) => {
-    const result = await createTask(values);
+    const result = await createTask({ ...values, trace_id: traceId });
     if (result) {
       setModalVisible(false);
       fetchTasks(traceId);

@@ -30,6 +30,7 @@ type CreateTaskCommand struct {
 	MaxRetries  int
 	Priority    int
 	ParentID    *domain.TaskID
+	TraceID     *domain.TraceID
 }
 
 // TaskApplicationService 任务应用服务
@@ -71,6 +72,8 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 			return nil, fmt.Errorf("parent task not found: %w", err)
 		}
 		traceID = parent.TraceID()
+	} else if cmd.TraceID != nil {
+		traceID = *cmd.TraceID
 	} else {
 		traceID = domain.NewTraceID(s.idGenerator.Generate())
 	}

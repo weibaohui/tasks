@@ -7,3 +7,11 @@ frontend/frontend.log
 backend/tmp/build-errors.log
 .gitignore
 backend/tmp/taskmanager
+backend/backend_new.log
+frontend/debug-01-initial.png
+frontend/debug-02-modal-open.png
+.gitignore
+frontend/debug-03-select-open.png
+frontend/debug-04-after-select.png
+frontend/debug-05-after-submit.png
+frontend/test-results/.last-run.json

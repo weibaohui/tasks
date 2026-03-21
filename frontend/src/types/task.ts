@@ -64,6 +64,7 @@ export interface CreateTaskRequest {
   priority: number;
   metadata: Record<string, unknown>;
   parent_id?: string;
+  trace_id?: string;
 }
 
 /**

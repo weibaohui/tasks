@@ -69,6 +69,7 @@ type CreateTaskRequest struct {
 	MaxRetries  int                    `json:"max_retries"`
 	Priority    int                    `json:"priority"`
 	ParentID    *string                `json:"parent_id"`
+	TraceID     *string                `json:"trace_id"`
 }
 
 // CreateTask 创建任务
@@ -99,6 +100,12 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		parentID = &id
 	}
 
+	var traceID *domain.TraceID
+	if req.TraceID != nil {
+		tid := domain.NewTraceID(*req.TraceID)
+		traceID = &tid
+	}
+
 	cmd := application.CreateTaskCommand{
 		Name:        req.Name,
 		Description: req.Description,
@@ -108,6 +115,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		MaxRetries:  req.MaxRetries,
 		Priority:    req.Priority,
 		ParentID:    parentID,
+		TraceID:     traceID,
 	}
 
 	task, err := h.taskService.CreateTask(r.Context(), cmd)
