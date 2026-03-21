@@ -39,6 +39,7 @@ type TaskApplicationService struct {
 	idGenerator domain.IDGenerator
 	eventBus    *bus.EventBus
 	taskRuntime *TaskRuntime
+	workerPool  *WorkerPool
 	logger      *zap.Logger
 }
 
@@ -56,6 +57,11 @@ func NewTaskApplicationService(
 		taskRuntime: NewTaskRuntime(),
 		logger:      logger,
 	}
+}
+
+// SetWorkerPool 设置工作池
+func (s *TaskApplicationService) SetWorkerPool(wp *WorkerPool) {
+	s.workerPool = wp
 }
 
 // CreateTask 创建任务用例
@@ -132,7 +138,16 @@ func (s *TaskApplicationService) StartTask(ctx context.Context, taskID domain.Ta
 		return fmt.Errorf("failed to save task: %w", err)
 	}
 
-	// 4. 发布领域事件
+	// 4. 提交到工作池执行
+	if s.workerPool != nil {
+		if ok := s.workerPool.Submit(task); !ok {
+			s.logger.Warn("任务提交到工作池失败", zap.String("taskID", taskID.String()))
+		} else {
+			s.logger.Info("任务已提交到工作池", zap.String("taskID", taskID.String()))
+		}
+	}
+
+	// 5. 发布领域事件
 	for _, event := range task.PopEvents() {
 		s.eventBus.Publish(event)
 	}
