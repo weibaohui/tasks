@@ -9,13 +9,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
-const MaxTaskDepth = 3 // 最大任务深度，超过则直接完成
+const MaxTaskDepth = 4
 
 type AutoTaskExecutor struct {
 	repo       domain.TaskRepository
@@ -43,90 +45,114 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	traceID := task.TraceID().String()
 	spanID := task.SpanID().String()
 
-	log.Printf("[AutoExecutor] 开始执行任务: %s, traceID: %s, spanID: %s", taskID, traceID, spanID)
+	// 从 metadata 获取当前深度
+	currentDepth := 1
+	if task.Metadata() != nil {
+		if depthStr, ok := task.Metadata()["depth"].(string); ok {
+			if depth, err := strconv.Atoi(depthStr); err == nil {
+				currentDepth = depth + 1
+			}
+		}
+	}
+
+	log.Printf("[AutoExecutor] 执行任务: %s, spanID: %s, depth: %d/%d", taskID, spanID, currentDepth, MaxTaskDepth)
 
 	todoList := NewTodoList(taskID)
 
-	e.updateProgress(task, 0, "初始化", "开始执行任务")
+	e.updateProgress(task, 0, "初始化", fmt.Sprintf("开始执行任务，深度 %d", currentDepth))
 	time.Sleep(10 * time.Second)
 
-	// 100% 分发子任务（调试用）
-	e.updateProgress(task, 10, "分发子任务", "开始创建子任务")
-
-	subTasks := []struct {
-		goal     string
-		taskType domain.TaskType
-	}{
-		{"处理前50%数据", domain.TaskTypeDataProcessing},
-		{"处理后50%数据", domain.TaskTypeFileOperation},
-		{"验证处理结果", domain.TaskTypeAPICall},
+	// 检查是否达到最大深度
+	if currentDepth >= MaxTaskDepth {
+		e.updateProgress(task, 100, "完成", "达到最大深度，直接完成")
+		return e.finishTask(task)
 	}
 
-	idGen := utils.NewNanoIDGenerator(21)
+	// 90% 概率分发子任务，10% 概率直接完成
+	if rand.Float32() < 0.9 {
+		e.updateProgress(task, 10, "分发子任务", "开始创建子任务")
 
-	for _, st := range subTasks {
-		subTaskID := idGen.Generate()
-		subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
-
-		subTask, err := domain.NewTask(
-			domain.NewTaskID(subTaskID),
-			domain.NewTraceID(traceID),
-			domain.NewSpanID(subSpanID),
-			func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
-			st.goal,
-			"",
-			st.taskType,
-			map[string]interface{}{
-				"goal":        st.goal,
-				"parent_id":   taskID,
-				"parent_span": spanID,
-			},
-			60000*time.Millisecond,
-			0,
-			0,
-		)
-		if err != nil {
-			log.Printf("Failed to create sub-task: %v", err)
-			continue
+		subTasks := []struct {
+			goal     string
+			taskType domain.TaskType
+		}{
+			{"处理前50%数据", domain.TaskTypeDataProcessing},
+			{"处理后50%数据", domain.TaskTypeFileOperation},
+			{"验证处理结果", domain.TaskTypeAPICall},
 		}
 
-		subTask.Start()
-		if err := e.repo.Save(context.Background(), subTask); err != nil {
-			log.Printf("Failed to save sub-task: %v", err)
-			continue
-		}
+		idGen := utils.NewNanoIDGenerator(21)
 
-		if e.workerPool != nil {
-			e.workerPool.Submit(subTask)
-		}
+		for _, st := range subTasks {
+			subTaskID := idGen.Generate()
+			subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
 
-		todoList.AddItem(subTaskID, st.goal, string(st.taskType), subSpanID, TodoStatusDistributed)
-
-		if e.eventBus != nil {
-			evt := domain.NewTodoSubTaskCreatedEvent(
-				domain.NewTaskID(taskID),
+			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
 				domain.NewTraceID(traceID),
-				subTaskID,
-				subSpanID,
-				spanID,
-				st.taskType,
+				domain.NewSpanID(subSpanID),
+				func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
 				st.goal,
+				"",
+				st.taskType,
+				map[string]interface{}{
+					"goal":        st.goal,
+					"parent_id":   taskID,
+					"parent_span": spanID,
+					"depth":       strconv.Itoa(currentDepth),
+				},
+				60000*time.Millisecond,
+				0,
+				0,
 			)
-			e.eventBus.Publish(evt)
-		}
-	}
+			if err != nil {
+				log.Printf("Failed to create sub-task: %v", err)
+				continue
+			}
 
-	e.publishTodoList(taskID, traceID, spanID, todoList)
+			subTask.Start()
+			if err := e.repo.Save(context.Background(), subTask); err != nil {
+				log.Printf("Failed to save sub-task: %v", err)
+				continue
+			}
 
-	for i := 20; i <= 90; i += 10 {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			e.updateProgress(task, i, "等待子任务执行", fmt.Sprintf("等待子任务完成... %d%%", i))
-			time.Sleep(5 * time.Second)
+			if e.workerPool != nil {
+				e.workerPool.Submit(subTask)
+			}
+
+			todoList.AddItem(subTaskID, st.goal, string(st.taskType), subSpanID, TodoStatusDistributed)
+
+			if e.eventBus != nil {
+				evt := domain.NewTodoSubTaskCreatedEvent(
+					domain.NewTaskID(taskID),
+					domain.NewTaskID(subTaskID),
+					domain.NewTraceID(traceID),
+					subTaskID,
+					subSpanID,
+					spanID,
+					st.taskType,
+					st.goal,
+				)
+				e.eventBus.Publish(evt)
+			}
+
+			log.Printf("[AutoExecutor] 创建子任务: %s, spanID: %s", subTaskID, subSpanID)
 		}
+
+		e.publishTodoList(taskID, traceID, spanID, todoList)
+
+		for i := 20; i <= 90; i += 10 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				e.updateProgress(task, i, "等待子任务执行", fmt.Sprintf("等待子任务完成... %d%%", i))
+				time.Sleep(5 * time.Second)
+			}
+		}
+	} else {
+		e.updateProgress(task, 50, "直接完成", "10%概率选择直接完成任务")
+		time.Sleep(2 * time.Second)
 	}
 
 	return e.finishTask(task)
@@ -166,36 +192,4 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 		e.eventBus.Publish(evt)
 	}
 	return nil
-}
-
-func (e *AutoTaskExecutor) HandleSubTaskCompleted(subTaskID, parentTaskID string) {
-	parentTask, err := e.repo.FindByID(context.Background(), domain.NewTaskID(parentTaskID))
-	if err != nil {
-		log.Printf("Failed to find parent task: %v", err)
-		return
-	}
-
-	todoListJSON, ok := parentTask.Metadata()["todo_list"]
-	if !ok {
-		return
-	}
-
-	todoJSON, ok := todoListJSON.(string)
-	if !ok {
-		return
-	}
-
-	var todoList *TodoList
-	if err := json.Unmarshal([]byte(todoJSON), todoList); err != nil {
-		log.Printf("Failed to unmarshal todo list: %v", err)
-		return
-	}
-
-	todoList.MarkCompleted(subTaskID)
-
-	updatedJSON, _ := json.Marshal(todoList)
-	parentTask.Metadata()["todo_list"] = string(updatedJSON)
-	e.repo.Save(context.Background(), parentTask)
-
-	e.publishTodoList(parentTaskID, parentTask.TraceID().String(), parentTask.SpanID().String(), todoList)
 }

@@ -90,13 +90,6 @@ func main() {
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
-	// 6.1 订阅 TodoSubTaskCreatedEvent 事件
-	eventBus.Subscribe("TodoSubTaskCreated", func(event domain.DomainEvent) {
-		if e, ok := event.(*domain.TodoSubTaskCreatedEvent); ok {
-			autoExecutor.HandleSubTaskCompleted(e.SubTaskIDStr(), e.ParentTaskID().String())
-		}
-	})
-
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
 	mux := httpHandler.SetupRoutes(taskHandler)
