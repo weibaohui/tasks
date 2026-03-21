@@ -31,8 +31,19 @@ export function useTaskOperations() {
       await taskApi.cancelTask(taskId);
       message.success('任务已取消');
       return true;
-    } catch (error) {
+    } catch {
       message.error('取消任务失败');
+      return false;
+    }
+  };
+
+  const startTask = async (taskId: string): Promise<boolean> => {
+    try {
+      await taskApi.startTask(taskId);
+      message.success('任务已启动');
+      return true;
+    } catch {
+      message.error('启动任务失败');
       return false;
     }
   };
@@ -41,5 +52,6 @@ export function useTaskOperations() {
     creating,
     createTask,
     cancelTask,
+    startTask,
   };
 }

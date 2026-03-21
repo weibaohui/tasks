@@ -67,4 +67,12 @@ export async function cancelTask(taskId: string): Promise<void> {
   await apiClient.post(`/tasks/${taskId}/cancel`);
 }
 
+/**
+ * 启动任务
+ * POST /api/v1/tasks/{id}/start
+ */
+export async function startTask(taskId: string): Promise<void> {
+  await apiClient.post(`/tasks/${taskId}/start`);
+}
+
 export default apiClient;

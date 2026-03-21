@@ -59,6 +59,11 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, loading, onCancel }) 
       key: 'action',
       render: (_: unknown, record: Task) => (
         <Space>
+          {record.status === 'pending' && (
+            <Button size="small" type="primary" onClick={() => navigate(`/tasks/${record.id}?action=start`)}>
+              启动
+            </Button>
+          )}
           <Button size="small" onClick={() => navigate(`/tasks/${record.id}`)}>
             详情
           </Button>
