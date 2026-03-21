@@ -131,3 +131,16 @@ export interface TodoList {
   created_at: number;
   updated_at: number;
 }
+
+/**
+ * 任务执行摘要
+ */
+export interface ExecutionSummary {
+  task_id: string;
+  span_id: string;
+  goal: string;
+  result: string;
+  stage: string;
+  completed_at: number;
+  status: string;
+}

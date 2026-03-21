@@ -12,6 +12,7 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -20,11 +21,23 @@ import (
 
 const MaxTaskDepth = 4
 
+// TaskExecutionSummary 单个任务的执行摘要
+type TaskExecutionSummary struct {
+	TaskID      string `json:"task_id"`
+	SpanID      string `json:"span_id"`
+	Goal        string `json:"goal"`          // 目标是什么
+	Result      string `json:"result"`        // 结果是什么
+	Stage       string `json:"stage"`
+	CompletedAt int64  `json:"completed_at"`
+	Status      string `json:"status"`
+}
+
 type AutoTaskExecutor struct {
 	repo       domain.TaskRepository
 	eventBus   interface{ Publish(domain.DomainEvent) }
 	registry   *TaskRegistry
 	workerPool interface{ Submit(*domain.Task) bool }
+	resultMu   sync.Mutex // 保护并发保存 execution_summaries
 }
 
 func NewAutoTaskExecutor(
@@ -118,9 +131,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				continue
 			}
 
-			if e.workerPool != nil {
-				e.workerPool.Submit(subTask)
-			}
+			e.executeSubTaskAsync(subTask)
 
 			todoList.AddItem(subTaskID, st.goal, string(st.taskType), subSpanID, TodoStatusDistributed)
 			subTaskIDs = append(subTaskIDs, subTaskID)
@@ -163,10 +174,117 @@ func (e *AutoTaskExecutor) updateProgress(task *domain.Task, progress int, stage
 	task.UpdateProgress(100, progress, stage, detail)
 	e.saveTaskPreservingMetadata(task)
 
+	// 当任务完成（100% progress）时，收集执行结果
+	if progress == 100 {
+		e.collectTaskResult(task, stage, detail)
+	}
+
 	if e.eventBus != nil {
 		evt := domain.NewTaskProgressUpdatedEvent(task, task.Progress())
 		e.eventBus.Publish(evt)
 	}
+}
+
+// collectTaskResult 收集任务执行结果到根任务
+func (e *AutoTaskExecutor) collectTaskResult(task *domain.Task, stage, detail string) {
+	log.Printf("[DEBUG] collectTaskResult: taskID=%s, status=%s, stage=%s, detail=%s",
+		task.ID().String(), task.Status().String(), stage, detail)
+	summary := TaskExecutionSummary{
+		TaskID:      task.ID().String(),
+		SpanID:      task.SpanID().String(),
+		Goal:        task.Name(),
+		Result:      detail,
+		Stage:       stage,
+		CompletedAt: time.Now().UnixMilli(),
+		Status:      task.Status().String(),
+	}
+	log.Printf("[DEBUG] summary created: status=%s", summary.Status)
+
+	// 找到根任务并汇总结果
+	rootTask := task
+	for rootTask.ParentID() != nil {
+		parent, err := e.repo.FindByID(context.Background(), *rootTask.ParentID())
+		if err != nil {
+			break
+		}
+		rootTask = parent
+	}
+
+	if rootTask.Metadata() == nil {
+		rootTask.SetMetadata(map[string]interface{}{})
+	}
+
+	// 获取或初始化 execution_summaries
+	raw, exists := rootTask.Metadata()["execution_summaries"]
+	list := make([]TaskExecutionSummary, 0)
+	if exists {
+		if arr, ok := raw.([]interface{}); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					s := TaskExecutionSummary{}
+					if id, ok := m["task_id"].(string); ok {
+						s.TaskID = id
+					}
+					if spanID, ok := m["span_id"].(string); ok {
+						s.SpanID = spanID
+					}
+					if goal, ok := m["goal"].(string); ok {
+						s.Goal = goal
+					}
+					if result, ok := m["result"].(string); ok {
+						s.Result = result
+					}
+					if stage, ok := m["stage"].(string); ok {
+						s.Stage = stage
+					}
+					if completedAt, ok := m["completed_at"].(float64); ok {
+						s.CompletedAt = int64(completedAt)
+					}
+					if status, ok := m["status"].(string); ok {
+						s.Status = status
+					}
+					list = append(list, s)
+				}
+			}
+		}
+	}
+
+	// 检查是否已存在（更新），否则添加
+	updated := false
+	for i := range list {
+		if list[i].TaskID == summary.TaskID {
+			list[i] = summary
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		list = append(list, summary)
+	}
+
+	// 转换回 []interface{} 存储
+	interfaceList := make([]interface{}, len(list))
+	for i, s := range list {
+		interfaceList[i] = map[string]interface{}{
+			"task_id":      s.TaskID,
+			"span_id":      s.SpanID,
+			"goal":         s.Goal,
+			"result":       s.Result,
+			"stage":        s.Stage,
+			"completed_at": s.CompletedAt,
+			"status":       s.Status,
+		}
+	}
+
+	rootTask.Metadata()["execution_summaries"] = interfaceList
+
+	e.resultMu.Lock()
+	if err := e.repo.Save(context.Background(), rootTask); err != nil {
+		log.Printf("[AutoExecutor] collectTaskResult: save failed, err=%v", err)
+		e.resultMu.Unlock()
+		return
+	}
+	e.resultMu.Unlock()
 }
 
 func (e *AutoTaskExecutor) publishTodoList(taskID, traceID string, todoList *TodoList) {
@@ -242,10 +360,6 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 }
 
 func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
-	if err := e.submitHomeworkToRoot(task); err != nil {
-		log.Printf("submit homework failed: %v", err)
-	}
-
 	resultData := map[string]interface{}{
 		"completed_at": time.Now().UnixMilli(),
 	}
@@ -256,8 +370,15 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	}
 
 	result := domain.NewResult(resultData, "任务完成")
+	log.Printf("[DEBUG] finishTask: about to Complete taskID=%s, current status=%s", task.ID().String(), task.Status().String())
 	task.Complete(result)
+	log.Printf("[DEBUG] finishTask: completed taskID=%s, status after Complete=%s", task.ID().String(), task.Status().String())
+	e.updateProgress(task, 100, "完成", "任务执行完成")
 	e.saveTaskPreservingMetadata(task)
+
+	if err := e.submitHomeworkToRoot(task); err != nil {
+		log.Printf("submit homework failed: %v", err)
+	}
 
 	if e.eventBus != nil {
 		evt := domain.NewTaskCompletedEvent(task)
@@ -333,7 +454,10 @@ func (e *AutoTaskExecutor) submitHomeworkToRoot(task *domain.Task) error {
 	}
 
 	rootTask.Metadata()["homework_submissions"] = list
-	return e.repo.Save(context.Background(), rootTask)
+	e.resultMu.Lock()
+	err := e.repo.Save(context.Background(), rootTask)
+	e.resultMu.Unlock()
+	return err
 }
 
 func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
@@ -349,4 +473,13 @@ func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
 		}
 	}
 	e.repo.Save(context.Background(), task)
+}
+
+func (e *AutoTaskExecutor) executeSubTaskAsync(task *domain.Task) {
+	go func(t *domain.Task) {
+		if err := e.ExecuteAutoTask(context.Background(), t); err != nil {
+			log.Printf("sub-task execute failed: task=%s err=%v", t.ID().String(), err)
+			_ = e.failTask(t, err)
+		}
+	}(task)
 }
