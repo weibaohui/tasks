@@ -2,9 +2,8 @@
  * 任务详情页面
  * 展示单个任务的完整信息
  */
-import React, { useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Spin } from 'antd';
+import React, { useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { TaskDetail } from '../components/TaskDetail';
 import { useTaskWebSocket } from '../hooks/useTaskWebSocket';
 import { useTaskStore } from '../stores/taskStore';
@@ -13,8 +12,10 @@ import { useTaskOperations } from '../hooks/useTaskOperations';
 export const TaskDetailPage: React.FC = () => {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentTask, loading, fetchTask } = useTaskStore();
-  const { cancelTask } = useTaskOperations();
+  const { cancelTask, startTask } = useTaskOperations();
+  const autoStartedRef = useRef(false);
 
   useTaskWebSocket(currentTask?.trace_id || '');
 
@@ -23,6 +24,18 @@ export const TaskDetailPage: React.FC = () => {
       fetchTask(taskId);
     }
   }, [taskId, fetchTask]);
+
+  // 自动启动任务
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'start' && currentTask?.status === 'pending' && taskId && !autoStartedRef.current) {
+      autoStartedRef.current = true;
+      startTask(taskId).then(() => {
+        fetchTask(taskId);
+        navigate(`/tasks/${taskId}`, { replace: true });
+      });
+    }
+  }, [currentTask, taskId, searchParams, startTask, fetchTask, navigate]);
 
   const handleCancel = async () => {
     if (!taskId) return;

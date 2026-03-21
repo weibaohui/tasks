@@ -3,14 +3,13 @@
  * 显示任务统计和列表
  */
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Button, Space, Modal, message } from 'antd';
+import { Row, Col, Card, Statistic, Button, Space, Modal } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TaskList } from '../components/TaskList';
 import { TaskForm } from '../components/TaskForm';
 import { useTaskWebSocket } from '../hooks/useTaskWebSocket';
 import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
-import * as taskApi from '../api/taskApi';
 
 export const TaskDashboard: React.FC = () => {
   const traceId = 'default-trace-id';

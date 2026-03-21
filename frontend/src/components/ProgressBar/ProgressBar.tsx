@@ -12,8 +12,8 @@ interface ProgressBarProps {
 }
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, showInfo = true }) => {
-  const formatPercent = (percent: number): string => {
-    return `${Math.round(percent)}%`;
+  const formatPercent = (percent?: number): string => {
+    return `${Math.round(percent || 0)}%`;
   };
 
   return (
