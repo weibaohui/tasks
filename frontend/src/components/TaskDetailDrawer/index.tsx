@@ -8,8 +8,8 @@ import { TeamOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
 import { TodoList } from '../TodoList';
-import { getTask } from '../../api/taskApi';
-import type { Task, TodoList as TodoListType, TaskStatus } from '../../types/task';
+import { getAllTasks, getTask } from '../../api/taskApi';
+import type { Task, TodoItem, TodoList as TodoListType, TaskStatus } from '../../types/task';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -23,37 +23,84 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
   const [todoList, setTodoList] = useState<TodoListType | null>(null);
 
   useEffect(() => {
-    if (taskId && open) {
-      loadTask();
-    }
+    if (!taskId || !open) return;
+    loadTask(false);
+    const timer = setInterval(() => {
+      loadTask(true);
+    }, 2000);
+    return () => clearInterval(timer);
   }, [taskId, open]);
 
-  const loadTask = async () => {
-    if (!taskId) return;
-    setLoading(true);
-    try {
-      const response = await getTask(taskId);
-      setTask(response);
+  const normalizeStatus = (status: Task['status']): TodoItem['status'] => {
+    if (status === 'pending') return 'distributed';
+    if (status === 'running') return 'running';
+    if (status === 'completed') return 'completed';
+    if (status === 'failed') return 'failed';
+    return 'cancelled';
+  };
 
-      if (response.metadata?.todo_list) {
-        try {
-          const todo = JSON.parse(response.metadata.todo_list as string);
-          setTodoList(todo);
-        } catch {
-          setTodoList(null);
-        }
-      } else {
-        setTodoList(null);
-      }
+  const parseMetadataTodo = (metadata: Record<string, unknown> | undefined): TodoListType | null => {
+    if (!metadata?.todo_list) return null;
+    try {
+      return JSON.parse(metadata.todo_list as string) as TodoListType;
+    } catch {
+      return null;
+    }
+  };
+
+  const buildTodoList = (currentTask: Task, allTasks: Task[]): TodoListType | null => {
+    const childTasks = allTasks.filter((t) => t.parent_id === currentTask.id);
+    const metadataTodo = parseMetadataTodo(currentTask.metadata);
+    const baseMap = new Map<string, TodoItem>();
+
+    if (metadataTodo?.items) {
+      metadataTodo.items.forEach((item) => {
+        baseMap.set(item.sub_task_id, item);
+      });
+    }
+
+    const mergedItems: TodoItem[] = childTasks.map((child) => {
+      const base = baseMap.get(child.id);
+      return {
+        sub_task_id: child.id,
+        sub_task_type: child.type,
+        goal: base?.goal || child.name,
+        status: normalizeStatus(child.status),
+        progress: Math.round(child.progress?.percentage || 0),
+        span_id: child.span_id,
+        created_at: child.created_at,
+        completed_at: child.finished_at,
+      };
+    });
+
+    if (mergedItems.length === 0 && metadataTodo) {
+      return metadataTodo;
+    }
+
+    return {
+      task_id: currentTask.id,
+      items: mergedItems,
+      created_at: metadataTodo?.created_at || Date.now(),
+      updated_at: Date.now(),
+    };
+  };
+
+  const loadTask = async (silent: boolean) => {
+    if (!taskId) return;
+    if (!silent) setLoading(true);
+    try {
+      const [taskResponse, tasksResponse] = await Promise.all([getTask(taskId), getAllTasks()]);
+      setTask(taskResponse);
+      setTodoList(buildTodoList(taskResponse, tasksResponse.tasks));
     } catch (error) {
       console.error('Failed to load task:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   const handleRefresh = () => {
-    loadTask();
+    loadTask(false);
   };
 
   if (!open) return null;
