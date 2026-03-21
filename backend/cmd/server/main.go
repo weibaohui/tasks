@@ -67,22 +67,10 @@ func main() {
 	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
 
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
-		// 根任务（无 parent_id）使用自动执行器，会分发子任务
-		// 子任务（有 parent_id）使用普通执行器，正常执行
-		parentID := task.ParentID()
-		if parentID == nil {
-			// 根任务：使用自动执行器
-			if err := autoExecutor.ExecuteAutoTask(ctx, task); err != nil {
-				if ctx.Err() != context.Canceled {
-					logger.Error("自动任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
-				}
-			}
-		} else {
-			// 子任务：使用普通执行器
-			if err := executor.Execute(ctx, task, taskRepo); err != nil {
-				if ctx.Err() != context.Canceled {
-					logger.Error("任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
-				}
+		// 所有任务都使用自动执行器，支持递归创建子任务
+		if err := autoExecutor.ExecuteAutoTask(ctx, task); err != nil {
+			if ctx.Err() != context.Canceled {
+				logger.Error("自动任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
 			}
 		}
 		// 确保任务状态被持久化

@@ -15,6 +15,8 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
+const MaxTaskDepth = 3 // 最大任务深度，超过则直接完成
+
 type AutoTaskExecutor struct {
 	repo       domain.TaskRepository
 	eventBus   interface{ Publish(domain.DomainEvent) }
