@@ -11,13 +11,13 @@ import { TodoList } from '../TodoList';
 import { getAllTasks, getTask } from '../../api/taskApi';
 import type { Task, TodoItem, TodoList as TodoListType, TaskStatus, ExecutionSummary } from '../../types/task';
 
-// 解析执行结果汇总
-const parseExecutionSummaries = (metadata: Record<string, unknown> | undefined): ExecutionSummary[] => {
-  if (!metadata?.execution_summaries) return [];
+// 解析当前任务的执行结果
+const parseExecutionSummary = (metadata: Record<string, unknown> | undefined): ExecutionSummary | null => {
+  if (!metadata?.execution_summary) return null;
   try {
-    return metadata.execution_summaries as ExecutionSummary[];
+    return metadata.execution_summary as ExecutionSummary;
   } catch {
-    return [];
+    return null;
   }
 };
 
@@ -311,36 +311,27 @@ const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }
 );
 
 /**
- * 任务执行结果汇总面板
+ * 任务执行结果面板
  */
 const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ task, traceTasks }) => {
-  // 找到根任务（execution_summaries 存储在根任务元数据中）
-  const rootTask = traceTasks.find((t) => !t.parent_id) || task;
-  const summaries = parseExecutionSummaries(rootTask.metadata);
-  // 获取当前任务的所有后代任务ID
-  const getAllDescendantIds = (taskId: string): string[] => {
-    const directChildren = traceTasks.filter((t) => t.parent_id === taskId);
-    const descendantIds = directChildren.map((c) => c.id);
-    directChildren.forEach((child) => {
-      descendantIds.push(...getAllDescendantIds(child.id));
-    });
-    return descendantIds;
-  };
-  const descendantIds = getAllDescendantIds(task.id);
+  // 当前任务的执行结果
+  const ownSummary = parseExecutionSummary(task.metadata);
+  // 直接子任务的执行结果
+  const childTasks = traceTasks.filter((t) => t.parent_id === task.id);
+  const childSummaries = childTasks
+    .map((t) => parseExecutionSummary(t.metadata))
+    .filter((s): s is ExecutionSummary => s !== null)
+    .sort((a, b) => a.completed_at - b.completed_at);
 
-  // 过滤出属于当前任务的汇总记录
-  const ownSummary = summaries.filter((s) => s.task_id === task.id);
-  const descendantSummaries = summaries.filter((s) => descendantIds.includes(s.task_id));
-
-  // 如果没有任何汇总记录且没有任何后代任务，则不显示
-  if (ownSummary.length === 0 && descendantSummaries.length === 0) {
+  // 如果没有任何汇总记录，则不显示
+  if (!ownSummary && childSummaries.length === 0) {
     return null;
   }
 
   return (
-    <Descriptions column={1} bordered size="small" title="执行结果汇总">
+    <Descriptions column={1} bordered size="small" title="执行结果">
       <Descriptions.Item>
-        {ownSummary.length > 0 && (
+        {ownSummary && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>本任务执行记录：</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -354,29 +345,27 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
                 </tr>
               </thead>
               <tbody>
-                {ownSummary.map((summary) => (
-                    <tr key={summary.task_id}>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
-                        {summary.task_id.slice(0, 8)}...
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{summary.goal}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                        {summary.result}
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                        <StatusBadge status={summary.status as TaskStatus} />
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                        {new Date(summary.completed_at).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
+                <tr>
+                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
+                    {ownSummary.task_id.slice(0, 8)}...
+                  </td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{ownSummary.goal}</td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
+                    {ownSummary.result}
+                  </td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
+                    <StatusBadge status={ownSummary.status as TaskStatus} />
+                  </td>
+                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
+                    {new Date(ownSummary.completed_at).toLocaleTimeString()}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
         )}
 
-        {descendantSummaries.length > 0 && (
+        {childSummaries.length > 0 && (
           <div>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>子任务执行记录：</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -390,31 +379,23 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
                 </tr>
               </thead>
               <tbody>
-                {descendantSummaries
-                  .sort((a, b) => a.completed_at - b.completed_at)
-                  .map((summary) => (
-                    <tr key={summary.task_id}>
-                      <td
-                        style={{
-                          padding: '6px 8px',
-                          border: '1px solid #f0f0f0',
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {summary.task_id.slice(0, 8)}...
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{summary.goal}</td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                        {summary.result}
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                        <StatusBadge status={summary.status as TaskStatus} />
-                      </td>
-                      <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                        {new Date(summary.completed_at).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
+                {childSummaries.map((summary) => (
+                  <tr key={summary.task_id}>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
+                      {summary.task_id.slice(0, 8)}...
+                    </td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{summary.goal}</td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
+                      {summary.result}
+                    </td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
+                      <StatusBadge status={summary.status as TaskStatus} />
+                    </td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
+                      {new Date(summary.completed_at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
