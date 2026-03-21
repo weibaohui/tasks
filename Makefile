@@ -59,16 +59,13 @@ dev-backend:
 dev-web:
 	cd frontend && pnpm run dev
 
-# 停止所有 taskmanager 相关进程
+# 停止本项目相关进程（按端口精准kill，不误杀其他项目）
 stop:
-	@echo "正在停止所有 taskmanager 相关进程..."
-	@-ps -ef | grep -v grep | grep "taskmanager" | awk '{print $$2}' | xargs -r kill -9
-	@-ps -ef | grep -v grep | grep "air" | grep -v "airportd" | awk '{print $$2}' | xargs -r kill -9
-	@-ps -ef | grep -v grep | grep "go run.*taskmanager" | awk '{print $$2}' | xargs -r kill -9
-	@-pkill -f "vite" 2>/dev/null || true
-	@-pkill -f "esbuild" 2>/dev/null || true
+	@echo "正在停止 TaskManager 进程..."
+	@-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
 	@sleep 1
-	@echo "已停止所有 taskmanager 进程"
+	@echo "已停止 TaskManager 进程"
 
 # 运行测试
 test:

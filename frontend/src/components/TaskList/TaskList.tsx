@@ -50,6 +50,8 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, loading, onCancel }) 
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
+      sorter: (a, b) => a.created_at - b.created_at,
+      defaultSortOrder: 'descend',
       render: (timestamp: number) => new Date(timestamp).toLocaleString(),
     },
     {
