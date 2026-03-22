@@ -106,6 +106,7 @@ func TestTaskType(t *testing.T) {
 		{TaskTypeDataProcessing, "data_processing"},
 		{TaskTypeFileOperation, "file_operation"},
 		{TaskTypeAPICall, "api_call"},
+		{TaskTypeAgent, "agent"},
 		{TaskTypeCustom, "custom"},
 	}
 
@@ -125,6 +126,7 @@ func TestParseTaskType(t *testing.T) {
 		{"data_processing", TaskTypeDataProcessing, false},
 		{"file_operation", TaskTypeFileOperation, false},
 		{"api_call", TaskTypeAPICall, false},
+		{"agent", TaskTypeAgent, false},
 		{"custom", TaskTypeCustom, false},
 		{"unknown", TaskTypeCustom, true},
 	}
