@@ -49,6 +49,7 @@ func main() {
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 	userRepo := _persistence.NewSQLiteUserRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
+	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
@@ -102,6 +103,7 @@ func main() {
 	)
 	userService := application.NewUserApplicationService(userRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
+	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
@@ -109,7 +111,8 @@ func main() {
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
 	userHandler := httpHandler.NewUserHandler(userService)
 	agentHandler := httpHandler.NewAgentHandler(agentService)
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler)
+	providerHandler := httpHandler.NewLLMProviderHandler(providerService)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)

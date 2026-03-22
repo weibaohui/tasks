@@ -16,10 +16,15 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil)
 }
 
-func SetupRoutesWithManagement(handler *TaskHandler, userHandler *UserHandler, agentHandler *AgentHandler) *http.ServeMux {
+func SetupRoutesWithManagement(
+	handler *TaskHandler,
+	userHandler *UserHandler,
+	agentHandler *AgentHandler,
+	providerHandler *LLMProviderHandler,
+) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// POST /api/v1/tasks - 创建任务
@@ -126,6 +131,46 @@ func SetupRoutesWithManagement(handler *TaskHandler, userHandler *UserHandler, a
 				agentHandler.UpdateAgent(w, r)
 			case http.MethodDelete:
 				agentHandler.DeleteAgent(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
+
+	if providerHandler != nil {
+		mux.HandleFunc("/api/v1/providers", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				providerHandler.CreateProvider(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					providerHandler.GetProvider(w, r)
+					return
+				}
+				providerHandler.ListProviders(w, r)
+			case http.MethodPut:
+				providerHandler.UpdateProvider(w, r)
+			case http.MethodDelete:
+				providerHandler.DeleteProvider(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+
+		mux.HandleFunc("/api/v1/providers/test", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			providerHandler.TestConnection(w, r)
+		})
+
+		mux.HandleFunc("/api/v1/providers/embedding", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				providerHandler.GetEmbeddingModels(w, r)
+			case http.MethodPut:
+				providerHandler.UpdateEmbeddingModels(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

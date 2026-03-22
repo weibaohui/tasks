@@ -74,6 +74,29 @@ CREATE TABLE IF NOT EXISTS agents (
 
 CREATE INDEX IF NOT EXISTS idx_agents_agent_code ON agents(agent_code);
 CREATE INDEX IF NOT EXISTS idx_agents_user_code ON agents(user_code);
+
+CREATE TABLE IF NOT EXISTS llm_providers (
+    id TEXT PRIMARY KEY,
+    user_code TEXT NOT NULL,
+    provider_key TEXT NOT NULL,
+    provider_name TEXT,
+    api_key TEXT,
+    api_base TEXT,
+    extra_headers TEXT,
+    supported_models TEXT,
+    default_model TEXT,
+    is_default INTEGER NOT NULL,
+    priority INTEGER NOT NULL,
+    auto_merge INTEGER NOT NULL,
+    embedding_models TEXT,
+    default_embedding_model TEXT,
+    is_active INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_providers_user_code ON llm_providers(user_code);
+CREATE INDEX IF NOT EXISTS idx_llm_providers_default ON llm_providers(is_default, is_active);
 `
 
 // InitSchema 初始化数据库 Schema
