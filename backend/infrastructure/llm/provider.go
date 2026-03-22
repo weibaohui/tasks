@@ -6,22 +6,23 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SubTask 子任务结构
 type SubTask struct {
-	Goal     string `json:"goal"`
-	TaskType string `json:"type"` // data_processing, file_operation, api_call, agent, custom
+	Goal     string `yaml:"goal"`
+	TaskType string `yaml:"type"` // data_processing, file_operation, api_call, agent, custom
 }
 
 // SubTaskPlan 子任务计划
 type SubTaskPlan struct {
-	SubTasks []SubTask `json:"sub_tasks"`
-	Reason   string    `json:"reason,omitempty"`
+	SubTasks []SubTask `yaml:"sub_tasks"`
+	Reason   string    `yaml:"reason,omitempty"`
 }
 
 // LLMProvider LLM provider 接口
@@ -119,64 +120,65 @@ func subTaskPrompt(taskName, taskDesc string, depth, maxDepth int) string {
 2. 任务类型应与子任务内容匹配
 3. 如果当前深度已达到最大深度，则不生成子任务
 
-请以 JSON 格式返回：
-{
-  "sub_tasks": [
-    {"goal": "处理前50%数据", "type": "data_processing"},
-    {"goal": "处理后50%数据", "type": "file_operation"}
-  ],
-  "reason": "简要说明为什么这样分解"
-}`, taskName, taskDesc, depth, maxDepth)
+请直接返回 YAML 格式，不要包含任何解释或标记：
+sub_tasks:
+  - goal: 处理前半部分数据
+    type: data_processing
+  - goal: 处理后半部分数据
+    type: data_processing
+  - goal: 验证处理结果
+    type: api_call
+reason: 简要说明为什么这样分解`, taskName, taskDesc, depth, maxDepth)
 }
 
-// extractJSON 从响应中提取 JSON
-func extractJSON(s string) string {
-	// 查找 ```json ... ``` 块
-	start := 0
-	end := len(s)
+// extractYAML 从响应中提取 YAML
+func extractYAML(s string) string {
+	// 去除可能的 markdown 标记
+	s = strings.TrimSpace(s)
 
-	// 查找 JSON 开始标记
-	if idx := strings.Index(s, "```json"); idx >= 0 {
-		start = idx + 7
+	// 去除 ```yaml ``` 或 ``` 包裹
+	if idx := strings.Index(s, "```yaml"); idx >= 0 {
+		start := idx + 7
+		if endIdx := strings.Index(s[start:], "```"); endIdx >= 0 {
+			return strings.TrimSpace(s[start : start+endIdx])
+		}
 	} else if idx := strings.Index(s, "```"); idx >= 0 {
-		start = idx + 3
-	}
-
-	// 查找 JSON 结束标记
-	if idx := strings.Index(s[start:], "```"); idx >= 0 {
-		end = start + idx
-	}
-
-	return strings.TrimSpace(s[start:end])
-}
-
-// tryFixAndParseJSON 尝试修复并解析 JSON
-func tryFixAndParseJSON(s string) (*SubTaskPlan, error) {
-	var plan SubTaskPlan
-
-	// 移除可能的前缀文本
-	jsonStart := strings.Index(s, "{")
-	if jsonStart < 0 {
-		return nil, fmt.Errorf("no JSON object found")
-	}
-
-	jsonStr := s[jsonStart:]
-
-	// 尝试解析
-	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		// 最后尝试：替换常见的问题字符
-		fixed := fixJSON(jsonStr)
-		if err := json.Unmarshal([]byte(fixed), &plan); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		start := idx + 3
+		if endIdx := strings.Index(s[start:], "```"); endIdx >= 0 {
+			return strings.TrimSpace(s[start : start+endIdx])
 		}
 	}
 
-	return &plan, nil
+	return s
 }
 
-// fixJSON 修复常见的 JSON 问题
-func fixJSON(s string) string {
-	// 移除单引号替换为双引号（如果有问题）
-	// 这是一个简单的修复，不处理所有情况
-	return s
+// tryParseYAML 尝试解析 YAML
+func tryParseYAML(s string) (*SubTaskPlan, error) {
+	var plan SubTaskPlan
+
+	// 移除可能的前缀文本，找到 YAML 开始位置
+	yamlStart := strings.Index(s, "sub_tasks:")
+	if yamlStart < 0 {
+		yamlStart = strings.Index(s, "sub_tasks :")
+	}
+	if yamlStart < 0 {
+		// 尝试找其他开始标记
+		for _, prefix := range []string{"- goal:", "reason:", "goal:", "type:"} {
+			if idx := strings.Index(s, prefix); idx >= 0 && (yamlStart < 0 || idx < yamlStart) {
+				yamlStart = idx
+			}
+		}
+	}
+
+	if yamlStart < 0 {
+		return nil, fmt.Errorf("no YAML content found")
+	}
+
+	yamlStr := strings.TrimSpace(s[yamlStart:])
+
+	if err := yaml.Unmarshal([]byte(yamlStr), &plan); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	return &plan, nil
 }

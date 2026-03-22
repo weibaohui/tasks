@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -83,6 +84,9 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 	url := p.config.BaseURL
 	if url == "" {
 		url = "https://api.openai.com/v1/chat/completions"
+	} else {
+		// 确保 base URL 加上 chat completions 路径
+		url = strings.TrimSuffix(url, "/") + "/chat/completions"
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqJSON))
@@ -129,22 +133,15 @@ func (p *OpenAIProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 		return nil, err
 	}
 
-	// 解析 JSON 响应
-	var plan SubTaskPlan
+	// 解析 YAML 响应
+	yamlStr := extractYAML(resp)
 
-	// 尝试提取 JSON 部分（可能包含在 ```json ... ``` 中）
-	jsonStr := extractJSON(resp)
-
-	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		// 如果解析失败，尝试修复常见的 JSON 问题
-		planPtr, err := tryFixAndParseJSON(resp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse sub task plan: %w", err)
-		}
-		plan = *planPtr
+	plan, err := tryParseYAML(yamlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse sub task plan: %w", err)
 	}
 
-	return &plan, nil
+	return plan, nil
 }
 
 // Name 返回 provider 名称

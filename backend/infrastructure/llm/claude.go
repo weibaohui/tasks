@@ -121,19 +121,14 @@ func (p *ClaudeProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 		return nil, err
 	}
 
-	var plan SubTaskPlan
+	yamlStr := extractYAML(resp)
 
-	jsonStr := extractJSON(resp)
-
-	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		planPtr, err := tryFixAndParseJSON(resp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse sub task plan: %w", err)
-		}
-		plan = *planPtr
+	plan, err := tryParseYAML(yamlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse sub task plan: %w", err)
 	}
 
-	return &plan, nil
+	return plan, nil
 }
 
 // Name 返回 provider 名称
