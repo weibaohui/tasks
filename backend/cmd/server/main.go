@@ -66,11 +66,7 @@ func main() {
 
 	// 5. 初始化任务执行器
 	executor := application.NewTaskExecutor()
-	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
-	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
-	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
 	executor.RegisterHandler(domain.TaskTypeAgent, application.AgentHandlerFunc)
-	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
 
 	// 6. 初始化工作池
 	workerPool := application.NewWorkerPool(3, logger)
