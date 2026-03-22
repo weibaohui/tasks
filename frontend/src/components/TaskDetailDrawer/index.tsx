@@ -266,14 +266,6 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
               </Descriptions>
             )}
 
-            {activeTask.result && (
-              <Descriptions column={1} bordered size="small" title="执行结果">
-                <Descriptions.Item>
-                  <pre style={{ margin: 0 }}>{JSON.stringify(activeTask.result, null, 2)}</pre>
-                </Descriptions.Item>
-              </Descriptions>
-            )}
-
             <Divider />
 
             <ExecutionSummaryPanel task={activeTask} traceTasks={traceTasks} />
