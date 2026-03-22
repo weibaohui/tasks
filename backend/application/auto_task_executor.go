@@ -301,20 +301,11 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	resultData := map[string]interface{}{
 		"completed_at": time.Now().UnixMilli(),
 	}
-	if task.ParentID() == nil && task.Metadata() != nil {
-		if homework, ok := task.Metadata()["homework_submissions"]; ok {
-			resultData["homework_submissions"] = homework
-		}
-	}
 
 	result := domain.NewResult(resultData, "任务完成")
 	task.Complete(result)
 	e.updateProgress(task, 100, "完成", "任务执行完成")
 	e.saveTaskPreservingMetadata(task)
-
-	if err := e.submitHomeworkToRoot(task); err != nil {
-		log.Printf("submit homework failed: %v", err)
-	}
 
 	if e.eventBus != nil {
 		evt := domain.NewTaskCompletedEvent(task)
@@ -332,68 +323,6 @@ func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {
 		e.eventBus.Publish(evt)
 	}
 	return nil
-}
-
-func (e *AutoTaskExecutor) submitHomeworkToRoot(task *domain.Task) error {
-	if task.ParentID() == nil {
-		return nil
-	}
-
-	rootTask := task
-	for rootTask.ParentID() != nil {
-		parent, err := e.repo.FindByID(context.Background(), *rootTask.ParentID())
-		if err != nil {
-			return err
-		}
-		rootTask = parent
-	}
-
-	if rootTask.Metadata() == nil {
-		rootTask.SetMetadata(map[string]interface{}{})
-	}
-
-	submission := map[string]interface{}{
-		"task_id":      task.ID().String(),
-		"parent_id":    task.ParentID().String(),
-		"trace_id":     task.TraceID().String(),
-		"span_id":      task.SpanID().String(),
-		"submitted_at": time.Now().UnixMilli(),
-		"status":       task.Status().String(),
-		"result":       nil,
-	}
-	if task.Result() != nil {
-		submission["result"] = task.Result().ToMap()
-	}
-
-	raw, exists := rootTask.Metadata()["homework_submissions"]
-	list := make([]map[string]interface{}, 0)
-	if exists {
-		if arr, ok := raw.([]interface{}); ok {
-			for _, item := range arr {
-				if m, ok := item.(map[string]interface{}); ok {
-					list = append(list, m)
-				}
-			}
-		}
-	}
-
-	updated := false
-	for i := range list {
-		if id, ok := list[i]["task_id"].(string); ok && id == task.ID().String() {
-			list[i] = submission
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		list = append(list, submission)
-	}
-
-	rootTask.Metadata()["homework_submissions"] = list
-	e.resultMu.Lock()
-	err := e.repo.Save(context.Background(), rootTask)
-	e.resultMu.Unlock()
-	return err
 }
 
 func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
