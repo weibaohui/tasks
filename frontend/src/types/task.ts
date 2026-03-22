@@ -6,7 +6,7 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cance
 /**
  * 任务类型枚举
  */
-export type TaskType = 'data_processing' | 'file_operation' | 'api_call' | 'custom';
+export type TaskType = 'data_processing' | 'file_operation' | 'api_call' | 'agent' | 'custom';
 
 /**
  * 任务接口

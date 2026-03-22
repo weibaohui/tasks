@@ -19,11 +19,13 @@ const taskTypeLabels: Record<string, string> = {
   data_processing: '数据处理',
   file_operation: '文件操作',
   api_call: 'API调用',
+  agent: 'Agent',
   custom: '自定义',
   '0': '数据处理',
   '1': '文件操作',
   '2': 'API调用',
-  '3': '自定义',
+  '3': 'Agent',
+  '4': '自定义',
 };
 
 const getTaskTypeLabel = (taskType: string): string => {
