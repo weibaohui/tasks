@@ -57,7 +57,7 @@ func DefaultConfig() *Config {
 	config := &Config{
 		ProviderType: providerType,
 		Model:        getEnvOrDefault("LLM_MODEL", "gpt-4"),
-		APIKey:       os.Getenv("OPENAI_API_KEY"),
+		APIKey:       getFirstEnv("OPENAI_API_KEY", "LLM_API_KEY"),
 		BaseURL:      os.Getenv("LLM_BASE_URL"),
 		Temperature:  0.7,
 		MaxTokens:    4096,
@@ -86,6 +86,15 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getFirstEnv(keys ...string) string {
+	for _, key := range keys {
+		if val := os.Getenv(key); val != "" {
+			return val
+		}
+	}
+	return ""
 }
 
 // NewLLMProvider 创建 LLM Provider

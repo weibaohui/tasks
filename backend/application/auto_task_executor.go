@@ -91,6 +91,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	// 使用 LLM 动态生成子任务
 	subTaskIDs := make([]string, 0)
 	hasSubTasks := false
+	isAgentTask := task.Type() == domain.TaskTypeAgent
 
 	// 如果有 LLM Provider，调用它生成子任务
 	if e.llmProvider != nil {
@@ -104,7 +105,12 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			MaxTaskDepth,
 		)
 		if err != nil {
-			log.Printf("[AutoExecutor] LLM 生成子任务失败: %v，回退到默认处理", err)
+			log.Printf("[AutoExecutor] LLM 生成子任务失败: %v", err)
+			if isAgentTask {
+				e.updateProgress(task, 10, "LLM 规划失败", "Agent 模式调用 LLM 失败，任务终止")
+				return e.failTask(task, fmt.Errorf("Agent 模式调用 LLM 失败: %w", err))
+			}
+			log.Printf("[AutoExecutor] 非 Agent 任务回退到默认子任务")
 			hasSubTasks = false
 		} else if len(plan.SubTasks) > 0 {
 			hasSubTasks = true
@@ -117,7 +123,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
 
 				taskType := parseTaskType(st.TaskType)
-				if task.Type() == domain.TaskTypeAgent {
+				if isAgentTask {
 					taskType = domain.TaskTypeAgent
 				}
 
@@ -174,7 +180,15 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			}
 
 			e.publishAndPersistTodoList(task, todoList)
+		} else if isAgentTask {
+			log.Printf("[AutoExecutor] Agent 模式下 LLM 未返回可用子任务")
+			e.updateProgress(task, 10, "LLM 规划为空", "Agent 模式要求 LLM 返回子任务，任务终止")
+			return e.failTask(task, errors.New("Agent 模式下 LLM 未生成子任务"))
 		}
+	} else if isAgentTask {
+		log.Printf("[AutoExecutor] Agent 模式未配置 LLM Provider，无法进行智能分解")
+		e.updateProgress(task, 5, "LLM 未配置", "Agent 模式未配置 LLM，任务终止")
+		return e.failTask(task, errors.New("Agent 模式未配置 LLM Provider"))
 	}
 
 	// 如果没有 LLM Provider 或 LLM 返回空，使用简单的随机子任务

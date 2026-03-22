@@ -51,7 +51,8 @@ func main() {
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
 	var llmProvider llm.LLMProvider
-	if llmConfig.APIKey != "" || llmConfig.ProviderType == "ollama" {
+	shouldInitLLM := llmConfig.ProviderType == "ollama" || llmConfig.APIKey != "" || llmConfig.BaseURL != "" || os.Getenv("LLM_PROVIDER") != ""
+	if shouldInitLLM {
 		var err error
 		llmProvider, err = llm.NewLLMProvider(llmConfig)
 		if err != nil {
