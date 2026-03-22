@@ -1,4 +1,5 @@
 .PHONY: help build clean dev dev-backend dev-web stop test fmt lint setup
+SHELL := /bin/bash
 
 # 默认目标
 help:
@@ -45,6 +46,7 @@ dev:
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@(trap 'kill 0' INT; \
+		set -a; source backend/.env; set +a; \
 		cd backend && air 2>&1 & \
 		cd frontend && pnpm run dev 2>&1 & \
 		wait)
@@ -53,7 +55,7 @@ dev:
 dev-backend:
 	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
 	@echo "启动后端开发服务器 (air 热重载)..."
-	cd backend && air
+	set -a; source backend/.env; set +a; cd backend && air
 
 # 启动前端开发服务器
 dev-web:

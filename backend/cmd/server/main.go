@@ -16,6 +16,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -47,24 +48,38 @@ func main() {
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 
-	// 4. 初始化任务执行器
+	// 4. 初始化 LLM Provider
+	llmConfig := llm.DefaultConfig()
+	var llmProvider llm.LLMProvider
+	shouldInitLLM := llmConfig.ProviderType == "ollama" || llmConfig.APIKey != "" || llmConfig.BaseURL != "" || os.Getenv("LLM_PROVIDER") != ""
+	if shouldInitLLM {
+		var err error
+		llmProvider, err = llm.NewLLMProvider(llmConfig)
+		if err != nil {
+			logger.Warn("LLM Provider 初始化失败，将使用默认子任务生成", zap.Error(err))
+		} else {
+			logger.Info("LLM Provider 初始化成功", zap.String("provider", llmProvider.Name()), zap.String("model", llmConfig.Model))
+		}
+	} else {
+		logger.Warn("未配置 LLM API Key，子任务生成将使用默认逻辑")
+	}
+
+	// 5. 初始化任务执行器
 	executor := application.NewTaskExecutor()
 	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
 	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
 	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
+	executor.RegisterHandler(domain.TaskTypeAgent, application.AgentHandlerFunc)
 	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
 
-	// 5. 初始化工作池
+	// 6. 初始化工作池
 	workerPool := application.NewWorkerPool(3, logger)
 
-	// 5.1 初始化自动任务执行器
+	// 6.1 初始化自动任务执行器
 	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
-
-	// 5.2 注册任务处理器
-	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
-	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
-	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
-	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
+	if llmProvider != nil {
+		autoExecutor.SetLLMProvider(llmProvider)
+	}
 
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
 		// 所有任务都使用自动执行器，支持递归创建子任务

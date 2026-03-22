@@ -10,12 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
@@ -25,19 +25,20 @@ const MaxTaskDepth = 4
 type TaskExecutionSummary struct {
 	TaskID      string `json:"task_id"`
 	SpanID      string `json:"span_id"`
-	Goal        string `json:"goal"`          // 目标是什么
-	Result      string `json:"result"`        // 结果是什么
+	Goal        string `json:"goal"`   // 目标是什么
+	Result      string `json:"result"` // 结果是什么
 	Stage       string `json:"stage"`
 	CompletedAt int64  `json:"completed_at"`
 	Status      string `json:"status"`
 }
 
 type AutoTaskExecutor struct {
-	repo       domain.TaskRepository
-	eventBus   interface{ Publish(domain.DomainEvent) }
-	registry   *TaskRegistry
-	workerPool interface{ Submit(*domain.Task) bool }
-	resultMu   sync.Mutex // 保护并发保存 execution_summaries
+	repo        domain.TaskRepository
+	eventBus    interface{ Publish(domain.DomainEvent) }
+	registry    *TaskRegistry
+	workerPool  interface{ Submit(*domain.Task) bool }
+	llmProvider llm.LLMProvider
+	resultMu    sync.Mutex // 保护并发保存 execution_summaries
 }
 
 func NewAutoTaskExecutor(
@@ -52,6 +53,11 @@ func NewAutoTaskExecutor(
 		registry:   registry,
 		workerPool: workerPool,
 	}
+}
+
+// SetLLMProvider 设置 LLM Provider
+func (e *AutoTaskExecutor) SetLLMProvider(provider llm.LLMProvider) {
+	e.llmProvider = provider
 }
 
 func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Task) error {
@@ -74,7 +80,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	todoList := NewTodoList(taskID)
 
 	e.updateProgress(task, 0, "初始化", fmt.Sprintf("开始执行任务，深度 %d", currentDepth))
-	time.Sleep(10 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// 检查是否达到最大深度
 	if currentDepth >= MaxTaskDepth {
@@ -82,13 +88,113 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		return e.finishTask(task)
 	}
 
-	// 90% 概率分发子任务，10% 概率直接完成
+	// 使用 LLM 动态生成子任务
 	subTaskIDs := make([]string, 0)
 	hasSubTasks := false
+	isAgentTask := task.Type() == domain.TaskTypeAgent
 
-	if rand.Float32() < 0.9 {
-		hasSubTasks = true
-		e.updateProgress(task, 10, "分发子任务", "开始创建子任务")
+	// 如果有 LLM Provider，调用它生成子任务
+	if e.llmProvider != nil {
+		e.updateProgress(task, 5, "LLM 规划中", "正在调用 LLM 生成子任务...")
+
+		plan, err := e.llmProvider.GenerateSubTasks(
+			ctx,
+			task.Name(),
+			task.Description(),
+			currentDepth,
+			MaxTaskDepth,
+		)
+		if err != nil {
+			log.Printf("[AutoExecutor] LLM 生成子任务失败: %v", err)
+			if isAgentTask {
+				e.updateProgress(task, 10, "LLM 规划失败", "Agent 模式调用 LLM 失败，任务终止")
+				return e.failTask(task, fmt.Errorf("Agent 模式调用 LLM 失败: %w", err))
+			}
+			log.Printf("[AutoExecutor] 非 Agent 任务回退到默认子任务")
+			hasSubTasks = false
+		} else if len(plan.SubTasks) > 0 {
+			hasSubTasks = true
+			e.updateProgress(task, 10, "分发子任务", fmt.Sprintf("LLM 生成了 %d 个子任务", len(plan.SubTasks)))
+
+			idGen := utils.NewNanoIDGenerator(21)
+
+			for _, st := range plan.SubTasks {
+				subTaskID := idGen.Generate()
+				subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
+
+				taskType := parseTaskType(st.TaskType)
+				if isAgentTask {
+					taskType = domain.TaskTypeAgent
+				}
+
+				subTask, err := domain.NewTask(
+					domain.NewTaskID(subTaskID),
+					domain.NewTraceID(traceID),
+					domain.NewSpanID(subSpanID),
+					func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
+					st.Goal,
+					"",
+					taskType,
+					map[string]interface{}{
+						"goal":        st.Goal,
+						"parent_id":   taskID,
+						"parent_span": spanID,
+						"depth":       strconv.Itoa(currentDepth),
+						"llm_reason":  plan.Reason,
+					},
+					60000*time.Millisecond,
+					0,
+					0,
+				)
+				if err != nil {
+					log.Printf("Failed to create sub-task: %v", err)
+					continue
+				}
+
+				subTask.Start()
+				if err := e.repo.Save(context.Background(), subTask); err != nil {
+					log.Printf("Failed to save sub-task: %v", err)
+					continue
+				}
+
+				e.executeSubTaskAsync(subTask)
+
+				todoList.AddItem(subTaskID, st.Goal, taskType.String(), subSpanID, TodoStatusDistributed)
+				subTaskIDs = append(subTaskIDs, subTaskID)
+
+				if e.eventBus != nil {
+					evt := domain.NewTodoSubTaskCreatedEvent(
+						domain.NewTaskID(taskID),
+						domain.NewTaskID(subTaskID),
+						domain.NewTraceID(traceID),
+						subTaskID,
+						subSpanID,
+						spanID,
+						taskType,
+						st.Goal,
+					)
+					e.eventBus.Publish(evt)
+				}
+
+				log.Printf("[AutoExecutor] 创建子任务(LLM): %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
+			}
+
+			e.publishAndPersistTodoList(task, todoList)
+		} else if isAgentTask {
+			log.Printf("[AutoExecutor] Agent 模式下 LLM 未返回可用子任务")
+			e.updateProgress(task, 10, "LLM 规划为空", "Agent 模式要求 LLM 返回子任务，任务终止")
+			return e.failTask(task, errors.New("Agent 模式下 LLM 未生成子任务"))
+		}
+	} else if isAgentTask {
+		log.Printf("[AutoExecutor] Agent 模式未配置 LLM Provider，无法进行智能分解")
+		e.updateProgress(task, 5, "LLM 未配置", "Agent 模式未配置 LLM，任务终止")
+		return e.failTask(task, errors.New("Agent 模式未配置 LLM Provider"))
+	}
+
+	// 如果没有 LLM Provider 或 LLM 返回空，使用简单的随机子任务
+	if !hasSubTasks {
+		e.updateProgress(task, 10, "分发子任务", "使用默认子任务")
+		time.Sleep(1 * time.Second)
 
 		subTasks := []struct {
 			goal     string
@@ -104,6 +210,10 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		for _, st := range subTasks {
 			subTaskID := idGen.Generate()
 			subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
+			taskType := st.taskType
+			if task.Type() == domain.TaskTypeAgent {
+				taskType = domain.TaskTypeAgent
+			}
 
 			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
@@ -112,7 +222,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
 				st.goal,
 				"",
-				st.taskType,
+				taskType,
 				map[string]interface{}{
 					"goal":        st.goal,
 					"parent_id":   taskID,
@@ -136,7 +246,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 			e.executeSubTaskAsync(subTask)
 
-			todoList.AddItem(subTaskID, st.goal, string(st.taskType), subSpanID, TodoStatusDistributed)
+			todoList.AddItem(subTaskID, st.goal, taskType.String(), subSpanID, TodoStatusDistributed)
 			subTaskIDs = append(subTaskIDs, subTaskID)
 
 			if e.eventBus != nil {
@@ -147,20 +257,17 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					subTaskID,
 					subSpanID,
 					spanID,
-					st.taskType,
+					taskType,
 					st.goal,
 				)
 				e.eventBus.Publish(evt)
 			}
 
-			log.Printf("[AutoExecutor] 创建子任务: %s, spanID: %s", subTaskID, subSpanID)
+			log.Printf("[AutoExecutor] 创建子任务: %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
 		}
 
+		hasSubTasks = true
 		e.publishAndPersistTodoList(task, todoList)
-	} else {
-		hasSubTasks = false
-		e.updateProgress(task, 50, "直接完成", "10%概率选择直接完成任务")
-		time.Sleep(2 * time.Second)
 	}
 
 	// 最终检查：只有所有子任务都完成，父任务才能完成

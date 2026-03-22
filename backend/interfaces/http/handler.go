@@ -126,11 +126,25 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cmd.ParentID == nil {
+		if err := h.taskService.StartTask(r.Context(), task.ID()); err != nil {
+			code, message := mapDomainErrorToHTTP(err)
+			w.WriteHeader(code)
+			json.NewEncoder(w).Encode(HTTPError{Code: code, Message: message})
+			return
+		}
+	}
+
+	status := task.Status().String()
+	if cmd.ParentID == nil {
+		status = "running"
+	}
+
 	resp := map[string]interface{}{
 		"id":         task.ID().String(),
 		"trace_id":   task.TraceID().String(),
 		"span_id":    task.SpanID().String(),
-		"status":     task.Status().String(),
+		"status":     status,
 		"created_at": task.CreatedAt().UnixMilli(),
 	}
 
@@ -139,11 +153,11 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetTask 获取任务，或获取所有任务
+// GetTask 获取任务
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	taskID := r.URL.Query().Get("id")
 	if taskID == "" {
-		h.ListAllTasks(w, r)
+		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
 

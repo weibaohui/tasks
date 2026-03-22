@@ -62,6 +62,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
           <Select.Option value="data_processing">数据处理</Select.Option>
           <Select.Option value="file_operation">文件操作</Select.Option>
           <Select.Option value="api_call">API 调用</Select.Option>
+          <Select.Option value="agent">Agent</Select.Option>
           <Select.Option value="custom">自定义</Select.Option>
         </Select>
       </Form.Item>

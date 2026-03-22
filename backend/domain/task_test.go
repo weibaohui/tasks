@@ -367,6 +367,204 @@ func TestTask_ConcurrentAccess(t *testing.T) {
 	<-done
 }
 
+// Agent 模式测试用例
+
+func TestNewTask_AgentType(t *testing.T) {
+	taskID := NewTaskID("agent-task-1")
+	traceID := NewTraceID("agent-trace-1")
+	spanID := NewSpanID("agent-span-1")
+
+	metadata := map[string]interface{}{
+		"model":       "claude-3-opus",
+		"prompt":      "请帮我分析这个数据",
+		"max_tokens":  4096,
+		"temperature": 0.7,
+	}
+
+	task, err := NewTask(
+		taskID,
+		traceID,
+		spanID,
+		nil,
+		"Agent任务",
+		"使用LLM Agent进行数据分析",
+		TaskTypeAgent,
+		metadata,
+		120*time.Second,
+		3,
+		10,
+	)
+
+	if err != nil {
+		t.Fatalf("创建Agent任务失败: %v", err)
+	}
+
+	if task.Type() != TaskTypeAgent {
+		t.Errorf("期望任务类型为 Agent, 实际为 %v", task.Type())
+	}
+
+	if task.Name() != "Agent任务" {
+		t.Errorf("期望任务名称为 'Agent任务', 实际为 '%s'", task.Name())
+	}
+
+	if task.Metadata()["model"] != "claude-3-opus" {
+		t.Errorf("期望 model 为 'claude-3-opus', 实际为 '%v'", task.Metadata()["model"])
+	}
+}
+
+func TestTask_AgentType_Lifecycle(t *testing.T) {
+	task := createAgentTestTask()
+
+	if task.Type() != TaskTypeAgent {
+		t.Errorf("期望任务类型为 Agent, 实际为 %v", task.Type())
+	}
+
+	err := task.Start()
+	if err != nil {
+		t.Fatalf("启动Agent任务失败: %v", err)
+	}
+
+	if task.Status() != TaskStatusRunning {
+		t.Errorf("期望状态为 Running, 实际为 %v", task.Status())
+	}
+
+	result := NewResult(map[string]interface{}{
+		"response": "分析完成，发现3个关键洞察",
+		"insights": []string{"趋势1", "趋势2", "趋势3"},
+	}, "Agent任务执行成功")
+
+	err = task.Complete(result)
+	if err != nil {
+		t.Fatalf("完成Agent任务失败: %v", err)
+	}
+
+	if task.Status() != TaskStatusCompleted {
+		t.Errorf("期望状态为 Completed, 实际为 %v", task.Status())
+	}
+
+	if task.Result().Data().(map[string]interface{})["response"] != "分析完成，发现3个关键洞察" {
+		t.Error("Agent任务结果不正确")
+	}
+}
+
+func TestTask_AgentType_Progress(t *testing.T) {
+	task := createAgentTestTask()
+	task.Start()
+
+	task.UpdateProgress(4, 1, "思考中", "分析问题...")
+	progress := task.Progress()
+	if progress.Stage() != "思考中" {
+		t.Errorf("期望阶段为 '思考中', 实际为 '%s'", progress.Stage())
+	}
+
+	task.UpdateProgress(4, 2, "执行中", "调用工具...")
+	progress = task.Progress()
+	if progress.Percentage() != 50.0 {
+		t.Errorf("期望百分比为 50.0, 实际为 %f", progress.Percentage())
+	}
+
+	task.UpdateProgress(4, 3, "生成中", "整合结果...")
+	progress = task.Progress()
+	if progress.Current() != 3 {
+		t.Errorf("期望当前为 3, 实际为 %d", progress.Current())
+	}
+
+	task.UpdateProgress(4, 4, "完成", "任务结束")
+	progress = task.Progress()
+	if progress.Percentage() != 100.0 {
+		t.Errorf("期望百分比为 100.0, 实际为 %f", progress.Percentage())
+	}
+}
+
+func TestTask_AgentType_FailAndRetry(t *testing.T) {
+	task := createAgentTestTask()
+	task.Start()
+
+	err := task.Fail(errors.New("LLM API超时"))
+	if err != nil {
+		t.Fatalf("标记Agent任务失败失败: %v", err)
+	}
+
+	if task.Status() != TaskStatusFailed {
+		t.Errorf("期望状态为 Failed, 实际为 %v", task.Status())
+	}
+
+	if task.Error() == nil {
+		t.Error("期望 Error 不为 nil")
+	}
+}
+
+func TestTask_AgentType_ToFromSnapshot(t *testing.T) {
+	task := createAgentTestTask()
+	task.Start()
+	task.UpdateProgress(100, 50, "处理中", "已完成一半")
+
+	snap := task.ToSnapshot()
+
+	if snap.Type != TaskTypeAgent {
+		t.Errorf("期望快照类型为 Agent, 实际为 %v", snap.Type)
+	}
+
+	newTask := &Task{}
+	newTask.FromSnapshot(&snap)
+
+	if newTask.Type() != TaskTypeAgent {
+		t.Errorf("恢复后类型不匹配")
+	}
+
+	if newTask.Status() != TaskStatusRunning {
+		t.Errorf("恢复后状态不匹配")
+	}
+
+	if newTask.Progress().Current() != 50 {
+		t.Errorf("恢复后进度不匹配: 期望 50, 实际 %d", newTask.Progress().Current())
+	}
+}
+
+func TestTaskType_Agent_AllTransitions(t *testing.T) {
+	task := createAgentTestTask()
+
+	// Pending -> Running
+	err := task.Start()
+	if err != nil {
+		t.Fatalf("启动任务失败: %v", err)
+	}
+	if task.Status() != TaskStatusRunning {
+		t.Errorf("期望 Running, 实际 %v", task.Status())
+	}
+
+	// Running -> Completed
+	result := NewResult("success", "完成")
+	err = task.Complete(result)
+	if err != nil {
+		t.Fatalf("完成任务失败: %v", err)
+	}
+	if task.Status() != TaskStatusCompleted {
+		t.Errorf("期望 Completed, 实际 %v", task.Status())
+	}
+}
+
+func createAgentTestTask() *Task {
+	task, _ := NewTask(
+		NewTaskID("agent-test-task"),
+		NewTraceID("agent-test-trace"),
+		NewSpanID("agent-test-span"),
+		nil,
+		"Agent测试任务",
+		"Agent模式测试",
+		TaskTypeAgent,
+		map[string]interface{}{
+			"model":      "claude-3-opus",
+			"prompt":     "测试prompt",
+			"max_tokens": 4096,
+		},
+		120*time.Second,
+		3,
+		10,
+	)
+	return task
+}
+
 func createTestTask() *Task {
 	task, _ := NewTask(
 		NewTaskID("test-task"),

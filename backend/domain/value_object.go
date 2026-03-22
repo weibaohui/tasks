@@ -64,11 +64,11 @@ func (id SpanID) Equals(other SpanID) bool {
 type TaskStatus int
 
 const (
-	TaskStatusPending    TaskStatus = 0
-	TaskStatusRunning    TaskStatus = 1
-	TaskStatusCompleted  TaskStatus = 2
-	TaskStatusFailed     TaskStatus = 3
-	TaskStatusCancelled  TaskStatus = 4
+	TaskStatusPending   TaskStatus = 0
+	TaskStatusRunning   TaskStatus = 1
+	TaskStatusCompleted TaskStatus = 2
+	TaskStatusFailed    TaskStatus = 3
+	TaskStatusCancelled TaskStatus = 4
 )
 
 func (s TaskStatus) String() string {
@@ -113,7 +113,8 @@ const (
 	TaskTypeDataProcessing TaskType = 0
 	TaskTypeFileOperation  TaskType = 1
 	TaskTypeAPICall        TaskType = 2
-	TaskTypeCustom         TaskType = 3
+	TaskTypeAgent          TaskType = 3
+	TaskTypeCustom         TaskType = 4
 )
 
 func (t TaskType) String() string {
@@ -124,6 +125,8 @@ func (t TaskType) String() string {
 		return "file_operation"
 	case TaskTypeAPICall:
 		return "api_call"
+	case TaskTypeAgent:
+		return "agent"
 	case TaskTypeCustom:
 		return "custom"
 	default:
@@ -140,6 +143,8 @@ func ParseTaskType(s string) (TaskType, error) {
 		return TaskTypeFileOperation, nil
 	case "api_call":
 		return TaskTypeAPICall, nil
+	case "agent":
+		return TaskTypeAgent, nil
 	case "custom":
 		return TaskTypeCustom, nil
 	default:

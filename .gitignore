@@ -17,3 +17,4 @@ frontend/debug-05-after-submit.png
 frontend/test-results/.last-run.json
 backend/backend_exec.log
 frontend/dist
+.env
