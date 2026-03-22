@@ -2,7 +2,7 @@
  * 任务详情抽屉组件
  * 展示任务详情和子任务列表
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider, Tree } from 'antd';
 import { TeamOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
@@ -34,38 +34,24 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
   const [loading, setLoading] = useState(false);
   const [todoList, setTodoList] = useState<TodoListType | null>(null);
 
-  useEffect(() => {
-    if (!taskId || !open) return;
-    loadTask(false);
-  }, [taskId, open]);
-
-  // 当选择的タスク改变时，重新从数据库加载全量数据
-  useEffect(() => {
-    if (!selectedTaskId || !open) return;
-    if (selectedTaskId === taskId) return;
-
-    // 重新加载全量数据，确保获取最新状态
-    loadTask(false);
-  }, [selectedTaskId, open]);
-
-  const normalizeStatus = (status: Task['status']): TodoItem['status'] => {
+  const normalizeStatus = useCallback((status: Task['status']): TodoItem['status'] => {
     if (status === 'pending') return 'distributed';
     if (status === 'running') return 'running';
     if (status === 'completed') return 'completed';
     if (status === 'failed') return 'failed';
     return 'cancelled';
-  };
+  }, []);
 
-  const parseMetadataTodo = (metadata: Record<string, unknown> | undefined): TodoListType | null => {
+  const parseMetadataTodo = useCallback((metadata: Record<string, unknown> | undefined): TodoListType | null => {
     if (!metadata?.todo_list) return null;
     try {
       return JSON.parse(metadata.todo_list as string) as TodoListType;
     } catch {
       return null;
     }
-  };
+  }, []);
 
-  const buildTodoList = (currentTask: Task, allTasks: Task[]): TodoListType | null => {
+  const buildTodoList = useCallback((currentTask: Task, allTasks: Task[]): TodoListType | null => {
     const childTasks = allTasks.filter((t) => t.parent_id === currentTask.id);
     const metadataTodo = parseMetadataTodo(currentTask.metadata);
     const baseMap = new Map<string, TodoItem>();
@@ -100,9 +86,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
       created_at: metadataTodo?.created_at || Date.now(),
       updated_at: Date.now(),
     };
-  };
+  }, [normalizeStatus, parseMetadataTodo]);
 
-  const loadTask = async (silent: boolean) => {
+  const loadTask = useCallback(async (silent: boolean, preferredTaskId?: string) => {
     if (!taskId) return;
     if (!silent) setLoading(true);
     try {
@@ -113,14 +99,26 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
       const sameTraceTasks = tasksResponse.tasks.filter((t) => t.trace_id === taskResponse.trace_id);
       setTraceTasks(sameTraceTasks);
 
-      const currentSelectedTask = sameTraceTasks.find((t) => t.id === (selectedTaskId || taskResponse.id)) || taskResponse;
+      const selectedId = preferredTaskId || selectedTaskId || taskResponse.id;
+      const currentSelectedTask = sameTraceTasks.find((t) => t.id === selectedId) || taskResponse;
       setTodoList(buildTodoList(currentSelectedTask, tasksResponse.tasks));
     } catch (error) {
       console.error('Failed to load task:', error);
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [taskId, selectedTaskId, buildTodoList]);
+
+  useEffect(() => {
+    if (!taskId || !open) return;
+    loadTask(false);
+  }, [taskId, open, loadTask]);
+
+  useEffect(() => {
+    if (!selectedTaskId || !open) return;
+    if (selectedTaskId === taskId) return;
+    loadTask(false, selectedTaskId);
+  }, [selectedTaskId, open, taskId, loadTask]);
 
   const handleRefresh = () => {
     loadTask(false);

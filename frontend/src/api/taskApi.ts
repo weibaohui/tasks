@@ -43,10 +43,10 @@ export async function getTask(taskId: string): Promise<Task> {
 
 /**
  * 获取任务列表（全部）
- * GET /api/v1/tasks
+ * GET /api/v1/tasks/all
  */
 export async function getAllTasks(): Promise<TaskListResponse> {
-  const response = await apiClient.get<TaskListResponse>('/tasks');
+  const response = await apiClient.get<TaskListResponse>('/tasks/all');
   return response.data;
 }
 

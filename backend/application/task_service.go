@@ -108,14 +108,7 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		return nil, fmt.Errorf("failed to save task: %w", err)
 	}
 
-	// 5. 根任务（无 parent_id）自动启动
-	if cmd.ParentID == nil {
-		if err := s.StartTask(ctx, task.ID()); err != nil {
-			s.logger.Warn("自动启动任务失败", zap.String("taskID", taskID.String()), zap.Error(err))
-		}
-	}
-
-	// 6. 发布领域事件
+	// 5. 发布领域事件
 	for _, event := range task.PopEvents() {
 		s.eventBus.Publish(event)
 	}
