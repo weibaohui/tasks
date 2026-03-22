@@ -120,7 +120,7 @@ func CreateSubTasksFromLLM(
 		subTaskID := idGen.Generate()
 		subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
 
-		taskType := parseTaskType(st.TaskType)
+		taskType := domain.TaskTypeAgent
 
 		subTask, err := domain.NewTask(
 			domain.NewTaskID(subTaskID),
@@ -155,7 +155,7 @@ func CreateSubTasksFromLLM(
 		todoList.AddItem(subTaskID, st.Goal, taskType.String(), subSpanID, TodoStatusDistributed)
 		subTaskIDs = append(subTaskIDs, subTaskID)
 
-		log.Printf("[AgentHandler] 创建子任务: %s, spanID: %s, type: %s", subTaskID, subSpanID, st.TaskType)
+		log.Printf("[AgentHandler] 创建子任务: %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
 	}
 
 	// 持久化 todo list

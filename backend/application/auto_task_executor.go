@@ -25,8 +25,8 @@ const MaxTaskDepth = 4
 type TaskExecutionSummary struct {
 	TaskID      string `json:"task_id"`
 	SpanID      string `json:"span_id"`
-	Goal        string `json:"goal"`          // 目标是什么
-	Result      string `json:"result"`        // 结果是什么
+	Goal        string `json:"goal"`   // 目标是什么
+	Result      string `json:"result"` // 结果是什么
 	Stage       string `json:"stage"`
 	CompletedAt int64  `json:"completed_at"`
 	Status      string `json:"status"`
@@ -116,8 +116,10 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				subTaskID := idGen.Generate()
 				subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
 
-				// 解析 task type
 				taskType := parseTaskType(st.TaskType)
+				if task.Type() == domain.TaskTypeAgent {
+					taskType = domain.TaskTypeAgent
+				}
 
 				subTask, err := domain.NewTask(
 					domain.NewTaskID(subTaskID),
@@ -168,7 +170,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					e.eventBus.Publish(evt)
 				}
 
-				log.Printf("[AutoExecutor] 创建子任务(LLM): %s, spanID: %s, type: %s", subTaskID, subSpanID, st.TaskType)
+				log.Printf("[AutoExecutor] 创建子任务(LLM): %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
 			}
 
 			e.publishAndPersistTodoList(task, todoList)
@@ -194,6 +196,10 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		for _, st := range subTasks {
 			subTaskID := idGen.Generate()
 			subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
+			taskType := st.taskType
+			if task.Type() == domain.TaskTypeAgent {
+				taskType = domain.TaskTypeAgent
+			}
 
 			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
@@ -202,7 +208,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
 				st.goal,
 				"",
-				st.taskType,
+				taskType,
 				map[string]interface{}{
 					"goal":        st.goal,
 					"parent_id":   taskID,
@@ -226,7 +232,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 			e.executeSubTaskAsync(subTask)
 
-			todoList.AddItem(subTaskID, st.goal, st.taskType.String(), subSpanID, TodoStatusDistributed)
+			todoList.AddItem(subTaskID, st.goal, taskType.String(), subSpanID, TodoStatusDistributed)
 			subTaskIDs = append(subTaskIDs, subTaskID)
 
 			if e.eventBus != nil {
@@ -237,13 +243,13 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					subTaskID,
 					subSpanID,
 					spanID,
-					st.taskType,
+					taskType,
 					st.goal,
 				)
 				e.eventBus.Publish(evt)
 			}
 
-			log.Printf("[AutoExecutor] 创建子任务: %s, spanID: %s", subTaskID, subSpanID)
+			log.Printf("[AutoExecutor] 创建子任务: %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
 		}
 
 		hasSubTasks = true
