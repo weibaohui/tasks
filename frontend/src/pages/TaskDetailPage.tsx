@@ -4,10 +4,13 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Row, Col } from 'antd';
 import { TaskDetail } from '../components/TaskDetail';
+import { TodoList } from '../components/TodoList';
 import { useTaskWebSocket } from '../hooks/useTaskWebSocket';
 import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
+import type { TodoList as TodoListType } from '../types/task';
 
 export const TaskDetailPage: React.FC = () => {
   const { taskId } = useParams<{ taskId: string }>();
@@ -25,7 +28,6 @@ export const TaskDetailPage: React.FC = () => {
     }
   }, [taskId, fetchTask]);
 
-  // 自动启动任务
   useEffect(() => {
     const action = searchParams.get('action');
     if (action === 'start' && currentTask?.status === 'pending' && taskId && !autoStartedRef.current) {
@@ -43,15 +45,31 @@ export const TaskDetailPage: React.FC = () => {
     fetchTask(taskId);
   };
 
+  const todoList: TodoListType | null = (() => {
+    if (!currentTask?.metadata?.todo_list) return null;
+    try {
+      return JSON.parse(currentTask.metadata.todo_list as string);
+    } catch {
+      return null;
+    }
+  })();
+
   return (
     <div style={{ padding: 24 }}>
-      <TaskDetail
-        task={currentTask}
-        loading={loading}
-        onCancel={handleCancel}
-        onBack={() => navigate(-1)}
-        onViewTree={(traceId) => navigate(`/tasks/trace/${traceId}/tree`)}
-      />
+      <Row gutter={16}>
+        <Col span={16}>
+          <TaskDetail
+            task={currentTask}
+            loading={loading}
+            onCancel={handleCancel}
+            onBack={() => navigate(-1)}
+            onViewTree={(traceId) => navigate(`/tasks/trace/${traceId}/tree`)}
+          />
+        </Col>
+        <Col span={8}>
+          <TodoList todoList={todoList} loading={loading} />
+        </Col>
+      </Row>
     </div>
   );
 };

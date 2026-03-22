@@ -108,7 +108,14 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		return nil, fmt.Errorf("failed to save task: %w", err)
 	}
 
-	// 5. 发布领域事件
+	// 5. 根任务（无 parent_id）自动启动
+	if cmd.ParentID == nil {
+		if err := s.StartTask(ctx, task.ID()); err != nil {
+			s.logger.Warn("自动启动任务失败", zap.String("taskID", taskID.String()), zap.Error(err))
+		}
+	}
+
+	// 6. 发布领域事件
 	for _, event := range task.PopEvents() {
 		s.eventBus.Publish(event)
 	}
@@ -188,6 +195,28 @@ func (s *TaskApplicationService) CancelTask(ctx context.Context, taskID domain.T
 	s.logger.Info("任务取消成功", zap.String("taskID", taskID.String()))
 
 	return nil
+}
+
+// DeleteAllTasks 删除全部任务
+func (s *TaskApplicationService) DeleteAllTasks(ctx context.Context) (int, error) {
+	tasks, err := s.taskRepo.FindAll(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	deleted := 0
+	for _, task := range tasks {
+		if task.Status() == domain.TaskStatusRunning && s.taskRuntime != nil {
+			s.taskRuntime.Cancel(task.ID().String())
+		}
+		if err := s.taskRepo.Delete(ctx, task.ID()); err != nil {
+			return deleted, fmt.Errorf("failed to delete task %s: %w", task.ID().String(), err)
+		}
+		deleted++
+	}
+
+	s.logger.Info("已删除全部任务", zap.Int("deleted", deleted))
+	return deleted, nil
 }
 
 // CompleteTask 完成任务

@@ -243,6 +243,22 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "task cancelled"})
 }
 
+// ClearAllTasks 清空全部任务
+func (h *TaskHandler) ClearAllTasks(w http.ResponseWriter, r *http.Request) {
+	deleted, err := h.taskService.DeleteAllTasks(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "all tasks deleted",
+		"deleted": deleted,
+	})
+}
+
 // extractTraceID 从路径中提取 trace_id
 func extractTraceID(path string) string {
 	parts := strings.Split(path, "/")

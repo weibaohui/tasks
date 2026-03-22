@@ -3,6 +3,8 @@
  */
 package domain
 
+import "time"
+
 // DomainEvent 领域事件接口
 type DomainEvent interface {
 	// EventType 返回事件类型
@@ -155,4 +157,181 @@ func (e *TaskProgressUpdatedEvent) Timestamp() int64 {
 // GetProgress 获取进度
 func (e *TaskProgressUpdatedEvent) GetProgress() Progress {
 	return e.progress
+}
+
+// TodoPublishedEvent Todo列表发布事件
+type TodoPublishedEvent struct {
+	taskID       TaskID
+	traceID      TraceID
+	timestamp    int64
+	todoListJSON string
+}
+
+func NewTodoPublishedEvent(taskID TaskID, traceID TraceID, todoListJSON string) *TodoPublishedEvent {
+	return &TodoPublishedEvent{
+		taskID:       taskID,
+		traceID:      traceID,
+		timestamp:    time.Now().UnixMilli(),
+		todoListJSON: todoListJSON,
+	}
+}
+
+func (e *TodoPublishedEvent) EventType() string {
+	return "TodoPublished"
+}
+
+func (e *TodoPublishedEvent) TraceID() TraceID {
+	return e.traceID
+}
+
+func (e *TodoPublishedEvent) Timestamp() int64 {
+	return e.timestamp
+}
+
+func (e *TodoPublishedEvent) TodoListJSON() string {
+	return e.todoListJSON
+}
+
+func (e *TodoPublishedEvent) TaskID() TaskID {
+	return e.taskID
+}
+
+// TodoUpdatedEvent Todo列表更新事件
+type TodoUpdatedEvent struct {
+	taskID       TaskID
+	traceID      TraceID
+	timestamp    int64
+	todoListJSON string
+}
+
+func NewTodoUpdatedEvent(taskID TaskID, traceID TraceID, todoListJSON string) *TodoUpdatedEvent {
+	return &TodoUpdatedEvent{
+		taskID:       taskID,
+		traceID:      traceID,
+		timestamp:    time.Now().UnixMilli(),
+		todoListJSON: todoListJSON,
+	}
+}
+
+func (e *TodoUpdatedEvent) EventType() string {
+	return "TodoUpdated"
+}
+
+func (e *TodoUpdatedEvent) TraceID() TraceID {
+	return e.traceID
+}
+
+func (e *TodoUpdatedEvent) Timestamp() int64 {
+	return e.timestamp
+}
+
+func (e *TodoUpdatedEvent) TodoListJSON() string {
+	return e.todoListJSON
+}
+
+func (e *TodoUpdatedEvent) TaskID() TaskID {
+	return e.taskID
+}
+
+// SubTaskCompletedEvent 子任务完成事件（用于父任务更新Todo）
+type SubTaskCompletedEvent struct {
+	parentTaskID TaskID
+	subTaskID    TaskID
+	traceID      TraceID
+	timestamp    int64
+}
+
+func NewSubTaskCompletedEvent(parentTaskID, subTaskID TaskID, traceID TraceID) *SubTaskCompletedEvent {
+	return &SubTaskCompletedEvent{
+		parentTaskID: parentTaskID,
+		subTaskID:    subTaskID,
+		traceID:      traceID,
+		timestamp:    time.Now().UnixMilli(),
+	}
+}
+
+func (e *SubTaskCompletedEvent) EventType() string {
+	return "SubTaskCompleted"
+}
+
+func (e *SubTaskCompletedEvent) TraceID() TraceID {
+	return e.traceID
+}
+
+func (e *SubTaskCompletedEvent) Timestamp() int64 {
+	return e.timestamp
+}
+
+func (e *SubTaskCompletedEvent) ParentTaskID() TaskID {
+	return e.parentTaskID
+}
+
+func (e *SubTaskCompletedEvent) SubTaskID() TaskID {
+	return e.subTaskID
+}
+
+type TodoSubTaskCreatedEvent struct {
+	parentTask TaskID
+	subTask    TaskID
+	trace      TraceID
+	subTaskID  string
+	subSpanID  string
+	parentSpan string
+	subType    TaskType
+	goal       string
+	timestamp  int64
+}
+
+func NewTodoSubTaskCreatedEvent(parentTask, subTask TaskID, trace TraceID, subTaskID, subSpanID, parentSpan string, subType TaskType, goal string) *TodoSubTaskCreatedEvent {
+	return &TodoSubTaskCreatedEvent{
+		parentTask: parentTask,
+		subTask:    subTask,
+		trace:      trace,
+		subTaskID:  subTaskID,
+		subSpanID:  subSpanID,
+		parentSpan: parentSpan,
+		subType:    subType,
+		goal:       goal,
+		timestamp:  time.Now().UnixMilli(),
+	}
+}
+
+func (e *TodoSubTaskCreatedEvent) EventType() string {
+	return "TodoSubTaskCreated"
+}
+
+func (e *TodoSubTaskCreatedEvent) TraceID() TraceID {
+	return e.trace
+}
+
+func (e *TodoSubTaskCreatedEvent) Timestamp() int64 {
+	return e.timestamp
+}
+
+func (e *TodoSubTaskCreatedEvent) ParentTaskID() TaskID {
+	return e.parentTask
+}
+
+func (e *TodoSubTaskCreatedEvent) SubTaskID() TaskID {
+	return e.subTask
+}
+
+func (e *TodoSubTaskCreatedEvent) SubTaskIDStr() string {
+	return e.subTaskID
+}
+
+func (e *TodoSubTaskCreatedEvent) SubTaskSpanID() string {
+	return e.subSpanID
+}
+
+func (e *TodoSubTaskCreatedEvent) ParentSpanID() string {
+	return e.parentSpan
+}
+
+func (e *TodoSubTaskCreatedEvent) SubTaskType() TaskType {
+	return e.subType
+}
+
+func (e *TodoSubTaskCreatedEvent) Goal() string {
+	return e.goal
 }

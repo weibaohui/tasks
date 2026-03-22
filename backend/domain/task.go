@@ -101,6 +101,7 @@ func (t *Task) Name() string                     { return t.name }
 func (t *Task) Description() string              { return t.description }
 func (t *Task) Type() TaskType                   { return t.taskType }
 func (t *Task) Metadata() map[string]interface{} { return t.metadata }
+func (t *Task) SetMetadata(m map[string]interface{}) { t.metadata = m }
 func (t *Task) Timeout() time.Duration           { return t.timeout }
 func (t *Task) MaxRetries() int                  { return t.maxRetries }
 func (t *Task) Priority() int                    { return t.priority }

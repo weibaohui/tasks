@@ -102,3 +102,45 @@ export interface TaskTreeNode {
   task: Task;
   children: TaskTreeNode[];
 }
+
+/**
+ * Todo 列表项状态
+ */
+export type TodoStatus = 'distributed' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/**
+ * Todo 列表项
+ */
+export interface TodoItem {
+  sub_task_id: string;
+  sub_task_type: TaskType;
+  goal: string;
+  status: TodoStatus;
+  progress: number;
+  span_id: string;
+  created_at: number;
+  completed_at?: number;
+}
+
+/**
+ * Todo 列表
+ */
+export interface TodoList {
+  task_id: string;
+  items: TodoItem[];
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * 任务执行摘要
+ */
+export interface ExecutionSummary {
+  task_id: string;
+  span_id: string;
+  goal: string;
+  result: string;
+  stage: string;
+  completed_at: number;
+  status: string;
+}

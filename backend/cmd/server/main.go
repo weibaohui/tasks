@@ -56,10 +56,21 @@ func main() {
 
 	// 5. 初始化工作池
 	workerPool := application.NewWorkerPool(3, logger)
+
+	// 5.1 初始化自动任务执行器
+	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
+
+	// 5.2 注册任务处理器
+	executor.RegisterHandler(domain.TaskTypeDataProcessing, application.DataProcessingHandler)
+	executor.RegisterHandler(domain.TaskTypeFileOperation, application.FileOperationHandler)
+	executor.RegisterHandler(domain.TaskTypeAPICall, application.APICallHandler)
+	executor.RegisterHandler(domain.TaskTypeCustom, application.CustomHandler)
+
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
-		if err := executor.Execute(ctx, task, taskRepo); err != nil {
+		// 所有任务都使用自动执行器，支持递归创建子任务
+		if err := autoExecutor.ExecuteAutoTask(ctx, task); err != nil {
 			if ctx.Err() != context.Canceled {
-				logger.Error("任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
+				logger.Error("自动任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
 			}
 		}
 		// 确保任务状态被持久化
