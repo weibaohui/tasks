@@ -111,24 +111,21 @@ func subTaskPrompt(taskName, taskDesc string, depth, maxDepth int) string {
 - 任务描述：%s
 - 当前深度：%d/%d
 
-请生成 1-3 个子任务，每个子任务包含：
+请根据任务实际情况决定子任务分解策略：
 - goal: 任务目标描述
 - type: 任务类型（data_processing, file_operation, api_call, agent, custom 之一）
 
-注意：
-1. 子任务应该是完成父任务所需的关键步骤
+分解原则：
+1. 子任务应该是完成父任务的关键步骤
 2. 任务类型应与子任务内容匹配
-3. 如果当前深度已达到最大深度，则不生成子任务
+3. 如果任务简单或已达到最大深度，可以不分解（返回空 sub_tasks）
+4. 子任务数量根据实际需求决定，不要强行分解
 
 请直接返回 YAML 格式，不要包含任何解释或标记：
 sub_tasks:
-  - goal: 处理前半部分数据
-    type: data_processing
-  - goal: 处理后半部分数据
-    type: data_processing
-  - goal: 验证处理结果
-    type: api_call
-reason: 简要说明为什么这样分解`, taskName, taskDesc, depth, maxDepth)
+  - goal: 任务目标描述
+    type: 任务类型
+reason: 简要说明分解策略`, taskName, taskDesc, depth, maxDepth)
 }
 
 // extractYAML 从响应中提取 YAML
