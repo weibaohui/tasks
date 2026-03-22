@@ -31,10 +31,10 @@ type OpenAIMessage struct {
 
 // OpenAIRequest OpenAI 请求格式
 type OpenAIRequest struct {
-	Model       string            `json:"model"`
-	Messages    []OpenAIMessage   `json:"messages"`
-	Temperature float64           `json:"temperature,omitempty"`
-	MaxTokens   int               `json:"max_tokens,omitempty"`
+	Model       string          `json:"model"`
+	Messages    []OpenAIMessage `json:"messages"`
+	Temperature float64         `json:"temperature,omitempty"`
+	MaxTokens   int             `json:"max_tokens,omitempty"`
 }
 
 // OpenAIResponse OpenAI 响应格式
@@ -85,8 +85,10 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 	if url == "" {
 		url = "https://api.openai.com/v1/chat/completions"
 	} else {
-		// 确保 base URL 加上 chat completions 路径
-		url = strings.TrimSuffix(url, "/") + "/chat/completions"
+		url = strings.TrimSuffix(url, "/")
+		if !strings.HasSuffix(url, "/chat/completions") {
+			url = url + "/chat/completions"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqJSON))
