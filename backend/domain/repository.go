@@ -28,6 +28,15 @@ type TaskRepository interface {
 	Exists(ctx context.Context, id TaskID) (bool, error)
 }
 
+type UserRepository interface {
+	Save(ctx context.Context, user *User) error
+	FindByID(ctx context.Context, id UserID) (*User, error)
+	FindByUsername(ctx context.Context, username string) (*User, error)
+	FindByUserCode(ctx context.Context, userCode UserCode) (*User, error)
+	FindAll(ctx context.Context) ([]*User, error)
+	Delete(ctx context.Context, id UserID) error
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件

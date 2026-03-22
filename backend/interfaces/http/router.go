@@ -12,6 +12,10 @@ import (
 // SetupRoutes 设置路由
 // 注意：Go 标准库 http.ServeMux 不支持路径参数，路由按最长前缀匹配
 func SetupRoutes(handler *TaskHandler) *http.ServeMux {
+	return SetupRoutesWithUsers(handler, nil)
+}
+
+func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// POST /api/v1/tasks - 创建任务
@@ -81,6 +85,27 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
+
+	if userHandler != nil {
+		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				userHandler.CreateUser(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					userHandler.GetUser(w, r)
+					return
+				}
+				userHandler.ListUsers(w, r)
+			case http.MethodPut:
+				userHandler.UpdateUser(w, r)
+			case http.MethodDelete:
+				userHandler.DeleteUser(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
 
 	return mux
 }

@@ -47,6 +47,7 @@ func main() {
 	idGenerator := utils.NewNanoIDGenerator(21)
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
+	userRepo := _persistence.NewSQLiteUserRepository(db)
 
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
@@ -98,12 +99,14 @@ func main() {
 		eventBus,
 		logger,
 	)
+	userService := application.NewUserApplicationService(userRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
-	mux := httpHandler.SetupRoutes(taskHandler)
+	userHandler := httpHandler.NewUserHandler(userService)
+	mux := httpHandler.SetupRoutesWithUsers(taskHandler, userHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
