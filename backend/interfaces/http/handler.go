@@ -87,10 +87,12 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	taskType, err := domain.ParseTaskType(req.Type)
-	if err != nil {
+	if req.Type == "" {
+		req.Type = domain.TaskTypeAgent.String()
+	}
+	if req.Type != domain.TaskTypeAgent.String() {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid type"})
+		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "only agent type is supported"})
 		return
 	}
 
@@ -109,7 +111,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	cmd := application.CreateTaskCommand{
 		Name:        req.Name,
 		Description: req.Description,
-		Type:        taskType,
+		Type:        domain.TaskTypeAgent,
 		Metadata:    req.Metadata,
 		Timeout:     req.Timeout,
 		MaxRetries:  req.MaxRetries,

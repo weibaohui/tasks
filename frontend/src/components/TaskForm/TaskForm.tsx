@@ -26,6 +26,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
   const handleFinish = (values: CreateTaskRequest): void => {
     onSubmit({
       ...values,
+      type: 'agent',
       timeout: values.timeout || 60000,
       max_retries: values.max_retries || 0,
       priority: values.priority || 0,
@@ -40,6 +41,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
       form={form}
       layout="vertical"
       onFinish={handleFinish}
+      initialValues={{ type: 'agent' }}
     >
       <Form.Item
         name="name"
@@ -53,17 +55,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
         <TextArea placeholder="请输入任务描述" rows={3} />
       </Form.Item>
 
-      <Form.Item
-        name="type"
-        label="任务类型"
-        rules={[{ required: true, message: '请选择任务类型' }]}
-      >
-        <Select placeholder="请选择任务类型">
-          <Select.Option value="data_processing">数据处理</Select.Option>
-          <Select.Option value="file_operation">文件操作</Select.Option>
-          <Select.Option value="api_call">API 调用</Select.Option>
+      <Form.Item name="type" label="任务类型">
+        <Select disabled>
           <Select.Option value="agent">Agent</Select.Option>
-          <Select.Option value="custom">自定义</Select.Option>
         </Select>
       </Form.Item>
 
