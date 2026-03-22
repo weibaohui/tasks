@@ -37,6 +37,15 @@ type UserRepository interface {
 	Delete(ctx context.Context, id UserID) error
 }
 
+type AgentRepository interface {
+	Save(ctx context.Context, agent *Agent) error
+	FindByID(ctx context.Context, id AgentID) (*Agent, error)
+	FindByAgentCode(ctx context.Context, code AgentCode) (*Agent, error)
+	FindByUserCode(ctx context.Context, userCode string) ([]*Agent, error)
+	FindAll(ctx context.Context) ([]*Agent, error)
+	Delete(ctx context.Context, id AgentID) error
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件

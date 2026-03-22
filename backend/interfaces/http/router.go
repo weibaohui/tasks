@@ -16,6 +16,10 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
+	return SetupRoutesWithManagement(handler, userHandler, nil)
+}
+
+func SetupRoutesWithManagement(handler *TaskHandler, userHandler *UserHandler, agentHandler *AgentHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// POST /api/v1/tasks - 创建任务
@@ -101,6 +105,27 @@ func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.
 				userHandler.UpdateUser(w, r)
 			case http.MethodDelete:
 				userHandler.DeleteUser(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
+
+	if agentHandler != nil {
+		mux.HandleFunc("/api/v1/agents", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				agentHandler.CreateAgent(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" || r.URL.Query().Get("code") != "" {
+					agentHandler.GetAgent(w, r)
+					return
+				}
+				agentHandler.ListAgents(w, r)
+			case http.MethodPut:
+				agentHandler.UpdateAgent(w, r)
+			case http.MethodDelete:
+				agentHandler.DeleteAgent(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

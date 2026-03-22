@@ -99,28 +99,28 @@ func NewAgent(
 	}, nil
 }
 
-func (a *Agent) ID() AgentID                     { return a.id }
-func (a *Agent) AgentCode() AgentCode            { return a.agentCode }
-func (a *Agent) UserCode() string                { return a.userCode }
-func (a *Agent) Name() string                    { return a.name }
-func (a *Agent) Description() string             { return a.description }
-func (a *Agent) IdentityContent() string         { return a.identityContent }
-func (a *Agent) SoulContent() string             { return a.soulContent }
-func (a *Agent) AgentsContent() string           { return a.agentsContent }
-func (a *Agent) UserContent() string             { return a.userContent }
-func (a *Agent) ToolsContent() string            { return a.toolsContent }
-func (a *Agent) Model() string                   { return a.model }
-func (a *Agent) MaxTokens() int                  { return a.maxTokens }
-func (a *Agent) Temperature() float64            { return a.temperature }
-func (a *Agent) MaxIterations() int              { return a.maxIterations }
-func (a *Agent) HistoryMessages() int            { return a.historyMessages }
-func (a *Agent) SkillsList() []string            { return append([]string(nil), a.skillsList...) }
-func (a *Agent) ToolsList() []string             { return append([]string(nil), a.toolsList...) }
-func (a *Agent) IsActive() bool                  { return a.isActive }
-func (a *Agent) IsDefault() bool                 { return a.isDefault }
-func (a *Agent) EnableThinkingProcess() bool     { return a.enableThinkingProcess }
-func (a *Agent) CreatedAt() time.Time            { return a.createdAt }
-func (a *Agent) UpdatedAt() time.Time            { return a.updatedAt }
+func (a *Agent) ID() AgentID                 { return a.id }
+func (a *Agent) AgentCode() AgentCode        { return a.agentCode }
+func (a *Agent) UserCode() string            { return a.userCode }
+func (a *Agent) Name() string                { return a.name }
+func (a *Agent) Description() string         { return a.description }
+func (a *Agent) IdentityContent() string     { return a.identityContent }
+func (a *Agent) SoulContent() string         { return a.soulContent }
+func (a *Agent) AgentsContent() string       { return a.agentsContent }
+func (a *Agent) UserContent() string         { return a.userContent }
+func (a *Agent) ToolsContent() string        { return a.toolsContent }
+func (a *Agent) Model() string               { return a.model }
+func (a *Agent) MaxTokens() int              { return a.maxTokens }
+func (a *Agent) Temperature() float64        { return a.temperature }
+func (a *Agent) MaxIterations() int          { return a.maxIterations }
+func (a *Agent) HistoryMessages() int        { return a.historyMessages }
+func (a *Agent) SkillsList() []string        { return append([]string(nil), a.skillsList...) }
+func (a *Agent) ToolsList() []string         { return append([]string(nil), a.toolsList...) }
+func (a *Agent) IsActive() bool              { return a.isActive }
+func (a *Agent) IsDefault() bool             { return a.isDefault }
+func (a *Agent) EnableThinkingProcess() bool { return a.enableThinkingProcess }
+func (a *Agent) CreatedAt() time.Time        { return a.createdAt }
+func (a *Agent) UpdatedAt() time.Time        { return a.updatedAt }
 
 func (a *Agent) UpdateProfile(name, description string) error {
 	if strings.TrimSpace(name) == "" {

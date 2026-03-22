@@ -46,6 +46,34 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_user_code ON users(user_code);
+
+CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    agent_code TEXT NOT NULL UNIQUE,
+    user_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    identity_content TEXT,
+    soul_content TEXT,
+    agents_content TEXT,
+    user_content TEXT,
+    tools_content TEXT,
+    model TEXT,
+    max_tokens INTEGER NOT NULL,
+    temperature REAL NOT NULL,
+    max_iterations INTEGER NOT NULL,
+    history_messages INTEGER NOT NULL,
+    skills_list TEXT,
+    tools_list TEXT,
+    is_active INTEGER NOT NULL,
+    is_default INTEGER NOT NULL,
+    enable_thinking_process INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_agent_code ON agents(agent_code);
+CREATE INDEX IF NOT EXISTS idx_agents_user_code ON agents(user_code);
 `
 
 // InitSchema 初始化数据库 Schema
