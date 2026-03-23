@@ -17,58 +17,99 @@ import {
   Tag,
   message,
 } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { listAgents } from '../api/agentApi';
-import { createChannel, deleteChannel, listChannels, listChannelTypes, updateChannel } from '../api/channelApi';
+import { createChannel, deleteChannel, listChannels, updateChannel } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
-import type { Channel, ChannelTypeOption, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
+import type { Channel } from '../types/channel';
+import { ChannelTypeLabels } from '../types/channel';
+
+type ChannelType = 'feishu' | 'dingtalk' | 'matrix' | 'websocket';
 
 type ChannelFormValues = {
   name: string;
-  type: string;
+  type: ChannelType;
   agent_code: string;
   is_active: boolean;
-  allow_from: string[];
-  config_json: string;
-  feishu_app_id?: string;
-  feishu_app_secret?: string;
+  allow_from: string;
+  config: {
+    app_id?: string;
+    app_secret?: string;
+    encrypt_key?: string;
+    verification_token?: string;
+    client_id?: string;
+    client_secret?: string;
+    homeserver?: string;
+    user_id?: string;
+    token?: string;
+    addr?: string;
+    path?: string;
+  };
 };
 
 /**
- * 解析 JSON 文本为对象（要求是 JSON Object）
+ * 根据渠道类型获取配置字段
  */
-function parseJsonObject(jsonText: string): Record<string, unknown> {
-  if (!jsonText.trim()) {
-    return {};
+function getConfigFields(type: ChannelType | undefined) {
+  switch (type) {
+    case 'feishu':
+      return (
+        <>
+          <Form.Item name={['config', 'app_id']} label="App ID" rules={[{ required: true, message: '请输入 App ID' }]}>
+            <Input placeholder="例如：cli_a93d6ef856781bc6" />
+          </Form.Item>
+          <Form.Item name={['config', 'app_secret']} label="App Secret" rules={[{ required: true, message: '请输入 App Secret' }]}>
+            <Input.Password placeholder="例如：xvijM8ZZqPIwNBho2dmflhNWHZNRMd51" />
+          </Form.Item>
+          <Form.Item name={['config', 'encrypt_key']} label="Encrypt Key">
+            <Input placeholder="加密 Key（可选）" />
+          </Form.Item>
+          <Form.Item name={['config', 'verification_token']} label="Verification Token">
+            <Input placeholder="验证 Token（可选）" />
+          </Form.Item>
+        </>
+      );
+    case 'dingtalk':
+      return (
+        <>
+          <Form.Item name={['config', 'client_id']} label="Client ID" rules={[{ required: true, message: '请输入 Client ID' }]}>
+            <Input placeholder="钉钉应用的 Client ID" />
+          </Form.Item>
+          <Form.Item name={['config', 'client_secret']} label="Client Secret" rules={[{ required: true, message: '请输入 Client Secret' }]}>
+            <Input.Password placeholder="钉钉应用的 Client Secret" />
+          </Form.Item>
+        </>
+      );
+    case 'matrix':
+      return (
+        <>
+          <Form.Item name={['config', 'homeserver']} label="Homeserver" rules={[{ required: true, message: '请输入 Homeserver' }]}>
+            <Input placeholder="https://matrix.org" />
+          </Form.Item>
+          <Form.Item name={['config', 'user_id']} label="User ID" rules={[{ required: true, message: '请输入 User ID' }]}>
+            <Input placeholder="@user:matrix.org" />
+          </Form.Item>
+          <Form.Item name={['config', 'token']} label="Token" rules={[{ required: true, message: '请输入 Token' }]}>
+            <Input.Password placeholder="访问 Token" />
+          </Form.Item>
+        </>
+      );
+    case 'websocket':
+      return (
+        <>
+          <Form.Item name={['config', 'addr']} label="监听地址" initialValue=":8080">
+            <Input placeholder=":8080" />
+          </Form.Item>
+          <Form.Item name={['config', 'path']} label="路径" initialValue="/ws">
+            <Input placeholder="/ws" />
+          </Form.Item>
+        </>
+      );
+    default:
+      return null;
   }
-  const parsed = JSON.parse(jsonText) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('config must be an object');
-  }
-  return parsed as Record<string, unknown>;
-}
-
-/**
- * 将对象转换为用于表单编辑的 JSON 文本
- */
-function toJsonText(value: Record<string, unknown> | undefined): string {
-  if (!value || Object.keys(value).length === 0) {
-    return '';
-  }
-  return JSON.stringify(value, null, 2);
-}
-
-/**
- * 根据表单值生成要提交的 config 对象
- */
-function buildChannelConfig(values: ChannelFormValues, channelType: string): Record<string, unknown> {
-  const config = parseJsonObject(values.config_json || '');
-  if (channelType === 'feishu') {
-    config.app_id = (values.feishu_app_id || '').trim();
-    config.app_secret = (values.feishu_app_secret || '').trim();
-  }
-  return config;
 }
 
 export const ChannelManagementPage: React.FC = () => {
@@ -76,14 +117,11 @@ export const ChannelManagementPage: React.FC = () => {
   const userCode = user?.user_code || '';
   const [items, setItems] = useState<Channel[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [channelTypes, setChannelTypes] = useState<ChannelTypeOption[]>([]);
-  const [channelTypesLoading, setChannelTypesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Channel | null>(null);
   const [form] = Form.useForm<ChannelFormValues>();
-  const watchedType = Form.useWatch('type', form);
 
   /**
    * 拉取渠道列表
@@ -97,7 +135,7 @@ export const ChannelManagementPage: React.FC = () => {
     try {
       const data = await listChannels(userCode);
       setItems(data);
-    } catch (_error) {
+    } catch {
       message.error('获取渠道列表失败');
     } finally {
       setLoading(false);
@@ -115,32 +153,10 @@ export const ChannelManagementPage: React.FC = () => {
     try {
       const data = await listAgents(userCode);
       setAgents(data);
-    } catch (_error) {
+    } catch {
       setAgents([]);
     }
   }, [userCode]);
-
-  const fetchChannelTypes = useCallback(async () => {
-    if (!userCode) {
-      setChannelTypes([]);
-      return;
-    }
-    setChannelTypesLoading(true);
-    try {
-      const data = await listChannelTypes();
-      setChannelTypes(data);
-    } catch (_error) {
-      message.error('获取渠道类型失败');
-      setChannelTypes([]);
-    } finally {
-      setChannelTypesLoading(false);
-    }
-  }, [userCode]);
-
-  const channelTypeOptions = useMemo(
-    () => channelTypes.map((t) => ({ value: t.key, label: t.name ? `${t.name}（${t.key}）` : t.key })),
-    [channelTypes],
-  );
 
   /**
    * 删除渠道
@@ -150,7 +166,7 @@ export const ChannelManagementPage: React.FC = () => {
       await deleteChannel(id);
       message.success('删除成功');
       await fetchChannels();
-    } catch (_error) {
+    } catch {
       message.error('删除失败');
     }
   }, [fetchChannels]);
@@ -165,40 +181,37 @@ export const ChannelManagementPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      const channelType = editing ? editing.type : values.type;
-      const config = buildChannelConfig(values, channelType);
+      const config = values.config || {};
+      const allowFrom = values.allow_from
+        ? values.allow_from.split('\n').map((s) => s.trim()).filter(Boolean)
+        : [];
+
       if (editing) {
-        const req: UpdateChannelRequest = {
+        await updateChannel(editing.id, {
           name: values.name,
           config,
-          allow_from: values.allow_from || [],
+          allow_from: allowFrom,
           is_active: values.is_active,
           agent_code: values.agent_code || undefined,
-        };
-        await updateChannel(editing.id, req);
+        });
         message.success('更新成功');
       } else {
-        const req: CreateChannelRequest = {
+        await createChannel({
           user_code: userCode,
           name: values.name,
           type: values.type,
           config,
-          allow_from: values.allow_from || [],
+          allow_from: allowFrom,
           agent_code: values.agent_code,
-        };
-        await createChannel(req);
+        });
         message.success('创建成功');
       }
       setOpen(false);
       setEditing(null);
       form.resetFields();
       await fetchChannels();
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('JSON')) {
-        message.error('Config 不是合法 JSON');
-      } else {
-        message.error('保存失败');
-      }
+    } catch {
+      message.error('保存失败');
     } finally {
       setSaving(false);
     }
@@ -223,63 +236,90 @@ export const ChannelManagementPage: React.FC = () => {
         title: '类型',
         dataIndex: 'type',
         key: 'type',
-        width: 140,
-        render: (v: string) => <Tag>{v}</Tag>,
+        width: 120,
+        render: (v: string) => <Tag>{ChannelTypeLabels[v] || v}</Tag>,
       },
       {
-        title: 'Agent Code',
-        dataIndex: 'agent_code',
-        key: 'agent_code',
-        width: 180,
-        render: (v: string) => (v ? <Tag color="geekblue">{v}</Tag> : <Tag>-</Tag>),
+        title: '绑定 Agent',
+        key: 'agent',
+        width: 150,
+        render: (_: unknown, record: Channel) => {
+          const agent = agents.find((a) => a.agent_code === record.agent_code);
+          return agent ? (
+            <Tag color="geekblue">{agent.name}</Tag>
+          ) : (
+            <span style={{ color: '#999' }}>未绑定</span>
+          );
+        },
       },
       {
-        title: '启用',
-        dataIndex: 'is_active',
-        key: 'is_active',
+        title: '状态',
+        key: 'status',
         width: 80,
-        render: (v: boolean) => (v ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+        render: (_: unknown, record: Channel) => (
+          <Tag color={record.is_active ? 'success' : 'default'}>
+            {record.is_active ? '启用' : '禁用'}
+          </Tag>
+        ),
       },
       {
         title: '操作',
         key: 'action',
-        width: 200,
+        width: 180,
         render: (_: unknown, record: Channel) => (
           <Space>
             <Button
-              type="primary"
+              type="text"
+              icon={<EditOutlined />}
               onClick={() => {
                 setEditing(record);
-                setOpen(true);
+                const config = record.config || {};
+                const allowFrom = record.allow_from?.join('\n') || '';
                 form.setFieldsValue({
                   name: record.name,
-                  type: record.type,
+                  type: record.type as ChannelType,
                   agent_code: record.agent_code,
                   is_active: record.is_active,
-                  allow_from: record.allow_from || [],
-                  config_json: toJsonText(record.config),
-                  feishu_app_id: String((record.config as Record<string, unknown> | undefined)?.app_id || ''),
-                  feishu_app_secret: String((record.config as Record<string, unknown> | undefined)?.app_secret || ''),
+                  allow_from: allowFrom,
+                  config: {
+                    app_id: String(config.app_id || ''),
+                    app_secret: String(config.app_secret || ''),
+                    encrypt_key: String(config.encrypt_key || ''),
+                    verification_token: String(config.verification_token || ''),
+                    client_id: String(config.client_id || ''),
+                    client_secret: String(config.client_secret || ''),
+                    homeserver: String(config.homeserver || ''),
+                    user_id: String(config.user_id || ''),
+                    token: String(config.token || ''),
+                    addr: String(config.addr || ''),
+                    path: String(config.path || ''),
+                  },
                 });
+                setOpen(true);
               }}
             >
               编辑
             </Button>
-            <Popconfirm title="确认删除该渠道？" onConfirm={() => handleDelete(record.id)}>
-              <Button danger>删除</Button>
+            <Popconfirm
+              title="确认删除"
+              description="删除后将无法恢复，是否继续？"
+              onConfirm={() => handleDelete(record.id)}
+            >
+              <Button type="text" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [form, handleDelete],
+    [agents, form, handleDelete],
   );
 
   useEffect(() => {
     fetchAgents();
     fetchChannels();
-    fetchChannelTypes();
-  }, [fetchAgents, fetchChannels, fetchChannelTypes]);
+  }, [fetchAgents, fetchChannels]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -297,19 +337,12 @@ export const ChannelManagementPage: React.FC = () => {
             </Button>
             <Button
               type="primary"
+              icon={<PlusOutlined />}
               onClick={() => {
                 setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ is_active: true });
                 setOpen(true);
-                form.setFieldsValue({
-                  name: '',
-                  type: '',
-                  agent_code: '',
-                  is_active: true,
-                  allow_from: [],
-                  config_json: '',
-                  feishu_app_id: '',
-                  feishu_app_secret: '',
-                });
               }}
             >
               新建渠道
@@ -327,91 +360,50 @@ export const ChannelManagementPage: React.FC = () => {
           setOpen(false);
           setEditing(null);
         }}
-        footer={null}
-        width={920}
+        onOk={() => form.submit()}
+        confirmLoading={saving}
+        width={600}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
-              <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
-                <Input />
-              </Form.Item>
-            </div>
-            <div style={{ width: 220 }}>
-              <Form.Item label="类型" name="type" rules={editing ? [] : [{ required: true, message: '请选择类型' }]}>
-                <Select
-                  disabled={!!editing}
-                  loading={channelTypesLoading}
-                  options={channelTypeOptions}
-                  placeholder={channelTypesLoading ? '正在加载类型...' : '请选择渠道类型'}
-                  notFoundContent={channelTypesLoading ? '正在加载...' : '暂无可用类型'}
-                />
-              </Form.Item>
-            </div>
-            <div style={{ width: 160 }}>
-              <Form.Item label="启用" name="is_active" valuePropName="checked">
-                <Switch checkedChildren="启用" unCheckedChildren="停用" />
-              </Form.Item>
-            </div>
-          </Space>
-
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
-              <Form.Item label="关联 Agent" name="agent_code">
-                <Select
-                  allowClear
-                  placeholder="可选"
-                  options={agents.map((a) => ({ label: `${a.name} (${a.agent_code})`, value: a.agent_code }))}
-                />
-              </Form.Item>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Form.Item label="Allow From（可多选/自定义）" name="allow_from">
-                <Select mode="tags" placeholder="输入后回车添加" />
-              </Form.Item>
-            </div>
-          </Space>
-
-          {watchedType === 'feishu' ? (
-            <Space style={{ width: '100%' }} align="start">
-              <div style={{ flex: 1 }}>
-                <Form.Item
-                  label="飞书 App ID"
-                  name="feishu_app_id"
-                  rules={[{ required: true, message: '请输入飞书 App ID' }]}
-                >
-                  <Input placeholder="例如：cli_a93d6ef856781bc6" />
-                </Form.Item>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Form.Item
-                  label="飞书 App Secret"
-                  name="feishu_app_secret"
-                  rules={[{ required: true, message: '请输入飞书 App Secret' }]}
-                >
-                  <Input.Password placeholder="例如：xvijM8ZZqPIwNBho2dmflhNWHZNRMd51" />
-                </Form.Item>
-              </div>
-            </Space>
-          ) : null}
-
-          <Form.Item label="高级配置（JSON）" name="config_json" tooltip='例如：{"token":"xxx","webhook":"https://..."}'>
-            <Input.TextArea rows={8} placeholder="可选，必须是 JSON 对象格式" />
+          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input placeholder="渠道名称" />
           </Form.Item>
 
-          <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-            <Button
-              onClick={() => {
-                setOpen(false);
-                setEditing(null);
-              }}
-            >
-              取消
-            </Button>
-            <Button type="primary" htmlType="submit" loading={saving}>
-              保存
-            </Button>
-          </Space>
+          <Form.Item
+            name="type"
+            label="类型"
+            rules={editing ? [] : [{ required: true, message: '请选择类型' }]}
+          >
+            <Select placeholder="选择渠道类型" disabled={!!editing}>
+              {Object.entries(ChannelTypeLabels).map(([key, label]) => (
+                <Select.Option key={key} value={key}>
+                  {label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="agent_code" label="绑定 Agent">
+            <Select placeholder="选择要绑定的 Agent" allowClear>
+              {agents.map((agent) => (
+                <Select.Option key={agent.agent_code} value={agent.agent_code}>
+                  {agent.name}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="allow_from" label="白名单用户">
+            <Input.TextArea rows={3} placeholder="每行一个用户ID，留空表示允许所有用户" />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.type !== curr.type}>
+            {({ getFieldValue }) => getConfigFields(getFieldValue('type'))}
+          </Form.Item>
+
+          <Form.Item name="is_active" valuePropName="checked" initialValue={true}>
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
