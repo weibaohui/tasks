@@ -3,15 +3,19 @@
  * 支持 Agent 的新增、编辑、删除、启用/停用
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
+import { Button, Card, Divider, Drawer, Form, Grid, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { ApiOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined } from '@ant-design/icons';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
 import { listProviders } from '../api/providerApi';
-import { createBinding, deleteBinding, getMCPErrorMessage, listBindings } from '../api/mcpApi';
+import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCPServers, listMCPTools, updateBinding } from '../api/mcpApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
-import type { AgentMCPBinding } from '../types/mcp';
+import type { AgentMCPBinding, MCPServer, MCPTool } from '../types/mcp';
+
+const { useBreakpoint } = Grid;
+const { Title } = Typography;
 
 type AgentFormValues = {
   name: string;
@@ -208,6 +212,7 @@ _(待填充)_`,
 }
 
 export const AgentManagementPage: React.FC = () => {
+  const screens = useBreakpoint();
   const { user } = useAuthStore();
   const userCode = user?.user_code || '';
   const [items, setItems] = useState<Agent[]>([]);
@@ -219,11 +224,20 @@ export const AgentManagementPage: React.FC = () => {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const watchedModel = Form.useWatch('model', form);
-  // MCP 绑定面板
-  const [bindingOpen, setBindingOpen] = useState(false);
-  const [bindingAgent, setBindingAgent] = useState<Agent | null>(null);
-  const [bindings, setBindings] = useState<AgentMCPBinding[]>([]);
-  const [bindingsLoading, setBindingsLoading] = useState(false);
+
+  // Drawer Tabs
+  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality'>('basic');
+
+  // MCP 绑定相关状态（集成到 Drawer 的「技能工具」Tab）
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [mcpBindings, setMcpBindings] = useState<AgentMCPBinding[]>([]);
+  const [mcpForm] = Form.useForm<{ mcp_server_id: string; is_active: boolean; auto_load: boolean }>();
+  const [toolsDrawerOpen, setToolsDrawerOpen] = useState(false);
+  const [toolsDrawerLoading, setToolsDrawerLoading] = useState(false);
+  const [toolsForServer, setToolsForServer] = useState<MCPTool[]>([]);
+  const [editingBinding, setEditingBinding] = useState<AgentMCPBinding | null>(null);
+  const [toolsForm] = Form.useForm<{ all_tools: boolean; enabled_tools: string[] }>();
 
   /**
    * 拉取 Agent 列表
@@ -321,6 +335,151 @@ export const AgentManagementPage: React.FC = () => {
   }, [fetchList]);
 
   /**
+   * 基于当前 Agent 生成更新请求，并允许覆盖部分字段
+   */
+  const buildUpdateRequestFromAgent = useCallback((agent: Agent, overrides: Partial<UpdateAgentRequest>): UpdateAgentRequest => {
+    return {
+      name: agent.name,
+      description: agent.description,
+      identity_content: agent.identity_content,
+      soul_content: agent.soul_content,
+      agents_content: agent.agents_content,
+      user_content: agent.user_content,
+      tools_content: agent.tools_content,
+      model: agent.model,
+      max_tokens: agent.max_tokens,
+      temperature: agent.temperature,
+      max_iterations: agent.max_iterations,
+      history_messages: agent.history_messages,
+      skills_list: agent.skills_list || [],
+      tools_list: agent.tools_list || [],
+      is_active: agent.is_active,
+      is_default: agent.is_default,
+      enable_thinking_process: agent.enable_thinking_process,
+      ...overrides,
+    };
+  }, []);
+
+  /**
+   * 刷新 MCP 服务器与绑定列表
+   */
+  const reloadMCP = useCallback(async (agentId: string) => {
+    setMcpLoading(true);
+    try {
+      const [servers, bindings] = await Promise.all([listMCPServers(), listBindings(agentId)]);
+      setMcpServers(servers);
+      setMcpBindings(bindings);
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '获取 MCP 绑定信息失败');
+      setMcpServers([]);
+      setMcpBindings([]);
+    } finally {
+      setMcpLoading(false);
+    }
+  }, []);
+
+  /**
+   * 打开编辑抽屉（新建/编辑）
+   */
+  const openEditor = useCallback(async (agent: Agent | null) => {
+    setEditing(agent);
+    setActiveTab('basic');
+    setOpen(true);
+    setEditingBinding(null);
+    setToolsDrawerOpen(false);
+    setToolsForServer([]);
+    toolsForm.resetFields();
+    mcpForm.resetFields();
+
+    if (agent) {
+      form.setFieldsValue({
+        name: agent.name,
+        description: agent.description,
+        identity_content: agent.identity_content,
+        soul_content: agent.soul_content,
+        agents_content: agent.agents_content,
+        user_content: agent.user_content,
+        tools_content: agent.tools_content,
+        model: agent.model,
+        max_tokens: agent.max_tokens,
+        temperature: agent.temperature,
+        max_iterations: agent.max_iterations,
+        history_messages: agent.history_messages,
+        skills_list: agent.skills_list || [],
+        tools_list: agent.tools_list || [],
+        is_default: agent.is_default,
+        is_active: agent.is_active,
+        enable_thinking_process: agent.enable_thinking_process,
+      });
+      await reloadMCP(agent.id);
+    } else {
+      form.setFieldsValue(getDefaultAgentFormValues(defaultModelFromProviders));
+      try {
+        const servers = await listMCPServers();
+        setMcpServers(servers);
+      } catch (e) {
+        setMcpServers([]);
+        message.error(getMCPErrorMessage(e) || '获取 MCP 服务器列表失败');
+      }
+      setMcpBindings([]);
+    }
+  }, [defaultModelFromProviders, form, mcpForm, reloadMCP, toolsForm]);
+
+  /**
+   * 关闭编辑抽屉
+   */
+  const closeEditor = useCallback(() => {
+    setOpen(false);
+    setEditing(null);
+    setActiveTab('basic');
+    form.resetFields();
+    mcpForm.resetFields();
+    setMcpBindings([]);
+    setEditingBinding(null);
+    setToolsDrawerOpen(false);
+    toolsForm.resetFields();
+  }, [form, mcpForm, toolsForm]);
+
+  /**
+   * 快捷设置默认 Agent
+   */
+  const handleSetDefault = useCallback(async (agent: Agent) => {
+    try {
+      await updateAgent(agent.id, buildUpdateRequestFromAgent(agent, { is_default: true }));
+      message.success('已设为默认 Agent');
+      await fetchList();
+    } catch (_e) {
+      message.error('设置默认失败');
+    }
+  }, [buildUpdateRequestFromAgent, fetchList]);
+
+  /**
+   * 快捷切换思考过程
+   */
+  const handleToggleThinking = useCallback(async (agent: Agent, enabled: boolean) => {
+    try {
+      await updateAgent(agent.id, buildUpdateRequestFromAgent(agent, { enable_thinking_process: enabled }));
+      message.success(enabled ? '已开启思考过程' : '已关闭思考过程');
+      await fetchList();
+    } catch (_e) {
+      message.error('更新失败');
+    }
+  }, [buildUpdateRequestFromAgent, fetchList]);
+
+  /**
+   * 快捷更新最大迭代轮数
+   */
+  const handleUpdateMaxIterations = useCallback(async (agent: Agent, value: number) => {
+    try {
+      await updateAgent(agent.id, buildUpdateRequestFromAgent(agent, { max_iterations: value }));
+      message.success('已更新最大迭代轮数');
+      await fetchList();
+    } catch (_e) {
+      message.error('更新失败');
+    }
+  }, [buildUpdateRequestFromAgent, fetchList]);
+
+  /**
    * 保存 Agent（创建/更新）
    */
   const handleSubmit = useCallback(async (values: AgentFormValues) => {
@@ -375,112 +534,148 @@ export const AgentManagementPage: React.FC = () => {
         await createAgent(req);
         message.success('创建成功');
       }
-      setOpen(false);
-      setEditing(null);
-      form.resetFields();
+      closeEditor();
       await fetchList();
     } catch (_error) {
       message.error('保存失败');
     } finally {
       setSaving(false);
     }
-  }, [editing, fetchList, form, userCode]);
+  }, [closeEditor, editing, fetchList, userCode]);
 
   const columns: ColumnsType<Agent> = useMemo(
     () => [
+      ...(screens.xs
+        ? []
+        : [
+          {
+            title: 'ID',
+            dataIndex: 'id',
+            key: 'id',
+            width: 120,
+            ellipsis: true,
+          },
+        ]),
       {
         title: '名称',
         dataIndex: 'name',
         key: 'name',
         ellipsis: true,
       },
+      ...(screens.xs
+        ? []
+        : [
+          {
+            title: '描述',
+            dataIndex: 'description',
+            key: 'description',
+            ellipsis: true,
+          },
+        ]),
       {
-        title: 'Code',
-        dataIndex: 'agent_code',
-        key: 'agent_code',
-        width: 180,
-        render: (v: string) => <Tag color="blue">{v}</Tag>,
-      },
-      {
-        title: '模型',
+        title: screens.xs ? '模型' : '模型',
         dataIndex: 'model',
         key: 'model',
-        width: 180,
+        width: screens.xs ? 120 : 180,
         ellipsis: true,
       },
       {
-        title: '默认',
-        dataIndex: 'is_default',
-        key: 'is_default',
+        title: '思考',
+        key: 'thinking',
         width: 80,
-        render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+        align: 'center',
+        render: (_: unknown, record: Agent) => (
+          <Switch
+            size="small"
+            checked={record.enable_thinking_process}
+            checkedChildren="开"
+            unCheckedChildren="关"
+            onChange={(checked) => handleToggleThinking(record, checked)}
+          />
+        ),
       },
       {
-        title: '启用',
-        dataIndex: 'is_active',
-        key: 'is_active',
-        width: 80,
-        render: (v: boolean) => (v ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+        title: '轮数',
+        key: 'max_iterations',
+        width: 90,
+        align: 'center',
+        render: (_: unknown, record: Agent) => (
+          <InputNumber
+            size="small"
+            min={1}
+            max={50}
+            defaultValue={record.max_iterations}
+            onPressEnter={(e) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(v) && v !== record.max_iterations) {
+                handleUpdateMaxIterations(record, v);
+              }
+            }}
+            onBlur={(e) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(v) && v !== record.max_iterations) {
+                handleUpdateMaxIterations(record, v);
+              }
+            }}
+            style={{ width: 70 }}
+          />
+        ),
+      },
+      {
+        title: '技能',
+        key: 'skills',
+        width: 70,
+        align: 'center',
+        render: (_: unknown, record: Agent) => {
+          const count = (record.skills_list || []).length;
+          return <Tag color={count === 0 ? 'default' : 'blue'}>{count === 0 ? '不限' : count}</Tag>;
+        },
+      },
+      {
+        title: '工具',
+        key: 'tools',
+        width: 70,
+        align: 'center',
+        render: (_: unknown, record: Agent) => {
+          const count = (record.tools_list || []).length;
+          return <Tag color={count === 0 ? 'default' : 'cyan'}>{count === 0 ? '不限' : count}</Tag>;
+        },
+      },
+      {
+        title: '状态',
+        key: 'status',
+        width: 120,
+        render: (_: unknown, record: Agent) => (
+          <Space size="small">
+            {record.is_default && <Tag color="gold">默认</Tag>}
+            <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '停用'}</Tag>
+          </Space>
+        ),
       },
       {
         title: '操作',
         key: 'action',
-        width: 200,
+        width: screens.xs ? 140 : 280,
         render: (_: unknown, record: Agent) => (
-          <Space>
-            <Button
-              onClick={async () => {
-                setBindingAgent(record);
-                setBindingOpen(true);
-                setBindingsLoading(true);
-                try {
-                  const list = await listBindings(record.id);
-                  setBindings(list);
-                } catch (e) {
-                  message.error(getMCPErrorMessage(e) || '获取绑定失败');
-                } finally {
-                  setBindingsLoading(false);
-                }
-              }}
-            >
-              MCP 绑定
+          <Space size={[4, 4]} wrap>
+            <Button type="text" icon={<EditOutlined />} onClick={() => openEditor(record)}>
+              {screens.xs ? '' : '编辑'}
             </Button>
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditing(record);
-                setOpen(true);
-                form.setFieldsValue({
-                  name: record.name,
-                  description: record.description,
-                  identity_content: record.identity_content,
-                  soul_content: record.soul_content,
-                  agents_content: record.agents_content,
-                  user_content: record.user_content,
-                  tools_content: record.tools_content,
-                  model: record.model,
-                  max_tokens: record.max_tokens,
-                  temperature: record.temperature,
-                  max_iterations: record.max_iterations,
-                  history_messages: record.history_messages,
-                  skills_list: record.skills_list || [],
-                  tools_list: record.tools_list || [],
-                  is_default: record.is_default,
-                  is_active: record.is_active,
-                  enable_thinking_process: record.enable_thinking_process,
-                });
-              }}
-            >
-              编辑
-            </Button>
+            {!record.is_default && !screens.xs && (
+              <Button type="text" onClick={() => handleSetDefault(record)}>
+                默认
+              </Button>
+            )}
             <Popconfirm title="确认删除该 Agent？" onConfirm={() => handleDelete(record.id)}>
-              <Button danger>删除</Button>
+              <Button type="text" danger icon={<DeleteOutlined />}>
+                {screens.xs ? '' : '删除'}
+              </Button>
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [form, handleDelete],
+    [handleDelete, handleSetDefault, handleToggleThinking, handleUpdateMaxIterations, openEditor, screens.xs],
   );
 
   useEffect(() => {
@@ -494,248 +689,433 @@ export const AgentManagementPage: React.FC = () => {
   return (
     <div style={{ padding: 24 }}>
       <Card
-        title={`Agents 管理 (${items.length})`}
+        title={<Title level={screens.xs ? 4 : 3} style={{ margin: 0 }}>Agent 管理</Title>}
         extra={
           <Space>
             <Button onClick={() => fetchList()}>刷新</Button>
             <Button
               type="primary"
+              icon={<PlusOutlined />}
               onClick={() => {
-                setEditing(null);
-                setOpen(true);
-                form.setFieldsValue(getDefaultAgentFormValues(defaultModelFromProviders));
+                openEditor(null);
               }}
             >
-              新建 Agent
+              {screens.xs ? '新建' : '新建 Agent'}
             </Button>
           </Space>
         }
       >
-        <Table<Agent> rowKey="id" loading={loading} dataSource={items} columns={columns} />
+        <Table<Agent>
+          rowKey="id"
+          loading={loading}
+          dataSource={items}
+          columns={columns}
+          size={screens.xs ? 'small' : 'middle'}
+          scroll={{ x: screens.xs ? 760 : 'max-content' }}
+        />
       </Card>
 
-      {/* MCP 绑定面板 */}
-      <Modal
-        title={bindingAgent ? `MCP 绑定 - ${bindingAgent.name}` : 'MCP 绑定'}
-        open={bindingOpen}
-        onCancel={() => {
-          setBindingOpen(false);
-          setBindingAgent(null);
-          setBindings([]);
-        }}
-        footer={null}
-        width={720}
+      <Drawer
+        title={editing ? '编辑 Agent' : '新建 Agent'}
+        placement="right"
+        open={open}
+        onClose={closeEditor}
+        width={screens.xs ? '100%' : 760}
+        styles={{ body: { padding: 0 } }}
+        destroyOnClose
+        extra={
+          <Space>
+            <Button onClick={closeEditor}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()} loading={saving}>
+              {editing ? '更新' : '创建'}
+            </Button>
+          </Space>
+        }
       >
-        <div style={{ marginBottom: 12 }}>
+        <Form layout="vertical" form={form} onFinish={handleSubmit} style={{ height: '100%' }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as any)}
+            tabBarStyle={{ padding: '0 24px', margin: 0 }}
+            items={[
+              {
+                key: 'basic',
+                label: '基础信息',
+                children: (
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+                      <Input placeholder="Agent 名称" />
+                    </Form.Item>
+                    <Form.Item label="描述" name="description">
+                      <Input.TextArea rows={2} placeholder="Agent 描述" />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ThunderboltOutlined /> 模型配置
+                    </Divider>
+
+                    <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
+                      <Select
+                        showSearch
+                        allowClear
+                        loading={providersLoading}
+                        options={modelOptions}
+                        placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型（来自 LLM 配置）'}
+                        notFoundContent={providersLoading ? '正在加载...' : '没有可选模型，请先在 LLM 配置中配置 Provider 与模型'}
+                        filterOption={(input, option) => {
+                          const q = input.toLowerCase();
+                          const v = String(option?.value || '').toLowerCase();
+                          const l = String(option?.label || '').toLowerCase();
+                          return v.includes(q) || l.includes(q);
+                        }}
+                      />
+                    </Form.Item>
+
+                    <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
+                      <Form.Item label="Max Tokens" name="max_tokens" style={{ width: screens.xs ? '100%' : 160 }}>
+                        <InputNumber min={0} style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item label="Temperature" name="temperature" style={{ width: screens.xs ? '100%' : 160 }}>
+                        <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item label="最大迭代" name="max_iterations" style={{ width: screens.xs ? '100%' : 160 }}>
+                        <InputNumber min={1} style={{ width: '100%' }} />
+                      </Form.Item>
+                      <Form.Item label="历史消息数" name="history_messages" style={{ width: screens.xs ? '100%' : 160 }}>
+                        <InputNumber min={0} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Space>
+
+                    <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
+                      <Form.Item label="设为默认" name="is_default" valuePropName="checked">
+                        <Switch checkedChildren="默认" unCheckedChildren="非默认" />
+                      </Form.Item>
+                      <Form.Item label="启用" name="is_active" valuePropName="checked">
+                        <Switch checkedChildren="启用" unCheckedChildren="停用" disabled={!editing} />
+                      </Form.Item>
+                      <Form.Item label="展示思考过程" name="enable_thinking_process" valuePropName="checked">
+                        <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+                      </Form.Item>
+                    </Space>
+                  </div>
+                ),
+              },
+              {
+                key: 'skills',
+                label: '技能工具',
+                children: (
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ThunderboltOutlined /> 技能配置
+                    </Divider>
+                    <Form.Item label="Skills（可多选/自定义）" name="skills_list">
+                      <Select mode="tags" placeholder="输入后回车添加" />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ToolOutlined /> 工具配置
+                    </Divider>
+                    <Form.Item label="Tools（可多选/自定义）" name="tools_list">
+                      <Select mode="tags" placeholder="输入后回车添加" />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ApiOutlined /> MCP Server 绑定
+                    </Divider>
+
+                    {!editing && <Tag>请先创建 Agent 后再绑定 MCP Server</Tag>}
+                    {editing && (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <Space>
+                            <Button
+                              onClick={async () => {
+                                if (!editing) return;
+                                await reloadMCP(editing.id);
+                              }}
+                              loading={mcpLoading}
+                            >
+                              刷新
+                            </Button>
+                          </Space>
+                        </div>
+
+                        <Form
+                          form={mcpForm}
+                          layout="inline"
+                          initialValues={{ is_active: true, auto_load: false }}
+                          onFinish={async (values) => {
+                            if (!editing) return;
+                            try {
+                              await createBinding({
+                                agent_id: editing.id,
+                                mcp_server_id: values.mcp_server_id,
+                                is_active: values.is_active,
+                                auto_load: values.auto_load,
+                              });
+                              message.success('绑定成功');
+                              mcpForm.resetFields();
+                              await reloadMCP(editing.id);
+                            } catch (e) {
+                              message.error(getMCPErrorMessage(e) || '绑定失败');
+                            }
+                          }}
+                          style={{ marginBottom: 12 }}
+                        >
+                          <Form.Item
+                            name="mcp_server_id"
+                            rules={[{ required: true, message: '请选择 MCP Server' }]}
+                            style={{ flex: 1, minWidth: 260 }}
+                          >
+                            <Select
+                              placeholder="选择 MCP Server"
+                              options={mcpServers
+                                .filter((s) => !mcpBindings.some((b) => b.mcp_server_id === s.id))
+                                .map((s) => ({ value: s.id, label: `${s.name}（${s.code}）` }))}
+                              showSearch
+                              optionFilterProp="label"
+                            />
+                          </Form.Item>
+                          <Form.Item name="is_active" valuePropName="checked">
+                            <Switch checkedChildren="启用" unCheckedChildren="停用" />
+                          </Form.Item>
+                          <Form.Item name="auto_load" valuePropName="checked">
+                            <Switch checkedChildren="自动加载" unCheckedChildren="手动" />
+                          </Form.Item>
+                          <Button type="primary" onClick={() => mcpForm.submit()} loading={mcpLoading}>
+                            绑定
+                          </Button>
+                        </Form>
+
+                        <Table<AgentMCPBinding>
+                          dataSource={mcpBindings}
+                          rowKey="id"
+                          loading={mcpLoading}
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 520 }}
+                          columns={[
+                            {
+                              title: 'MCP Server',
+                              render: (_: unknown, record: AgentMCPBinding) => {
+                                const s = mcpServers.find((x) => x.id === record.mcp_server_id);
+                                return <span>{s ? `${s.name}（${s.code}）` : record.mcp_server_id}</span>;
+                              },
+                            },
+                            {
+                              title: '工具',
+                              render: (_: unknown, record: AgentMCPBinding) => {
+                                const v = record.enabled_tools;
+                                return v && v.length > 0 ? v.slice(0, 3).map((x) => <Tag key={x}>{x}</Tag>) : <Tag>全部</Tag>;
+                              },
+                            },
+                            {
+                              title: '状态',
+                              width: 90,
+                              render: (_: unknown, record: AgentMCPBinding) => (
+                                <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '禁用'}</Tag>
+                              ),
+                            },
+                            {
+                              title: '自动加载',
+                              width: 90,
+                              render: (_: unknown, record: AgentMCPBinding) => (
+                                <Switch
+                                  size="small"
+                                  checked={record.auto_load}
+                                  checkedChildren="自"
+                                  unCheckedChildren="手"
+                                  onChange={async () => {
+                                    try {
+                                      await updateBinding(record.id, { auto_load: !record.auto_load });
+                                      message.success(!record.auto_load ? '已设置自动加载' : '已取消自动加载');
+                                      if (editing) await reloadMCP(editing.id);
+                                    } catch (e) {
+                                      message.error(getMCPErrorMessage(e) || '操作失败');
+                                    }
+                                  }}
+                                />
+                              ),
+                            },
+                            {
+                              title: '操作',
+                              width: 200,
+                              render: (_: unknown, record: AgentMCPBinding) => (
+                                <Space size="small">
+                                  <Switch
+                                    size="small"
+                                    checked={record.is_active}
+                                    onChange={async () => {
+                                      try {
+                                        await updateBinding(record.id, { is_active: !record.is_active });
+                                        message.success(record.is_active ? '已禁用' : '已启用');
+                                        if (editing) await reloadMCP(editing.id);
+                                      } catch (e) {
+                                        message.error(getMCPErrorMessage(e) || '操作失败');
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    onClick={async () => {
+                                      setEditingBinding(record);
+                                      setToolsDrawerOpen(true);
+                                      setToolsDrawerLoading(true);
+                                      try {
+                                        const tools = await listMCPTools(record.mcp_server_id);
+                                        setToolsForServer(tools);
+                                        const current = record.enabled_tools || [];
+                                        toolsForm.setFieldsValue({
+                                          all_tools: current.length === 0,
+                                          enabled_tools: current,
+                                        });
+                                      } catch (e) {
+                                        setToolsForServer([]);
+                                        message.error(getMCPErrorMessage(e) || '获取工具列表失败');
+                                      } finally {
+                                        setToolsDrawerLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    配置工具
+                                  </Button>
+                                  <Popconfirm
+                                    title="确认解绑该 MCP Server？"
+                                    onConfirm={async () => {
+                                      try {
+                                        await deleteBinding(record.id);
+                                        message.success('解绑成功');
+                                        if (editing) await reloadMCP(editing.id);
+                                      } catch (e) {
+                                        message.error(getMCPErrorMessage(e) || '解绑失败');
+                                      }
+                                    }}
+                                  >
+                                    <Button type="text" danger size="small">
+                                      解绑
+                                    </Button>
+                                  </Popconfirm>
+                                </Space>
+                              ),
+                            },
+                          ]}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'personality',
+                label: '人格属性',
+                children: (
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Divider style={{ margin: '12px 0' }}>
+                      <FileTextOutlined /> 配置文件编辑
+                    </Divider>
+                    <Form.Item label="IDENTITY.md" name="identity_content">
+                      <Input.TextArea rows={5} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                    </Form.Item>
+                    <Form.Item label="SOUL.md" name="soul_content">
+                      <Input.TextArea rows={5} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                    </Form.Item>
+                    <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
+                      <Form.Item label="AGENTS.md" name="agents_content">
+                        <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                      </Form.Item>
+                      <Form.Item label="TOOLS.md" name="tools_content">
+                        <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                      </Form.Item>
+                    </div>
+                    <Form.Item label="USER.md" name="user_content">
+                      <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                    </Form.Item>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </Form>
+      </Drawer>
+
+      <Drawer
+        title="配置 MCP 工具"
+        placement="right"
+        open={toolsDrawerOpen}
+        onClose={() => {
+          setToolsDrawerOpen(false);
+          setEditingBinding(null);
+          setToolsForServer([]);
+          toolsForm.resetFields();
+        }}
+        width={screens.xs ? '100%' : 520}
+        destroyOnClose
+        extra={
           <Space>
             <Button
-              onClick={async () => {
-                if (!bindingAgent) return;
-                setBindingsLoading(true);
-                try {
-                  const list = await listBindings(bindingAgent.id);
-                  setBindings(list);
-                } catch (e) {
-                  message.error(getMCPErrorMessage(e) || '刷新失败');
-                } finally {
-                  setBindingsLoading(false);
-                }
-              }}
-            >
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              onClick={async () => {
-                // 简化：快速绑定占位（需要在 MCP 管理中先创建服务器）
-                const serverId = window.prompt('输入要绑定的 MCP 服务器 ID');
-                if (!serverId || !bindingAgent) return;
-                try {
-                  await createBinding({ agent_id: bindingAgent.id, mcp_server_id: serverId });
-                  message.success('绑定成功');
-                  const list = await listBindings(bindingAgent.id);
-                  setBindings(list);
-                } catch (e) {
-                  message.error(getMCPErrorMessage(e) || '绑定失败');
-                }
-              }}
-            >
-              新增绑定
-            </Button>
-          </Space>
-        </div>
-        <Table<AgentMCPBinding>
-          rowKey="id"
-          loading={bindingsLoading}
-          dataSource={bindings}
-          columns={[
-            { title: '服务器ID', dataIndex: 'mcp_server_id', key: 'mcp_server_id', width: 220 },
-            {
-              title: '启用工具',
-              dataIndex: 'enabled_tools',
-              key: 'enabled_tools',
-              render: (v: string[] | null) => (v && v.length > 0 ? v.map((x) => <Tag key={x}>{x}</Tag>) : <Tag>全部</Tag>),
-            },
-            {
-              title: '状态',
-              dataIndex: 'is_active',
-              key: 'is_active',
-              width: 100,
-              render: (v: boolean) => (v ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
-            },
-            {
-              title: '操作',
-              key: 'action',
-              width: 160,
-              render: (_: unknown, record: AgentMCPBinding) => (
-                <Space>
-                  <Popconfirm
-                    title="确认删除该绑定？"
-                    onConfirm={async () => {
-                      try {
-                        await deleteBinding(record.id);
-                        message.success('删除成功');
-                        if (bindingAgent) {
-                          const list = await listBindings(bindingAgent.id);
-                          setBindings(list);
-                        }
-                      } catch (e) {
-                        message.error(getMCPErrorMessage(e) || '删除失败');
-                      }
-                    }}
-                  >
-                    <Button danger>删除</Button>
-                  </Popconfirm>
-                </Space>
-              ),
-            },
-          ]}
-        />
-      </Modal>
-
-      <Modal
-        title={editing ? '编辑 Agent' : '新建 Agent'}
-        open={open}
-        onCancel={() => {
-          setOpen(false);
-          setEditing(null);
-        }}
-        footer={null}
-        width={980}
-      >
-        <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
-              <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
-                <Input />
-              </Form.Item>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
-                <Select
-                  showSearch
-                  allowClear
-                  loading={providersLoading}
-                  options={modelOptions}
-                  placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型（来自 LLM 配置）'}
-                  notFoundContent={providersLoading ? '正在加载...' : '没有可选模型，请先在 LLM 配置中配置 Provider 与模型'}
-                  filterOption={(input, option) => {
-                    const q = input.toLowerCase();
-                    const v = String(option?.value || '').toLowerCase();
-                    const l = String(option?.label || '').toLowerCase();
-                    return v.includes(q) || l.includes(q);
-                  }}
-                />
-              </Form.Item>
-            </div>
-          </Space>
-
-          <Form.Item label="描述" name="description">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ width: 180 }}>
-              <Form.Item label="Max Tokens" name="max_tokens">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </div>
-            <div style={{ width: 180 }}>
-              <Form.Item label="Temperature" name="temperature">
-                <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
-              </Form.Item>
-            </div>
-            <div style={{ width: 180 }}>
-              <Form.Item label="最大迭代" name="max_iterations">
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-            </div>
-            <div style={{ width: 180 }}>
-              <Form.Item label="历史消息数" name="history_messages">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </div>
-            <div style={{ width: 140 }}>
-              <Form.Item label="设为默认" name="is_default" valuePropName="checked">
-                <Switch checkedChildren="是" unCheckedChildren="否" />
-              </Form.Item>
-            </div>
-            <div style={{ width: 140 }}>
-              <Form.Item label="启用" name="is_active" valuePropName="checked">
-                <Switch checkedChildren="启用" unCheckedChildren="停用" />
-              </Form.Item>
-            </div>
-          </Space>
-
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
-              <Form.Item label="Skills（可多选/自定义）" name="skills_list">
-                <Select mode="tags" placeholder="输入后回车添加" />
-              </Form.Item>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Form.Item label="Tools（可多选/自定义）" name="tools_list">
-                <Select mode="tags" placeholder="输入后回车添加" />
-              </Form.Item>
-            </div>
-            <div style={{ width: 200 }}>
-              <Form.Item label="展示思考过程" name="enable_thinking_process" valuePropName="checked">
-                <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-              </Form.Item>
-            </div>
-          </Space>
-
-          <Form.Item label="Identity Content" name="identity_content">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item label="Soul Content" name="soul_content">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item label="Agents Content" name="agents_content">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item label="User Content" name="user_content">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item label="Tools Content" name="tools_content">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-
-          <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-            <Button
               onClick={() => {
-                setOpen(false);
-                setEditing(null);
+                setToolsDrawerOpen(false);
+                setEditingBinding(null);
+                toolsForm.resetFields();
               }}
             >
               取消
             </Button>
-            <Button type="primary" htmlType="submit" loading={saving}>
+            <Button
+              type="primary"
+              loading={toolsDrawerLoading}
+              onClick={() => toolsForm.submit()}
+              disabled={!editingBinding}
+            >
               保存
             </Button>
           </Space>
+        }
+      >
+        <Form
+          form={toolsForm}
+          layout="vertical"
+          onFinish={async (values) => {
+            if (!editingBinding || !editing) return;
+            try {
+              const enabled = values.all_tools ? [] : (values.enabled_tools || []);
+              await updateBinding(editingBinding.id, { enabled_tools: enabled });
+              message.success('已更新工具配置');
+              await reloadMCP(editing.id);
+              setToolsDrawerOpen(false);
+              setEditingBinding(null);
+            } catch (e) {
+              message.error(getMCPErrorMessage(e) || '保存失败');
+            }
+          }}
+        >
+          <Form.Item name="all_tools" valuePropName="checked" label="启用全部工具">
+            <Switch checkedChildren="全部" unCheckedChildren="选择" />
+          </Form.Item>
+          <Form.Item shouldUpdate noStyle>
+            {() => {
+              const all = Boolean(toolsForm.getFieldValue('all_tools'));
+              return (
+                <Form.Item
+                  name="enabled_tools"
+                  label="选择启用工具"
+                  hidden={all}
+                  rules={all ? undefined : [{ required: true, message: '请选择至少一个工具，或开启“全部工具”' }]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="选择工具"
+                    loading={toolsDrawerLoading}
+                    options={toolsForServer.map((t) => ({ value: t.name, label: t.name }))}
+                    allowClear
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   );
 };
