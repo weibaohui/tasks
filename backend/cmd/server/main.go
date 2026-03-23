@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,9 +24,20 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
+	channelBus "github.com/weibh/taskmanager/pkg/bus"
+	"github.com/weibh/taskmanager/pkg/channel"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
+
+// Gateway 渠道网关组件
+type Gateway struct {
+	logger          *zap.Logger
+	messageBus      *channelBus.MessageBus
+	sessionManager  *channel.SessionManager
+	processor      *channel.MessageProcessor
+	channelManager *channel.Manager
+}
 
 func main() {
 	logger, _ := zap.NewProduction()
@@ -70,7 +82,7 @@ func main() {
 	hookManager := hook.NewManager(logger, nil)
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
-	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger)) // 60 req/min, burst 100
+	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	if shouldInitLLM {
@@ -158,7 +170,10 @@ func main() {
 		wsHandler.HandleWebSocket(w, r)
 	})
 
-	// 7. 创建 HTTP Server
+	// 9. 初始化渠道网关
+	gateway := initGateway(channelService, logger)
+
+	// 10. 创建 HTTP Server
 	server := &http.Server{
 		Addr:         ":8888",
 		Handler:      mux,
@@ -167,7 +182,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// 8. 启动服务器
+	// 11. 启动服务器
 	go func() {
 		logger.Info("HTTP Server 启动在 :8888")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -175,12 +190,19 @@ func main() {
 		}
 	}()
 
-	// 9. 等待中断信号优雅关闭
+	logger.Info("服务已启动",
+		zap.Int("channels", gateway.ChannelCount()),
+	)
+
+	// 12. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("正在关闭服务器...")
+
+	// 关闭渠道网关
+	gateway.Shutdown()
 
 	ctx := context.Background()
 	err = server.Shutdown(ctx)
@@ -189,6 +211,118 @@ func main() {
 	}
 
 	logger.Info("服务器已关闭")
+}
+
+// initGateway 初始化渠道网关
+func initGateway(channelService *application.ChannelApplicationService, logger *zap.Logger) *Gateway {
+	gw := &Gateway{
+		logger:          logger,
+		messageBus:      channelBus.NewMessageBus(logger),
+		sessionManager:  channel.NewSessionManager(logger),
+		channelManager: channel.NewManager(nil),
+	}
+
+	// 创建消息处理器
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger)
+
+	// 初始化渠道管理器
+	gw.channelManager = channel.NewManager(gw.messageBus)
+
+	// 加载渠道配置
+	gw.loadChannels(channelService)
+
+	// 启动消息分发器
+	ctx, cancel := context.WithCancel(context.Background())
+	gw.messageBus.StartDispatcher(ctx)
+	_ = cancel // 保留 cancel 函数用于清理
+
+	// 启动所有渠道
+	if err := gw.channelManager.StartAll(ctx); err != nil {
+		logger.Error("启动渠道失败", zap.Error(err))
+	}
+
+	// 启动消息处理循环
+	go gw.runMessageLoop(ctx, channelService)
+
+	logger.Info("渠道网关初始化完成", zap.Int("channels", gw.ChannelCount()))
+
+	return gw
+}
+
+// loadChannels 从数据库加载渠道
+func (g *Gateway) loadChannels(channelService *application.ChannelApplicationService) {
+	registry := channel.DefaultRegistry(g.logger)
+
+	ctx := context.Background()
+	channels, err := channelService.ListActiveChannels(ctx)
+	if err != nil {
+		g.logger.Error("加载渠道配置失败", zap.Error(err))
+		return
+	}
+
+	for _, ch := range channels {
+		chType := string(ch.Type())
+		factory, ok := registry.GetFactory(chType)
+		if !ok {
+			g.logger.Warn("未注册的渠道类型", zap.String("type", chType))
+			continue
+		}
+
+		chInstance, err := factory(ch.Config())
+		if err != nil {
+			g.logger.Error("创建渠道实例失败",
+				zap.String("name", ch.Name()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		g.channelManager.Register(chInstance)
+		g.logger.Info("已注册渠道",
+			zap.String("name", ch.Name()),
+			zap.String("type", chType),
+		)
+	}
+}
+
+// runMessageLoop 运行消息处理循环
+func (g *Gateway) runMessageLoop(ctx context.Context, channelService *application.ChannelApplicationService) {
+	g.logger.Info("消息处理循环已启动")
+	for {
+		msg, err := g.messageBus.ConsumeInbound(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				g.logger.Info("消息处理循环上下文已取消")
+				return
+			}
+			g.logger.Error("消费消息失败", zap.Error(err))
+			continue
+		}
+
+		if err := g.processor.Process(ctx, msg); err != nil {
+			g.logger.Error("处理消息失败", zap.Error(err))
+			outMsg := &channelBus.OutboundMessage{
+				Channel:  msg.Channel,
+				ChatID:   msg.ChatID,
+				Content:  fmt.Sprintf("处理消息时出错: %v", err),
+				Metadata: make(map[string]any),
+			}
+			g.messageBus.PublishOutbound(outMsg)
+		}
+	}
+}
+
+// Shutdown 关闭渠道网关
+func (g *Gateway) Shutdown() {
+	g.logger.Info("正在关闭渠道网关...")
+	g.channelManager.StopAll()
+	g.messageBus.Stop()
+	g.logger.Info("渠道网关已关闭")
+}
+
+// ChannelCount 返回已注册渠道数量
+func (g *Gateway) ChannelCount() int {
+	return len(g.channelManager.List())
 }
 
 func ensureDefaultAdminUser(userService *application.UserApplicationService, userRepo domain.UserRepository, logger *zap.Logger) {
