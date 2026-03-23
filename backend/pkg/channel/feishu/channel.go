@@ -32,6 +32,7 @@ func NewChannel(config *Config, messageBus *bus.MessageBus, logger *zap.Logger) 
 		config:          config,
 		logger:          logger,
 		processedMsgIDs: newSyncMap(1000),
+		reactionCache:   make(map[string]*reactionInfo),
 	}
 }
 

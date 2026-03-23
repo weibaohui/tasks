@@ -111,6 +111,9 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 		zap.String("content", content),
 	)
 
+	// Add reaction emoji to indicate message is being processed
+	go c.addReactionAndSave(messageID, "OnIt")
+
 	// Publish message to bus
 	// Record app_id in Metadata for message routing
 	// Record channel_id for loading channel-bound agent config

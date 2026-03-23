@@ -48,6 +48,10 @@ type Channel struct {
 	// Message deduplication cache
 	processedMsgIDs *syncMap
 
+	// Reaction cache: message_id -> reactionInfo
+	reactionCache map[string]*reactionInfo
+	reactionMu    sync.RWMutex
+
 	// Event handler
 	eventHandler *dispatcher.EventDispatcher
 }
