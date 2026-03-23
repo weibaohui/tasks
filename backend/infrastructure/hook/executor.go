@@ -44,7 +44,7 @@ func (e *Executor) SetErrorStrategy(strategy ErrorStrategy) {
 
 // ExecutePreLLMCall 执行 PreLLMCall 钩子
 func (e *Executor) ExecutePreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
-	hooks := e.getEnabledHooks(domain.HookTypeLLM)
+	hooks := e.getAllEnabledHooks() // 获取所有启用的 hooks
 	hooks = e.sortByPriority(hooks)
 
 	modifiedCtx := callCtx
@@ -83,7 +83,7 @@ func (e *Executor) ExecutePreLLMCall(ctx *domain.HookContext, callCtx *domain.LL
 
 // ExecutePostLLMCall 执行 PostLLMCall 钩子
 func (e *Executor) ExecutePostLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error) {
-	hooks := e.getEnabledHooks(domain.HookTypeLLM)
+	hooks := e.getAllEnabledHooks()
 	hooks = e.sortByPriority(hooks)
 
 	modifiedResp := resp
@@ -122,7 +122,7 @@ func (e *Executor) ExecutePostLLMCall(ctx *domain.HookContext, callCtx *domain.L
 
 // ExecutePreToolCall 执行 PreToolCall 钩子
 func (e *Executor) ExecutePreToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext) (*domain.ToolCallContext, error) {
-	hooks := e.getEnabledHooks(domain.HookTypeTool)
+	hooks := e.getAllEnabledHooks()
 	hooks = e.sortByPriority(hooks)
 
 	modifiedCtx := callCtx
@@ -161,7 +161,7 @@ func (e *Executor) ExecutePreToolCall(ctx *domain.HookContext, callCtx *domain.T
 
 // ExecutePostToolCall 执行 PostToolCall 钩子
 func (e *Executor) ExecutePostToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext, result *domain.ToolExecutionResult) (*domain.ToolExecutionResult, error) {
-	hooks := e.getEnabledHooks(domain.HookTypeTool)
+	hooks := e.getAllEnabledHooks()
 	hooks = e.sortByPriority(hooks)
 
 	modifiedResult := result
@@ -200,7 +200,7 @@ func (e *Executor) ExecutePostToolCall(ctx *domain.HookContext, callCtx *domain.
 
 // ExecuteOnToolError 执行 OnToolError 钩子
 func (e *Executor) ExecuteOnToolError(ctx *domain.HookContext, callCtx *domain.ToolCallContext, err error) (*domain.ToolExecutionResult, error) {
-	hooks := e.getEnabledHooks(domain.HookTypeTool)
+	hooks := e.getAllEnabledHooks()
 	hooks = e.sortByPriority(hooks)
 
 	modifiedResult := &domain.ToolExecutionResult{Success: false, Error: err}
@@ -239,6 +239,18 @@ func (e *Executor) ExecuteOnToolError(ctx *domain.HookContext, callCtx *domain.T
 
 func (e *Executor) getEnabledHooks(hookType domain.HookType) []domain.Hook {
 	hooks := e.registry.ListByType(hookType)
+	var enabled []domain.Hook
+	for _, hook := range hooks {
+		if hook.Enabled() {
+			enabled = append(enabled, hook)
+		}
+	}
+	return enabled
+}
+
+// getAllEnabledHooks 获取所有启用的 hooks（不按类型过滤）
+func (e *Executor) getAllEnabledHooks() []domain.Hook {
+	hooks := e.registry.List()
 	var enabled []domain.Hook
 	for _, hook := range hooks {
 		if hook.Enabled() {
