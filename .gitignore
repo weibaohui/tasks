@@ -18,3 +18,4 @@ frontend/test-results/.last-run.json
 backend/backend_exec.log
 frontend/dist
 .env
+backend/server
