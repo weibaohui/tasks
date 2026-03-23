@@ -128,7 +128,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 
 // GenerateSubTasks 生成子任务计划
 func (p *OpenAIProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
-	prompt := subTaskPrompt(taskName, taskDesc, depth, maxDepth)
+	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
 	resp, err := p.Generate(ctx, prompt)
 	if err != nil {
@@ -136,9 +136,9 @@ func (p *OpenAIProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 	}
 
 	// 解析 YAML 响应
-	yamlStr := extractYAML(resp)
+	yamlStr := ExtractYAML(resp)
 
-	plan, err := tryParseYAML(yamlStr)
+	plan, err := TryParseYAML(yamlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse sub task plan: %w", err)
 	}
