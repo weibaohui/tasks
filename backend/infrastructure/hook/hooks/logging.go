@@ -24,7 +24,7 @@ func NewLoggingHook(logger *zap.Logger) *LoggingHook {
 
 // PreLLMCall 记录 LLM 调用前
 func (h *LoggingHook) PreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
-	h.logger.Debug("PreLLMCall",
+	h.logger.Info("PreLLMCall",
 		zap.String("model", callCtx.Model),
 		zap.Int("prompt_len", len(callCtx.Prompt)),
 		zap.String("session_id", callCtx.SessionID),
@@ -34,7 +34,7 @@ func (h *LoggingHook) PreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCal
 
 // PostLLMCall 记录 LLM 调用后
 func (h *LoggingHook) PostLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error) {
-	h.logger.Debug("PostLLMCall",
+	h.logger.Info("PostLLMCall",
 		zap.String("model", resp.Model),
 		zap.Int("content_len", len(resp.Content)),
 		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
@@ -46,7 +46,7 @@ func (h *LoggingHook) PostLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCa
 
 // PreToolCall 记录工具调用前
 func (h *LoggingHook) PreToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext) (*domain.ToolCallContext, error) {
-	h.logger.Debug("PreToolCall",
+	h.logger.Info("PreToolCall",
 		zap.String("tool_name", callCtx.ToolName),
 		zap.Any("tool_input", callCtx.ToolInput),
 		zap.String("session_id", callCtx.SessionID),
@@ -56,7 +56,7 @@ func (h *LoggingHook) PreToolCall(ctx *domain.HookContext, callCtx *domain.ToolC
 
 // PostToolCall 记录工具调用后
 func (h *LoggingHook) PostToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext, result *domain.ToolExecutionResult) (*domain.ToolExecutionResult, error) {
-	h.logger.Debug("PostToolCall",
+	h.logger.Info("PostToolCall",
 		zap.String("tool_name", callCtx.ToolName),
 		zap.Bool("success", result.Success),
 		zap.Duration("duration", result.Duration),

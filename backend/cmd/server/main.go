@@ -16,12 +16,15 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -62,13 +65,24 @@ func main() {
 	llmConfig := llm.DefaultConfig()
 	var llmProvider llm.LLMProvider
 	shouldInitLLM := llmConfig.ProviderType == "ollama" || llmConfig.APIKey != "" || llmConfig.BaseURL != "" || os.Getenv("LLM_PROVIDER") != ""
+
+	// 4.1 初始化 Hook Manager
+	hookManager := hook.NewManager(logger, nil)
+	hookManager.Register(hooks.NewLoggingHook(logger))
+	hookManager.Register(hooks.NewMetricsHook(logger))
+	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger)) // 60 req/min, burst 100
+	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
+
 	if shouldInitLLM {
 		var err error
-		llmProvider, err = llm.NewLLMProvider(llmConfig)
+		provider, err := llm.NewLLMProvider(llmConfig)
 		if err != nil {
 			logger.Warn("LLM Provider 初始化失败，将使用默认子任务生成", zap.Error(err))
 		} else {
-			logger.Info("LLM Provider 初始化成功", zap.String("provider", llmProvider.Name()), zap.String("model", llmConfig.Model))
+			// 4.2 包装为 HookableProvider
+			llmProvider = llm.NewHookableProvider(provider)
+			llmProvider.(*llm.HookableProvider).SetHookManager(hookManager)
+			logger.Info("LLM Provider 初始化成功（带 Hook 支持）", zap.String("provider", llmProvider.Name()), zap.String("model", llmConfig.Model))
 		}
 	} else {
 		logger.Warn("未配置 LLM API Key，子任务生成将使用默认逻辑")
