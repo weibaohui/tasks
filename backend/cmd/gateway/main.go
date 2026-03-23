@@ -59,20 +59,28 @@ func main() {
 	messageBus := channelBus.NewMessageBus(logger)
 	logger.Info("Message Bus 初始化完成")
 
-	// 5. 初始化 Hook Manager
+	// 5. 初始化 Session Manager
+	sessionManager := channel.NewSessionManager(logger)
+	logger.Info("Session Manager 初始化完成")
+
+	// 6. 初始化消息处理器
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger)
+	logger.Info("消息处理器初始化完成")
+
+	// 7. 初始化 Hook Manager
 	hookManager := hook.NewManager(logger, nil)
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
-	// 6. 初始化应用服务
+	// 8. 初始化应用服务
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	logger.Info("应用服务初始化完成")
 
-	// 7. 初始化渠道管理器
+	// 9. 初始化渠道管理器
 	channelRegistry := channel.DefaultRegistry(logger)
 	channelManager := channel.NewManager(messageBus)
 
@@ -81,16 +89,16 @@ func main() {
 		logger.Error("加载渠道配置失败", zap.Error(err))
 	}
 
-	// 8. 启动消息分发器
+	// 10. 启动消息分发器
 	ctx, cancel := context.WithCancel(context.Background())
 	messageBus.StartDispatcher(ctx)
 
-	// 9. 启动所有渠道
+	// 11. 启动所有渠道
 	if err := channelManager.StartAll(ctx); err != nil {
 		logger.Error("启动渠道失败", zap.Error(err))
 	}
 
-	// 10. 初始化 HTTP Handler (仅管理API)
+	// 12. 初始化 HTTP Handler (仅管理API)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
 		authSecret = "taskmanager-dev-secret"
@@ -107,7 +115,7 @@ func main() {
 	mux.HandleFunc("/api/tasks", taskHandler.CreateTask)
 	mux.HandleFunc("/api/tasks/", taskHandler.GetTask)
 
-	// 11. 启动 HTTP Server
+	// 13. 启动 HTTP Server
 	server := &http.Server{
 		Addr:         ":8889",
 		Handler:      mux,
@@ -123,19 +131,19 @@ func main() {
 		}
 	}()
 
-	// 12. 启动消息处理循环
+	// 14. 启动消息处理循环
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		processMessages(ctx, messageBus, sessionService, agentService, logger)
+		runMessageLoop(ctx, messageBus, processor, sessionService, agentService, logger)
 	}()
 
 	logger.Info("渠道网关服务已启动",
 		zap.Int("channels", len(channelManager.List())),
 	)
 
-	// 13. 等待中断信号
+	// 15. 等待中断信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
@@ -210,39 +218,37 @@ func registerChannelsFromDB(
 	return nil
 }
 
-// processMessages 处理来自渠道的消息
-func processMessages(
+// runMessageLoop 运行消息处理循环
+func runMessageLoop(
 	ctx context.Context,
 	messageBus *channelBus.MessageBus,
+	processor *channel.MessageProcessor,
 	sessionService *application.SessionApplicationService,
 	agentService *application.AgentApplicationService,
 	logger *zap.Logger,
 ) {
+	logger.Info("消息处理循环已启动")
 	for {
 		msg, err := messageBus.ConsumeInbound(ctx)
 		if err != nil {
-			return
+			if ctx.Err() != nil {
+				logger.Info("消息处理循环上下文已取消")
+				return
+			}
+			logger.Error("消费消息失败", zap.Error(err))
+			continue
 		}
-		handleInboundMessage(msg, sessionService, agentService, logger)
+
+		if err := processor.Process(ctx, msg); err != nil {
+			logger.Error("处理消息失败", zap.Error(err))
+			// 发送错误响应
+			outMsg := &channelBus.OutboundMessage{
+				Channel:  msg.Channel,
+				ChatID:   msg.ChatID,
+				Content:  fmt.Sprintf("处理消息时出错: %v", err),
+				Metadata: make(map[string]any),
+			}
+			messageBus.PublishOutbound(outMsg)
+		}
 	}
-}
-
-// handleInboundMessage 处理入站消息
-func handleInboundMessage(
-	msg *channelBus.InboundMessage,
-	sessionService *application.SessionApplicationService,
-	agentService *application.AgentApplicationService,
-	logger *zap.Logger,
-) {
-	logger.Info("处理入站消息",
-		zap.String("channel", msg.Channel),
-		zap.String("sender", msg.SenderID),
-		zap.String("content", msg.Content),
-	)
-
-	// TODO: 实现消息处理逻辑
-	// 1. 获取或创建 Session
-	// 2. 记录 Conversation
-	// 3. 调用 Agent 处理
-	// 4. 发送响应
 }
