@@ -65,6 +65,17 @@ type ChannelRepository interface {
 	Delete(ctx context.Context, id ChannelID) error
 }
 
+type SessionRepository interface {
+	Save(ctx context.Context, session *Session) error
+	FindByID(ctx context.Context, id SessionID) (*Session, error)
+	FindBySessionKey(ctx context.Context, sessionKey string) (*Session, error)
+	FindByUserCode(ctx context.Context, userCode string) ([]*Session, error)
+	FindByChannelCode(ctx context.Context, channelCode string) ([]*Session, error)
+	FindActiveByUserCode(ctx context.Context, userCode string) ([]*Session, error)
+	DeleteBySessionKey(ctx context.Context, sessionKey string) error
+	DeleteByChannelCode(ctx context.Context, channelCode string) error
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件

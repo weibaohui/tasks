@@ -115,6 +115,23 @@ CREATE TABLE IF NOT EXISTS channels (
 CREATE INDEX IF NOT EXISTS idx_channels_channel_code ON channels(channel_code);
 CREATE INDEX IF NOT EXISTS idx_channels_user_code ON channels(user_code);
 CREATE INDEX IF NOT EXISTS idx_channels_agent_code ON channels(agent_code);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_code TEXT NOT NULL,
+    agent_code TEXT,
+    channel_code TEXT NOT NULL,
+    session_key TEXT NOT NULL UNIQUE,
+    external_id TEXT,
+    last_active_at INTEGER,
+    metadata TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_session_key ON sessions(session_key);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_code ON sessions(user_code);
+CREATE INDEX IF NOT EXISTS idx_sessions_channel_code ON sessions(channel_code);
 `
 
 // InitSchema 初始化数据库 Schema

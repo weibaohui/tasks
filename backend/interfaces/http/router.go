@@ -16,7 +16,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -25,6 +25,7 @@ func SetupRoutesWithManagement(
 	agentHandler *AgentHandler,
 	providerHandler *LLMProviderHandler,
 	channelHandler *ChannelHandler,
+	sessionHandler *SessionHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -195,6 +196,55 @@ func SetupRoutesWithManagement(
 				channelHandler.DeleteChannel(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
+
+	if sessionHandler != nil {
+		mux.HandleFunc("/api/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				sessionHandler.CreateSession(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("session_key") != "" {
+					sessionHandler.GetSession(w, r)
+					return
+				}
+				sessionHandler.ListSessions(w, r)
+			case http.MethodDelete:
+				sessionHandler.DeleteSession(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+
+		mux.HandleFunc("/api/v1/sessions/", func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			switch {
+			case strings.HasSuffix(path, "/touch"):
+				if r.Method != http.MethodPost {
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+					return
+				}
+				sessionHandler.TouchSession(w, r)
+			case strings.HasSuffix(path, "/metadata"):
+				switch r.Method {
+				case http.MethodGet:
+					sessionHandler.GetSessionMetadata(w, r)
+				case http.MethodPut:
+					sessionHandler.UpdateSessionMetadata(w, r)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+			default:
+				switch r.Method {
+				case http.MethodGet:
+					sessionHandler.GetSession(w, r)
+				case http.MethodDelete:
+					sessionHandler.DeleteSession(w, r)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
 			}
 		})
 	}
