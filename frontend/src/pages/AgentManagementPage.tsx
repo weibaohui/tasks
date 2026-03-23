@@ -7,9 +7,11 @@ import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Spac
 import type { ColumnsType } from 'antd/es/table';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
 import { listProviders } from '../api/providerApi';
+import { createBinding, deleteBinding, listBindings } from '../api/mcpApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
+import type { AgentMCPBinding } from '../types/mcp';
 
 type AgentFormValues = {
   name: string;
@@ -217,6 +219,11 @@ export const AgentManagementPage: React.FC = () => {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const watchedModel = Form.useWatch('model', form);
+  // MCP 绑定面板
+  const [bindingOpen, setBindingOpen] = useState(false);
+  const [bindingAgent, setBindingAgent] = useState<Agent | null>(null);
+  const [bindings, setBindings] = useState<AgentMCPBinding[]>([]);
+  const [bindingsLoading, setBindingsLoading] = useState(false);
 
   /**
    * 拉取 Agent 列表
@@ -422,6 +429,23 @@ export const AgentManagementPage: React.FC = () => {
         render: (_: unknown, record: Agent) => (
           <Space>
             <Button
+              onClick={async () => {
+                setBindingAgent(record);
+                setBindingOpen(true);
+                setBindingsLoading(true);
+                try {
+                  const list = await listBindings(record.id);
+                  setBindings(list);
+                } catch (_e) {
+                  message.error('获取绑定失败');
+                } finally {
+                  setBindingsLoading(false);
+                }
+              }}
+            >
+              MCP 绑定
+            </Button>
+            <Button
               type="primary"
               onClick={() => {
                 setEditing(record);
@@ -489,6 +513,105 @@ export const AgentManagementPage: React.FC = () => {
       >
         <Table<Agent> rowKey="id" loading={loading} dataSource={items} columns={columns} />
       </Card>
+
+      {/* MCP 绑定面板 */}
+      <Modal
+        title={bindingAgent ? `MCP 绑定 - ${bindingAgent.name}` : 'MCP 绑定'}
+        open={bindingOpen}
+        onCancel={() => {
+          setBindingOpen(false);
+          setBindingAgent(null);
+          setBindings([]);
+        }}
+        footer={null}
+        width={720}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Space>
+            <Button
+              onClick={async () => {
+                if (!bindingAgent) return;
+                setBindingsLoading(true);
+                try {
+                  const list = await listBindings(bindingAgent.id);
+                  setBindings(list);
+                } catch (_e) {
+                  message.error('刷新失败');
+                } finally {
+                  setBindingsLoading(false);
+                }
+              }}
+            >
+              刷新
+            </Button>
+            <Button
+              type="primary"
+              onClick={async () => {
+                // 简化：快速绑定占位（需要在 MCP 管理中先创建服务器）
+                const serverId = window.prompt('输入要绑定的 MCP 服务器 ID');
+                if (!serverId || !bindingAgent) return;
+                try {
+                  await createBinding({ agent_id: bindingAgent.id, mcp_server_id: serverId });
+                  message.success('绑定成功');
+                  const list = await listBindings(bindingAgent.id);
+                  setBindings(list);
+                } catch (_e) {
+                  message.error('绑定失败');
+                }
+              }}
+            >
+              新增绑定
+            </Button>
+          </Space>
+        </div>
+        <Table<AgentMCPBinding>
+          rowKey="id"
+          loading={bindingsLoading}
+          dataSource={bindings}
+          columns={[
+            { title: '服务器ID', dataIndex: 'mcp_server_id', key: 'mcp_server_id', width: 220 },
+            {
+              title: '启用工具',
+              dataIndex: 'enabled_tools',
+              key: 'enabled_tools',
+              render: (v: string[] | null) => (v && v.length > 0 ? v.map((x) => <Tag key={x}>{x}</Tag>) : <Tag>全部</Tag>),
+            },
+            {
+              title: '状态',
+              dataIndex: 'is_active',
+              key: 'is_active',
+              width: 100,
+              render: (v: boolean) => (v ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+            },
+            {
+              title: '操作',
+              key: 'action',
+              width: 160,
+              render: (_: unknown, record: AgentMCPBinding) => (
+                <Space>
+                  <Popconfirm
+                    title="确认删除该绑定？"
+                    onConfirm={async () => {
+                      try {
+                        await deleteBinding(record.id);
+                        message.success('删除成功');
+                        if (bindingAgent) {
+                          const list = await listBindings(bindingAgent.id);
+                          setBindings(list);
+                        }
+                      } catch (_e) {
+                        message.error('删除失败');
+                      }
+                    }}
+                  >
+                    <Button danger>删除</Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Modal>
 
       <Modal
         title={editing ? '编辑 Agent' : '新建 Agent'}

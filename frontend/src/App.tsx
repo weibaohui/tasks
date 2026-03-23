@@ -13,6 +13,7 @@ import {
   DatabaseOutlined,
   MessageOutlined,
   RobotOutlined,
+  ToolOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { TaskDashboard } from './pages/TaskDashboard';
@@ -25,6 +26,7 @@ import { AgentManagementPage } from './pages/AgentManagementPage';
 import { ChannelManagementPage } from './pages/ChannelManagementPage';
 import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
+import { MCPManagementPage } from './pages/MCPManagementPage';
 import { useAuthStore } from './stores/authStore';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -44,6 +46,8 @@ const MainLayout: React.FC = () => {
       ? '/providers'
       : location.pathname.startsWith('/agents')
         ? '/agents'
+        : location.pathname.startsWith('/mcp')
+          ? '/mcp'
         : location.pathname.startsWith('/channels')
           ? '/channels'
           : location.pathname.startsWith('/sessions')
@@ -67,6 +71,7 @@ const MainLayout: React.FC = () => {
             { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
             { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
             { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
+            { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
             { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
             { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
             { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
@@ -113,6 +118,7 @@ const App: React.FC = () => {
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />
             <Route path="providers" element={<ProviderManagementPage />} />
+            <Route path="mcp" element={<MCPManagementPage />} />
             <Route path="users" element={<UserManagementPage />} />
           </Route>
         </Routes>

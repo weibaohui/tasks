@@ -17,7 +17,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -29,6 +29,7 @@ func SetupRoutesWithManagement(
 	sessionHandler *SessionHandler,
 	conversationRecordHandler *ConversationRecordHandler,
 	authHandler *AuthHandler,
+	mcpHandler *MCPHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -128,6 +129,63 @@ func SetupRoutesWithManagement(
 				return
 			}
 			authHandler.Me(w, r)
+		}))
+	}
+
+	// MCP 路由
+	if mcpHandler != nil {
+		mux.HandleFunc("/api/v1/mcp/servers", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				mcpHandler.CreateServer(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					mcpHandler.GetServer(w, r)
+					return
+				}
+				mcpHandler.ListServers(w, r)
+			case http.MethodPut:
+				mcpHandler.UpdateServer(w, r)
+			case http.MethodDelete:
+				mcpHandler.DeleteServer(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+		mux.HandleFunc("/api/v1/mcp/servers/test", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			mcpHandler.TestServer(w, r)
+		}))
+		mux.HandleFunc("/api/v1/mcp/servers/refresh", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			mcpHandler.RefreshCapabilities(w, r)
+		}))
+		mux.HandleFunc("/api/v1/mcp/servers/tools", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			mcpHandler.ListTools(w, r)
+		}))
+		mux.HandleFunc("/api/v1/mcp/bindings", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				mcpHandler.ListBindings(w, r)
+			case http.MethodPost:
+				mcpHandler.CreateBinding(w, r)
+			case http.MethodPut:
+				mcpHandler.UpdateBinding(w, r)
+			case http.MethodDelete:
+				mcpHandler.DeleteBinding(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
 		}))
 	}
 

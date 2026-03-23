@@ -53,6 +53,10 @@ func main() {
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
+	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
+	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
+	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
+	mcpToolLogRepo := _persistence.NewSQLiteMCPToolLogRepository(db)
 
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
@@ -110,6 +114,7 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
+	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	ensureDefaultAdminUser(userService, userRepo, logger)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -122,12 +127,13 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
 		authSecret = "taskmanager-dev-secret"
 	}
 	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
