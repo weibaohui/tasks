@@ -97,6 +97,24 @@ CREATE TABLE IF NOT EXISTS llm_providers (
 
 CREATE INDEX IF NOT EXISTS idx_llm_providers_user_code ON llm_providers(user_code);
 CREATE INDEX IF NOT EXISTS idx_llm_providers_default ON llm_providers(is_default, is_active);
+
+CREATE TABLE IF NOT EXISTS channels (
+    id TEXT PRIMARY KEY,
+    channel_code TEXT NOT NULL UNIQUE,
+    user_code TEXT NOT NULL,
+    agent_code TEXT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    is_active INTEGER NOT NULL,
+    allow_from TEXT,
+    config TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_channels_channel_code ON channels(channel_code);
+CREATE INDEX IF NOT EXISTS idx_channels_user_code ON channels(user_code);
+CREATE INDEX IF NOT EXISTS idx_channels_agent_code ON channels(agent_code);
 `
 
 // InitSchema 初始化数据库 Schema

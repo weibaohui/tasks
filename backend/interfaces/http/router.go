@@ -16,7 +16,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -24,6 +24,7 @@ func SetupRoutesWithManagement(
 	userHandler *UserHandler,
 	agentHandler *AgentHandler,
 	providerHandler *LLMProviderHandler,
+	channelHandler *ChannelHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -171,6 +172,27 @@ func SetupRoutesWithManagement(
 				providerHandler.GetEmbeddingModels(w, r)
 			case http.MethodPut:
 				providerHandler.UpdateEmbeddingModels(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
+
+	if channelHandler != nil {
+		mux.HandleFunc("/api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				channelHandler.CreateChannel(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" || r.URL.Query().Get("code") != "" {
+					channelHandler.GetChannel(w, r)
+					return
+				}
+				channelHandler.ListChannels(w, r)
+			case http.MethodPut:
+				channelHandler.UpdateChannel(w, r)
+			case http.MethodDelete:
+				channelHandler.DeleteChannel(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

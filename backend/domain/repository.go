@@ -55,6 +55,16 @@ type LLMProviderRepository interface {
 	Delete(ctx context.Context, id LLMProviderID) error
 }
 
+type ChannelRepository interface {
+	Save(ctx context.Context, channel *Channel) error
+	FindByID(ctx context.Context, id ChannelID) (*Channel, error)
+	FindByCode(ctx context.Context, code ChannelCode) (*Channel, error)
+	FindByUserCode(ctx context.Context, userCode string) ([]*Channel, error)
+	FindByAgentCode(ctx context.Context, agentCode string) ([]*Channel, error)
+	FindActiveByUserCode(ctx context.Context, userCode string) ([]*Channel, error)
+	Delete(ctx context.Context, id ChannelID) error
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件
