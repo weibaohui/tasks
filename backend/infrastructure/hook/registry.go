@@ -1,51 +1,125 @@
 /**
- * HookRegistry 钩子注册表
- * 管理任务钩子的注册和获取
+ * Hook 注册表实现
  */
 package hook
 
 import (
-	"github.com/weibh/taskmanager/domain"
+	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/weibh/taskmanager/domain"
 )
 
-// DefaultHookRegistry 默认钩子注册表
-type DefaultHookRegistry struct {
+// Registry Hook 注册表
+type Registry interface {
+	Register(hook domain.Hook) error
+	Unregister(name string) error
+	Get(name string) domain.Hook
+	List() []domain.Hook
+	ListByType(hookType domain.HookType) []domain.Hook
+	Enable(name string) error
+	Disable(name string) error
+	Clear()
+}
+
+// SimpleRegistry 简单注册表实现
+type SimpleRegistry struct {
 	mu    sync.RWMutex
-	hooks domain.TaskHooks
+	hooks map[string]domain.Hook
 }
 
-// NewDefaultHookRegistry 创建钩子注册表
-func NewDefaultHookRegistry() *DefaultHookRegistry {
-	return &DefaultHookRegistry{
-		hooks: make(domain.TaskHooks, 0),
+// NewRegistry 创建注册表
+func NewRegistry() Registry {
+	return &SimpleRegistry{
+		hooks: make(map[string]domain.Hook),
 	}
 }
 
-// Register 注册钩子
-func (r *DefaultHookRegistry) Register(hook domain.TaskHook) error {
+func (r *SimpleRegistry) Register(hook domain.Hook) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.hooks = append(r.hooks, hook)
-	return nil
-}
 
-// Unregister 取消注册
-func (r *DefaultHookRegistry) Unregister(name string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for i, hook := range r.hooks {
-		if hook.Name() == name {
-			r.hooks = append(r.hooks[:i], r.hooks[i+1:]...)
-			return nil
-		}
+	if hook == nil {
+		return errors.New("hook cannot be nil")
 	}
+
+	if _, exists := r.hooks[hook.Name()]; exists {
+		return fmt.Errorf("hook %s already registered", hook.Name())
+	}
+
+	r.hooks[hook.Name()] = hook
 	return nil
 }
 
-// GetHooks 获取所有钩子
-func (r *DefaultHookRegistry) GetHooks() domain.TaskHooks {
+func (r *SimpleRegistry) Unregister(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.hooks[name]; !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+
+	delete(r.hooks, name)
+	return nil
+}
+
+func (r *SimpleRegistry) Get(name string) domain.Hook {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.hooks
+	return r.hooks[name]
+}
+
+func (r *SimpleRegistry) List() []domain.Hook {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	hooks := make([]domain.Hook, 0, len(r.hooks))
+	for _, hook := range r.hooks {
+		hooks = append(hooks, hook)
+	}
+	return hooks
+}
+
+func (r *SimpleRegistry) ListByType(hookType domain.HookType) []domain.Hook {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var hooks []domain.Hook
+	for _, hook := range r.hooks {
+		if hook.HookType() == hookType {
+			hooks = append(hooks, hook)
+		}
+	}
+	return hooks
+}
+
+func (r *SimpleRegistry) Enable(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	hook, exists := r.hooks[name]
+	if !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+	hook.SetEnabled(true)
+	return nil
+}
+
+func (r *SimpleRegistry) Disable(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	hook, exists := r.hooks[name]
+	if !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+	hook.SetEnabled(false)
+	return nil
+}
+
+func (r *SimpleRegistry) Clear() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.hooks = make(map[string]domain.Hook)
 }
