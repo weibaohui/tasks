@@ -17,8 +17,9 @@ import (
 
 // OpenAIProvider OpenAI GPT 系列 provider
 type OpenAIProvider struct {
-	config *Config
-	client *http.Client
+	config     *Config
+	client     *http.Client
+	lastUsage  Usage  // 上次调用的 token 使用量
 }
 
 var _ LLMProvider = (*OpenAIProvider)(nil)
@@ -41,6 +42,14 @@ type OpenAIRequest struct {
 type OpenAIResponse struct {
 	ID      string   `json:"id"`
 	Choices []Choice `json:"choices"`
+	Usage   Usage    `json:"usage"`
+}
+
+// Usage OpenAI token 使用量
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 // Choice 选择
@@ -123,7 +132,15 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 		return "", fmt.Errorf("empty response from openai")
 	}
 
+	// 保存 Usage
+	p.lastUsage = openAIResp.Usage
+
 	return openAIResp.Choices[0].Message.Content, nil
+}
+
+// GetLastUsage 返回上次调用的 token 使用量
+func (p *OpenAIProvider) GetLastUsage() Usage {
+	return p.lastUsage
 }
 
 // GenerateSubTasks 生成子任务计划
