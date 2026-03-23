@@ -5,6 +5,7 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -16,7 +17,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -26,11 +27,27 @@ func SetupRoutesWithManagement(
 	providerHandler *LLMProviderHandler,
 	channelHandler *ChannelHandler,
 	sessionHandler *SessionHandler,
+	conversationRecordHandler *ConversationRecordHandler,
+	authHandler *AuthHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
+	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if authHandler == nil {
+				next(w, r)
+				return
+			}
+			if _, err := authHandler.Authorize(r); err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+				return
+			}
+			next(w, r)
+		}
+	}
 
 	// POST /api/v1/tasks - 创建任务
-	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/tasks", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			handler.CreateTask(w, r)
@@ -40,35 +57,35 @@ func SetupRoutesWithManagement(
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
-	mux.HandleFunc("/api/v1/tasks/clear", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/tasks/clear", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			handler.ClearAllTasks(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	}))
 
-	mux.HandleFunc("/api/v1/tasks/all", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/tasks/all", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			handler.ListAllTasks(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	}))
 
 	// GET /api/v1/tasks/trace/{trace_id} - 获取任务列表（按 trace_id）
-	mux.HandleFunc("/api/v1/tasks/trace/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/tasks/trace/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			handler.ListTasksByTrace(w, r)
 		} else {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
 	// GET /api/v1/traces/{trace_id}/tree - 获取任务树
-	mux.HandleFunc("/api/v1/traces/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/traces/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			if strings.HasSuffix(r.URL.Path, "/tree") {
 				handler.GetTaskTree(w, r)
@@ -78,11 +95,11 @@ func SetupRoutesWithManagement(
 		} else {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
 	// POST /api/v1/tasks/{id}/cancel - 取消任务
 	// POST /api/v1/tasks/{id}/start - 启动任务
-	mux.HandleFunc("/api/v1/tasks/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/tasks/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if r.Method == http.MethodPost {
 			if strings.HasSuffix(path, "/cancel") {
@@ -95,10 +112,27 @@ func SetupRoutesWithManagement(
 			}
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	}))
+
+	if authHandler != nil {
+		mux.HandleFunc("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandler.Login(w, r)
+		})
+		mux.HandleFunc("/api/v1/auth/me", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandler.Me(w, r)
+		}))
+	}
 
 	if userHandler != nil {
-		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/users", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				userHandler.CreateUser(w, r)
@@ -115,11 +149,11 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 	}
 
 	if agentHandler != nil {
-		mux.HandleFunc("/api/v1/agents", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/agents", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				agentHandler.CreateAgent(w, r)
@@ -136,11 +170,11 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 	}
 
 	if providerHandler != nil {
-		mux.HandleFunc("/api/v1/providers", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/providers", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				providerHandler.CreateProvider(w, r)
@@ -157,17 +191,17 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 
-		mux.HandleFunc("/api/v1/providers/test", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/providers/test", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
 			providerHandler.TestConnection(w, r)
-		})
+		}))
 
-		mux.HandleFunc("/api/v1/providers/embedding", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/providers/embedding", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodGet:
 				providerHandler.GetEmbeddingModels(w, r)
@@ -176,11 +210,11 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 	}
 
 	if channelHandler != nil {
-		mux.HandleFunc("/api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/channels", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				channelHandler.CreateChannel(w, r)
@@ -197,11 +231,11 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 	}
 
 	if sessionHandler != nil {
-		mux.HandleFunc("/api/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/sessions", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				sessionHandler.CreateSession(w, r)
@@ -216,9 +250,9 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		})
+		}))
 
-		mux.HandleFunc("/api/v1/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/sessions/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/touch"):
@@ -246,7 +280,24 @@ func SetupRoutesWithManagement(
 					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				}
 			}
-		})
+		}))
+	}
+
+	if conversationRecordHandler != nil {
+		mux.HandleFunc("/api/v1/conversation-records", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				conversationRecordHandler.CreateRecord(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					conversationRecordHandler.GetRecord(w, r)
+					return
+				}
+				conversationRecordHandler.ListRecords(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
 	}
 
 	return mux

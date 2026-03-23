@@ -52,6 +52,7 @@ func main() {
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
+	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
 
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
@@ -108,6 +109,7 @@ func main() {
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
+	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
@@ -118,7 +120,13 @@ func main() {
 	providerHandler := httpHandler.NewLLMProviderHandler(providerService)
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler)
+	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	authSecret := os.Getenv("AUTH_SECRET")
+	if authSecret == "" {
+		authSecret = "taskmanager-dev-secret"
+	}
+	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)

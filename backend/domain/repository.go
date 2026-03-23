@@ -76,6 +76,26 @@ type SessionRepository interface {
 	DeleteByChannelCode(ctx context.Context, channelCode string) error
 }
 
+type ConversationRecordListFilter struct {
+	TraceID     string
+	SessionKey  string
+	UserCode    string
+	AgentCode   string
+	ChannelCode string
+	EventType   string
+	Role        string
+	Limit       int
+	Offset      int
+}
+
+type ConversationRecordRepository interface {
+	Save(ctx context.Context, record *ConversationRecord) error
+	FindByID(ctx context.Context, id ConversationRecordID) (*ConversationRecord, error)
+	FindByTraceID(ctx context.Context, traceID string, limit int) ([]*ConversationRecord, error)
+	FindBySessionKey(ctx context.Context, sessionKey string, limit int) ([]*ConversationRecord, error)
+	List(ctx context.Context, filter ConversationRecordListFilter) ([]*ConversationRecord, error)
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件

@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -11,6 +14,8 @@ import (
 var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrUsernameDuplicated = errors.New("username already exists")
+	ErrInvalidCredentials = errors.New("invalid username or password")
+	ErrUserInactive       = errors.New("user is inactive")
 )
 
 type CreateUserCommand struct {
@@ -18,6 +23,7 @@ type CreateUserCommand struct {
 	Email        string
 	DisplayName  string
 	PasswordHash string
+	Password     string
 }
 
 type UpdateUserCommand struct {
@@ -51,13 +57,18 @@ func (s *UserApplicationService) CreateUser(ctx context.Context, cmd CreateUserC
 		return nil, ErrUsernameDuplicated
 	}
 
+	passwordHash := strings.TrimSpace(cmd.PasswordHash)
+	if passwordHash == "" && strings.TrimSpace(cmd.Password) != "" {
+		passwordHash = hashPassword(cmd.Password)
+	}
+
 	user, err := domain.NewUser(
 		domain.NewUserID(s.idGenerator.Generate()),
 		domain.NewUserCode("usr_"+s.idGenerator.Generate()),
 		cmd.Username,
 		cmd.Email,
 		cmd.DisplayName,
-		cmd.PasswordHash,
+		passwordHash,
 	)
 	if err != nil {
 		return nil, err
@@ -117,4 +128,31 @@ func (s *UserApplicationService) DeleteUser(ctx context.Context, id domain.UserI
 		return ErrUserNotFound
 	}
 	return s.userRepo.Delete(ctx, id)
+}
+
+func (s *UserApplicationService) Authenticate(ctx context.Context, username, password string) (*domain.User, error) {
+	user, err := s.userRepo.FindByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrInvalidCredentials
+	}
+	if !user.IsActive() {
+		return nil, ErrUserInactive
+	}
+	if !verifyPassword(user.PasswordHash(), password) {
+		return nil, ErrInvalidCredentials
+	}
+	return user, nil
+}
+
+func hashPassword(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(sum[:])
+}
+
+func verifyPassword(storedHash, plainPassword string) bool {
+	hashed := hashPassword(plainPassword)
+	return storedHash == hashed || storedHash == plainPassword
 }

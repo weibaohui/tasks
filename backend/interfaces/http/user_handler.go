@@ -21,6 +21,7 @@ type CreateUserRequest struct {
 	Email        string `json:"email"`
 	DisplayName  string `json:"display_name"`
 	PasswordHash string `json:"password_hash"`
+	Password     string `json:"password"`
 }
 
 type UpdateUserRequest struct {
@@ -42,6 +43,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Email:        req.Email,
 		DisplayName:  req.DisplayName,
 		PasswordHash: req.PasswordHash,
+		Password:     req.Password,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
