@@ -17,7 +17,7 @@ type LoggingHook struct {
 // NewLoggingHook 创建日志 Hook
 func NewLoggingHook(logger *zap.Logger) *LoggingHook {
 	return &LoggingHook{
-		BaseHook: domain.NewBaseHook("logging", 100, domain.HookTypeLifecycle),
+		BaseHook: domain.NewBaseHook("logging", 100, domain.HookTypeLLM),
 		logger: logger,
 	}
 }
