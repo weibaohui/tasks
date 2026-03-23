@@ -38,3 +38,11 @@ export interface ChannelTypeOption {
   name: string;
   description?: string;
 }
+
+// 渠道类型标签
+export const ChannelTypeLabels: Record<string, string> = {
+  feishu: '飞书',
+  dingtalk: '钉钉',
+  matrix: 'Matrix',
+  websocket: 'WebSocket',
+};
