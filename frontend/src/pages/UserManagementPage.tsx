@@ -128,7 +128,6 @@ export const UserManagementPage: React.FC = () => {
         title={`用户管理 (${users.length})`}
         extra={
           <Space>
-            <Button onClick={() => navigate('/tasks')}>返回任务页</Button>
             <Button onClick={() => fetchUsers()}>刷新</Button>
             <Button type="primary" onClick={() => setCreateOpen(true)}>
               新建用户

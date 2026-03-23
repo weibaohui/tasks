@@ -189,7 +189,6 @@ export const TaskDashboard: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={() => fetchTasks()}>
               刷新
             </Button>
-            <Button onClick={() => navigate('/users')}>用户管理</Button>
             <Popconfirm
               title="确认清空全部任务？"
               description="该操作会删除所有任务数据，无法恢复。"
