@@ -32,3 +32,9 @@ export interface UpdateChannelRequest {
   is_active?: boolean;
   agent_code?: string;
 }
+
+export interface ChannelTypeOption {
+  key: string;
+  name: string;
+  description?: string;
+}

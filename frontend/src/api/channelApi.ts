@@ -2,7 +2,7 @@
  * 渠道（Channel）API 调用模块
  */
 import apiClient from './taskApi';
-import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
+import type { Channel, ChannelTypeOption, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
 
 /**
  * 获取渠道列表
@@ -33,4 +33,9 @@ export async function updateChannel(id: string, request: UpdateChannelRequest): 
  */
 export async function deleteChannel(id: string): Promise<void> {
   await apiClient.delete('/channels', { params: { id } });
+}
+
+export async function listChannelTypes(): Promise<ChannelTypeOption[]> {
+  const response = await apiClient.get<ChannelTypeOption[]>('/channels/types');
+  return response.data;
 }

@@ -239,6 +239,14 @@ func SetupRoutesWithManagement(
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}))
+
+		mux.HandleFunc("/api/v1/channels/types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			channelHandler.ListChannelTypes(w, r)
+		}))
 	}
 
 	if sessionHandler != nil {

@@ -19,10 +19,10 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { listAgents } from '../api/agentApi';
-import { createChannel, deleteChannel, listChannels, updateChannel } from '../api/channelApi';
+import { createChannel, deleteChannel, listChannels, listChannelTypes, updateChannel } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
-import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
+import type { Channel, ChannelTypeOption, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
 
 type ChannelFormValues = {
   name: string;
@@ -62,6 +62,8 @@ export const ChannelManagementPage: React.FC = () => {
   const userCode = user?.user_code || '';
   const [items, setItems] = useState<Channel[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [channelTypes, setChannelTypes] = useState<ChannelTypeOption[]>([]);
+  const [channelTypesLoading, setChannelTypesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
@@ -102,6 +104,28 @@ export const ChannelManagementPage: React.FC = () => {
       setAgents([]);
     }
   }, [userCode]);
+
+  const fetchChannelTypes = useCallback(async () => {
+    if (!userCode) {
+      setChannelTypes([]);
+      return;
+    }
+    setChannelTypesLoading(true);
+    try {
+      const data = await listChannelTypes();
+      setChannelTypes(data);
+    } catch (_error) {
+      message.error('获取渠道类型失败');
+      setChannelTypes([]);
+    } finally {
+      setChannelTypesLoading(false);
+    }
+  }, [userCode]);
+
+  const channelTypeOptions = useMemo(
+    () => channelTypes.map((t) => ({ value: t.key, label: t.name ? `${t.name}（${t.key}）` : t.key })),
+    [channelTypes],
+  );
 
   /**
    * 删除渠道
@@ -236,7 +260,8 @@ export const ChannelManagementPage: React.FC = () => {
   useEffect(() => {
     fetchAgents();
     fetchChannels();
-  }, [fetchAgents, fetchChannels]);
+    fetchChannelTypes();
+  }, [fetchAgents, fetchChannels, fetchChannelTypes]);
 
   return (
     <div style={{ padding: 24 }}>
@@ -293,8 +318,14 @@ export const ChannelManagementPage: React.FC = () => {
               </Form.Item>
             </div>
             <div style={{ width: 220 }}>
-              <Form.Item label="类型" name="type" rules={editing ? [] : [{ required: true, message: '请输入类型' }]}>
-                <Input placeholder="例如：feishu / wechat / http" disabled={!!editing} />
+              <Form.Item label="类型" name="type" rules={editing ? [] : [{ required: true, message: '请选择类型' }]}>
+                <Select
+                  disabled={!!editing}
+                  loading={channelTypesLoading}
+                  options={channelTypeOptions}
+                  placeholder={channelTypesLoading ? '正在加载类型...' : '请选择渠道类型'}
+                  notFoundContent={channelTypesLoading ? '正在加载...' : '暂无可用类型'}
+                />
               </Form.Item>
             </div>
             <div style={{ width: 160 }}>

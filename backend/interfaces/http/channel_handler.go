@@ -16,6 +16,20 @@ func NewChannelHandler(channelService *application.ChannelApplicationService) *C
 	return &ChannelHandler{channelService: channelService}
 }
 
+type ChannelTypeOption struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+func (h *ChannelHandler) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
+	resp := []ChannelTypeOption{
+		{Key: string(domain.ChannelTypeFeishu), Name: "飞书"},
+		{Key: string(domain.ChannelTypeWebSocket), Name: "WebSocket"},
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 type CreateChannelRequest struct {
 	UserCode  string                 `json:"user_code"`
 	Name      string                 `json:"name"`
