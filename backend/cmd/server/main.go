@@ -40,7 +40,7 @@ type Gateway struct {
 }
 
 func main() {
-	logger, _ := zap.NewProduction()
+	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
 	logger.Info("启动任务管理服务...")
@@ -251,7 +251,7 @@ func initGateway(channelService *application.ChannelApplicationService, logger *
 
 // loadChannels 从数据库加载渠道
 func (g *Gateway) loadChannels(channelService *application.ChannelApplicationService) {
-	registry := channel.DefaultRegistry(g.logger)
+	registry := channel.DefaultRegistry(g.messageBus, g.logger)
 
 	ctx := context.Background()
 	channels, err := channelService.ListActiveChannels(ctx)
@@ -262,16 +262,12 @@ func (g *Gateway) loadChannels(channelService *application.ChannelApplicationSer
 
 	for _, ch := range channels {
 		chType := string(ch.Type())
-		factory, ok := registry.GetFactory(chType)
-		if !ok {
-			g.logger.Warn("未注册的渠道类型", zap.String("type", chType))
-			continue
-		}
 
-		chInstance, err := factory(ch.Config())
+		chInstance, err := registry.CreateChannel(chType, ch.Config())
 		if err != nil {
-			g.logger.Error("创建渠道实例失败",
+			g.logger.Warn("创建渠道实例失败",
 				zap.String("name", ch.Name()),
+				zap.String("type", chType),
 				zap.Error(err),
 			)
 			continue

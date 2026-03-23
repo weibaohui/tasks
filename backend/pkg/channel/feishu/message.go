@@ -24,7 +24,7 @@ func newMessageHandler(channel *Channel) *messageHandler {
 // onMessageReceive handles received messages
 func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 	c := h.channel
-	c.logger.Debug("Feishu callback triggered")
+	c.logger.Info("Feishu 收到事件回调")
 
 	if event == nil || event.Event == nil {
 		c.logger.Debug("Feishu event is empty")
@@ -36,7 +36,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 	sender := ev.Sender
 
 	if message == nil || sender == nil {
-		c.logger.Debug("Feishu message or sender is empty")
+		c.logger.Warn("Feishu message or sender is empty")
 		return nil
 	}
 
@@ -49,6 +49,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 
 	// Skip bot messages
 	if sender.SenderType != nil && *sender.SenderType == "bot" {
+		c.logger.Debug("Skipping bot message")
 		return nil
 	}
 
@@ -98,7 +99,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 			}
 		}
 		if !allowed {
-			c.logger.Debug("Feishu message sender not in whitelist", zap.String("sender", senderID))
+			c.logger.Warn("Feishu message sender not in whitelist", zap.String("sender", senderID), zap.Strings("whitelist", c.config.AllowFrom))
 			return nil
 		}
 	}
@@ -124,6 +125,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 			"chat_type":  chatType,
 			"msg_type":   msgType,
 			"chat_id":    chatID,
+			"sender_id":  senderID,
 			"app_id":     c.config.AppID,
 			"channel_id": c.config.ChannelID,
 			"channel_code": c.config.ChannelCode,

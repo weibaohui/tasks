@@ -31,18 +31,20 @@ type Channel interface {
 }
 
 // ChannelFactory is a function that creates a channel instance
-type ChannelFactory func(config map[string]interface{}) (Channel, error)
+type ChannelFactory func(config map[string]interface{}, messageBus *bus.MessageBus) (Channel, error)
 
 // Registry manages channel factories for creating channel instances
 type Registry struct {
 	factories map[string]ChannelFactory
 	mu        sync.RWMutex
+	messageBus *bus.MessageBus
 }
 
 // NewRegistry creates a new channel registry
-func NewRegistry() *Registry {
+func NewRegistry(messageBus *bus.MessageBus) *Registry {
 	return &Registry{
-		factories: make(map[string]ChannelFactory),
+		factories:  make(map[string]ChannelFactory),
+		messageBus: messageBus,
 	}
 }
 
@@ -53,12 +55,23 @@ func (r *Registry) Register(channelType string, factory ChannelFactory) {
 	r.factories[channelType] = factory
 }
 
-// GetFactory returns the factory for a channel type
+// GetFactory returns the factory for a channel type (with messageBus pre-bound)
 func (r *Registry) GetFactory(channelType string) (ChannelFactory, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	factory, ok := r.factories[channelType]
 	return factory, ok
+}
+
+// CreateChannel creates a channel using the registered factory
+func (r *Registry) CreateChannel(channelType string, config map[string]interface{}) (Channel, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	factory, ok := r.factories[channelType]
+	if !ok {
+		return nil, fmt.Errorf("no factory registered for channel type: %s", channelType)
+	}
+	return factory(config, r.messageBus)
 }
 
 // ListTypes returns all registered channel types

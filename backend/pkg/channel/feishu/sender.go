@@ -18,10 +18,25 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 	content := msg.Content
 	chatID := msg.ChatID
 
+	// Determine receive_id type based on chat_type
+	// For p2p (person-to-person) chats, use open_id; for group chats, use chat_id
+	receiveIDType := "chat_id"
+	receiveID := chatID
+
+	if msg.Metadata != nil {
+		if chatType, ok := msg.Metadata["chat_type"].(string); ok && chatType == "p2p" {
+			// For p2p chats, use sender's open_id as receive_id
+			receiveIDType = "open_id"
+			if senderID, ok := msg.Metadata["sender_id"].(string); ok && senderID != "" {
+				receiveID = senderID
+			}
+		}
+	}
+
 	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType("chat_id").
+		ReceiveIdType(receiveIDType).
 		Body(&larkim.CreateMessageReqBody{
-			ReceiveId: &chatID,
+			ReceiveId: &receiveID,
 			MsgType:   ptrString("text"),
 			Content:   ptrRawMessage(fmt.Sprintf(`{"text":"%s"}`, escapeJSONString(content))),
 		}).Build()
@@ -37,7 +52,8 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 
 	if resp.Data != nil && resp.Data.MessageId != nil {
 		c.logger.Debug("Message sent to Feishu",
-			zap.String("chat_id", msg.ChatID),
+			zap.String("receive_id", receiveID),
+			zap.String("receive_id_type", receiveIDType),
 			zap.String("message_id", *resp.Data.MessageId),
 		)
 	}

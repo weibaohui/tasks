@@ -81,6 +81,12 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 		if appID, ok := msg.Metadata["app_id"].(string); ok {
 			outMsg.Metadata["app_id"] = appID
 		}
+		if senderID, ok := msg.Metadata["sender_id"].(string); ok {
+			outMsg.Metadata["sender_id"] = senderID
+		}
+		if chatType, ok := msg.Metadata["chat_type"].(string); ok {
+			outMsg.Metadata["chat_type"] = chatType
+		}
 	}
 
 	// 保存助手响应到会话历史

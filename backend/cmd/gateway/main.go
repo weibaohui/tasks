@@ -81,7 +81,7 @@ func main() {
 	logger.Info("应用服务初始化完成")
 
 	// 9. 初始化渠道管理器
-	channelRegistry := channel.DefaultRegistry(logger)
+	channelRegistry := channel.DefaultRegistry(messageBus, logger)
 	channelManager := channel.NewManager(messageBus)
 
 	// 从数据库加载渠道配置
@@ -193,16 +193,12 @@ func registerChannelsFromDB(
 
 	for _, ch := range channels {
 		chType := string(ch.Type())
-		factory, ok := registry.GetFactory(chType)
-		if !ok {
-			logger.Warn("未注册的渠道类型", zap.String("type", chType))
-			continue
-		}
 
-		chInstance, err := factory(ch.Config())
+		chInstance, err := registry.CreateChannel(chType, ch.Config())
 		if err != nil {
-			logger.Error("创建渠道实例失败",
+			logger.Warn("创建渠道实例失败",
 				zap.String("name", ch.Name()),
+				zap.String("type", chType),
 				zap.Error(err),
 			)
 			continue

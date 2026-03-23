@@ -6,7 +6,8 @@ import (
 )
 
 // Factory creates a Feishu channel from configuration
-func Factory(config map[string]interface{}, logger *zap.Logger) (*Channel, error) {
+// messageBus is the shared message bus from the gateway
+func Factory(config map[string]interface{}, messageBus *bus.MessageBus, logger *zap.Logger) (*Channel, error) {
 	cfg := &Config{
 		AppID:             getString(config, "app_id"),
 		AppSecret:         getString(config, "app_secret"),
@@ -26,9 +27,6 @@ func Factory(config map[string]interface{}, logger *zap.Logger) (*Channel, error
 			}
 		}
 	}
-
-	// Create a new message bus for the channel
-	messageBus := bus.NewMessageBus(logger)
 
 	return NewChannel(cfg, messageBus, logger), nil
 }
