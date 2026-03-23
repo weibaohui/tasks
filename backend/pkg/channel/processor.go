@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
 )
@@ -15,6 +17,8 @@ type MessageProcessor struct {
 	logger            *zap.Logger
 	sessionManager    *SessionManager
 	agentConfigCache *AgentConfigCache
+	agentRepo        domain.AgentRepository
+	providerRepo     domain.LLMProviderRepository
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -22,12 +26,16 @@ func NewMessageProcessor(
 	messageBus *bus.MessageBus,
 	sessionManager *SessionManager,
 	logger *zap.Logger,
+	agentRepo domain.AgentRepository,
+	providerRepo domain.LLMProviderRepository,
 ) *MessageProcessor {
 	return &MessageProcessor{
 		bus:               messageBus,
 		logger:            logger,
 		sessionManager:    sessionManager,
 		agentConfigCache: NewAgentConfigCache(),
+		agentRepo:        agentRepo,
+		providerRepo:     providerRepo,
 	}
 }
 
@@ -61,9 +69,8 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 		Content: msg.Content,
 	})
 
-	// TODO: 调用 LLM 处理消息
-	// 目前返回简单的响应
-	response := p.generateResponse(msg)
+	// 生成响应
+	response := p.generateResponse(msg, session)
 
 	// 发布响应消息
 	outMsg := &bus.OutboundMessage{
@@ -99,8 +106,8 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 	return nil
 }
 
-// generateResponse 生成响应（临时实现，后续接入 LLM）
-func (p *MessageProcessor) generateResponse(msg *bus.InboundMessage) string {
+// generateResponse 生成响应
+func (p *MessageProcessor) generateResponse(msg *bus.InboundMessage, session *Session) string {
 	content := strings.TrimSpace(msg.Content)
 
 	// 简单的命令处理
@@ -112,8 +119,116 @@ func (p *MessageProcessor) generateResponse(msg *bus.InboundMessage) string {
 		return fmt.Sprintf("状态正常\n会话: %s\n渠道: %s", msg.SessionKey(), msg.Channel)
 	}
 
-	// 默认响应
-	return fmt.Sprintf("收到消息: %s\n(LLM 处理功能待实现)", content)
+	// 获取 Agent 和 LLM 配置
+	agent, provider, err := p.getAgentAndProvider(msg)
+	if err != nil {
+		p.logger.Debug("获取 Agent/LLM 配置失败", zap.Error(err))
+		return fmt.Sprintf("收到消息: %s\n(Agent 或 LLM 配置未找到)", content)
+	}
+
+	// 如果没有 Provider，返回默认响应
+	if provider == nil {
+		return fmt.Sprintf("收到消息: %s\n(LLM Provider 未配置)", content)
+	}
+
+	// 构建 LLM 配置
+	model := ""
+	if agent != nil {
+		model = agent.Model()
+	}
+	if model == "" {
+		model = provider.DefaultModel()
+	}
+	if model == "" {
+		model = "gpt-4"
+	}
+
+	llmConfig := &llm.Config{
+		ProviderType: provider.ProviderKey(),
+		Model:        model,
+		APIKey:       provider.APIKey(),
+		BaseURL:      provider.APIBase(),
+		Temperature:  0.7,
+		MaxTokens:    4096,
+	}
+
+	// 创建 LLM Provider
+	llmProvider, err := llm.NewLLMProvider(llmConfig)
+	if err != nil {
+		p.logger.Error("创建 LLM Provider 失败", zap.Error(err))
+		return fmt.Sprintf("收到消息: %s\n(LLM 配置错误)", content)
+	}
+
+	// 构建对话历史 prompt
+	prompt := p.buildPrompt(session, content)
+
+	// 调用 LLM
+	ctx := context.Background()
+	response, err := llmProvider.Generate(ctx, prompt)
+	if err != nil {
+		p.logger.Error("LLM 调用失败", zap.Error(err))
+		return fmt.Sprintf("抱歉，LLM 处理失败: %v", err)
+	}
+
+	return response
+}
+
+// getAgentAndProvider 根据消息获取 Agent 和 LLMProvider
+func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain.Agent, *domain.LLMProvider, error) {
+	if msg.Metadata == nil {
+		return nil, nil, fmt.Errorf("消息元数据为空")
+	}
+
+	// 获取 agent_code
+	agentCode, ok := msg.Metadata["agent_code"].(string)
+	if !ok || agentCode == "" {
+		// 尝试从 channel_code 获取 channel 再获取 agent
+		p.logger.Debug("消息中未包含 agent_code")
+		return nil, nil, fmt.Errorf("消息中未包含 agent_code")
+	}
+
+	// 获取 Agent
+	agent, err := p.agentRepo.FindByAgentCode(context.Background(), domain.NewAgentCode(agentCode))
+	if err != nil || agent == nil {
+		p.logger.Debug("获取 Agent 失败", zap.String("agent_code", agentCode), zap.Error(err))
+		return nil, nil, err
+	}
+
+	// 获取用户的默认 LLM Provider
+	userCode := agent.UserCode()
+	provider, err := p.providerRepo.FindDefaultActive(context.Background(), userCode)
+	if err != nil || provider == nil {
+		p.logger.Debug("获取 LLM Provider 失败", zap.String("user_code", userCode), zap.Error(err))
+		return agent, nil, err
+	}
+
+	return agent, provider, nil
+}
+
+// buildPrompt 构建 LLM prompt
+func (p *MessageProcessor) buildPrompt(session *Session, userInput string) string {
+	var sb strings.Builder
+
+	// 添加系统提示
+	sb.WriteString("你是一个智能助手，请根据对话历史回答用户的问题。\n\n")
+
+	// 添加对话历史
+	messages := session.Messages()
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			sb.WriteString(fmt.Sprintf("用户: %s\n", msg.Content))
+		case "assistant":
+			sb.WriteString(fmt.Sprintf("助手: %s\n", msg.Content))
+		case "system":
+			sb.WriteString(fmt.Sprintf("系统: %s\n", msg.Content))
+		}
+	}
+
+	// 添加当前用户输入
+	sb.WriteString(fmt.Sprintf("用户: %s\n助手:", userInput))
+
+	return sb.String()
 }
 
 // AgentConfigCache 缓存 Agent 配置

@@ -108,7 +108,8 @@ func getFirstEnvWithDefault(defaultVal string, keys ...string) string {
 // NewLLMProvider 创建 LLM Provider
 func NewLLMProvider(config *Config) (LLMProvider, error) {
 	switch config.ProviderType {
-	case "openai":
+	case "openai", "minimax":
+		// minimax 使用 OpenAI 兼容 API
 		return NewOpenAIProvider(config)
 	case "claude":
 		return NewClaudeProvider(config)

@@ -171,7 +171,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, logger)
+	gateway := initGateway(channelService, agentRepo, providerRepo, logger)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -214,7 +214,12 @@ func main() {
 }
 
 // initGateway 初始化渠道网关
-func initGateway(channelService *application.ChannelApplicationService, logger *zap.Logger) *Gateway {
+func initGateway(
+	channelService *application.ChannelApplicationService,
+	agentRepo domain.AgentRepository,
+	providerRepo domain.LLMProviderRepository,
+	logger *zap.Logger,
+) *Gateway {
 	gw := &Gateway{
 		logger:          logger,
 		messageBus:      channelBus.NewMessageBus(logger),
@@ -223,7 +228,7 @@ func initGateway(channelService *application.ChannelApplicationService, logger *
 	}
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

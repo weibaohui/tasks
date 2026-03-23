@@ -54,6 +54,7 @@ func main() {
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
+	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 
 	// 4. 初始化 Message Bus
 	messageBus := channelBus.NewMessageBus(logger)
@@ -64,7 +65,7 @@ func main() {
 	logger.Info("Session Manager 初始化完成")
 
 	// 6. 初始化消息处理器
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo)
 	logger.Info("消息处理器初始化完成")
 
 	// 7. 初始化 Hook Manager
