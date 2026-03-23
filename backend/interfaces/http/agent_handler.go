@@ -1,0 +1,219 @@
+package http
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/weibh/taskmanager/application"
+	"github.com/weibh/taskmanager/domain"
+)
+
+type AgentHandler struct {
+	agentService *application.AgentApplicationService
+}
+
+func NewAgentHandler(agentService *application.AgentApplicationService) *AgentHandler {
+	return &AgentHandler{agentService: agentService}
+}
+
+type CreateAgentRequest struct {
+	UserCode              string   `json:"user_code"`
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	IdentityContent       string   `json:"identity_content"`
+	SoulContent           string   `json:"soul_content"`
+	AgentsContent         string   `json:"agents_content"`
+	UserContent           string   `json:"user_content"`
+	ToolsContent          string   `json:"tools_content"`
+	Model                 string   `json:"model"`
+	MaxTokens             int      `json:"max_tokens"`
+	Temperature           float64  `json:"temperature"`
+	MaxIterations         int      `json:"max_iterations"`
+	HistoryMessages       int      `json:"history_messages"`
+	SkillsList            []string `json:"skills_list"`
+	ToolsList             []string `json:"tools_list"`
+	IsDefault             bool     `json:"is_default"`
+	EnableThinkingProcess bool     `json:"enable_thinking_process"`
+}
+
+type UpdateAgentRequest struct {
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	IdentityContent       string   `json:"identity_content"`
+	SoulContent           string   `json:"soul_content"`
+	AgentsContent         string   `json:"agents_content"`
+	UserContent           string   `json:"user_content"`
+	ToolsContent          string   `json:"tools_content"`
+	Model                 string   `json:"model"`
+	MaxTokens             int      `json:"max_tokens"`
+	Temperature           float64  `json:"temperature"`
+	MaxIterations         int      `json:"max_iterations"`
+	HistoryMessages       int      `json:"history_messages"`
+	SkillsList            []string `json:"skills_list"`
+	ToolsList             []string `json:"tools_list"`
+	IsActive              *bool    `json:"is_active"`
+	IsDefault             *bool    `json:"is_default"`
+	EnableThinkingProcess *bool    `json:"enable_thinking_process"`
+}
+
+func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	var req CreateAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+
+	agent, err := h.agentService.CreateAgent(r.Context(), application.CreateAgentCommand{
+		UserCode:              req.UserCode,
+		Name:                  req.Name,
+		Description:           req.Description,
+		IdentityContent:       req.IdentityContent,
+		SoulContent:           req.SoulContent,
+		AgentsContent:         req.AgentsContent,
+		UserContent:           req.UserContent,
+		ToolsContent:          req.ToolsContent,
+		Model:                 req.Model,
+		MaxTokens:             req.MaxTokens,
+		Temperature:           req.Temperature,
+		MaxIterations:         req.MaxIterations,
+		HistoryMessages:       req.HistoryMessages,
+		SkillsList:            req.SkillsList,
+		ToolsList:             req.ToolsList,
+		IsDefault:             req.IsDefault,
+		EnableThinkingProcess: req.EnableThinkingProcess,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+}
+
+func (h *AgentHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
+	userCode := r.URL.Query().Get("user_code")
+	agents, err := h.agentService.ListAgents(r.Context(), userCode)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	resp := make([]map[string]interface{}, 0, len(agents))
+	for _, agent := range agents {
+		resp = append(resp, agentToMap(agent))
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *AgentHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	code := r.URL.Query().Get("code")
+	if id == "" && code == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id or code is required"})
+		return
+	}
+
+	var (
+		agent *domain.Agent
+		err   error
+	)
+	if id != "" {
+		agent, err = h.agentService.GetAgent(r.Context(), domain.NewAgentID(id))
+	} else {
+		agent, err = h.agentService.GetAgentByCode(r.Context(), domain.NewAgentCode(code))
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+}
+
+func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	var req UpdateAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+
+	agent, err := h.agentService.UpdateAgent(r.Context(), application.UpdateAgentCommand{
+		ID:                    domain.NewAgentID(id),
+		Name:                  req.Name,
+		Description:           req.Description,
+		IdentityContent:       req.IdentityContent,
+		SoulContent:           req.SoulContent,
+		AgentsContent:         req.AgentsContent,
+		UserContent:           req.UserContent,
+		ToolsContent:          req.ToolsContent,
+		Model:                 req.Model,
+		MaxTokens:             req.MaxTokens,
+		Temperature:           req.Temperature,
+		MaxIterations:         req.MaxIterations,
+		HistoryMessages:       req.HistoryMessages,
+		SkillsList:            req.SkillsList,
+		ToolsList:             req.ToolsList,
+		IsActive:              req.IsActive,
+		IsDefault:             req.IsDefault,
+		EnableThinkingProcess: req.EnableThinkingProcess,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+}
+
+func (h *AgentHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	if err := h.agentService.DeleteAgent(r.Context(), domain.NewAgentID(id)); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+}
+
+func agentToMap(agent *domain.Agent) map[string]interface{} {
+	return map[string]interface{}{
+		"id":                      agent.ID().String(),
+		"agent_code":              agent.AgentCode().String(),
+		"user_code":               agent.UserCode(),
+		"name":                    agent.Name(),
+		"description":             agent.Description(),
+		"identity_content":        agent.IdentityContent(),
+		"soul_content":            agent.SoulContent(),
+		"agents_content":          agent.AgentsContent(),
+		"user_content":            agent.UserContent(),
+		"tools_content":           agent.ToolsContent(),
+		"model":                   agent.Model(),
+		"max_tokens":              agent.MaxTokens(),
+		"temperature":             agent.Temperature(),
+		"max_iterations":          agent.MaxIterations(),
+		"history_messages":        agent.HistoryMessages(),
+		"skills_list":             agent.SkillsList(),
+		"tools_list":              agent.ToolsList(),
+		"is_active":               agent.IsActive(),
+		"is_default":              agent.IsDefault(),
+		"enable_thinking_process": agent.EnableThinkingProcess(),
+		"created_at":              agent.CreatedAt().UnixMilli(),
+		"updated_at":              agent.UpdatedAt().UnixMilli(),
+	}
+}

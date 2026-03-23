@@ -47,6 +47,16 @@ func main() {
 	idGenerator := utils.NewNanoIDGenerator(21)
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
+	userRepo := _persistence.NewSQLiteUserRepository(db)
+	agentRepo := _persistence.NewSQLiteAgentRepository(db)
+	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
+	channelRepo := _persistence.NewSQLiteChannelRepository(db)
+	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
+	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
+	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
+	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
+	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
+	mcpToolLogRepo := _persistence.NewSQLiteMCPToolLogRepository(db)
 
 	// 4. 初始化 LLM Provider
 	llmConfig := llm.DefaultConfig()
@@ -98,12 +108,32 @@ func main() {
 		eventBus,
 		logger,
 	)
+	userService := application.NewUserApplicationService(userRepo, idGenerator)
+	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
+	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
+	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
+	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
+	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
+	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
+	ensureDefaultAdminUser(userService, userRepo, logger)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
-	mux := httpHandler.SetupRoutes(taskHandler)
+	userHandler := httpHandler.NewUserHandler(userService)
+	agentHandler := httpHandler.NewAgentHandler(agentService)
+	providerHandler := httpHandler.NewLLMProviderHandler(providerService)
+	channelHandler := httpHandler.NewChannelHandler(channelService)
+	sessionHandler := httpHandler.NewSessionHandler(sessionService)
+	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	mcpHandler := httpHandler.NewMCPHandler(mcpService)
+	authSecret := os.Getenv("AUTH_SECRET")
+	if authSecret == "" {
+		authSecret = "taskmanager-dev-secret"
+	}
+	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
@@ -145,4 +175,37 @@ func main() {
 	}
 
 	logger.Info("服务器已关闭")
+}
+
+func ensureDefaultAdminUser(userService *application.UserApplicationService, userRepo domain.UserRepository, logger *zap.Logger) {
+	ctx := context.Background()
+	existingUser, err := userRepo.FindByUsername(ctx, "admin")
+	if err != nil {
+		logger.Warn("检查默认管理员用户失败", zap.Error(err))
+		return
+	}
+	if existingUser != nil {
+		if err := existingUser.ChangePasswordHash("admin123"); err != nil {
+			logger.Warn("重置默认管理员密码失败", zap.Error(err))
+			return
+		}
+		existingUser.Activate()
+		if err := userRepo.Save(ctx, existingUser); err != nil {
+			logger.Warn("保存默认管理员用户失败", zap.Error(err))
+			return
+		}
+		logger.Info("默认管理员密码已重置", zap.String("username", "admin"))
+		return
+	}
+	_, err = userService.CreateUser(ctx, application.CreateUserCommand{
+		Username:    "admin",
+		DisplayName: "系统管理员",
+		Email:       "admin@local.dev",
+		Password:    "admin123",
+	})
+	if err != nil {
+		logger.Warn("创建默认管理员用户失败", zap.Error(err))
+		return
+	}
+	logger.Info("默认管理员用户已创建", zap.String("username", "admin"))
 }

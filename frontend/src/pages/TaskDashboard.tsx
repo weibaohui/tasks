@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal, Popconfirm, message } from 'antd';
 import { PlusOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { TaskForm } from '../components/TaskForm';
 import { TaskDetailDrawer } from '../components/TaskDetailDrawer';
 import { StatusBadge } from '../components/StatusBadge';
@@ -12,8 +13,11 @@ import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
 import type { Task, TaskStatus } from '../types/task';
 import { clearAllTasks } from '../api/taskApi';
+import { useAuthStore } from '../stores/authStore';
 
 export const TaskDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuthStore();
   const { tasks, loading, fetchTasks } = useTaskStore();
   const { createTask, cancelTask } = useTaskOperations();
   const [modalVisible, setModalVisible] = useState(false);
@@ -198,6 +202,15 @@ export const TaskDashboard: React.FC = () => {
             </Popconfirm>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
               创建任务
+            </Button>
+            <Button
+              danger
+              onClick={() => {
+                logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              退出登录
             </Button>
           </Space>
         }
