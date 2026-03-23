@@ -132,7 +132,14 @@ func SetupRoutesWithManagement(
 	}
 
 	if userHandler != nil {
-		mux.HandleFunc("/api/v1/users", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost && authHandler != nil {
+				if _, err := authHandler.Authorize(r); err != nil {
+					w.WriteHeader(http.StatusUnauthorized)
+					_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+					return
+				}
+			}
 			switch r.Method {
 			case http.MethodPost:
 				userHandler.CreateUser(w, r)
@@ -149,7 +156,7 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
-		}))
+		})
 	}
 
 	if agentHandler != nil {
