@@ -138,3 +138,8 @@ func (s *ChannelApplicationService) DeleteChannel(ctx context.Context, id domain
 	}
 	return s.channelRepo.Delete(ctx, id)
 }
+
+// ListActiveChannels returns all active channels
+func (s *ChannelApplicationService) ListActiveChannels(ctx context.Context) ([]*domain.Channel, error) {
+	return s.channelRepo.FindActive(ctx)
+}

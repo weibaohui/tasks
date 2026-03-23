@@ -96,6 +96,15 @@ func (r *SQLiteChannelRepository) Delete(ctx context.Context, id domain.ChannelI
 	return err
 }
 
+func (r *SQLiteChannelRepository) FindActive(ctx context.Context) ([]*domain.Channel, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT * FROM channels WHERE is_active = 1 ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanChannels(rows)
+}
+
 func scanChannels(rows *sql.Rows) ([]*domain.Channel, error) {
 	channels := make([]*domain.Channel, 0)
 	for rows.Next() {

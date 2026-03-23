@@ -65,6 +65,7 @@ type ChannelRepository interface {
 	FindByUserCode(ctx context.Context, userCode string) ([]*Channel, error)
 	FindByAgentCode(ctx context.Context, agentCode string) ([]*Channel, error)
 	FindActiveByUserCode(ctx context.Context, userCode string) ([]*Channel, error)
+	FindActive(ctx context.Context) ([]*Channel, error)
 	Delete(ctx context.Context, id ChannelID) error
 }
 
