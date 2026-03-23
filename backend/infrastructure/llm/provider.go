@@ -120,7 +120,8 @@ func NewLLMProvider(config *Config) (LLMProvider, error) {
 }
 
 // subTaskPrompt 生成子任务的 prompt
-func subTaskPrompt(taskName, taskDesc string, depth, maxDepth int) string {
+// SubTaskPrompt 生成子任务的 prompt
+func SubTaskPrompt(taskName, taskDesc string, depth, maxDepth int) string {
 	return fmt.Sprintf(`你是一个任务规划 Agent。请根据以下任务生成子任务计划。
 
 任务信息：
@@ -146,7 +147,8 @@ reason: 简要说明分解策略`, taskName, taskDesc, depth, maxDepth)
 }
 
 // extractYAML 从响应中提取 YAML
-func extractYAML(s string) string {
+// ExtractYAML 从响应中提取 YAML
+func ExtractYAML(s string) string {
 	// 去除可能的 markdown 标记
 	s = strings.TrimSpace(s)
 
@@ -167,7 +169,8 @@ func extractYAML(s string) string {
 }
 
 // tryParseYAML 尝试解析 YAML
-func tryParseYAML(s string) (*SubTaskPlan, error) {
+// TryParseYAML 尝试解析 YAML
+func TryParseYAML(s string) (*SubTaskPlan, error) {
 	var plan SubTaskPlan
 
 	// 移除可能的前缀文本，找到 YAML 开始位置
