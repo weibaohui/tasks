@@ -8,6 +8,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   createMCPServer,
   deleteMCPServer,
+  getMCPErrorMessage,
   listMCPServers,
   refreshMCPServer,
   testMCPServer,
@@ -59,8 +60,8 @@ export const MCPManagementPage: React.FC = () => {
     try {
       const data = await listMCPServers();
       setItems(data);
-    } catch (_e) {
-      message.error('获取 MCP 服务器列表失败');
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '获取 MCP 服务器列表失败');
     } finally {
       setLoading(false);
     }
@@ -102,8 +103,8 @@ export const MCPManagementPage: React.FC = () => {
       setEditing(null);
       form.resetFields();
       await fetchList();
-    } catch (_e) {
-      message.error('保存失败');
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '保存失败');
     } finally {
       setSaving(false);
     }
@@ -117,8 +118,8 @@ export const MCPManagementPage: React.FC = () => {
       await testMCPServer(id);
       message.success('测试连接已完成');
       await fetchList();
-    } catch (_e) {
-      message.error('测试连接失败');
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '测试连接失败');
     }
   }, [fetchList]);
 
@@ -130,8 +131,8 @@ export const MCPManagementPage: React.FC = () => {
       await refreshMCPServer(id);
       message.success('刷新工具能力成功');
       await fetchList();
-    } catch (_e) {
-      message.error('刷新失败');
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '刷新失败');
     }
   }, [fetchList]);
 
@@ -143,8 +144,8 @@ export const MCPManagementPage: React.FC = () => {
       await deleteMCPServer(id);
       message.success('删除成功');
       await fetchList();
-    } catch (_e) {
-      message.error('删除失败');
+    } catch (e) {
+      message.error(getMCPErrorMessage(e) || '删除失败');
     }
   }, [fetchList]);
 
@@ -312,4 +313,3 @@ export const MCPManagementPage: React.FC = () => {
     </div>
   );
 };
-

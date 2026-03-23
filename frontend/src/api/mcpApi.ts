@@ -2,6 +2,7 @@
  * MCP API 调用模块
  */
 import apiClient from './taskApi';
+import type { AxiosError } from 'axios';
 import type {
   MCPServer,
   CreateMCPServerRequest,
@@ -11,6 +12,16 @@ import type {
   UpdateBindingRequest,
 } from '../types/mcp';
 import type { MCPTool } from '../types/mcp';
+
+/**
+ * 提取后端错误信息（用于前端 toast 展示）
+ */
+export function getMCPErrorMessage(err: unknown): string {
+  const e = err as AxiosError<any>;
+  const msg = e?.response?.data?.message;
+  if (typeof msg === 'string' && msg.trim()) return msg.trim();
+  return '请求失败';
+}
 
 /**
  * 列出 MCP 服务器
@@ -70,7 +81,7 @@ export async function refreshMCPServer(id: string): Promise<{ message: string }>
 /**
  * 列出服务器工具
  */
-export async function listMCPToys(id: string): Promise<MCPTool[]> {
+export async function listMCPTools(id: string): Promise<MCPTool[]> {
   const resp = await apiClient.get<MCPTool[]>('/mcp/servers/tools', { params: { id } });
   return resp.data;
 }
@@ -105,4 +116,3 @@ export async function updateBinding(id: string, req: UpdateBindingRequest): Prom
 export async function deleteBinding(id: string): Promise<void> {
   await apiClient.delete('/mcp/bindings', { params: { id } });
 }
-

@@ -7,7 +7,7 @@ import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Spac
 import type { ColumnsType } from 'antd/es/table';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
 import { listProviders } from '../api/providerApi';
-import { createBinding, deleteBinding, listBindings } from '../api/mcpApi';
+import { createBinding, deleteBinding, getMCPErrorMessage, listBindings } from '../api/mcpApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
@@ -436,8 +436,8 @@ export const AgentManagementPage: React.FC = () => {
                 try {
                   const list = await listBindings(record.id);
                   setBindings(list);
-                } catch (_e) {
-                  message.error('获取绑定失败');
+                } catch (e) {
+                  message.error(getMCPErrorMessage(e) || '获取绑定失败');
                 } finally {
                   setBindingsLoading(false);
                 }
@@ -535,8 +535,8 @@ export const AgentManagementPage: React.FC = () => {
                 try {
                   const list = await listBindings(bindingAgent.id);
                   setBindings(list);
-                } catch (_e) {
-                  message.error('刷新失败');
+                } catch (e) {
+                  message.error(getMCPErrorMessage(e) || '刷新失败');
                 } finally {
                   setBindingsLoading(false);
                 }
@@ -555,8 +555,8 @@ export const AgentManagementPage: React.FC = () => {
                   message.success('绑定成功');
                   const list = await listBindings(bindingAgent.id);
                   setBindings(list);
-                } catch (_e) {
-                  message.error('绑定失败');
+                } catch (e) {
+                  message.error(getMCPErrorMessage(e) || '绑定失败');
                 }
               }}
             >
@@ -599,8 +599,8 @@ export const AgentManagementPage: React.FC = () => {
                           const list = await listBindings(bindingAgent.id);
                           setBindings(list);
                         }
-                      } catch (_e) {
-                        message.error('删除失败');
+                      } catch (e) {
+                        message.error(getMCPErrorMessage(e) || '删除失败');
                       }
                     }}
                   >

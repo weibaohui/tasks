@@ -35,11 +35,11 @@ type UpdateMCPServerCommand struct {
 }
 
 type CreateAgentMCPBindingCommand struct {
-	AgentID     domain.AgentID
-	MCPServerID domain.MCPServerID
+	AgentID      domain.AgentID
+	MCPServerID  domain.MCPServerID
 	EnabledTools []string
-	IsActive    *bool
-	AutoLoad    *bool
+	IsActive     *bool
+	AutoLoad     *bool
 }
 
 type UpdateAgentMCPBindingCommand struct {
@@ -418,10 +418,11 @@ func (s *MCPApplicationService) createMCPClient(server *domain.MCPServer) (*clie
 			env = append(env, fmt.Sprintf("%s=%s", k, v))
 		}
 		return client.NewStdioMCPClient(server.Command(), env, server.Args()...)
-	case domain.MCPTransportHTTP, domain.MCPTransportSSE:
+	case domain.MCPTransportHTTP:
+		return client.NewStreamableHttpClient(server.URL())
+	case domain.MCPTransportSSE:
 		return client.NewSSEMCPClient(server.URL())
 	default:
 		return nil, fmt.Errorf("不支持的传输类型: %s", server.TransportType())
 	}
 }
-
