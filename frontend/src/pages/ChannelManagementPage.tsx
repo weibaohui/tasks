@@ -31,6 +31,8 @@ type ChannelFormValues = {
   is_active: boolean;
   allow_from: string[];
   config_json: string;
+  feishu_app_id?: string;
+  feishu_app_secret?: string;
 };
 
 /**
@@ -57,6 +59,18 @@ function toJsonText(value: Record<string, unknown> | undefined): string {
   return JSON.stringify(value, null, 2);
 }
 
+/**
+ * 根据表单值生成要提交的 config 对象
+ */
+function buildChannelConfig(values: ChannelFormValues, channelType: string): Record<string, unknown> {
+  const config = parseJsonObject(values.config_json || '');
+  if (channelType === 'feishu') {
+    config.app_id = (values.feishu_app_id || '').trim();
+    config.app_secret = (values.feishu_app_secret || '').trim();
+  }
+  return config;
+}
+
 export const ChannelManagementPage: React.FC = () => {
   const { user } = useAuthStore();
   const userCode = user?.user_code || '';
@@ -69,6 +83,7 @@ export const ChannelManagementPage: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Channel | null>(null);
   const [form] = Form.useForm<ChannelFormValues>();
+  const watchedType = Form.useWatch('type', form);
 
   /**
    * 拉取渠道列表
@@ -150,7 +165,8 @@ export const ChannelManagementPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      const config = parseJsonObject(values.config_json);
+      const channelType = editing ? editing.type : values.type;
+      const config = buildChannelConfig(values, channelType);
       if (editing) {
         const req: UpdateChannelRequest = {
           name: values.name,
@@ -242,6 +258,8 @@ export const ChannelManagementPage: React.FC = () => {
                   is_active: record.is_active,
                   allow_from: record.allow_from || [],
                   config_json: toJsonText(record.config),
+                  feishu_app_id: String((record.config as Record<string, unknown> | undefined)?.app_id || ''),
+                  feishu_app_secret: String((record.config as Record<string, unknown> | undefined)?.app_secret || ''),
                 });
               }}
             >
@@ -289,6 +307,8 @@ export const ChannelManagementPage: React.FC = () => {
                   is_active: true,
                   allow_from: [],
                   config_json: '',
+                  feishu_app_id: '',
+                  feishu_app_secret: '',
                 });
               }}
             >
@@ -352,7 +372,30 @@ export const ChannelManagementPage: React.FC = () => {
             </div>
           </Space>
 
-          <Form.Item label="Config（JSON）" name="config_json" tooltip='例如：{"token":"xxx","webhook":"https://..."}'>
+          {watchedType === 'feishu' ? (
+            <Space style={{ width: '100%' }} align="start">
+              <div style={{ flex: 1 }}>
+                <Form.Item
+                  label="飞书 App ID"
+                  name="feishu_app_id"
+                  rules={[{ required: true, message: '请输入飞书 App ID' }]}
+                >
+                  <Input placeholder="例如：cli_a93d6ef856781bc6" />
+                </Form.Item>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Form.Item
+                  label="飞书 App Secret"
+                  name="feishu_app_secret"
+                  rules={[{ required: true, message: '请输入飞书 App Secret' }]}
+                >
+                  <Input.Password placeholder="例如：xvijM8ZZqPIwNBho2dmflhNWHZNRMd51" />
+                </Form.Item>
+              </div>
+            </Space>
+          ) : null}
+
+          <Form.Item label="高级配置（JSON）" name="config_json" tooltip='例如：{"token":"xxx","webhook":"https://..."}'>
             <Input.TextArea rows={8} placeholder="可选，必须是 JSON 对象格式" />
           </Form.Item>
 
