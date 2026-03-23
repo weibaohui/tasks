@@ -6,8 +6,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
+import { listProviders } from '../api/providerApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
+import type { LLMProvider } from '../types/provider';
 
 type AgentFormValues = {
   name: string;
@@ -32,7 +34,7 @@ type AgentFormValues = {
 /**
  * 获取新建 Agent 的默认表单值（与后端创建默认配置保持一致的基础模板）
  */
-function getDefaultAgentFormValues(): AgentFormValues {
+function getDefaultAgentFormValues(defaultModel?: string): AgentFormValues {
   return {
     name: '',
     description: '默认 Agent',
@@ -190,7 +192,7 @@ _(待填充)_`,
     tools_content: `# TOOLS.md - 本地笔记
 
 添加任何能帮助你完成工作的东西。这是你的速查表。`,
-    model: 'gpt-4',
+    model: defaultModel || 'gpt-4',
     max_tokens: 4096,
     temperature: 0.7,
     max_iterations: 15,
@@ -212,6 +214,9 @@ export const AgentManagementPage: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form] = Form.useForm<AgentFormValues>();
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const watchedModel = Form.useWatch('model', form);
 
   /**
    * 拉取 Agent 列表
@@ -231,6 +236,69 @@ export const AgentManagementPage: React.FC = () => {
       setLoading(false);
     }
   }, [userCode]);
+
+  const fetchProviders = useCallback(async () => {
+    if (!userCode) {
+      setProviders([]);
+      return;
+    }
+    setProvidersLoading(true);
+    try {
+      const data = await listProviders(userCode);
+      setProviders(data);
+    } catch (_error) {
+      message.error('获取 LLM 配置失败');
+      setProviders([]);
+    } finally {
+      setProvidersLoading(false);
+    }
+  }, [userCode]);
+
+  const activeProviders = useMemo(() => providers.filter((p) => p.is_active), [providers]);
+
+  const defaultModelFromProviders = useMemo(() => {
+    const defaultProvider = activeProviders.find((p) => p.is_default) || activeProviders[0];
+    const model = defaultProvider?.default_model?.trim();
+    return model || undefined;
+  }, [activeProviders]);
+
+  const modelOptionsFromProviders = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: Array<{ value: string; label: string }> = [];
+
+    for (const p of activeProviders) {
+      const providerLabel = p.provider_name || p.provider_key || 'Provider';
+      const candidates: string[] = [];
+      if (p.default_model) {
+        candidates.push(p.default_model);
+      }
+      for (const m of p.supported_models || []) {
+        if (m?.name) {
+          candidates.push(m.name);
+        } else if (m?.id) {
+          candidates.push(m.id);
+        }
+      }
+      for (const model of candidates) {
+        const value = model.trim();
+        if (!value || seen.has(value)) {
+          continue;
+        }
+        seen.add(value);
+        opts.push({ value, label: `${value}（${providerLabel}）` });
+      }
+    }
+
+    opts.sort((a, b) => a.value.localeCompare(b.value));
+    return opts;
+  }, [activeProviders]);
+
+  const modelOptions = useMemo(() => {
+    if (!watchedModel || modelOptionsFromProviders.some((o) => o.value === watchedModel)) {
+      return modelOptionsFromProviders;
+    }
+    return [{ value: watchedModel, label: watchedModel }, ...modelOptionsFromProviders];
+  }, [modelOptionsFromProviders, watchedModel]);
 
   /**
    * 删除 Agent
@@ -395,6 +463,10 @@ export const AgentManagementPage: React.FC = () => {
     fetchList();
   }, [fetchList]);
 
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders]);
+
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -407,7 +479,7 @@ export const AgentManagementPage: React.FC = () => {
               onClick={() => {
                 setEditing(null);
                 setOpen(true);
-                form.setFieldsValue(getDefaultAgentFormValues());
+                form.setFieldsValue(getDefaultAgentFormValues(defaultModelFromProviders));
               }}
             >
               新建 Agent
@@ -437,7 +509,20 @@ export const AgentManagementPage: React.FC = () => {
             </div>
             <div style={{ flex: 1 }}>
               <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
-                <Input placeholder="例如：gpt-4o-mini / llama3" />
+                <Select
+                  showSearch
+                  allowClear
+                  loading={providersLoading}
+                  options={modelOptions}
+                  placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型（来自 LLM 配置）'}
+                  notFoundContent={providersLoading ? '正在加载...' : '没有可选模型，请先在 LLM 配置中配置 Provider 与模型'}
+                  filterOption={(input, option) => {
+                    const q = input.toLowerCase();
+                    const v = String(option?.value || '').toLowerCase();
+                    const l = String(option?.label || '').toLowerCase();
+                    return v.includes(q) || l.includes(q);
+                  }}
+                />
               </Form.Item>
             </div>
           </Space>
