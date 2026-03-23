@@ -6,12 +6,25 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ConfigProvider, Layout, Menu, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { AppstoreOutlined, UserOutlined } from '@ant-design/icons';
+import {
+  ApiOutlined,
+  AppstoreOutlined,
+  ApartmentOutlined,
+  DatabaseOutlined,
+  MessageOutlined,
+  RobotOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { TaskDashboard } from './pages/TaskDashboard';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskTreePage } from './pages/TaskTreePage';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { ProviderManagementPage } from './pages/ProviderManagementPage';
+import { AgentManagementPage } from './pages/AgentManagementPage';
+import { ChannelManagementPage } from './pages/ChannelManagementPage';
+import { SessionManagementPage } from './pages/SessionManagementPage';
+import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
 import { useAuthStore } from './stores/authStore';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -25,7 +38,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const selectedKey = location.pathname.startsWith('/users') ? '/users' : '/tasks';
+  const selectedKey = location.pathname.startsWith('/users')
+    ? '/users'
+    : location.pathname.startsWith('/providers')
+      ? '/providers'
+      : location.pathname.startsWith('/agents')
+        ? '/agents'
+        : location.pathname.startsWith('/channels')
+          ? '/channels'
+          : location.pathname.startsWith('/sessions')
+            ? '/sessions'
+            : location.pathname.startsWith('/conversation-records')
+              ? '/conversation-records'
+              : '/tasks';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -40,6 +65,11 @@ const MainLayout: React.FC = () => {
           selectedKeys={[selectedKey]}
           items={[
             { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
+            { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
+            { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
+            { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
+            { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
+            { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
             { key: '/users', icon: <UserOutlined />, label: '用户管理' },
           ]}
           onClick={(item) => navigate(item.key)}
@@ -78,6 +108,11 @@ const App: React.FC = () => {
             <Route path="tasks" element={<TaskDashboard />} />
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="tasks/trace/:traceId/tree" element={<TaskTreePage />} />
+            <Route path="conversation-records" element={<ConversationRecordsPage />} />
+            <Route path="agents" element={<AgentManagementPage />} />
+            <Route path="channels" element={<ChannelManagementPage />} />
+            <Route path="sessions" element={<SessionManagementPage />} />
+            <Route path="providers" element={<ProviderManagementPage />} />
             <Route path="users" element={<UserManagementPage />} />
           </Route>
         </Routes>
