@@ -146,12 +146,13 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		return resp, nil
 	}
 
-	// 优先从 ctx 获取 span_id，如果为空则从 trace context 提取
-	spanID, _ := ctx.Get(spanKey).(string)
-	if spanID == "" {
-		spanID = trace.GetSpanID(ctx.Context)
+	// 获取用户输入的 span_id 作为 parent（来自 PreLLMCall 存储的 spanKey）
+	parentSpanID, _ := ctx.Get(spanKey).(string)
+	if parentSpanID == "" {
+		parentSpanID = trace.GetSpanID(ctx.Context)
 	}
-	parentSpanID := trace.GetParentSpanID(ctx.Context)
+	// LLM 响应生成新的 span_id，parent 指向上游用户输入
+	spanID := h.idGenerator.Generate()
 
 	traceID := callCtx.TraceID
 	if traceID == "" {
@@ -330,10 +331,13 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		traceID = h.extractTraceID(ctx)
 	}
 
-	spanID, _ := ctx.Get(spanKey).(string)
-	if spanID == "" {
-		spanID = h.idGenerator.Generate()
+	// 从 ctx 获取 tool_call 的 span_id 作为 parent
+	toolCallSpanID, _ := ctx.Get(spanKey).(string)
+	if toolCallSpanID == "" {
+		toolCallSpanID = h.idGenerator.Generate()
 	}
+	// 生成新的 span_id 用于 tool_result
+	spanID := h.idGenerator.Generate()
 
 	var content string
 	var eventType string
@@ -353,7 +357,8 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		eventType = "tool_error"
 	}
 
-	record, err := h.createRecord(traceID, spanID, callCtx.ParentSpanID, eventType, "tool_result", content)
+	// tool_result 的 parent 是 tool_call 的 span_id
+	record, err := h.createRecord(traceID, spanID, toolCallSpanID, eventType, "tool_result", content)
 	if err != nil {
 		h.logger.Error("Failed to create conversation record for tool result", zap.Error(err))
 		return result, nil
@@ -371,8 +376,12 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 	h.logger.Debug("ConversationRecord: saved tool result",
 		zap.String("trace_id", traceID),
 		zap.String("span_id", spanID),
+		zap.String("parent_span_id", toolCallSpanID),
 		zap.String("tool_name", callCtx.ToolName),
 		zap.Bool("success", result.Success))
+
+	// 更新 ctx 中的 span_id 为新的 tool_result span_id，供后续调用使用
+	ctx.WithValue(spanKey, spanID)
 
 	return result, nil
 }
@@ -388,12 +397,15 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 		traceID = h.extractTraceID(ctx)
 	}
 
-	spanID, _ := ctx.Get(spanKey).(string)
-	if spanID == "" {
-		spanID = h.idGenerator.Generate()
+	// 从 ctx 获取 tool_call 的 span_id 作为 parent
+	toolCallSpanID, _ := ctx.Get(spanKey).(string)
+	if toolCallSpanID == "" {
+		toolCallSpanID = h.idGenerator.Generate()
 	}
+	// 生成新的 span_id 用于 tool_error
+	spanID := h.idGenerator.Generate()
 
-	record, err := h.createRecord(traceID, spanID, callCtx.ParentSpanID, "tool_error", "tool_error", fmt.Sprintf("%s: %v", callCtx.ToolName, err))
+	record, err := h.createRecord(traceID, spanID, toolCallSpanID, "tool_error", "tool_error", fmt.Sprintf("%s: %v", callCtx.ToolName, err))
 	if err != nil {
 		h.logger.Error("Failed to create conversation record for tool error", zap.Error(err))
 		return &domain.ToolExecutionResult{Success: false, Error: err}, nil
@@ -411,8 +423,12 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	h.logger.Debug("ConversationRecord: saved tool error",
 		zap.String("trace_id", traceID),
 		zap.String("span_id", spanID),
+		zap.String("parent_span_id", toolCallSpanID),
 		zap.String("tool_name", callCtx.ToolName),
 		zap.Error(err))
+
+	// 更新 ctx 中的 span_id 为新的 tool_error span_id，供后续调用使用
+	ctx.WithValue(spanKey, spanID)
 
 	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 }

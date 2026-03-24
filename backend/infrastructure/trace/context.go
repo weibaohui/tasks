@@ -7,8 +7,45 @@ package trace
 import (
 	"context"
 
-	"github.com/google/uuid"
+	"github.com/aidarkhanov/nanoid/v2"
 )
+
+// IDGenerator ID生成器接口
+type IDGenerator interface {
+	NewTraceID() string
+	NewSpanID() string
+}
+
+// defaultIDGenerator 默认的 nanoid 实现
+type defaultIDGenerator struct{}
+
+func (g *defaultIDGenerator) NewTraceID() string {
+	id, _ := nanoid.New()
+	return id
+}
+
+func (g *defaultIDGenerator) NewSpanID() string {
+	id, _ := nanoid.New()
+	return id
+}
+
+// defaultGenerator 全局默认生成器实例
+var defaultGenerator IDGenerator = &defaultIDGenerator{}
+
+// SetIDGenerator 设置全局 ID 生成器（用于测试注入）
+func SetIDGenerator(gen IDGenerator) {
+	defaultGenerator = gen
+}
+
+// NewTraceID 生成新的 TraceID
+func NewTraceID() string {
+	return defaultGenerator.NewTraceID()
+}
+
+// NewSpanID 生成新的 SpanID
+func NewSpanID() string {
+	return defaultGenerator.NewSpanID()
+}
 
 // TraceIDKey 是 context 中存储 TraceID 的 key
 type TraceIDKey struct{}
@@ -33,16 +70,6 @@ type ChannelCodeKey struct{}
 
 // AgentCodeKey 是 context 中存储 AgentCode 的 key
 type AgentCodeKey struct{}
-
-// NewTraceID 生成新的 TraceID
-func NewTraceID() string {
-	return uuid.New().String()
-}
-
-// NewSpanID 生成新的 SpanID
-func NewSpanID() string {
-	return uuid.New().String()
-}
 
 // WithTraceID 将 TraceID 注入到 context 中
 func WithTraceID(ctx context.Context, traceID string) context.Context {

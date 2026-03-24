@@ -16,6 +16,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// contextKey 用于在 HookContext 中存储和获取数据
+type contextKey string
+
+const spanKey contextKey = "conversation_span"
+
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
 	bus              *bus.MessageBus
@@ -213,8 +218,9 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	)
 
 	// 设置 hook context 元数据
+	var hookCtx *domain.HookContext
 	if p.hookManager != nil {
-		hookCtx := domain.NewHookContext(ctx)
+		hookCtx = domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("trace_id", traceID)
 		hookCtx.SetMetadata("session_key", msg.SessionKey())
 		hookCtx.SetMetadata("channel_code", msg.Channel)
@@ -226,8 +232,8 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	// 如果是 EinoProvider，设置工具执行钩子（在 StartSpan 之后创建 adapter）
-	if einoProvider, ok := llmProvider.(*llm.EinoProvider); ok && p.hookManager != nil {
-		toolHookAdapter := p.newToolHookAdapter(ctx, msg.SessionKey(), traceID, llmSpanID)
+	if einoProvider, ok := llmProvider.(*llm.EinoProvider); ok && p.hookManager != nil && hookCtx != nil {
+		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
 	}
 
@@ -271,7 +277,10 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			TraceID:   traceID,
 			Metadata:  callMetadata,
 		}
-		modifiedCtx, err := p.hookManager.PreLLMCall(ctx, callCtx)
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("trace_id", traceID)
+		hookCtx.SetMetadata("session_key", msg.SessionKey())
+		modifiedCtx, err := p.hookManager.PreLLMCall(hookCtx, callCtx)
 		if err != nil {
 			p.logger.Error("PreLLMCall hook failed", zap.Error(err))
 		} else if modifiedCtx != nil {
@@ -323,7 +332,10 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			})
 			resp.RawResponse = string(rawJSON)
 		}
-		_, err := p.hookManager.PostLLMCall(ctx, callCtx, resp)
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("trace_id", traceID)
+		hookCtx.SetMetadata("session_key", msg.SessionKey())
+		_, err := p.hookManager.PostLLMCall(hookCtx, callCtx, resp)
 		if err != nil {
 			p.logger.Error("PostLLMCall hook failed", zap.Error(err))
 		}
@@ -461,9 +473,7 @@ type toolHookAdapter struct {
 	parentSpanID string
 }
 
-func (p *MessageProcessor) newToolHookAdapter(ctx context.Context, sessionID, traceID, parentSpanID string) *toolHookAdapter {
-	hookCtx := domain.NewHookContext(ctx)
-	hookCtx.SetMetadata("trace_id", traceID)
+func (p *MessageProcessor) newToolHookAdapter(hookCtx *domain.HookContext, sessionID, traceID, parentSpanID string) *toolHookAdapter {
 	return &toolHookAdapter{
 		processor:    p,
 		hookCtx:      hookCtx,
@@ -490,9 +500,12 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 		ParentSpanID: a.parentSpanID,
 	}
 
+	// 将 tool_call 的 span_id 设置到 ctx 中，供 PostToolCall 使用
+	ctxWithSpan := a.hookCtx.WithValue(spanKey, a.spanID)
+
 	// 调用 PreToolCall hooks
 	if a.processor.hookManager != nil {
-		modifiedCtx, err := a.processor.hookManager.PreToolCall(a.hookCtx, callCtx)
+		modifiedCtx, err := a.processor.hookManager.PreToolCall(ctxWithSpan, callCtx)
 		if err != nil {
 			a.processor.logger.Error("PreToolCall hook failed", zap.Error(err))
 		} else if modifiedCtx != nil {
