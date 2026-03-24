@@ -31,9 +31,9 @@ import (
 
 // Gateway 渠道网关组件
 type Gateway struct {
-	logger          *zap.Logger
-	messageBus      *channelBus.MessageBus
-	sessionManager  *channel.SessionManager
+	logger         *zap.Logger
+	messageBus     *channelBus.MessageBus
+	sessionManager *channel.SessionManager
 	processor      *channel.MessageProcessor
 	channelManager *channel.Manager
 }
@@ -77,6 +77,19 @@ func main() {
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
+	// 注册对话记录 Hook
+	convRecordHook := hooks.NewConversationRecordHook(conversationRecordRepo, idGenerator, logger, &hooks.ConversationRecordHookConfig{
+		SessionKeyExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("session_key")
+		},
+		ChannelCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("channel_code")
+		},
+		ChannelTypeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("channel_type")
+		},
+	})
+	hookManager.Register(convRecordHook)
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	// 5. 初始化任务执行器
@@ -149,7 +162,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, logger)
+	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -199,17 +212,18 @@ func initGateway(
 	taskService *application.TaskApplicationService,
 	workerPool *application.WorkerPool,
 	idGenerator *utils.NanoIDGenerator,
+	hookManager *hook.Manager,
 	logger *zap.Logger,
 ) *Gateway {
 	gw := &Gateway{
-		logger:          logger,
-		messageBus:      channelBus.NewMessageBus(logger),
-		sessionManager:  channel.NewSessionManager(logger),
+		logger:         logger,
+		messageBus:     channelBus.NewMessageBus(logger),
+		sessionManager: channel.NewSessionManager(logger),
 		channelManager: channel.NewManager(nil),
 	}
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

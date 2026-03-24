@@ -37,6 +37,9 @@ type LLMProvider interface {
 	// GenerateSubTasks 根据任务生成子任务计划
 	GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error)
 
+	// GetLastUsage 返回上次调用的 token 使用量
+	GetLastUsage() Usage
+
 	// Name 返回 provider 名称
 	Name() string
 }

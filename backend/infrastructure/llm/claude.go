@@ -15,8 +15,9 @@ import (
 
 // ClaudeProvider Anthropic Claude provider
 type ClaudeProvider struct {
-	config *Config
-	client *http.Client
+	config    *Config
+	client    *http.Client
+	lastUsage Usage // 上次调用的 token 使用量
 }
 
 var _ LLMProvider = (*ClaudeProvider)(nil)
@@ -29,10 +30,10 @@ type ClaudeMessage struct {
 
 // ClaudeRequest Claude 请求格式
 type ClaudeRequest struct {
-	Model         string          `json:"model"`
-	MaxTokens     int             `json:"max_tokens"`
-	Temperature   float64         `json:"temperature,omitempty"`
-	Messages      []ClaudeMessage `json:"messages"`
+	Model       string          `json:"model"`
+	MaxTokens   int             `json:"max_tokens"`
+	Temperature float64         `json:"temperature,omitempty"`
+	Messages    []ClaudeMessage `json:"messages"`
 }
 
 // ClaudeResponse Claude 响应格式
@@ -142,4 +143,9 @@ func (p *ClaudeProvider) GenerateWithTools(ctx context.Context, prompt string, t
 // Name 返回 provider 名称
 func (p *ClaudeProvider) Name() string {
 	return "claude"
+}
+
+// GetLastUsage 返回上次调用的 token 使用量
+func (p *ClaudeProvider) GetLastUsage() Usage {
+	return p.lastUsage
 }

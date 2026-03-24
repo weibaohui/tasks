@@ -2,11 +2,13 @@ package channel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/trace"
@@ -16,9 +18,9 @@ import (
 
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
-	bus               *bus.MessageBus
-	logger            *zap.Logger
-	sessionManager    *SessionManager
+	bus              *bus.MessageBus
+	logger           *zap.Logger
+	sessionManager   *SessionManager
 	agentConfigCache *AgentConfigCache
 	agentRepo        domain.AgentRepository
 	providerRepo     domain.LLMProviderRepository
@@ -26,6 +28,7 @@ type MessageProcessor struct {
 	workerPool       *application.WorkerPool
 	idGenerator      domain.IDGenerator
 	toolRegistry     *llm.ToolRegistry
+	hookManager      *hook.Manager
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -38,15 +41,16 @@ func NewMessageProcessor(
 	taskService *application.TaskApplicationService,
 	workerPool *application.WorkerPool,
 	idGenerator domain.IDGenerator,
+	hookManager *hook.Manager,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注册 Bash 工具
 	registry.Register(tools.NewBashTool())
 
 	return &MessageProcessor{
-		bus:               messageBus,
-		logger:            logger,
-		sessionManager:    sessionManager,
+		bus:              messageBus,
+		logger:           logger,
+		sessionManager:   sessionManager,
 		agentConfigCache: NewAgentConfigCache(),
 		agentRepo:        agentRepo,
 		providerRepo:     providerRepo,
@@ -54,6 +58,7 @@ func NewMessageProcessor(
 		workerPool:       workerPool,
 		idGenerator:      idGenerator,
 		toolRegistry:     registry,
+		hookManager:      hookManager,
 	}
 }
 
@@ -207,8 +212,123 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		zap.String("span_id", llmSpanID),
 	)
 
+	// 设置 hook context 元数据
+	if p.hookManager != nil {
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("trace_id", traceID)
+		hookCtx.SetMetadata("session_key", msg.SessionKey())
+		hookCtx.SetMetadata("channel_code", msg.Channel)
+		hookCtx.SetMetadata("channel_type", msg.Channel)
+		if agent != nil {
+			hookCtx.SetMetadata("agent_code", agent.AgentCode().String())
+		}
+		ctx = hookCtx
+	}
+
+	// 如果是 EinoProvider，设置工具执行钩子（在 StartSpan 之后创建 adapter）
+	if einoProvider, ok := llmProvider.(*llm.EinoProvider); ok && p.hookManager != nil {
+		toolHookAdapter := p.newToolHookAdapter(ctx, msg.SessionKey(), traceID, llmSpanID)
+		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
+	}
+
 	// 调用 LLM (带工具支持)
-	response, toolCalls, err := llmProvider.GenerateWithTools(ctx, prompt, []*llm.ToolRegistry{p.toolRegistry}, 5)
+	var response string
+	var toolCalls []llm.ToolCall
+
+	// 构建 call metadata 从 msg.Metadata
+	callMetadata := make(map[string]string)
+	if msg.SessionKey() != "" {
+		callMetadata["session_key"] = msg.SessionKey()
+	}
+	if msg.Channel != "" {
+		callMetadata["channel_type"] = msg.Channel
+	}
+	if agent != nil {
+		callMetadata["agent_code"] = agent.AgentCode().String()
+	}
+	if msg.Metadata != nil {
+		if v, ok := msg.Metadata["channel_code"].(string); ok {
+			callMetadata["channel_code"] = v
+		}
+		if v, ok := msg.Metadata["user_code"].(string); ok {
+			callMetadata["user_code"] = v
+		}
+		if v, ok := msg.Metadata["agent_code"].(string); ok {
+			callMetadata["agent_code"] = v
+		}
+		if v, ok := msg.Metadata["chat_type"].(string); ok {
+			callMetadata["channel_type"] = v
+		}
+	}
+
+	// PreLLMCall hook
+	if p.hookManager != nil {
+		callCtx := &domain.LLMCallContext{
+			Prompt:    prompt,
+			UserInput: content, // 用户原始输入
+			Model:     model,
+			SessionID: msg.SessionKey(),
+			TraceID:   traceID,
+			Metadata:  callMetadata,
+		}
+		modifiedCtx, err := p.hookManager.PreLLMCall(ctx, callCtx)
+		if err != nil {
+			p.logger.Error("PreLLMCall hook failed", zap.Error(err))
+		} else if modifiedCtx != nil {
+			prompt = modifiedCtx.Prompt
+		}
+	}
+
+	response, toolCalls, err = llmProvider.GenerateWithTools(ctx, prompt, []*llm.ToolRegistry{p.toolRegistry}, 5)
+
+	// 获取 token 使用量
+	usage := llmProvider.GetLastUsage()
+
+	// PostLLMCall hook
+	if p.hookManager != nil {
+		callCtx := &domain.LLMCallContext{
+			Prompt:    prompt,
+			Model:     model,
+			SessionID: msg.SessionKey(),
+			TraceID:   traceID,
+			Metadata:  callMetadata,
+		}
+		resp := &domain.LLMResponse{
+			Content: response,
+			Model:   model,
+			Usage: domain.Usage{
+				PromptTokens:     usage.PromptTokens,
+				CompletionTokens: usage.CompletionTokens,
+				TotalTokens:     usage.TotalTokens,
+			},
+		}
+		// 从 toolCalls 提取 usage 信息（如果可用）
+		if len(toolCalls) > 0 {
+			// 构造 RawResponse 包含工具调用信息，供 hook 分析
+			// 使用 OpenAI 标准格式：function: {name, arguments}
+			toolCallsInfo := make([]map[string]interface{}, 0, len(toolCalls))
+			for _, tc := range toolCalls {
+				// tc.Input 是 json.RawMessage，需要转为字符串
+				argsStr := string(tc.Input)
+				toolCallsInfo = append(toolCallsInfo, map[string]interface{}{
+					"id":   tc.ID,
+					"function": map[string]interface{}{
+						"name":      tc.Name,
+						"arguments": argsStr,
+					},
+				})
+			}
+			rawJSON, _ := json.Marshal(map[string]interface{}{
+				"tool_calls": toolCallsInfo,
+			})
+			resp.RawResponse = string(rawJSON)
+		}
+		_, err := p.hookManager.PostLLMCall(ctx, callCtx, resp)
+		if err != nil {
+			p.logger.Error("PostLLMCall hook failed", zap.Error(err))
+		}
+	}
+
 	if err != nil {
 		p.logger.Error("LLM 调用失败",
 			zap.String("trace_id", traceID),
@@ -308,11 +428,11 @@ func NewAgentConfigCache() *AgentConfigCache {
 
 // AgentConfig Agent 配置
 type AgentConfig struct {
-	AgentCode   string
-	Name        string
+	AgentCode    string
+	Name         string
 	Instructions string
-	Tools       []string
-	MCPs        []string
+	Tools        []string
+	MCPs         []string
 }
 
 // Get 获取配置
@@ -329,6 +449,101 @@ func (c *AgentConfigCache) Set(key string, cfg *AgentConfig) {
 // Clear 清除缓存
 func (c *AgentConfigCache) Clear(key string) {
 	delete(c.cache, key)
+}
+
+// toolHookAdapter 将 domain.ToolHook 适配为 llm.ToolHook
+type toolHookAdapter struct {
+	processor   *MessageProcessor
+	hookCtx     *domain.HookContext
+	sessionID   string
+	traceID     string
+	spanID      string
+	parentSpanID string
+}
+
+func (p *MessageProcessor) newToolHookAdapter(ctx context.Context, sessionID, traceID, parentSpanID string) *toolHookAdapter {
+	hookCtx := domain.NewHookContext(ctx)
+	hookCtx.SetMetadata("trace_id", traceID)
+	return &toolHookAdapter{
+		processor:    p,
+		hookCtx:      hookCtx,
+		sessionID:    sessionID,
+		traceID:      traceID,
+		spanID:       p.idGenerator.Generate(),
+		parentSpanID: parentSpanID,
+	}
+}
+
+func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (json.RawMessage, error) {
+	// 构建 ToolCallContext
+	var args map[string]interface{}
+	if err := json.Unmarshal(input, &args); err != nil {
+		args = map[string]interface{}{"raw": string(input)}
+	}
+
+	callCtx := &domain.ToolCallContext{
+		ToolName:     toolName,
+		ToolInput:    args,
+		SessionID:    a.sessionID,
+		TraceID:      a.traceID,
+		SpanID:       a.spanID,
+		ParentSpanID: a.parentSpanID,
+	}
+
+	// 调用 PreToolCall hooks
+	if a.processor.hookManager != nil {
+		modifiedCtx, err := a.processor.hookManager.PreToolCall(a.hookCtx, callCtx)
+		if err != nil {
+			a.processor.logger.Error("PreToolCall hook failed", zap.Error(err))
+		} else if modifiedCtx != nil {
+			// 如果 hook 修改了输入，返回修改后的输入
+			if modifiedCtx.ToolInput != nil {
+				newInput, err := json.Marshal(modifiedCtx.ToolInput)
+				if err == nil {
+					return newInput, nil
+				}
+			}
+		}
+	}
+
+	return input, nil
+}
+
+func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, output string, toolErr error) {
+	// 构建 ToolCallContext
+	var args map[string]interface{}
+	if err := json.Unmarshal(input, &args); err != nil {
+		args = map[string]interface{}{"raw": string(input)}
+	}
+
+	callCtx := &domain.ToolCallContext{
+		ToolName:     toolName,
+		ToolInput:    args,
+		SessionID:    a.sessionID,
+		TraceID:      a.traceID,
+		SpanID:       a.spanID,
+		ParentSpanID: a.parentSpanID,
+	}
+
+	// 构建 ToolExecutionResult
+	var resultOutput interface{} = output
+	if toolErr != nil {
+		resultOutput = fmt.Sprintf("error: %v", toolErr)
+	}
+	result := &domain.ToolExecutionResult{
+		Success: toolErr == nil,
+		Output:  resultOutput,
+		Error:   toolErr,
+		SpanID:  a.spanID,
+	}
+
+	// 调用 PostToolCall hooks
+	if a.processor.hookManager != nil {
+		_, err := a.processor.hookManager.PostToolCall(a.hookCtx, callCtx, result)
+		if err != nil {
+			a.processor.logger.Error("PostToolCall hook failed", zap.Error(err))
+		}
+	}
 }
 
 // createTaskFromMessage 从消息创建任务

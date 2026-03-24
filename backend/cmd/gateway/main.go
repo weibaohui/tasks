@@ -69,16 +69,16 @@ func main() {
 	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
 	logger.Info("任务服务初始化完成")
 
-	// 7. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator)
-	logger.Info("消息处理器初始化完成")
-
 	// 7. 初始化 Hook Manager
 	hookManager := hook.NewManager(logger, nil)
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
+
+	// 8. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager)
+	logger.Info("消息处理器初始化完成")
 
 	// 8. 初始化应用服务
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)

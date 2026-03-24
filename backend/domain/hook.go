@@ -30,10 +30,10 @@ const (
 	HookTypeLLM       HookType = "llm"
 	HookTypeTool      HookType = "tool"
 	HookTypeMessage   HookType = "message"
-	HookTypeSkill    HookType = "skill"
-	HookTypeMCP      HookType = "mcp"
-	HookTypePrompt   HookType = "prompt"
-	HookTypeSession  HookType = "session"
+	HookTypeSkill     HookType = "skill"
+	HookTypeMCP       HookType = "mcp"
+	HookTypePrompt    HookType = "prompt"
+	HookTypeSession   HookType = "session"
 )
 
 // BaseHook 基础实现
@@ -54,15 +54,16 @@ func NewBaseHook(name string, priority int, hookType HookType) *BaseHook {
 	}
 }
 
-func (h *BaseHook) Name() string              { return h.name }
-func (h *BaseHook) Priority() int            { return h.priority }
-func (h *BaseHook) Enabled() bool            { return h.enabled }
-func (h *BaseHook) SetEnabled(b bool)         { h.enabled = b }
-func (h *BaseHook) HookType() HookType       { return h.hookType }
+func (h *BaseHook) Name() string       { return h.name }
+func (h *BaseHook) Priority() int      { return h.priority }
+func (h *BaseHook) Enabled() bool      { return h.enabled }
+func (h *BaseHook) SetEnabled(b bool)  { h.enabled = b }
+func (h *BaseHook) HookType() HookType { return h.hookType }
 
 // LLMCallContext LLM 调用上下文
 type LLMCallContext struct {
 	Prompt        string
+	UserInput     string // 用户原始输入，不包含历史
 	Model         string
 	Temperature   float64
 	MaxTokens     int
@@ -70,6 +71,7 @@ type LLMCallContext struct {
 	SystemPrompt  string
 	SessionID     string
 	TraceID       string
+	Metadata      map[string]string // 用于传递 session_key, channel_code, user_code 等
 }
 
 // LLMResponse LLM 响应

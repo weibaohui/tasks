@@ -22,6 +22,18 @@ type EinoProvider struct {
 	chatModel model.ToolCallingChatModel
 	logger    *zap.Logger
 	lastUsage Usage
+	toolHooks []ToolHook // 工具执行钩子
+}
+
+// ToolHook 工具执行钩子接口
+type ToolHook interface {
+	PreToolCall(toolName string, input json.RawMessage) (json.RawMessage, error)
+	PostToolCall(toolName string, input json.RawMessage, output string, err error)
+}
+
+// SetToolHooks 设置工具执行钩子
+func (p *EinoProvider) SetToolHooks(hooks []ToolHook) {
+	p.toolHooks = hooks
 }
 
 var _ LLMProvider = (*EinoProvider)(nil)
@@ -185,20 +197,28 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 			t, ok := toolMap[tc.Function.Name]
 			if !ok {
 				// 工具不存在，添加错误结果
-				messages = append(messages, schema.ToolMessage(
-					fmt.Sprintf(`{"error": "tool %s not found"}`, tc.Function.Name),
-					tc.ID,
-				))
+				errMsg := fmt.Sprintf(`{"error": "tool %s not found"}`, tc.Function.Name)
+				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))
+				// 调用 PostToolCall hooks
+				p.callPostToolHooks(tc.Function.Name, toolCall.Input, errMsg, fmt.Errorf("tool not found"))
 				continue
 			}
 
+			// 执行工具前调用 PreToolCall hooks
+			modifiedInput := toolCall.Input
+			for _, hook := range p.toolHooks {
+				if modInput, err := hook.PreToolCall(tc.Function.Name, modifiedInput); err == nil {
+					modifiedInput = modInput
+				}
+			}
+
 			// 执行工具
-			result, err := t.Execute(ctx, toolCall.Input)
+			result, err := t.Execute(ctx, modifiedInput)
 			if err != nil {
-				messages = append(messages, schema.ToolMessage(
-					fmt.Sprintf(`{"error": "%v"}`, err),
-					tc.ID,
-				))
+				errMsg := fmt.Sprintf(`{"error": "%v"}`, err)
+				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))
+				// 调用 PostToolCall hooks
+				p.callPostToolHooks(tc.Function.Name, modifiedInput, errMsg, err)
 				continue
 			}
 
@@ -212,6 +232,9 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 				zap.Int("输出长度", len(output)),
 			)
 			messages = append(messages, schema.ToolMessage(output, tc.ID))
+
+			// 调用 PostToolCall hooks
+			p.callPostToolHooks(tc.Function.Name, modifiedInput, output, nil)
 		}
 	}
 
@@ -319,4 +342,11 @@ func BuildMessages(prompt string, history []*schema.Message) []*schema.Message {
 	messages = append(messages, schema.UserMessage(prompt))
 
 	return messages
+}
+
+// callPostToolHooks 调用所有 PostToolCall hooks
+func (p *EinoProvider) callPostToolHooks(toolName string, input json.RawMessage, output string, toolErr error) {
+	for _, hook := range p.toolHooks {
+		hook.PostToolCall(toolName, input, output, toolErr)
+	}
 }

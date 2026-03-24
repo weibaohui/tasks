@@ -15,18 +15,19 @@ import (
 
 // OllamaProvider Ollama 本地模型 provider
 type OllamaProvider struct {
-	config *Config
-	client *http.Client
+	config    *Config
+	client    *http.Client
+	lastUsage Usage // 上次调用的 token 使用量
 }
 
 var _ LLMProvider = (*OllamaProvider)(nil)
 
 // OllamaRequest Ollama 请求格式
 type OllamaRequest struct {
-	Model       string `json:"model"`
-	Prompt      string `json:"prompt"`
+	Model       string  `json:"model"`
+	Prompt      string  `json:"prompt"`
 	Temperature float64 `json:"temperature,omitempty"`
-	Stream      bool   `json:"stream"`
+	Stream      bool    `json:"stream"`
 }
 
 // OllamaResponse Ollama 响应格式
@@ -126,4 +127,9 @@ func (p *OllamaProvider) GenerateWithTools(ctx context.Context, prompt string, t
 // Name 返回 provider 名称
 func (p *OllamaProvider) Name() string {
 	return "ollama"
+}
+
+// GetLastUsage 返回上次调用的 token 使用量
+func (p *OllamaProvider) GetLastUsage() Usage {
+	return p.lastUsage
 }

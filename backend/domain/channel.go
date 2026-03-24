@@ -106,23 +106,26 @@ func NewChannel(
 	}, nil
 }
 
-func (c *Channel) ID() ChannelID                  { return c.id }
-func (c *Channel) ChannelCode() ChannelCode       { return c.code }
-func (c *Channel) UserCode() string               { return c.userCode }
-func (c *Channel) AgentCode() string              { return c.agentCode }
-func (c *Channel) Name() string                   { return c.name }
-func (c *Channel) Type() ChannelType              { return c.typ }
-func (c *Channel) IsActive() bool                 { return c.isActive }
-func (c *Channel) AllowFrom() []string            { return append([]string(nil), c.allowFrom...) }
+func (c *Channel) ID() ChannelID            { return c.id }
+func (c *Channel) ChannelCode() ChannelCode { return c.code }
+func (c *Channel) UserCode() string         { return c.userCode }
+func (c *Channel) AgentCode() string        { return c.agentCode }
+func (c *Channel) Name() string             { return c.name }
+func (c *Channel) Type() ChannelType        { return c.typ }
+func (c *Channel) IsActive() bool           { return c.isActive }
+func (c *Channel) AllowFrom() []string      { return append([]string(nil), c.allowFrom...) }
 func (c *Channel) Config() map[string]interface{} {
 	m := cloneMap(c.config)
 	if c.agentCode != "" {
 		m["agent_code"] = c.agentCode
 	}
+	if c.code.String() != "" {
+		m["channel_code"] = c.code.String()
+	}
 	return m
 }
-func (c *Channel) CreatedAt() time.Time           { return c.createdAt }
-func (c *Channel) UpdatedAt() time.Time           { return c.updatedAt }
+func (c *Channel) CreatedAt() time.Time { return c.createdAt }
+func (c *Channel) UpdatedAt() time.Time { return c.updatedAt }
 
 func (c *Channel) UpdateName(name string) error {
 	if strings.TrimSpace(name) == "" {
