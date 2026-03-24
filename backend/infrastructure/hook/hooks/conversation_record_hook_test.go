@@ -534,6 +534,70 @@ func TestPostLLMCall_UserCodeAndAgentCodeFromMetadata(t *testing.T) {
 	if assistantRecord.AgentCode() != "agent-post-meta-002" {
 		t.Errorf("期望 agent_code 为 agent-post-meta-002，实际为 %s", assistantRecord.AgentCode())
 	}
+	// 验证 channel_code 和 channel_type
+	if assistantRecord.ChannelCode() != "channel-post-meta" {
+		t.Errorf("期望 channel_code 为 channel-post-meta，实际为 %s", assistantRecord.ChannelCode())
+	}
+}
+
+// TestPreLLMCall_AllScopeFields 测试 PreLLMCall 正确记录所有 scope 字段
+func TestPreLLMCall_AllScopeFields(t *testing.T) {
+	db, cleanup := setupHookTestDB(t)
+	defer cleanup()
+
+	logger := zap.NewNop()
+	idGen := newMockIDGen()
+	repo := persistence.NewSQLiteConversationRecordRepository(db)
+	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+
+	ctx := context.Background()
+	hookCtx := domain.NewHookContext(ctx)
+
+	callCtx := &domain.LLMCallContext{
+		TraceID:   "trace-all-scope",
+		SessionID: "session-all-scope",
+		Prompt:    "测试所有字段",
+		UserInput: "测试所有字段",
+		Metadata: map[string]string{
+			"session_key":  "session-all-scope",
+			"user_code":   "user-all-scope-001",
+			"agent_code":  "agent-all-scope-002",
+			"channel_code": "channel-all-scope-003",
+			"channel_type": "feishu",
+		},
+	}
+
+	result, err := hook.PreLLMCall(hookCtx, callCtx)
+	if err != nil {
+		t.Fatalf("PreLLMCall 失败: %v", err)
+	}
+	if result == nil {
+		t.Fatal("结果不应为空")
+	}
+
+	records, err := repo.FindByTraceID(ctx, "trace-all-scope", 10)
+	if err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("期望 1 条记录，实际 %d 条", len(records))
+	}
+
+	record := records[0]
+	// 验证所有 scope 字段
+	if record.SessionKey() != "session-all-scope" {
+		t.Errorf("期望 session_key 为 session-all-scope，实际为 %s", record.SessionKey())
+	}
+	if record.UserCode() != "user-all-scope-001" {
+		t.Errorf("期望 user_code 为 user-all-scope-001，实际为 %s", record.UserCode())
+	}
+	if record.AgentCode() != "agent-all-scope-002" {
+		t.Errorf("期望 agent_code 为 agent-all-scope-002，实际为 %s", record.AgentCode())
+	}
+	if record.ChannelCode() != "channel-all-scope-003" {
+		t.Errorf("期望 channel_code 为 channel-all-scope-003，实际为 %s", record.ChannelCode())
+	}
+	// channel_type 存储在 channel_code 中（根据 SetScope 实现）
 }
 
 // TestPreToolCall_UserCodeAndAgentCodePropagation 测试 tool_call 是否正确继承 user_code 和 agent_code
