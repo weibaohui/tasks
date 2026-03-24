@@ -371,6 +371,26 @@ func SetupRoutesWithManagement(
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}))
+
+		// GET /api/v1/conversation-records/session/{sessionKey}
+		mux.HandleFunc("/api/v1/conversation-records/session/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			sessionKey := strings.TrimPrefix(r.URL.Path, "/api/v1/conversation-records/session/")
+			conversationRecordHandler.GetRecordsBySession(w, r, sessionKey)
+		}))
+
+		// GET /api/v1/conversation-records/trace/{traceId}
+		mux.HandleFunc("/api/v1/conversation-records/trace/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			traceId := strings.TrimPrefix(r.URL.Path, "/api/v1/conversation-records/trace/")
+			conversationRecordHandler.GetRecordsByTrace(w, r, traceId)
+		}))
 	}
 
 	return mux

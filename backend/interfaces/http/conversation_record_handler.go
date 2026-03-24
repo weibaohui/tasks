@@ -120,6 +120,40 @@ func (h *ConversationRecordHandler) GetRecord(w http.ResponseWriter, r *http.Req
 	_ = json.NewEncoder(w).Encode(conversationRecordToMap(record))
 }
 
+func (h *ConversationRecordHandler) GetRecordsBySession(w http.ResponseWriter, r *http.Request, sessionKey string) {
+	records, err := h.recordService.ListRecords(r.Context(), application.ListConversationRecordsQuery{
+		SessionKey: sessionKey,
+		Limit:      500,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	resp := make([]map[string]interface{}, 0, len(records))
+	for _, record := range records {
+		resp = append(resp, conversationRecordToMap(record))
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *ConversationRecordHandler) GetRecordsByTrace(w http.ResponseWriter, r *http.Request, traceId string) {
+	records, err := h.recordService.ListRecords(r.Context(), application.ListConversationRecordsQuery{
+		TraceID: traceId,
+		Limit:   500,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	resp := make([]map[string]interface{}, 0, len(records))
+	for _, record := range records {
+		resp = append(resp, conversationRecordToMap(record))
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 func conversationRecordToMap(record *domain.ConversationRecord) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                record.ID().String(),
