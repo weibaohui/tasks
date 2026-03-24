@@ -7,7 +7,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -45,64 +44,6 @@ type Config struct {
 	BaseURL      string // 可选的自定义端点
 	Temperature  float64
 	MaxTokens    int
-}
-
-// DefaultConfig 从环境变量创建默认配置
-func DefaultConfig() *Config {
-	providerType := os.Getenv("LLM_PROVIDER")
-	if providerType == "" {
-		providerType = "openai" // 默认使用 OpenAI
-	}
-
-	config := &Config{
-		ProviderType: providerType,
-		Model:        getFirstEnvWithDefault("gpt-4", "LLM_MODEL", "OPENAI_MODEL"),
-		APIKey:       getFirstEnv("OPENAI_API_KEY", "LLM_API_KEY"),
-		BaseURL:      getFirstEnv("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENAI_API_URL", "OPENAI_ENDPOINT"),
-		Temperature:  0.7,
-		MaxTokens:    4096,
-	}
-
-	// Claude 配置
-	if providerType == "claude" {
-		config.APIKey = os.Getenv("ANTHROPIC_API_KEY")
-		if config.Model == "" {
-			config.Model = "claude-3-opus-20240229"
-		}
-	}
-
-	// Ollama 配置
-	if providerType == "ollama" {
-		config.BaseURL = getEnvOrDefault("OLLAMA_BASE_URL", "http://localhost:11434")
-		config.Model = getEnvOrDefault("OLLAMA_MODEL", "llama2")
-		config.APIKey = "" // Ollama 不需要 API key
-	}
-
-	return config
-}
-
-func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-func getFirstEnv(keys ...string) string {
-	for _, key := range keys {
-		if val := os.Getenv(key); val != "" {
-			return val
-		}
-	}
-	return ""
-}
-
-func getFirstEnvWithDefault(defaultVal string, keys ...string) string {
-	val := getFirstEnv(keys...)
-	if val == "" {
-		return defaultVal
-	}
-	return val
 }
 
 // NewLLMProvider 创建 LLM Provider

@@ -31,6 +31,7 @@ type CreateTaskCommand struct {
 	Priority    int
 	ParentID    *domain.TaskID
 	TraceID     *domain.TraceID
+	SpanID      *domain.SpanID
 }
 
 // TaskApplicationService 任务应用服务
@@ -68,7 +69,14 @@ func (s *TaskApplicationService) SetWorkerPool(wp *WorkerPool) {
 func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskCommand) (*domain.Task, error) {
 	// 1. 生成ID
 	taskID := domain.NewTaskID(s.idGenerator.Generate())
-	spanID := domain.NewSpanID(s.idGenerator.Generate())
+
+	// 确定SpanID：如果命令中提供了则使用，否则生成新的
+	var spanID domain.SpanID
+	if cmd.SpanID != nil {
+		spanID = *cmd.SpanID
+	} else {
+		spanID = domain.NewSpanID(s.idGenerator.Generate())
+	}
 
 	// 2. 确定TraceID
 	var traceID domain.TraceID

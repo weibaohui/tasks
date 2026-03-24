@@ -33,12 +33,14 @@ type TaskExecutionSummary struct {
 }
 
 type AutoTaskExecutor struct {
-	repo        domain.TaskRepository
-	eventBus    interface{ Publish(domain.DomainEvent) }
-	registry    *TaskRegistry
-	workerPool  interface{ Submit(*domain.Task) bool }
-	llmProvider llm.LLMProvider
-	resultMu    sync.Mutex // 保护并发保存 execution_summaries
+	repo           domain.TaskRepository
+	eventBus       interface{ Publish(domain.DomainEvent) }
+	registry       *TaskRegistry
+	workerPool     interface{ Submit(*domain.Task) bool }
+	agentRepo     domain.AgentRepository
+	providerRepo  domain.LLMProviderRepository
+	channelRepo   domain.ChannelRepository
+	resultMu      sync.Mutex // 保护并发保存 execution_summaries
 }
 
 func NewAutoTaskExecutor(
@@ -55,9 +57,95 @@ func NewAutoTaskExecutor(
 	}
 }
 
-// SetLLMProvider 设置 LLM Provider
+// SetRepositories 设置必要的仓库用于动态 LLM 查找
+func (e *AutoTaskExecutor) SetRepositories(
+	agentRepo domain.AgentRepository,
+	providerRepo domain.LLMProviderRepository,
+	channelRepo domain.ChannelRepository,
+) {
+	e.agentRepo = agentRepo
+	e.providerRepo = providerRepo
+	e.channelRepo = channelRepo
+}
+
+// SetLLMProvider 设置 LLM Provider (已废弃，使用 SetRepositories 代替)
 func (e *AutoTaskExecutor) SetLLMProvider(provider llm.LLMProvider) {
-	e.llmProvider = provider
+	// 已废弃，保留此方法避免编译错误
+}
+
+// getLLMProviderForTask 根据任务元数据获取 LLM Provider
+// 优先从 channel_code 查找，否则使用默认 provider
+func (e *AutoTaskExecutor) getLLMProviderForTask(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
+	metadata := task.Metadata()
+	if metadata == nil {
+		return nil, fmt.Errorf("任务元数据为空")
+	}
+
+	// 1. 尝试从 channel_code 获取
+	channelCode, hasChannel := metadata["channel_code"].(string)
+	userCode, hasUser := metadata["user_code"].(string)
+
+	if hasChannel && hasUser && e.channelRepo != nil && e.agentRepo != nil && e.providerRepo != nil {
+		// 通过 channel_code 查找 channel
+		channel, err := e.channelRepo.FindByCode(ctx, domain.NewChannelCode(channelCode))
+		if err == nil && channel != nil {
+			agentCode := channel.AgentCode()
+			if agentCode != "" {
+				// 查找 agent
+				agent, err := e.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
+				if err == nil && agent != nil {
+					// 查找用户的 LLM Provider
+					provider, err := e.providerRepo.FindDefaultActive(ctx, agent.UserCode())
+					if err == nil && provider != nil {
+						return e.createLLMProviderFromDomainProvider(provider, agent.Model())
+					}
+				}
+			}
+		}
+	}
+
+	// 2. 尝试直接从 user_code 获取
+	if hasUser && e.providerRepo != nil {
+		provider, err := e.providerRepo.FindDefaultActive(ctx, userCode)
+		if err == nil && provider != nil {
+			return e.createLLMProviderFromDomainProvider(provider, "")
+		}
+	}
+
+	// 3. 尝试使用任务的 user_code
+	if hasUser && e.providerRepo != nil {
+		provider, err := e.providerRepo.FindDefaultActive(ctx, userCode)
+		if err == nil && provider != nil {
+			return e.createLLMProviderFromDomainProvider(provider, "")
+		}
+	}
+
+	return nil, fmt.Errorf("未找到可用的 LLM Provider")
+}
+
+// createLLMProviderFromDomainProvider 从 domain LLMProvider 创建 infrastructure LLMProvider
+func (e *AutoTaskExecutor) createLLMProviderFromDomainProvider(provider *domain.LLMProvider, model string) (llm.LLMProvider, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("provider is nil")
+	}
+
+	cfg := &llm.Config{
+		ProviderType: provider.ProviderKey(),
+		Model:       model,
+		APIKey:      provider.APIKey(),
+		BaseURL:     provider.APIBase(),
+		Temperature: 0.7,
+		MaxTokens:   4096,
+	}
+
+	if cfg.Model == "" {
+		cfg.Model = provider.DefaultModel()
+	}
+	if cfg.Model == "" {
+		cfg.Model = "gpt-4"
+	}
+
+	return llm.NewLLMProvider(cfg)
 }
 
 func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Task) error {
@@ -93,11 +181,19 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	hasSubTasks := false
 	isAgentTask := task.Type() == domain.TaskTypeAgent
 
-	// 如果有 LLM Provider，调用它生成子任务
-	if e.llmProvider != nil {
+	// 动态获取 LLM Provider
+	llmProvider, err := e.getLLMProviderForTask(ctx, task)
+	if err != nil {
+		log.Printf("[AutoExecutor] 获取 LLM Provider 失败: %v", err)
+		if isAgentTask {
+			e.updateProgress(task, 5, "LLM 未配置", "Agent 模式未配置 LLM，任务终止")
+			_ = e.failTask(task, fmt.Errorf("Agent 模式未配置 LLM: %w", err))
+		}
+		hasSubTasks = false
+	} else if llmProvider != nil {
 		e.updateProgress(task, 5, "LLM 规划中", "正在调用 LLM 生成子任务...")
 
-		plan, err := e.llmProvider.GenerateSubTasks(
+		plan, err := llmProvider.GenerateSubTasks(
 			ctx,
 			task.Name(),
 			task.Description(),
@@ -185,10 +281,6 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			e.updateProgress(task, 10, "LLM 规划为空", "Agent 模式要求 LLM 返回子任务，任务终止")
 			return e.failTask(task, errors.New("Agent 模式下 LLM 未生成子任务"))
 		}
-	} else if isAgentTask {
-		log.Printf("[AutoExecutor] Agent 模式未配置 LLM Provider，无法进行智能分解")
-		e.updateProgress(task, 5, "LLM 未配置", "Agent 模式未配置 LLM，任务终止")
-		return e.failTask(task, errors.New("Agent 模式未配置 LLM Provider"))
 	}
 
 	// 如果没有 LLM Provider 或 LLM 返回空，使用简单的随机子任务

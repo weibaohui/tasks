@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
 )
@@ -19,6 +21,9 @@ type MessageProcessor struct {
 	agentConfigCache *AgentConfigCache
 	agentRepo        domain.AgentRepository
 	providerRepo     domain.LLMProviderRepository
+	taskService      *application.TaskApplicationService
+	workerPool       *application.WorkerPool
+	idGenerator      domain.IDGenerator
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -28,6 +33,9 @@ func NewMessageProcessor(
 	logger *zap.Logger,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
+	taskService *application.TaskApplicationService,
+	workerPool *application.WorkerPool,
+	idGenerator domain.IDGenerator,
 ) *MessageProcessor {
 	return &MessageProcessor{
 		bus:               messageBus,
@@ -36,16 +44,24 @@ func NewMessageProcessor(
 		agentConfigCache: NewAgentConfigCache(),
 		agentRepo:        agentRepo,
 		providerRepo:     providerRepo,
+		taskService:      taskService,
+		workerPool:       workerPool,
+		idGenerator:      idGenerator,
 	}
 }
 
 // Process 处理入站消息
 func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage) error {
+	// 开始新的 Trace，生成 trace_id 和 span_id
+	ctx, traceID, spanID := trace.StartTrace(ctx)
+
 	preview := msg.Content
 	if len(preview) > 80 {
 		preview = preview[:80] + "..."
 	}
 	p.logger.Info("处理消息",
+		zap.String("trace_id", traceID),
+		zap.String("span_id", spanID),
 		zap.String("渠道", msg.Channel),
 		zap.String("发送者", msg.SenderID),
 		zap.String("内容", preview),
@@ -54,8 +70,11 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 	// 获取或创建会话
 	session := p.sessionManager.GetOrCreate(msg.SessionKey())
 
-	// 为当前会话创建独立的 cancellable context
+	// 为当前会话创建独立的 cancellable context，并注入 trace 信息
 	sessionCtx, cancel := context.WithCancel(ctx)
+	sessionCtx = trace.WithTraceID(sessionCtx, traceID)
+	sessionCtx = trace.WithSpanID(sessionCtx, spanID)
+	sessionCtx = trace.WithSessionInfo(sessionCtx, msg.SessionKey(), msg.Channel)
 	session.SetContext(sessionCtx, cancel)
 
 	// 处理完成后清理
@@ -67,10 +86,17 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 	session.AddMessage(Message{
 		Role:    "user",
 		Content: msg.Content,
+		TraceID: traceID,
+		SpanID:  spanID,
 	})
 
+	// 如果配置了任务服务和工作者池，创建任务
+	if p.taskService != nil && p.workerPool != nil && p.idGenerator != nil {
+		p.createTaskFromMessage(ctx, msg, traceID, spanID, session)
+	}
+
 	// 生成响应
-	response := p.generateResponse(msg, session)
+	response := p.generateResponse(sessionCtx, msg, session, traceID, spanID)
 
 	// 发布响应消息
 	outMsg := &bus.OutboundMessage{
@@ -96,10 +122,16 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 		}
 	}
 
+	// 传递 trace 信息
+	outMsg.Metadata["trace_id"] = traceID
+	outMsg.Metadata["span_id"] = spanID
+
 	// 保存助手响应到会话历史
 	session.AddMessage(Message{
 		Role:    "assistant",
 		Content: response,
+		TraceID: traceID,
+		SpanID:  spanID,
 	})
 
 	p.bus.PublishOutbound(outMsg)
@@ -107,7 +139,7 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 }
 
 // generateResponse 生成响应
-func (p *MessageProcessor) generateResponse(msg *bus.InboundMessage, session *Session) string {
+func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.InboundMessage, session *Session, traceID, parentSpanID string) string {
 	content := strings.TrimSpace(msg.Content)
 
 	// 简单的命令处理
@@ -162,13 +194,30 @@ func (p *MessageProcessor) generateResponse(msg *bus.InboundMessage, session *Se
 	// 构建对话历史 prompt
 	prompt := p.buildPrompt(session, content)
 
+	// 开始 LLM 调用 span
+	ctx, llmSpanID := trace.StartSpan(ctx)
+	p.logger.Debug("LLM 调用",
+		zap.String("trace_id", traceID),
+		zap.String("parent_span_id", parentSpanID),
+		zap.String("span_id", llmSpanID),
+	)
+
 	// 调用 LLM
-	ctx := context.Background()
 	response, err := llmProvider.Generate(ctx, prompt)
 	if err != nil {
-		p.logger.Error("LLM 调用失败", zap.Error(err))
+		p.logger.Error("LLM 调用失败",
+			zap.String("trace_id", traceID),
+			zap.String("span_id", llmSpanID),
+			zap.Error(err),
+		)
 		return fmt.Sprintf("抱歉，LLM 处理失败: %v", err)
 	}
+
+	p.logger.Info("LLM 调用成功",
+		zap.String("trace_id", traceID),
+		zap.String("span_id", llmSpanID),
+		zap.Int("response_length", len(response)),
+	)
 
 	return response
 }
@@ -265,4 +314,64 @@ func (c *AgentConfigCache) Set(key string, cfg *AgentConfig) {
 // Clear 清除缓存
 func (c *AgentConfigCache) Clear(key string) {
 	delete(c.cache, key)
+}
+
+// createTaskFromMessage 从消息创建任务
+func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.InboundMessage, traceID, spanID string, session *Session) {
+	// 构建任务元数据，包含会话和渠道信息
+	metadata := make(map[string]interface{})
+	metadata["session_key"] = msg.SessionKey()
+	metadata["channel"] = msg.Channel
+	metadata["sender_id"] = msg.SenderID
+	metadata["content"] = msg.Content
+
+	// 从消息 metadata 中提取 agent_code 和其他信息
+	if msg.Metadata != nil {
+		if agentCode, ok := msg.Metadata["agent_code"].(string); ok {
+			metadata["agent_code"] = agentCode
+		}
+		if channelCode, ok := msg.Metadata["channel_code"].(string); ok {
+			metadata["channel_code"] = channelCode
+		}
+		if userCode, ok := msg.Metadata["user_code"].(string); ok {
+			metadata["user_code"] = userCode
+		}
+	}
+
+	// 使用消息的 trace_id 和 span_id
+	taskTraceID := domain.NewTraceID(traceID)
+	taskSpanID := domain.NewSpanID(spanID)
+
+	// 创建任务命令
+	cmd := application.CreateTaskCommand{
+		Name:        fmt.Sprintf("会话任务: %s", msg.SessionKey()),
+		Description: msg.Content,
+		Type:        domain.TaskTypeAgent,
+		Metadata:    metadata,
+		Timeout:     60000, // 60秒超时
+		MaxRetries:  0,
+		Priority:    0,
+		TraceID:     &taskTraceID,
+		SpanID:      &taskSpanID,
+	}
+
+	// 创建任务
+	task, err := p.taskService.CreateTask(ctx, cmd)
+	if err != nil {
+		p.logger.Error("创建任务失败", zap.Error(err), zap.String("trace_id", traceID))
+		return
+	}
+
+	// 启动任务并提交到工作池
+	if err := p.taskService.StartTask(ctx, task.ID()); err != nil {
+		p.logger.Error("启动任务失败", zap.Error(err), zap.String("task_id", task.ID().String()))
+		return
+	}
+
+	p.logger.Info("任务已创建并提交",
+		zap.String("task_id", task.ID().String()),
+		zap.String("trace_id", traceID),
+		zap.String("span_id", spanID),
+		zap.String("task_span_id", task.SpanID().String()),
+	)
 }

@@ -64,8 +64,13 @@ func main() {
 	sessionManager := channel.NewSessionManager(logger)
 	logger.Info("Session Manager 初始化完成")
 
-	// 6. 初始化消息处理器
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo)
+	// 6. 初始化应用服务 (在消息处理器之前，因为消息处理器需要 taskService)
+	taskRepo := _persistence.NewSQLiteTaskRepository(db)
+	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
+	logger.Info("任务服务初始化完成")
+
+	// 7. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator)
 	logger.Info("消息处理器初始化完成")
 
 	// 7. 初始化 Hook Manager
@@ -106,8 +111,6 @@ func main() {
 	}
 
 	// 创建最小化的 mux 用于管理 API
-	taskRepo := _persistence.NewSQLiteTaskRepository(db)
-	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
 	taskHandler := httpHandler.NewTaskHandler(taskService, nil)
 	userService := application.NewUserApplicationService(nil, idGenerator)
 	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)

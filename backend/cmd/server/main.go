@@ -19,7 +19,6 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -73,32 +72,12 @@ func main() {
 	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
 	mcpToolLogRepo := _persistence.NewSQLiteMCPToolLogRepository(db)
 
-	// 4. 初始化 LLM Provider
-	llmConfig := llm.DefaultConfig()
-	var llmProvider llm.LLMProvider
-	shouldInitLLM := llmConfig.ProviderType == "ollama" || llmConfig.APIKey != "" || llmConfig.BaseURL != "" || os.Getenv("LLM_PROVIDER") != ""
-
-	// 4.1 初始化 Hook Manager
+	// 4. 初始化 Hook Manager
 	hookManager := hook.NewManager(logger, nil)
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
-
-	if shouldInitLLM {
-		var err error
-		provider, err := llm.NewLLMProvider(llmConfig)
-		if err != nil {
-			logger.Warn("LLM Provider 初始化失败，将使用默认子任务生成", zap.Error(err))
-		} else {
-			// 4.2 包装为 HookableProvider
-			llmProvider = llm.NewHookableProvider(provider)
-			llmProvider.(*llm.HookableProvider).SetHookManager(hookManager)
-			logger.Info("LLM Provider 初始化成功（带 Hook 支持）", zap.String("provider", llmProvider.Name()), zap.String("model", llmConfig.Model))
-		}
-	} else {
-		logger.Warn("未配置 LLM API Key，子任务生成将使用默认逻辑")
-	}
 
 	// 5. 初始化任务执行器
 	executor := application.NewTaskExecutor()
@@ -109,9 +88,8 @@ func main() {
 
 	// 6.1 初始化自动任务执行器
 	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
-	if llmProvider != nil {
-		autoExecutor.SetLLMProvider(llmProvider)
-	}
+	// 设置仓库用于动态 LLM 查找
+	autoExecutor.SetRepositories(agentRepo, providerRepo, channelRepo)
 
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
 		// 所有任务都使用自动执行器，支持递归创建子任务
@@ -171,7 +149,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, logger)
+	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, logger)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -218,6 +196,9 @@ func initGateway(
 	channelService *application.ChannelApplicationService,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
+	taskService *application.TaskApplicationService,
+	workerPool *application.WorkerPool,
+	idGenerator *utils.NanoIDGenerator,
 	logger *zap.Logger,
 ) *Gateway {
 	gw := &Gateway{
@@ -228,7 +209,7 @@ func initGateway(
 	}
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)
