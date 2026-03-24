@@ -73,9 +73,9 @@ func (c *Channel) SendWithReply(msg *bus.OutboundMessage, replyToMessageID strin
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType("chat_id").
 		Body(&larkim.CreateMessageReqBody{
-			ReceiveId:  &chatID,
-			MsgType:    ptrString("text"),
-			Content:    ptrRawMessage(fmt.Sprintf(`{"text":"%s"}`, escapeJSONString(content))),
+			ReceiveId: &chatID,
+			MsgType:   ptrString("text"),
+			Content:   ptrRawMessage(fmt.Sprintf(`{"text":"%s"}`, escapeJSONString(content))),
 		}).Build()
 
 	resp, err := c.client.Im.V1.Message.Create(c.ctx, req)

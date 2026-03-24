@@ -75,7 +75,7 @@ func (m *MetricsCollector) GetGauge(name string) interface{} {
 // MetricsHook 收集指标
 type MetricsHook struct {
 	*domain.BaseHook
-	collector *MetricsCollector
+	collector  *MetricsCollector
 	startTimes map[string]time.Time
 	mu         sync.Mutex
 	logger     *zap.Logger
@@ -84,7 +84,7 @@ type MetricsHook struct {
 // NewMetricsHook 创建指标 Hook
 func NewMetricsHook(logger *zap.Logger) *MetricsHook {
 	return &MetricsHook{
-		BaseHook: domain.NewBaseHook("metrics", 50, domain.HookTypeLLM),
+		BaseHook:   domain.NewBaseHook("metrics", 50, domain.HookTypeLLM),
 		collector:  NewMetricsCollector(),
 		startTimes: make(map[string]time.Time),
 		logger:     logger,

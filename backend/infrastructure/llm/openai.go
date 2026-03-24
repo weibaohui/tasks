@@ -17,25 +17,25 @@ import (
 
 // OpenAIProvider OpenAI GPT 系列 provider
 type OpenAIProvider struct {
-	config     *Config
-	client     *http.Client
-	lastUsage  Usage  // 上次调用的 token 使用量
+	config    *Config
+	client    *http.Client
+	lastUsage Usage // 上次调用的 token 使用量
 }
 
 var _ LLMProvider = (*OpenAIProvider)(nil)
 
 // OpenAIMessage OpenAI 消息格式
 type OpenAIMessage struct {
-	Role        string         `json:"role"`
-	Content     string         `json:"content"`
-	ToolCalls   []OpenAIMessageToolCall `json:"tool_calls,omitempty"`
-	ToolCallID  string         `json:"tool_call_id,omitempty"` // 用于工具响应消息
+	Role       string                  `json:"role"`
+	Content    string                  `json:"content"`
+	ToolCalls  []OpenAIMessageToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string                  `json:"tool_call_id,omitempty"` // 用于工具响应消息
 }
 
 // OpenAIMessageToolCall OpenAI 消息中的工具调用
 type OpenAIMessageToolCall struct {
-	ID       string              `json:"id"`
-	Type     string              `json:"type"`
+	ID       string                `json:"id"`
+	Type     string                `json:"type"`
 	Function OpenAIMessageFunction `json:"function"`
 }
 
@@ -70,8 +70,8 @@ type Usage struct {
 
 // Choice 选择
 type Choice struct {
-	Message       OpenAIMessage `json:"message"`
-	FinishReason string       `json:"finish_reason"`
+	Message      OpenAIMessage `json:"message"`
+	FinishReason string        `json:"finish_reason"`
 }
 
 // NewOpenAIProvider 创建 OpenAI Provider
@@ -264,8 +264,8 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		// 处理工具调用
 		for _, tc := range choice.Message.ToolCalls {
 			toolCall := ToolCall{
-				ID:   tc.ID,
-				Name: tc.Function.Name,
+				ID:    tc.ID,
+				Name:  tc.Function.Name,
 				Input: json.RawMessage(tc.Function.Arguments),
 			}
 			allToolCalls = append(allToolCalls, toolCall)

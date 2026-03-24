@@ -21,8 +21,8 @@ type Config struct {
 	VerificationToken string   `json:"verification_token"`
 	AllowFrom         []string `json:"allow_from"`
 	ChannelCode       string   `json:"channel_code"` // Channel code from database
-	ChannelID         string   `json:"channel_id"`  // Channel ID from database
-	AgentCode         string   `json:"agent_code"`  // Bound agent code
+	ChannelID         string   `json:"channel_id"`   // Channel ID from database
+	AgentCode         string   `json:"agent_code"`   // Bound agent code
 }
 
 // Channel implements the Channel interface for Feishu

@@ -11,21 +11,21 @@ import (
 type TaskRegistry struct {
 	mu            sync.RWMutex
 	traceContexts map[string]*TraceContext // traceID -> TraceContext
-	taskContexts map[string]*TaskContext // taskID -> TaskContext
-	todoLists    map[string]*TodoList    // taskID -> TodoList
+	taskContexts  map[string]*TaskContext  // taskID -> TaskContext
+	todoLists     map[string]*TodoList     // taskID -> TodoList
 }
 
 var (
 	defaultRegistry *TaskRegistry
-	registryOnce   sync.Once
+	registryOnce    sync.Once
 )
 
 func GetTaskRegistry() *TaskRegistry {
 	registryOnce.Do(func() {
 		defaultRegistry = &TaskRegistry{
 			traceContexts: make(map[string]*TraceContext),
-			taskContexts: make(map[string]*TaskContext),
-			todoLists:    make(map[string]*TodoList),
+			taskContexts:  make(map[string]*TaskContext),
+			todoLists:     make(map[string]*TodoList),
 		}
 	})
 	return defaultRegistry

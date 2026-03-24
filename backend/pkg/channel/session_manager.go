@@ -10,11 +10,11 @@ import (
 
 // Message 聊天消息
 type Message struct {
-	Role      string    `json:"role"`       // user, assistant, system
-	Content   string    `json:"content"`    // 消息内容
-	Timestamp time.Time `json:"timestamp"`  // 时间戳
-	TraceID   string   `json:"trace_id"`   // 追踪ID
-	SpanID    string   `json:"span_id"`    // 跨度ID
+	Role      string    `json:"role"`      // user, assistant, system
+	Content   string    `json:"content"`   // 消息内容
+	Timestamp time.Time `json:"timestamp"` // 时间戳
+	TraceID   string    `json:"trace_id"`  // 追踪ID
+	SpanID    string    `json:"span_id"`   // 跨度ID
 }
 
 // Session 会话
@@ -113,7 +113,7 @@ func NewSessionManager(logger *zap.Logger) *SessionManager {
 	}
 	return &SessionManager{
 		sessions: make(map[string]*Session),
-		logger:    logger,
+		logger:   logger,
 	}
 }
 

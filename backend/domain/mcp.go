@@ -73,21 +73,21 @@ func NewMCPServer(id MCPServerID, code, name string, transport MCPTransportType)
 	}, nil
 }
 
-func (m *MCPServer) ID() MCPServerID               { return m.id }
-func (m *MCPServer) Code() string                  { return m.code }
-func (m *MCPServer) Name() string                  { return m.name }
-func (m *MCPServer) Description() string           { return m.description }
+func (m *MCPServer) ID() MCPServerID                 { return m.id }
+func (m *MCPServer) Code() string                    { return m.code }
+func (m *MCPServer) Name() string                    { return m.name }
+func (m *MCPServer) Description() string             { return m.description }
 func (m *MCPServer) TransportType() MCPTransportType { return m.transportType }
-func (m *MCPServer) Command() string               { return m.command }
-func (m *MCPServer) Args() []string                { return append([]string(nil), m.args...) }
-func (m *MCPServer) URL() string                   { return m.url }
-func (m *MCPServer) EnvVars() map[string]string    { return m.envVars }
-func (m *MCPServer) Status() string                { return m.status }
-func (m *MCPServer) Capabilities() []MCPTool       { return append([]MCPTool(nil), m.capabilities...) }
-func (m *MCPServer) LastConnectedAt() *time.Time   { return m.lastConnected }
-func (m *MCPServer) ErrorMessage() string          { return m.errorMessage }
-func (m *MCPServer) CreatedAt() time.Time          { return m.createdAt }
-func (m *MCPServer) UpdatedAt() time.Time          { return m.updatedAt }
+func (m *MCPServer) Command() string                 { return m.command }
+func (m *MCPServer) Args() []string                  { return append([]string(nil), m.args...) }
+func (m *MCPServer) URL() string                     { return m.url }
+func (m *MCPServer) EnvVars() map[string]string      { return m.envVars }
+func (m *MCPServer) Status() string                  { return m.status }
+func (m *MCPServer) Capabilities() []MCPTool         { return append([]MCPTool(nil), m.capabilities...) }
+func (m *MCPServer) LastConnectedAt() *time.Time     { return m.lastConnected }
+func (m *MCPServer) ErrorMessage() string            { return m.errorMessage }
+func (m *MCPServer) CreatedAt() time.Time            { return m.createdAt }
+func (m *MCPServer) UpdatedAt() time.Time            { return m.updatedAt }
 
 func (m *MCPServer) UpdateProfile(name, description string, transport MCPTransportType, command, url string, args []string, envVars map[string]string) {
 	if name != "" {
@@ -158,14 +158,14 @@ func NewAgentMCPBinding(id AgentMCPBindingID, agentID AgentID, serverID MCPServe
 	}
 }
 
-func (b *AgentMCPBinding) ID() AgentMCPBindingID   { return b.id }
-func (b *AgentMCPBinding) AgentID() AgentID        { return b.agentID }
+func (b *AgentMCPBinding) ID() AgentMCPBindingID    { return b.id }
+func (b *AgentMCPBinding) AgentID() AgentID         { return b.agentID }
 func (b *AgentMCPBinding) MCPServerID() MCPServerID { return b.mcpServerID }
-func (b *AgentMCPBinding) EnabledTools() []string  { return append([]string(nil), b.enabledTools...) }
-func (b *AgentMCPBinding) IsActive() bool          { return b.isActive }
-func (b *AgentMCPBinding) AutoLoad() bool          { return b.autoLoad }
-func (b *AgentMCPBinding) CreatedAt() time.Time    { return b.createdAt }
-func (b *AgentMCPBinding) UpdatedAt() time.Time    { return b.updatedAt }
+func (b *AgentMCPBinding) EnabledTools() []string   { return append([]string(nil), b.enabledTools...) }
+func (b *AgentMCPBinding) IsActive() bool           { return b.isActive }
+func (b *AgentMCPBinding) AutoLoad() bool           { return b.autoLoad }
+func (b *AgentMCPBinding) CreatedAt() time.Time     { return b.createdAt }
+func (b *AgentMCPBinding) UpdatedAt() time.Time     { return b.updatedAt }
 
 func (b *AgentMCPBinding) SetEnabledTools(tools []string) {
 	if len(tools) == 0 {
@@ -275,4 +275,3 @@ func EncodeAny(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
 }
-

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weibh/taskmanager/domain"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/weibh/taskmanager/domain"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, func()) {

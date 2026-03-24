@@ -93,19 +93,19 @@ func NewTask(
 }
 
 // 标识访问方法
-func (t *Task) ID() TaskID                       { return t.id }
-func (t *Task) TraceID() TraceID                 { return t.traceID }
-func (t *Task) SpanID() SpanID                   { return t.spanID }
-func (t *Task) ParentID() *TaskID                { return t.parentID }
-func (t *Task) Name() string                     { return t.name }
-func (t *Task) Description() string              { return t.description }
-func (t *Task) Type() TaskType                   { return t.taskType }
-func (t *Task) Metadata() map[string]interface{} { return t.metadata }
+func (t *Task) ID() TaskID                           { return t.id }
+func (t *Task) TraceID() TraceID                     { return t.traceID }
+func (t *Task) SpanID() SpanID                       { return t.spanID }
+func (t *Task) ParentID() *TaskID                    { return t.parentID }
+func (t *Task) Name() string                         { return t.name }
+func (t *Task) Description() string                  { return t.description }
+func (t *Task) Type() TaskType                       { return t.taskType }
+func (t *Task) Metadata() map[string]interface{}     { return t.metadata }
 func (t *Task) SetMetadata(m map[string]interface{}) { t.metadata = m }
-func (t *Task) Timeout() time.Duration           { return t.timeout }
-func (t *Task) MaxRetries() int                  { return t.maxRetries }
-func (t *Task) Priority() int                    { return t.priority }
-func (t *Task) CreatedAt() time.Time             { return t.createdAt }
+func (t *Task) Timeout() time.Duration               { return t.timeout }
+func (t *Task) MaxRetries() int                      { return t.maxRetries }
+func (t *Task) Priority() int                        { return t.priority }
+func (t *Task) CreatedAt() time.Time                 { return t.createdAt }
 
 func (t *Task) Status() TaskStatus {
 	t.mu.RLock()

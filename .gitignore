@@ -19,3 +19,4 @@ backend/backend_exec.log
 frontend/dist
 .env
 backend/server
+tasks.db

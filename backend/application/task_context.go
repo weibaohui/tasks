@@ -33,7 +33,7 @@ type TaskContext struct {
 
 	OnProgress func(progress int)
 	OnComplete func()
-	OnSubTask func(goal string, taskType domain.TaskType) *SubTaskResult
+	OnSubTask  func(goal string, taskType domain.TaskType) *SubTaskResult
 
 	mu sync.RWMutex
 }

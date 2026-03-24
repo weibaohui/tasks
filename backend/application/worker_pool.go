@@ -52,14 +52,14 @@ func (pq PriorityQueue) Swap(i, j int) {
 
 // WorkerPool 工作池
 type WorkerPool struct {
-	workers    int
-	taskQueue  *PriorityQueue
-	mu         sync.Mutex
-	cond       *sync.Cond
-	wg         sync.WaitGroup
-	logger     *zap.Logger
-	closed     bool
-	executeFn  func(ctx context.Context, task *domain.Task)
+	workers   int
+	taskQueue *PriorityQueue
+	mu        sync.Mutex
+	cond      *sync.Cond
+	wg        sync.WaitGroup
+	logger    *zap.Logger
+	closed    bool
+	executeFn func(ctx context.Context, task *domain.Task)
 }
 
 // NewWorkerPool 创建工作池

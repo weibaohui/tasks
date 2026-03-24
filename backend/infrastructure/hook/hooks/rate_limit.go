@@ -27,9 +27,9 @@ type RateLimitHook struct {
 func NewRateLimitHook(limit rate.Limit, burst int, logger *zap.Logger) *RateLimitHook {
 	return &RateLimitHook{
 		BaseHook: domain.NewBaseHook("rate_limit", 5, domain.HookTypeLLM),
-		limiter: rate.NewLimiter(limit, burst),
-		burst:   burst,
-		logger:  logger,
+		limiter:  rate.NewLimiter(limit, burst),
+		burst:    burst,
+		logger:   logger,
 	}
 }
 

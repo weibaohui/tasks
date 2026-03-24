@@ -4,7 +4,6 @@
 package hook
 
 import (
-	"context"
 	"sync"
 
 	"github.com/weibh/taskmanager/domain"
@@ -20,7 +19,7 @@ type ManagerConfig struct {
 // Manager Hook 管理器
 type Manager struct {
 	mu       sync.RWMutex
-	registry  Registry
+	registry Registry
 	executor *Executor
 	logger   *zap.Logger
 	config   *ManagerConfig
@@ -40,10 +39,10 @@ func NewManager(logger *zap.Logger, config *ManagerConfig) *Manager {
 	executor.SetErrorStrategy(config.ErrorStrategy)
 
 	return &Manager{
-		registry:  registry,
-		executor:  executor,
-		logger:    logger,
-		config:    config,
+		registry: registry,
+		executor: executor,
+		logger:   logger,
+		config:   config,
 	}
 }
 
@@ -90,31 +89,26 @@ func (m *Manager) Disable(name string) error {
 }
 
 // PreLLMCall 执行 PreLLMCall 钩子
-func (m *Manager) PreLLMCall(ctx context.Context, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
-	hookCtx := domain.NewHookContext(ctx)
-	return m.executor.ExecutePreLLMCall(hookCtx, callCtx)
+func (m *Manager) PreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
+	return m.executor.ExecutePreLLMCall(ctx, callCtx)
 }
 
 // PostLLMCall 执行 PostLLMCall 钩子
-func (m *Manager) PostLLMCall(ctx context.Context, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error) {
-	hookCtx := domain.NewHookContext(ctx)
-	return m.executor.ExecutePostLLMCall(hookCtx, callCtx, resp)
+func (m *Manager) PostLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error) {
+	return m.executor.ExecutePostLLMCall(ctx, callCtx, resp)
 }
 
 // PreToolCall 执行 PreToolCall 钩子
-func (m *Manager) PreToolCall(ctx context.Context, callCtx *domain.ToolCallContext) (*domain.ToolCallContext, error) {
-	hookCtx := domain.NewHookContext(ctx)
-	return m.executor.ExecutePreToolCall(hookCtx, callCtx)
+func (m *Manager) PreToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext) (*domain.ToolCallContext, error) {
+	return m.executor.ExecutePreToolCall(ctx, callCtx)
 }
 
 // PostToolCall 执行 PostToolCall 钩子
-func (m *Manager) PostToolCall(ctx context.Context, callCtx *domain.ToolCallContext, result *domain.ToolExecutionResult) (*domain.ToolExecutionResult, error) {
-	hookCtx := domain.NewHookContext(ctx)
-	return m.executor.ExecutePostToolCall(hookCtx, callCtx, result)
+func (m *Manager) PostToolCall(ctx *domain.HookContext, callCtx *domain.ToolCallContext, result *domain.ToolExecutionResult) (*domain.ToolExecutionResult, error) {
+	return m.executor.ExecutePostToolCall(ctx, callCtx, result)
 }
 
 // OnToolError 执行 OnToolError 钩子
-func (m *Manager) OnToolError(ctx context.Context, callCtx *domain.ToolCallContext, err error) (*domain.ToolExecutionResult, error) {
-	hookCtx := domain.NewHookContext(ctx)
-	return m.executor.ExecuteOnToolError(hookCtx, callCtx, err)
+func (m *Manager) OnToolError(ctx *domain.HookContext, callCtx *domain.ToolCallContext, err error) (*domain.ToolExecutionResult, error) {
+	return m.executor.ExecuteOnToolError(ctx, callCtx, err)
 }

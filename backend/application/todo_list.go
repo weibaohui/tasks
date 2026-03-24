@@ -14,10 +14,10 @@ type TodoStatus string
 
 const (
 	TodoStatusDistributed TodoStatus = "distributed" // 已分发
-	TodoStatusRunning    TodoStatus = "running"     // 执行中
-	TodoStatusCompleted TodoStatus = "completed"    // 已完成
-	TodoStatusFailed   TodoStatus = "failed"       // 失败
-	TodoStatusCancelled TodoStatus = "cancelled"    // 被取消
+	TodoStatusRunning     TodoStatus = "running"     // 执行中
+	TodoStatusCompleted   TodoStatus = "completed"   // 已完成
+	TodoStatusFailed      TodoStatus = "failed"      // 失败
+	TodoStatusCancelled   TodoStatus = "cancelled"   // 被取消
 )
 
 type TodoItem struct {

@@ -124,15 +124,15 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 		Content:   content,
 		Timestamp: time.Now(),
 		Metadata: map[string]interface{}{
-			"message_id": messageID,
-			"chat_type":  chatType,
-			"msg_type":   msgType,
-			"chat_id":    chatID,
-			"sender_id":  senderID,
-			"app_id":     c.config.AppID,
-			"channel_id": c.config.ChannelID,
+			"message_id":   messageID,
+			"chat_type":    chatType,
+			"msg_type":     msgType,
+			"chat_id":      chatID,
+			"sender_id":    senderID,
+			"app_id":       c.config.AppID,
+			"channel_id":   c.config.ChannelID,
 			"channel_code": c.config.ChannelCode,
-			"agent_code": c.config.AgentCode,
+			"agent_code":   c.config.AgentCode,
 		},
 	})
 

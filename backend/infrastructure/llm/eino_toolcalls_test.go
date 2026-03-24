@@ -131,4 +131,3 @@ func (t *stubTool) Execute(ctx context.Context, input json.RawMessage) (*ToolRes
 		Output: t.output,
 	}, nil
 }
-

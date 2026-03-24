@@ -16,14 +16,14 @@ type StreamCallback func(chunk *StreamChunk) error
 
 // MessageBus is an async message bus that decouples channels from the agent core
 type MessageBus struct {
-	inbound              chan *InboundMessage
-	outbound             chan *OutboundMessage
-	stream               chan *StreamChunk
-	outboundSubscribers  map[string][]OutboundCallback
-	streamSubscribers    map[string][]StreamCallback
-	mu                   sync.RWMutex
-	running              atomic.Bool
-	logger               *zap.Logger
+	inbound             chan *InboundMessage
+	outbound            chan *OutboundMessage
+	stream              chan *StreamChunk
+	outboundSubscribers map[string][]OutboundCallback
+	streamSubscribers   map[string][]StreamCallback
+	mu                  sync.RWMutex
+	running             atomic.Bool
+	logger              *zap.Logger
 }
 
 // NewMessageBus creates a new message bus

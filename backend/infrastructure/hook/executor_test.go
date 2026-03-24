@@ -52,9 +52,9 @@ func TestExecutor_PriorityOrdering(t *testing.T) {
 
 	// 注册多个 hooks，优先级不同
 	registry.Register(&mockLLMHook{
-		name:      "hook-priority-20",
-		priority:  20,
-		enabled:   true,
+		name:     "hook-priority-20",
+		priority: 20,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			mu.Lock()
 			callOrder = append(callOrder, "hook-priority-20")
@@ -63,9 +63,9 @@ func TestExecutor_PriorityOrdering(t *testing.T) {
 		},
 	})
 	registry.Register(&mockLLMHook{
-		name:      "hook-priority-10",
-		priority:  10,
-		enabled:   true,
+		name:     "hook-priority-10",
+		priority: 10,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			mu.Lock()
 			callOrder = append(callOrder, "hook-priority-10")
@@ -74,9 +74,9 @@ func TestExecutor_PriorityOrdering(t *testing.T) {
 		},
 	})
 	registry.Register(&mockLLMHook{
-		name:      "hook-priority-30",
-		priority:  30,
-		enabled:   true,
+		name:     "hook-priority-30",
+		priority: 30,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			mu.Lock()
 			callOrder = append(callOrder, "hook-priority-30")
@@ -111,9 +111,9 @@ func TestExecutor_DisabledHookSkipped(t *testing.T) {
 	var mu sync.Mutex
 
 	registry.Register(&mockLLMHook{
-		name:      "enabled-hook",
-		priority:  10,
-		enabled:   true,
+		name:     "enabled-hook",
+		priority: 10,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			mu.Lock()
 			callOrder = append(callOrder, "enabled-hook")
@@ -122,9 +122,9 @@ func TestExecutor_DisabledHookSkipped(t *testing.T) {
 		},
 	})
 	registry.Register(&mockLLMHook{
-		name:      "disabled-hook",
-		priority:  5, // 更高优先级但被禁用
-		enabled:   false,
+		name:     "disabled-hook",
+		priority: 5, // 更高优先级但被禁用
+		enabled:  false,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			mu.Lock()
 			callOrder = append(callOrder, "disabled-hook")
@@ -162,9 +162,9 @@ func TestExecutor_ErrorHandling_Continue(t *testing.T) {
 		},
 	})
 	registry.Register(&mockLLMHook{
-		name:      "after-error-hook",
-		priority:  20,
-		enabled:   true,
+		name:     "after-error-hook",
+		priority: 20,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			return callCtx, nil
 		},
@@ -200,9 +200,9 @@ func TestExecutor_ErrorHandling_StopOnFirst(t *testing.T) {
 		},
 	})
 	registry.Register(&mockLLMHook{
-		name:      "after-error-hook",
-		priority:  20,
-		enabled:   true,
+		name:     "after-error-hook",
+		priority: 20,
+		enabled:  true,
 		preCallFn: func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 			return callCtx, nil
 		},

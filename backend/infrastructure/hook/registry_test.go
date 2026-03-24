@@ -17,11 +17,11 @@ type mockHook struct {
 	hookType domain.HookType
 }
 
-func (m *mockHook) Name() string                              { return m.name }
-func (m *mockHook) Priority() int                            { return m.priority }
-func (m *mockHook) Enabled() bool                            { return m.enabled }
-func (m *mockHook) SetEnabled(b bool)                         { m.enabled = b }
-func (m *mockHook) HookType() domain.HookType                { return m.hookType }
+func (m *mockHook) Name() string              { return m.name }
+func (m *mockHook) Priority() int             { return m.priority }
+func (m *mockHook) Enabled() bool             { return m.enabled }
+func (m *mockHook) SetEnabled(b bool)         { m.enabled = b }
+func (m *mockHook) HookType() domain.HookType { return m.hookType }
 
 func TestRegistry_Register(t *testing.T) {
 	registry := NewRegistry()
@@ -163,18 +163,18 @@ func TestRegistry_Clear(t *testing.T) {
 
 // mockLLMHook 测试用 LLM Hook
 type mockLLMHook struct {
-	name            string
-	priority        int
-	enabled         bool
-	preCallFn       func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error)
-	postCallFn      func(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error)
+	name       string
+	priority   int
+	enabled    bool
+	preCallFn  func(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error)
+	postCallFn func(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error)
 }
 
-func (m *mockLLMHook) Name() string                                     { return m.name }
-func (m *mockLLMHook) Priority() int                                   { return m.priority }
-func (m *mockLLMHook) Enabled() bool                                   { return m.enabled }
-func (m *mockLLMHook) SetEnabled(b bool)                               { m.enabled = b }
-func (m *mockLLMHook) HookType() domain.HookType                       { return domain.HookTypeLLM }
+func (m *mockLLMHook) Name() string              { return m.name }
+func (m *mockLLMHook) Priority() int             { return m.priority }
+func (m *mockLLMHook) Enabled() bool             { return m.enabled }
+func (m *mockLLMHook) SetEnabled(b bool)         { m.enabled = b }
+func (m *mockLLMHook) HookType() domain.HookType { return domain.HookTypeLLM }
 func (m *mockLLMHook) PreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 	if m.preCallFn != nil {
 		return m.preCallFn(ctx, callCtx)

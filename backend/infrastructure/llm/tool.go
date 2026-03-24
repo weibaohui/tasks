@@ -11,15 +11,15 @@ import (
 
 // ToolCall 工具调用请求
 type ToolCall struct {
-	ID       string          `json:"id"`       // 工具调用 ID
-	Name     string          `json:"name"`     // 工具名称
-	Input    json.RawMessage `json:"input"`    // 工具输入参数
+	ID    string          `json:"id"`    // 工具调用 ID
+	Name  string          `json:"name"`  // 工具名称
+	Input json.RawMessage `json:"input"` // 工具输入参数
 }
 
 // ToolResult 工具执行结果
 type ToolResult struct {
-	ID     string `json:"id"`     // 对应的工具调用 ID
-	Output string `json:"output"` // 工具输出
+	ID     string `json:"id"`              // 对应的工具调用 ID
+	Output string `json:"output"`          // 工具输出
 	Error  string `json:"error,omitempty"` // 错误信息
 }
 
@@ -68,8 +68,8 @@ func (r *ToolRegistry) List() []Tool {
 
 // ToolInfos 返回工具信息列表（用于传递给 LLM）
 type ToolInfo struct {
-	Type     string          `json:"type"`
-	Function FunctionDef     `json:"function"`
+	Type     string      `json:"type"`
+	Function FunctionDef `json:"function"`
 }
 
 // FunctionDef 函数定义

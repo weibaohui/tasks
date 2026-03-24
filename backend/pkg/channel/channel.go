@@ -35,8 +35,8 @@ type ChannelFactory func(config map[string]interface{}, messageBus *bus.MessageB
 
 // Registry manages channel factories for creating channel instances
 type Registry struct {
-	factories map[string]ChannelFactory
-	mu        sync.RWMutex
+	factories  map[string]ChannelFactory
+	mu         sync.RWMutex
 	messageBus *bus.MessageBus
 }
 

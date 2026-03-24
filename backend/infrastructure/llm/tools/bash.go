@@ -65,7 +65,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 
 	if err := json.Unmarshal(input, &args); err != nil {
 		return &llm.ToolResult{
-			ID:    "",
+			ID:     "",
 			Output: "",
 			Error:  fmt.Sprintf("解析参数失败: %v", err),
 		}, nil
@@ -73,7 +73,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 
 	if args.Command == "" {
 		return &llm.ToolResult{
-			ID:    "",
+			ID:     "",
 			Output: "",
 			Error:  "command 参数不能为空",
 		}, nil
@@ -107,7 +107,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 
 	if ctx.Err() == context.DeadlineExceeded {
 		return &llm.ToolResult{
-			ID:    "",
+			ID:     "",
 			Output: output,
 			Error:  fmt.Sprintf("命令执行超时 (%.0f 秒)", args.Timeout),
 		}, nil

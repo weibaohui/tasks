@@ -18,7 +18,7 @@ type HookManagerInterface interface {
 
 // HookableProvider 包装普通 Provider，添加 Hook 支持
 type HookableProvider struct {
-	wrapped  LLMProvider
+	wrapped LLMProvider
 	hookMgr HookManagerInterface
 }
 
@@ -77,7 +77,7 @@ func (p *HookableProvider) getUsage() domain.Usage {
 		return domain.Usage{
 			PromptTokens:     usage.PromptTokens,
 			CompletionTokens: usage.CompletionTokens,
-			TotalTokens:     usage.TotalTokens,
+			TotalTokens:      usage.TotalTokens,
 		}
 	}
 	// 其他 Provider 暂时返回空 Usage
@@ -91,10 +91,10 @@ func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string
 
 	if p.hookMgr != nil {
 		callCtx := &domain.LLMCallContext{
-			Prompt:      prompt,
-			Model:       p.wrapped.Name(),
-			SessionID:   "",
-			TraceID:     "",
+			Prompt:    prompt,
+			Model:     p.wrapped.Name(),
+			SessionID: "",
+			TraceID:   "",
 		}
 		modifiedCtx, err := p.hookMgr.PreLLMCall(ctx, callCtx)
 		if err != nil {

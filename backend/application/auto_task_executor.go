@@ -33,14 +33,14 @@ type TaskExecutionSummary struct {
 }
 
 type AutoTaskExecutor struct {
-	repo           domain.TaskRepository
-	eventBus       interface{ Publish(domain.DomainEvent) }
-	registry       *TaskRegistry
-	workerPool     interface{ Submit(*domain.Task) bool }
-	agentRepo     domain.AgentRepository
-	providerRepo  domain.LLMProviderRepository
-	channelRepo   domain.ChannelRepository
-	resultMu      sync.Mutex // 保护并发保存 execution_summaries
+	repo         domain.TaskRepository
+	eventBus     interface{ Publish(domain.DomainEvent) }
+	registry     *TaskRegistry
+	workerPool   interface{ Submit(*domain.Task) bool }
+	agentRepo    domain.AgentRepository
+	providerRepo domain.LLMProviderRepository
+	channelRepo  domain.ChannelRepository
+	resultMu     sync.Mutex // 保护并发保存 execution_summaries
 }
 
 func NewAutoTaskExecutor(
@@ -131,11 +131,11 @@ func (e *AutoTaskExecutor) createLLMProviderFromDomainProvider(provider *domain.
 
 	cfg := &llm.Config{
 		ProviderType: provider.ProviderKey(),
-		Model:       model,
-		APIKey:      provider.APIKey(),
-		BaseURL:     provider.APIBase(),
-		Temperature: 0.7,
-		MaxTokens:   4096,
+		Model:        model,
+		APIKey:       provider.APIKey(),
+		BaseURL:      provider.APIBase(),
+		Temperature:  0.7,
+		MaxTokens:    4096,
 	}
 
 	if cfg.Model == "" {

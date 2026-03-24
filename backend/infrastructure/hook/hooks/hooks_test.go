@@ -33,10 +33,10 @@ func TestLoggingHook_PreLLMCall(t *testing.T) {
 
 	ctx := domain.NewHookContext(context.Background())
 	callCtx := &domain.LLMCallContext{
-		Prompt:   "test prompt",
-		Model:    "gpt-4",
+		Prompt:    "test prompt",
+		Model:     "gpt-4",
 		SessionID: "sess-123",
-		TraceID:  "trace-456",
+		TraceID:   "trace-456",
 	}
 
 	result, err := h.PreLLMCall(ctx, callCtx)
