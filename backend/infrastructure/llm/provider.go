@@ -7,7 +7,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -30,6 +29,11 @@ type LLMProvider interface {
 	// Generate 生成文本
 	Generate(ctx context.Context, prompt string) (string, error)
 
+	// GenerateWithTools 生成文本，支持工具调用
+	// tools: 可用的工具列表
+	// maxIterations: 最大工具调用迭代次数
+	GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error)
+
 	// GenerateSubTasks 根据任务生成子任务计划
 	GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error)
 
@@ -47,73 +51,21 @@ type Config struct {
 	MaxTokens    int
 }
 
-// DefaultConfig 从环境变量创建默认配置
-func DefaultConfig() *Config {
-	providerType := os.Getenv("LLM_PROVIDER")
-	if providerType == "" {
-		providerType = "openai" // 默认使用 OpenAI
-	}
-
-	config := &Config{
-		ProviderType: providerType,
-		Model:        getFirstEnvWithDefault("gpt-4", "LLM_MODEL", "OPENAI_MODEL"),
-		APIKey:       getFirstEnv("OPENAI_API_KEY", "LLM_API_KEY"),
-		BaseURL:      getFirstEnv("LLM_BASE_URL", "OPENAI_BASE_URL", "OPENAI_API_URL", "OPENAI_ENDPOINT"),
-		Temperature:  0.7,
-		MaxTokens:    4096,
-	}
-
-	// Claude 配置
-	if providerType == "claude" {
-		config.APIKey = os.Getenv("ANTHROPIC_API_KEY")
-		if config.Model == "" {
-			config.Model = "claude-3-opus-20240229"
-		}
-	}
-
-	// Ollama 配置
-	if providerType == "ollama" {
-		config.BaseURL = getEnvOrDefault("OLLAMA_BASE_URL", "http://localhost:11434")
-		config.Model = getEnvOrDefault("OLLAMA_MODEL", "llama2")
-		config.APIKey = "" // Ollama 不需要 API key
-	}
-
-	return config
-}
-
-func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-func getFirstEnv(keys ...string) string {
-	for _, key := range keys {
-		if val := os.Getenv(key); val != "" {
-			return val
-		}
-	}
-	return ""
-}
-
-func getFirstEnvWithDefault(defaultVal string, keys ...string) string {
-	val := getFirstEnv(keys...)
-	if val == "" {
-		return defaultVal
-	}
-	return val
-}
-
 // NewLLMProvider 创建 LLM Provider
 func NewLLMProvider(config *Config) (LLMProvider, error) {
 	switch config.ProviderType {
-	case "openai":
-		return NewOpenAIProvider(config)
+	case "openai", "minimax":
+		// minimax 使用 OpenAI 兼容 API，使用 eino 实现
+		return NewEinoProvider(config, nil)
 	case "claude":
+		// Claude 使用自定义实现
 		return NewClaudeProvider(config)
 	case "ollama":
+		// Ollama 使用自定义实现
 		return NewOllamaProvider(config)
+	case "eino":
+		// 显式使用 eino
+		return NewEinoProvider(config, nil)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", config.ProviderType)
 	}

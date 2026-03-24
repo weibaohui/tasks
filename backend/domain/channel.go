@@ -114,7 +114,13 @@ func (c *Channel) Name() string                   { return c.name }
 func (c *Channel) Type() ChannelType              { return c.typ }
 func (c *Channel) IsActive() bool                 { return c.isActive }
 func (c *Channel) AllowFrom() []string            { return append([]string(nil), c.allowFrom...) }
-func (c *Channel) Config() map[string]interface{} { return cloneMap(c.config) }
+func (c *Channel) Config() map[string]interface{} {
+	m := cloneMap(c.config)
+	if c.agentCode != "" {
+		m["agent_code"] = c.agentCode
+	}
+	return m
+}
 func (c *Channel) CreatedAt() time.Time           { return c.createdAt }
 func (c *Channel) UpdatedAt() time.Time           { return c.updatedAt }
 

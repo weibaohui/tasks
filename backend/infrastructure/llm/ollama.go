@@ -115,6 +115,14 @@ func (p *OllamaProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 	return plan, nil
 }
 
+// GenerateWithTools 生成文本，支持工具调用 (Ollama 版本)
+func (p *OllamaProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+	// Ollama 的工具调用支持取决于模型，这里暂时委托给普通 Generate
+	// TODO: 实现完整的 Ollama 工具调用支持
+	resp, err := p.Generate(ctx, prompt)
+	return resp, nil, err
+}
+
 // Name 返回 provider 名称
 func (p *OllamaProvider) Name() string {
 	return "ollama"

@@ -70,6 +70,7 @@ type CreateTaskRequest struct {
 	Priority    int                    `json:"priority"`
 	ParentID    *string                `json:"parent_id"`
 	TraceID     *string                `json:"trace_id"`
+	SpanID      *string                `json:"span_id"`
 }
 
 // CreateTask 创建任务
@@ -108,6 +109,12 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		traceID = &tid
 	}
 
+	var spanID *domain.SpanID
+	if req.SpanID != nil {
+		sid := domain.NewSpanID(*req.SpanID)
+		spanID = &sid
+	}
+
 	cmd := application.CreateTaskCommand{
 		Name:        req.Name,
 		Description: req.Description,
@@ -118,6 +125,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Priority:    req.Priority,
 		ParentID:    parentID,
 		TraceID:     traceID,
+		SpanID:      spanID,
 	}
 
 	task, err := h.taskService.CreateTask(r.Context(), cmd)

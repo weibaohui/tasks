@@ -65,6 +65,9 @@ export interface CreateTaskRequest {
   metadata: Record<string, unknown>;
   parent_id?: string;
   trace_id?: string;
+  // 渠道信息，用于 LLM 查找
+  channel_code?: string;
+  user_code?: string;
 }
 
 /**
