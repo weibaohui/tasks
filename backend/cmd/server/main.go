@@ -138,7 +138,6 @@ func main() {
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
-	ensureDefaultAdminUser(userService, userRepo, logger)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
@@ -325,37 +324,4 @@ func (g *Gateway) Shutdown() {
 // ChannelCount 返回已注册渠道数量
 func (g *Gateway) ChannelCount() int {
 	return len(g.channelManager.List())
-}
-
-func ensureDefaultAdminUser(userService *application.UserApplicationService, userRepo domain.UserRepository, logger *zap.Logger) {
-	ctx := context.Background()
-	existingUser, err := userRepo.FindByUsername(ctx, "admin")
-	if err != nil {
-		logger.Warn("检查默认管理员用户失败", zap.Error(err))
-		return
-	}
-	if existingUser != nil {
-		if err := existingUser.ChangePasswordHash("admin123"); err != nil {
-			logger.Warn("重置默认管理员密码失败", zap.Error(err))
-			return
-		}
-		existingUser.Activate()
-		if err := userRepo.Save(ctx, existingUser); err != nil {
-			logger.Warn("保存默认管理员用户失败", zap.Error(err))
-			return
-		}
-		logger.Info("默认管理员密码已重置", zap.String("username", "admin"))
-		return
-	}
-	_, err = userService.CreateUser(ctx, application.CreateUserCommand{
-		Username:    "admin",
-		DisplayName: "系统管理员",
-		Email:       "admin@local.dev",
-		Password:    "admin123",
-	})
-	if err != nil {
-		logger.Warn("创建默认管理员用户失败", zap.Error(err))
-		return
-	}
-	logger.Info("默认管理员用户已创建", zap.String("username", "admin"))
 }
