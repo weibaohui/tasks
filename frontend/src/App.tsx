@@ -10,14 +10,15 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   ApartmentOutlined,
-  BarChartOutlined,
+  DashboardOutlined,
   DatabaseOutlined,
   MessageOutlined,
   RobotOutlined,
   ToolOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { TaskDashboard } from './pages/TaskDashboard';
+import { Dashboard } from './pages/Dashboard';
+import { TaskManagement } from './pages/TaskManagement';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskTreePage } from './pages/TaskTreePage';
 import { LoginPage } from './pages/LoginPage';
@@ -27,7 +28,6 @@ import { AgentManagementPage } from './pages/AgentManagementPage';
 import { ChannelManagementPage } from './pages/ChannelManagementPage';
 import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
-import ConversationStatsPage from './pages/ConversationStatsPage';
 import { MCPManagementPage } from './pages/MCPManagementPage';
 import { useAuthStore } from './stores/authStore';
 
@@ -56,8 +56,8 @@ const MainLayout: React.FC = () => {
             ? '/sessions'
             : location.pathname.startsWith('/conversation-records')
               ? '/conversation-records'
-              : location.pathname.startsWith('/conversation-stats')
-                ? '/conversation-stats'
+              : location.pathname.startsWith('/dashboard')
+                ? '/dashboard'
                 : '/tasks';
 
   return (
@@ -72,9 +72,9 @@ const MainLayout: React.FC = () => {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={[
+            { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
             { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
             { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
-            { key: '/conversation-stats', icon: <BarChartOutlined />, label: '对话统计' },
             { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
             { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
             { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
@@ -105,7 +105,7 @@ const App: React.FC = () => {
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to={token ? '/tasks' : '/login'} replace />} />
+          <Route path="/" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
           <Route path="/login" element={token ? <Navigate to="/tasks" replace /> : <LoginPage />} />
           <Route
             path="/"
@@ -115,11 +115,11 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route path="tasks" element={<TaskDashboard />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="tasks" element={<TaskManagement />} />
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="tasks/trace/:traceId/tree" element={<TaskTreePage />} />
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
-            <Route path="conversation-stats" element={<ConversationStatsPage />} />
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />

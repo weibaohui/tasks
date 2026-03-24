@@ -80,17 +80,53 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 }
 
 func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID) (*domain.Agent, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT * FROM agents WHERE id = ?`, id.String())
+	row := r.db.QueryRowContext(ctx, `SELECT id, agent_code, user_code, name,
+		COALESCE(description, '') as description,
+		COALESCE(identity_content, '') as identity_content,
+		COALESCE(soul_content, '') as soul_content,
+		COALESCE(agents_content, '') as agents_content,
+		COALESCE(user_content, '') as user_content,
+		COALESCE(tools_content, '') as tools_content,
+		COALESCE(model, '') as model,
+		max_tokens, temperature, max_iterations, history_messages,
+		COALESCE(skills_list, '[]') as skills_list,
+		COALESCE(tools_list, '[]') as tools_list,
+		is_active, is_default, enable_thinking_process, created_at, updated_at
+		FROM agents WHERE id = ?`, id.String())
 	return scanAgent(row)
 }
 
 func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain.AgentCode) (*domain.Agent, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT * FROM agents WHERE agent_code = ?`, code.String())
+	row := r.db.QueryRowContext(ctx, `SELECT id, agent_code, user_code, name,
+		COALESCE(description, '') as description,
+		COALESCE(identity_content, '') as identity_content,
+		COALESCE(soul_content, '') as soul_content,
+		COALESCE(agents_content, '') as agents_content,
+		COALESCE(user_content, '') as user_content,
+		COALESCE(tools_content, '') as tools_content,
+		COALESCE(model, '') as model,
+		max_tokens, temperature, max_iterations, history_messages,
+		COALESCE(skills_list, '[]') as skills_list,
+		COALESCE(tools_list, '[]') as tools_list,
+		is_active, is_default, enable_thinking_process, created_at, updated_at
+		FROM agents WHERE agent_code = ?`, code.String())
 	return scanAgent(row)
 }
 
 func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode string) ([]*domain.Agent, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT * FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, agent_code, user_code, name,
+		COALESCE(description, '') as description,
+		COALESCE(identity_content, '') as identity_content,
+		COALESCE(soul_content, '') as soul_content,
+		COALESCE(agents_content, '') as agents_content,
+		COALESCE(user_content, '') as user_content,
+		COALESCE(tools_content, '') as tools_content,
+		COALESCE(model, '') as model,
+		max_tokens, temperature, max_iterations, history_messages,
+		COALESCE(skills_list, '[]') as skills_list,
+		COALESCE(tools_list, '[]') as tools_list,
+		is_active, is_default, enable_thinking_process, created_at, updated_at
+		FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +135,19 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 }
 
 func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT * FROM agents ORDER BY created_at DESC`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, agent_code, user_code, name,
+		COALESCE(description, '') as description,
+		COALESCE(identity_content, '') as identity_content,
+		COALESCE(soul_content, '') as soul_content,
+		COALESCE(agents_content, '') as agents_content,
+		COALESCE(user_content, '') as user_content,
+		COALESCE(tools_content, '') as tools_content,
+		COALESCE(model, '') as model,
+		max_tokens, temperature, max_iterations, history_messages,
+		COALESCE(skills_list, '[]') as skills_list,
+		COALESCE(tools_list, '[]') as tools_list,
+		is_active, is_default, enable_thinking_process, created_at, updated_at
+		FROM agents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

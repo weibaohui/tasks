@@ -71,12 +71,34 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 }
 
 func (r *SQLiteLLMProviderRepository) FindByID(ctx context.Context, id domain.LLMProviderID) (*domain.LLMProvider, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT * FROM llm_providers WHERE id = ?`, id.String())
+	row := r.db.QueryRowContext(ctx, `SELECT id, user_code, provider_key,
+		COALESCE(provider_name, '') as provider_name,
+		COALESCE(api_key, '') as api_key,
+		COALESCE(api_base, '') as api_base,
+		COALESCE(extra_headers, '{}') as extra_headers,
+		COALESCE(supported_models, '[]') as supported_models,
+		COALESCE(default_model, '') as default_model,
+		is_default, priority, auto_merge,
+		COALESCE(embedding_models, '[]') as embedding_models,
+		COALESCE(default_embedding_model, '') as default_embedding_model,
+		is_active, created_at, updated_at
+		FROM llm_providers WHERE id = ?`, id.String())
 	return scanProvider(row)
 }
 
 func (r *SQLiteLLMProviderRepository) FindByUserCode(ctx context.Context, userCode string) ([]*domain.LLMProvider, error) {
-	query := `SELECT * FROM llm_providers WHERE user_code = ? ORDER BY priority DESC, created_at DESC`
+	query := `SELECT id, user_code, provider_key,
+		COALESCE(provider_name, '') as provider_name,
+		COALESCE(api_key, '') as api_key,
+		COALESCE(api_base, '') as api_base,
+		COALESCE(extra_headers, '{}') as extra_headers,
+		COALESCE(supported_models, '[]') as supported_models,
+		COALESCE(default_model, '') as default_model,
+		is_default, priority, auto_merge,
+		COALESCE(embedding_models, '[]') as embedding_models,
+		COALESCE(default_embedding_model, '') as default_embedding_model,
+		is_active, created_at, updated_at
+		FROM llm_providers WHERE user_code = ? ORDER BY priority DESC, created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userCode)
 	if err != nil {
 		return nil, err
@@ -86,7 +108,18 @@ func (r *SQLiteLLMProviderRepository) FindByUserCode(ctx context.Context, userCo
 }
 
 func (r *SQLiteLLMProviderRepository) FindDefaultActive(ctx context.Context, userCode string) (*domain.LLMProvider, error) {
-	query := `SELECT * FROM llm_providers WHERE user_code = ? AND is_default = 1 AND is_active = 1 LIMIT 1`
+	query := `SELECT id, user_code, provider_key,
+		COALESCE(provider_name, '') as provider_name,
+		COALESCE(api_key, '') as api_key,
+		COALESCE(api_base, '') as api_base,
+		COALESCE(extra_headers, '{}') as extra_headers,
+		COALESCE(supported_models, '[]') as supported_models,
+		COALESCE(default_model, '') as default_model,
+		is_default, priority, auto_merge,
+		COALESCE(embedding_models, '[]') as embedding_models,
+		COALESCE(default_embedding_model, '') as default_embedding_model,
+		is_active, created_at, updated_at
+		FROM llm_providers WHERE user_code = ? AND is_default = 1 AND is_active = 1 LIMIT 1`
 	row := r.db.QueryRowContext(ctx, query, userCode)
 	return scanProvider(row)
 }
