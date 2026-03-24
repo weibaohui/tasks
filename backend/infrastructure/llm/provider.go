@@ -29,6 +29,11 @@ type LLMProvider interface {
 	// Generate 生成文本
 	Generate(ctx context.Context, prompt string) (string, error)
 
+	// GenerateWithTools 生成文本，支持工具调用
+	// tools: 可用的工具列表
+	// maxIterations: 最大工具调用迭代次数
+	GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error)
+
 	// GenerateSubTasks 根据任务生成子任务计划
 	GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error)
 

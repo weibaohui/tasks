@@ -131,6 +131,14 @@ func (p *ClaudeProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 	return plan, nil
 }
 
+// GenerateWithTools 生成文本，支持工具调用 (Claude 版本)
+func (p *ClaudeProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+	// Claude 的工具调用实现较为复杂，这里暂时委托给普通 Generate
+	// TODO: 实现完整的 Claude 工具调用支持
+	resp, err := p.Generate(ctx, prompt)
+	return resp, nil, err
+}
+
 // Name 返回 provider 名称
 func (p *ClaudeProvider) Name() string {
 	return "claude"
