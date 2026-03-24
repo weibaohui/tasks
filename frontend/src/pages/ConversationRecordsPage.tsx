@@ -40,7 +40,6 @@ import {
   getConversationRecordsBySession,
   getConversationRecordsByTrace,
 } from '../api/conversationRecordApi';
-import { useAuthStore } from '../stores/authStore';
 import type { ConversationRecord, ListConversationRecordsQuery } from '../types/conversationRecord';
 
 const { Text } = Typography;
@@ -117,8 +116,6 @@ interface ChatMessage {
 }
 
 export const ConversationRecordsPage: React.FC = () => {
-  const { user } = useAuthStore();
-  const userCode = user?.user_code || '';
   const [items, setItems] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [drawerSessionKey, setDrawerSessionKey] = useState<string | null>(null);
@@ -178,10 +175,6 @@ export const ConversationRecordsPage: React.FC = () => {
    * 拉取对话记录列表
    */
   const fetchList = useCallback(async (queryOverrides?: Partial<ListConversationRecordsQuery>) => {
-    if (!userCode) {
-      setItems([]);
-      return;
-    }
     setLoading(true);
     try {
       const values = form.getFieldsValue();
@@ -189,7 +182,6 @@ export const ConversationRecordsPage: React.FC = () => {
       const current = pagination.current || 1;
 
       const query: ListConversationRecordsQuery = {
-        user_code: userCode,
         trace_id: values.trace_id || undefined,
         session_key: values.session_key || undefined,
         agent_code: values.agent_code || undefined,
@@ -208,7 +200,7 @@ export const ConversationRecordsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [form, pagination, userCode]);
+  }, [form, pagination]);
 
   /**
    * 获取链路数据
@@ -245,9 +237,6 @@ export const ConversationRecordsPage: React.FC = () => {
    * 打开会话抽屉
    */
   const openSessionDrawer = useCallback(async (sessionKey: string) => {
-    if (!userCode) {
-      return;
-    }
     setDrawerSessionKey(sessionKey);
     try {
       const data = await getConversationRecordsBySession(sessionKey);
@@ -257,7 +246,7 @@ export const ConversationRecordsPage: React.FC = () => {
       setDrawerRecords([]);
       message.error('获取会话对话失败');
     }
-  }, [userCode]);
+  }, []);
 
   // 构建链路树
   const buildTraceTree = (records: ConversationRecord[]): TraceNode[] => {
