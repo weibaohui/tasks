@@ -584,9 +584,16 @@ func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, o
 		SpanID:  a.spanID,
 	}
 
-	// 调用 PostToolCall hooks
+	// 调用 PostToolCall hooks - 使用带有 scope 信息的 ctx
 	if a.processor.hookManager != nil {
-		_, err := a.processor.hookManager.PostToolCall(a.hookCtx, callCtx, result)
+		ctxWithScope := a.hookCtx.WithValue(scopeKey, scopeInfo{
+			SessionKey:  a.sessionKey,
+			UserCode:    a.userCode,
+			AgentCode:   a.agentCode,
+			ChannelCode: a.channelCode,
+			ChannelType: a.channelType,
+		})
+		_, err := a.processor.hookManager.PostToolCall(ctxWithScope, callCtx, result)
 		if err != nil {
 			a.processor.logger.Error("PostToolCall hook failed", zap.Error(err))
 		}

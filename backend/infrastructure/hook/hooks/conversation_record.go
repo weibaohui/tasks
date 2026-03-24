@@ -294,14 +294,10 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		return result, nil
 	}
 
-	// 设置范围 - 从 metadata 中获取
-	record.SetScope(
-		ctx.GetMetadata("session_key"),
-		ctx.GetMetadata("user_code"),
-		ctx.GetMetadata("agent_code"),
-		ctx.GetMetadata("channel_code"),
-		ctx.GetMetadata("channel_type"),
-	)
+	// 设置范围 - 从 scopeKey 获取
+	if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
+		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
+	}
 
 	if err := h.repo.Save(context.Background(), record); err != nil {
 		h.logger.Error("Failed to save conversation record for tool result", zap.Error(err))
