@@ -63,9 +63,60 @@ func (s *QueryService) ListTasksByTrace(ctx context.Context, traceID domain.Trac
 	}, nil
 }
 
+// taskTreeBuilder 任务树构建器
+type taskTreeBuilder struct {
+	taskRepo domain.TaskRepository
+}
+
+func newTaskTreeBuilder(taskRepo domain.TaskRepository) *taskTreeBuilder {
+	return &taskTreeBuilder{taskRepo: taskRepo}
+}
+
+// taskTreeNode 任务树节点
+type taskTreeNode struct {
+	Task     *domain.Task
+	Children []*taskTreeNode
+}
+
+func (b *taskTreeBuilder) Build(ctx context.Context, traceID domain.TraceID) ([]*taskTreeNode, error) {
+	tasks, err := b.taskRepo.FindByTraceID(ctx, traceID)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[domain.TaskID]*domain.Task)
+	for _, task := range tasks {
+		taskMap[task.ID()] = task
+	}
+
+	var roots []*taskTreeNode
+	for _, task := range tasks {
+		if task.ParentID() == nil {
+			roots = append(roots, b.buildNode(task, taskMap))
+		}
+	}
+
+	return roots, nil
+}
+
+func (b *taskTreeBuilder) buildNode(task *domain.Task, taskMap map[domain.TaskID]*domain.Task) *taskTreeNode {
+	node := &taskTreeNode{
+		Task:     task,
+		Children: nil,
+	}
+
+	for _, t := range taskMap {
+		if t.ParentID() != nil && t.ParentID().Equals(task.ID()) {
+			node.Children = append(node.Children, b.buildNode(t, taskMap))
+		}
+	}
+
+	return node
+}
+
 // GetTaskTree 获取任务树
 func (s *QueryService) GetTaskTree(ctx context.Context, traceID domain.TraceID) ([]*TaskTreeNodeDTO, error) {
-	builder := domain.NewTaskTreeBuilder(s.taskRepo)
+	builder := newTaskTreeBuilder(s.taskRepo)
 	nodes, err := builder.Build(ctx, traceID)
 	if err != nil {
 		return nil, err
@@ -131,7 +182,7 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 }
 
 // toTaskTreeDTOs 转换为任务树 DTO
-func toTaskTreeDTOs(nodes []*domain.TaskTreeNode) []*TaskTreeNodeDTO {
+func toTaskTreeDTOs(nodes []*taskTreeNode) []*TaskTreeNodeDTO {
 	if nodes == nil {
 		return nil
 	}
