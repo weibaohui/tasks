@@ -55,12 +55,17 @@ type Config struct {
 func NewLLMProvider(config *Config) (LLMProvider, error) {
 	switch config.ProviderType {
 	case "openai", "minimax":
-		// minimax 使用 OpenAI 兼容 API
-		return NewOpenAIProvider(config)
+		// minimax 使用 OpenAI 兼容 API，使用 eino 实现
+		return NewEinoProvider(config, nil)
 	case "claude":
+		// Claude 使用自定义实现
 		return NewClaudeProvider(config)
 	case "ollama":
+		// Ollama 使用自定义实现
 		return NewOllamaProvider(config)
+	case "eino":
+		// 显式使用 eino
+		return NewEinoProvider(config, nil)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", config.ProviderType)
 	}

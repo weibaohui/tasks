@@ -26,9 +26,10 @@ var _ LLMProvider = (*OpenAIProvider)(nil)
 
 // OpenAIMessage OpenAI 消息格式
 type OpenAIMessage struct {
-	Role      string         `json:"role"`
-	Content   string         `json:"content"`
-	ToolCalls []OpenAIMessageToolCall `json:"tool_calls,omitempty"`
+	Role        string         `json:"role"`
+	Content     string         `json:"content"`
+	ToolCalls   []OpenAIMessageToolCall `json:"tool_calls,omitempty"`
+	ToolCallID  string         `json:"tool_call_id,omitempty"` // 用于工具响应消息
 }
 
 // OpenAIMessageToolCall OpenAI 消息中的工具调用
@@ -274,8 +275,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 			if !ok {
 				// 工具不存在，添加错误结果到消息历史
 				messages = append(messages, OpenAIMessage{
-					Role:    "tool",
-					Content: fmt.Sprintf(`{"error": "tool %s not found"}`, tc.Function.Name),
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    fmt.Sprintf(`{"error": "tool %s not found"}`, tc.Function.Name),
 				})
 				continue
 			}
@@ -284,8 +286,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 			result, err := tool.Execute(ctx, json.RawMessage(tc.Function.Arguments))
 			if err != nil {
 				messages = append(messages, OpenAIMessage{
-					Role:    "tool",
-					Content: fmt.Sprintf(`{"error": "%v"}`, err),
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    fmt.Sprintf(`{"error": "%v"}`, err),
 				})
 				continue
 			}
@@ -296,8 +299,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 				output = fmt.Sprintf(`{"error": "%s", "output": "%s"}`, result.Error, output)
 			}
 			messages = append(messages, OpenAIMessage{
-				Role:    "tool",
-				Content: output,
+				Role:       "tool",
+				ToolCallID: tc.ID,
+				Content:    output,
 			})
 		}
 	}

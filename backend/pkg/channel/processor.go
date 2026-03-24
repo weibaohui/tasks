@@ -97,10 +97,8 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 		SpanID:  spanID,
 	})
 
-	// 如果配置了任务服务和工作者池，创建任务
-	if p.taskService != nil && p.workerPool != nil && p.idGenerator != nil {
-		p.createTaskFromMessage(ctx, msg, traceID, spanID, session)
-	}
+	// 注意：不在这里自动创建任务
+	// 任务应该在明确请求时才创建，例如通过 /task 命令触发
 
 	// 生成响应
 	response := p.generateResponse(sessionCtx, msg, session, traceID, spanID)
