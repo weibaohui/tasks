@@ -82,6 +82,12 @@ func main() {
 		SessionKeyExtractor: func(ctx *domain.HookContext) string {
 			return ctx.GetMetadata("session_key")
 		},
+		UserCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("user_code")
+		},
+		AgentCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("agent_code")
+		},
 		ChannelCodeExtractor: func(ctx *domain.HookContext) string {
 			return ctx.GetMetadata("channel_code")
 		},

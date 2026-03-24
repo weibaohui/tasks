@@ -237,6 +237,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		hookCtx.SetMetadata("channel_type", msg.Channel)
 		if agent != nil {
 			hookCtx.SetMetadata("agent_code", agent.AgentCode().String())
+			hookCtx.SetMetadata("user_code", agent.UserCode())
 		}
 		ctx = hookCtx
 	}

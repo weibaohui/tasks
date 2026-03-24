@@ -101,16 +101,17 @@ func (h *ConversationRecordHook) PreLLMCall(ctx *domain.HookContext, callCtx *do
 		spanID = h.idGenerator.Generate()
 	}
 
-	// 提取范围信息
-	scope := h.extractScope(ctx, callCtx)
-	ctx.WithValue(scopeKey, scope)
-	ctx.WithValue(spanKey, spanID)
-	ctx.WithValue(promptKey, callCtx.Prompt)
-
 	// 把 scope 存回 callCtx.Metadata，这样 PostLLMCall 能通过 extractScope 拿到
 	if callCtx.Metadata == nil {
 		callCtx.Metadata = make(map[string]string)
 	}
+	// 先设置 session_key（从 callCtx.SessionID 获取），其他字段从 extractScope 获取
+	if callCtx.SessionID != "" {
+		callCtx.Metadata["session_key"] = callCtx.SessionID
+	}
+
+	// 提取范围信息（在设置 Metadata 之后，以便 extractScope 能正确获取 session_key）
+	scope := h.extractScope(ctx, callCtx)
 	if scope.SessionKey != "" {
 		callCtx.Metadata["session_key"] = scope.SessionKey
 	}
@@ -126,6 +127,12 @@ func (h *ConversationRecordHook) PreLLMCall(ctx *domain.HookContext, callCtx *do
 	if scope.ChannelType != "" {
 		callCtx.Metadata["channel_type"] = scope.ChannelType
 	}
+
+	// 重新提取 scope，确保使用完整的 Metadata
+	scope = h.extractScope(ctx, callCtx)
+	ctx.WithValue(scopeKey, scope)
+	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(promptKey, callCtx.Prompt)
 
 	// 记录用户输入（使用 UserInput 原始输入，不使用包含历史的 Prompt）
 	userInput := callCtx.UserInput
