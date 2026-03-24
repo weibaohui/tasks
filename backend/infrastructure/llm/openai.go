@@ -170,15 +170,30 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		{Role: "user", Content: prompt},
 	}
 
-	// 收集所有工具
-	var allTools []ToolInfo
+	// 收集所有工具到 map
+	toolMap := make(map[string]Tool)
 	for _, registry := range toolRegistries {
 		if registry != nil {
-			allTools = append(allTools, registry.GetToolInfos()...)
+			for _, tool := range registry.List() {
+				toolMap[tool.Name()] = tool
+			}
 		}
 	}
 
-	var toolCalls []ToolCall
+	// 收集所有工具信息
+	var allTools []ToolInfo
+	for _, tool := range toolMap {
+		allTools = append(allTools, ToolInfo{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        tool.Name(),
+				Description: tool.Description(),
+				Parameters:  tool.Parameters(),
+			},
+		})
+	}
+
+	var allToolCalls []ToolCall
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// 构建请求
@@ -240,17 +255,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		choice := openAIResp.Choices[0]
 		p.lastUsage = openAIResp.Usage
 
-		// 添加助手消息到历史
-		assistantMsg := OpenAIMessage{
-			Role:      choice.Message.Role,
-			Content:   choice.Message.Content,
-			ToolCalls: choice.Message.ToolCalls,
-		}
-		messages = append(messages, assistantMsg)
-
 		// 如果没有工具调用，返回最终结果
 		if len(choice.Message.ToolCalls) == 0 {
-			return choice.Message.Content, toolCalls, nil
+			return choice.Message.Content, allToolCalls, nil
 		}
 
 		// 处理工具调用
@@ -260,24 +267,44 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 				Name: tc.Function.Name,
 				Input: json.RawMessage(tc.Function.Arguments),
 			}
-			toolCalls = append(toolCalls, toolCall)
+			allToolCalls = append(allToolCalls, toolCall)
 
-			// 在消息历史中添加 tool 类型消息
+			// 查找并执行工具
+			tool, ok := toolMap[tc.Function.Name]
+			if !ok {
+				// 工具不存在，添加错误结果到消息历史
+				messages = append(messages, OpenAIMessage{
+					Role:    "tool",
+					Content: fmt.Sprintf(`{"error": "tool %s not found"}`, tc.Function.Name),
+				})
+				continue
+			}
+
+			// 执行工具
+			result, err := tool.Execute(ctx, json.RawMessage(tc.Function.Arguments))
+			if err != nil {
+				messages = append(messages, OpenAIMessage{
+					Role:    "tool",
+					Content: fmt.Sprintf(`{"error": "%v"}`, err),
+				})
+				continue
+			}
+
+			// 添加工具结果到消息历史
+			output := result.Output
+			if result.Error != "" {
+				output = fmt.Sprintf(`{"error": "%s", "output": "%s"}`, result.Error, output)
+			}
 			messages = append(messages, OpenAIMessage{
-				Role: "tool",
-				Content: "", // 暂不填充，等执行完再填充
+				Role:    "tool",
+				Content: output,
 			})
 		}
-
-		// 注意：这里需要执行工具并填充结果
-		// 由于需要访问 registry，这部分逻辑应该在调用方处理
-		// 这里先返回，让调用方执行工具后继续迭代
-		break
 	}
 
 	// 如果循环结束还没返回，返回最后的消息内容
 	lastMsg := messages[len(messages)-1]
-	return lastMsg.Content, toolCalls, nil
+	return lastMsg.Content, allToolCalls, nil
 }
 
 // GenerateSubTasks 生成子任务计划

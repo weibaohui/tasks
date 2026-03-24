@@ -8,6 +8,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ type MessageProcessor struct {
 	taskService      *application.TaskApplicationService
 	workerPool       *application.WorkerPool
 	idGenerator      domain.IDGenerator
+	toolRegistry     *llm.ToolRegistry
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -37,6 +39,10 @@ func NewMessageProcessor(
 	workerPool *application.WorkerPool,
 	idGenerator domain.IDGenerator,
 ) *MessageProcessor {
+	registry := llm.NewToolRegistry()
+	// 注册 Bash 工具
+	registry.Register(tools.NewBashTool())
+
 	return &MessageProcessor{
 		bus:               messageBus,
 		logger:            logger,
@@ -47,6 +53,7 @@ func NewMessageProcessor(
 		taskService:      taskService,
 		workerPool:       workerPool,
 		idGenerator:      idGenerator,
+		toolRegistry:     registry,
 	}
 }
 
@@ -202,8 +209,8 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		zap.String("span_id", llmSpanID),
 	)
 
-	// 调用 LLM
-	response, err := llmProvider.Generate(ctx, prompt)
+	// 调用 LLM (带工具支持)
+	response, toolCalls, err := llmProvider.GenerateWithTools(ctx, prompt, []*llm.ToolRegistry{p.toolRegistry}, 5)
 	if err != nil {
 		p.logger.Error("LLM 调用失败",
 			zap.String("trace_id", traceID),
@@ -217,7 +224,17 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		zap.String("trace_id", traceID),
 		zap.String("span_id", llmSpanID),
 		zap.Int("response_length", len(response)),
+		zap.Int("tool_calls", len(toolCalls)),
 	)
+
+	// 如果有工具调用，在响应中说明
+	if len(toolCalls) > 0 {
+		p.logger.Info("执行了工具调用",
+			zap.String("trace_id", traceID),
+			zap.String("span_id", llmSpanID),
+			zap.Int("count", len(toolCalls)),
+		)
+	}
 
 	return response
 }
