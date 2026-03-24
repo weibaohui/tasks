@@ -375,3 +375,222 @@ type testError struct {
 func (e *testError) Error() string {
 	return e.msg
 }
+
+// TestPreLLMCall_UserCodeAndAgentCodeFromExtractor 测试当 user_code 和 agent_code 通过 Extractor 设置时能正确记录
+func TestPreLLMCall_UserCodeAndAgentCodeFromExtractor(t *testing.T) {
+	db, cleanup := setupHookTestDB(t)
+	defer cleanup()
+
+	logger := zap.NewNop()
+	idGen := newMockIDGen()
+	repo := persistence.NewSQLiteConversationRecordRepository(db)
+
+	// 配置 UserCodeExtractor 和 AgentCodeExtractor
+	hook := NewConversationRecordHook(repo, idGen, logger, &ConversationRecordHookConfig{
+		SessionKeyExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("session_key")
+		},
+		UserCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("user_code")
+		},
+		AgentCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("agent_code")
+		},
+		ChannelCodeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("channel_code")
+		},
+		ChannelTypeExtractor: func(ctx *domain.HookContext) string {
+			return ctx.GetMetadata("channel_type")
+		},
+	})
+
+	ctx := context.Background()
+	hookCtx := domain.NewHookContext(ctx)
+	// 通过 SetMetadata 设置，模拟 processor.go 中的行为
+	hookCtx.SetMetadata("session_key", "session-extractor-test")
+	hookCtx.SetMetadata("user_code", "user-extractor-001")
+	hookCtx.SetMetadata("agent_code", "agent-extractor-002")
+	hookCtx.SetMetadata("channel_code", "channel-extractor-003")
+	hookCtx.SetMetadata("channel_type", "feishu")
+
+	callCtx := &domain.LLMCallContext{
+		TraceID:   "trace-extractor-test",
+		SessionID: "session-extractor-test", // 这个也会被用来设置 session_key
+		Prompt:    "测试用户输入",
+		UserInput: "测试用户输入",
+		Metadata:  map[string]string{}, // 空的 Metadata，期望从 extractor 获取
+	}
+
+	result, err := hook.PreLLMCall(hookCtx, callCtx)
+	if err != nil {
+		t.Fatalf("PreLLMCall 失败: %v", err)
+	}
+	if result == nil {
+		t.Fatal("结果不应为空")
+	}
+
+	// 验证记录是否正确创建
+	records, err := repo.FindByTraceID(ctx, "trace-extractor-test", 10)
+	if err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("期望 1 条记录，实际 %d 条", len(records))
+	}
+
+	record := records[0]
+	// 验证 user_code 和 agent_code 是否正确记录
+	if record.UserCode() != "user-extractor-001" {
+		t.Errorf("期望 user_code 为 user-extractor-001，实际为 %s", record.UserCode())
+	}
+	if record.AgentCode() != "agent-extractor-002" {
+		t.Errorf("期望 agent_code 为 agent-extractor-002，实际为 %s", record.AgentCode())
+	}
+	if record.SessionKey() != "session-extractor-test" {
+		t.Errorf("期望 session_key 为 session-extractor-test，实际为 %s", record.SessionKey())
+	}
+	if record.ChannelCode() != "channel-extractor-003" {
+		t.Errorf("期望 channel_code 为 channel-extractor-003，实际为 %s", record.ChannelCode())
+	}
+
+	// 验证 callCtx.Metadata 是否被正确填充（用于后续 PostLLMCall）
+	if callCtx.Metadata["user_code"] != "user-extractor-001" {
+		t.Errorf("期望 callCtx.Metadata[user_code] 为 user-extractor-001，实际为 %s", callCtx.Metadata["user_code"])
+	}
+	if callCtx.Metadata["agent_code"] != "agent-extractor-002" {
+		t.Errorf("期望 callCtx.Metadata[agent_code] 为 agent-extractor-002，实际为 %s", callCtx.Metadata["agent_code"])
+	}
+}
+
+// TestPostLLMCall_UserCodeAndAgentCodeFromMetadata 测试 PostLLMCall 使用 PreLLMCall 设置的 Metadata 中的 user_code 和 agent_code
+func TestPostLLMCall_UserCodeAndAgentCodeFromMetadata(t *testing.T) {
+	db, cleanup := setupHookTestDB(t)
+	defer cleanup()
+
+	logger := zap.NewNop()
+	idGen := newMockIDGen()
+	repo := persistence.NewSQLiteConversationRecordRepository(db)
+	hook := NewConversationRecordHook(repo, idGen, logger, nil) // 不配置 extractor，依赖 Metadata
+
+	ctx := context.Background()
+	hookCtx := domain.NewHookContext(ctx)
+
+	// 先调用 PreLLMCall（设置 Metadata）
+	preCallCtx := &domain.LLMCallContext{
+		TraceID:   "trace-post-meta-test",
+		SessionID: "session-post-meta",
+		Prompt:    "你好",
+		UserInput: "你好",
+		Metadata: map[string]string{
+			"session_key":  "session-post-meta",
+			"user_code":   "user-post-meta-001",
+			"agent_code":  "agent-post-meta-002",
+			"channel_code": "channel-post-meta",
+			"channel_type": "feishu",
+		},
+	}
+	hook.PreLLMCall(hookCtx, preCallCtx)
+
+	// 调用 PostLLMCall（应该使用 preCallCtx.Metadata 中的 user_code 和 agent_code）
+	resp := &domain.LLMResponse{
+		Content: "你好，我是助手",
+		Usage: domain.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 20,
+			TotalTokens:      30,
+		},
+	}
+
+	result, err := hook.PostLLMCall(hookCtx, preCallCtx, resp)
+	if err != nil {
+		t.Fatalf("PostLLMCall 失败: %v", err)
+	}
+	if result == nil {
+		t.Fatal("结果不应为空")
+	}
+
+	// 验证记录
+	records, _ := repo.FindByTraceID(ctx, "trace-post-meta-test", 10)
+	if len(records) != 2 {
+		t.Fatalf("期望 2 条记录，实际 %d 条", len(records))
+	}
+
+	// 找到 assistant 的记录
+	var assistantRecord *domain.ConversationRecord
+	for _, r := range records {
+		if r.Role() == "assistant" {
+			assistantRecord = r
+			break
+		}
+	}
+	if assistantRecord == nil {
+		t.Fatal("找不到 assistant 记录")
+	}
+
+	// 验证 user_code 和 agent_code
+	if assistantRecord.UserCode() != "user-post-meta-001" {
+		t.Errorf("期望 user_code 为 user-post-meta-001，实际为 %s", assistantRecord.UserCode())
+	}
+	if assistantRecord.AgentCode() != "agent-post-meta-002" {
+		t.Errorf("期望 agent_code 为 agent-post-meta-002，实际为 %s", assistantRecord.AgentCode())
+	}
+}
+
+// TestPreToolCall_UserCodeAndAgentCodePropagation 测试 tool_call 是否正确继承 user_code 和 agent_code
+func TestPreToolCall_UserCodeAndAgentCodePropagation(t *testing.T) {
+	db, cleanup := setupHookTestDB(t)
+	defer cleanup()
+
+	logger := zap.NewNop()
+	idGen := newMockIDGen()
+	repo := persistence.NewSQLiteConversationRecordRepository(db)
+	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+
+	ctx := context.Background()
+	hookCtx := domain.NewHookContext(ctx)
+
+	// 模拟 PreLLMCall 已设置 scope
+	hookCtx = hookCtx.WithValue(scopeKey, scopeInfo{
+		SessionKey:  "session-tool-propagate",
+		UserCode:    "user-tool-propagate-001",
+		AgentCode:   "agent-tool-propagate-002",
+		ChannelCode: "channel-tool-propagate",
+		ChannelType: "feishu",
+	})
+
+	callCtx := &domain.ToolCallContext{
+		TraceID:      "trace-tool-propagate",
+		ToolName:     "bash",
+		ToolInput:    map[string]interface{}{"command": "ls"},
+		ParentSpanID: "span-parent-tool",
+	}
+
+	result, err := hook.PreToolCall(hookCtx, callCtx)
+	if err != nil {
+		t.Fatalf("PreToolCall 失败: %v", err)
+	}
+	if result == nil {
+		t.Fatal("结果不应为空")
+	}
+
+	// 验证记录
+	records, _ := repo.FindByTraceID(ctx, "trace-tool-propagate", 10)
+	if len(records) != 1 {
+		t.Fatalf("期望 1 条记录，实际 %d 条", len(records))
+	}
+
+	record := records[0]
+	if record.EventType() != "tool_call" {
+		t.Errorf("期望 event_type 为 tool_call，实际为 %s", record.EventType())
+	}
+	// 验证 scope 是否正确传播
+	if record.UserCode() != "user-tool-propagate-001" {
+		t.Errorf("期望 user_code 为 user-tool-propagate-001，实际为 %s", record.UserCode())
+	}
+	if record.AgentCode() != "agent-tool-propagate-002" {
+		t.Errorf("期望 agent_code 为 agent-tool-propagate-002，实际为 %s", record.AgentCode())
+	}
+	if record.SessionKey() != "session-tool-propagate" {
+		t.Errorf("期望 session_key 为 session-tool-propagate，实际为 %s", record.SessionKey())
+	}
+}
