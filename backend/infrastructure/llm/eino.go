@@ -9,9 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/eino-contrib/jsonschema"
 	"go.uber.org/zap"
 )
@@ -75,7 +75,11 @@ func (p *EinoProvider) Generate(ctx context.Context, prompt string) (string, err
 	return resp.Content, nil
 }
 
-// GenerateWithTools 生成文本，支持工具调用
+// GenerateWithTools 生成文本，支持工具调用。
+//
+// 注意：当模型返回 ToolCalls 时，必须先把包含 ToolCalls 的 assistant 消息写入 messages，
+// 再追加 tool 消息（携带 tool_call_id）。否则部分 OpenAI 兼容网关（例如 Minimax）会报
+// “tool result's tool id not found / tool_call_id 找不到”等错误。
 func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, toolRegistries []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
 	if maxIterations <= 0 {
 		maxIterations = 5
@@ -101,8 +105,8 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 		}
 
 		einoTools = append(einoTools, &schema.ToolInfo{
-			Name: t.Name(),
-			Desc: t.Description(),
+			Name:        t.Name(),
+			Desc:        t.Description(),
 			ParamsOneOf: schema.NewParamsOneOfByJSONSchema(paramSchema),
 		})
 	}
@@ -125,14 +129,19 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 	var allToolCalls []ToolCall
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
-		fmt.Printf("[EINO] 迭代 %d, 消息数量: %d\n", iteration, len(messages))
+		p.logger.Debug("EINO 迭代开始",
+			zap.Int("迭代", iteration),
+			zap.Int("消息数量", len(messages)),
+		)
 
 		resp, err := boundModel.Generate(ctx, messages)
 		if err != nil {
 			return "", nil, fmt.Errorf("eino generate failed: %w", err)
 		}
 
-		fmt.Printf("[EINO] 收到响应，ToolCalls数量: %d\n", len(resp.ToolCalls))
+		p.logger.Debug("EINO 收到响应",
+			zap.Int("tool_calls", len(resp.ToolCalls)),
+		)
 
 		// 记录 token 使用量
 		if resp.ResponseMeta != nil && resp.ResponseMeta.Usage != nil {
@@ -148,9 +157,15 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 			return resp.Content, allToolCalls, nil
 		}
 
+		messages = append(messages, resp)
+
 		// 处理工具调用
 		for _, tc := range resp.ToolCalls {
-			fmt.Printf("[EINO] 收到工具调用: ID=%s, Name=%s, Arguments=%s\n", tc.ID, tc.Function.Name, tc.Function.Arguments)
+			p.logger.Info("EINO 收到工具调用",
+				zap.String("id", tc.ID),
+				zap.String("名称", tc.Function.Name),
+				zap.String("参数", tc.Function.Arguments),
+			)
 
 			toolCall := ToolCall{
 				ID:   tc.ID,
@@ -192,7 +207,10 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 			if result.Error != "" {
 				output = fmt.Sprintf(`{"error": "%s", "output": "%s"}`, result.Error, output)
 			}
-			fmt.Printf("[EINO] 发送工具结果: ToolCallID=%s, Output=%s\n", tc.ID, output)
+			p.logger.Info("EINO 发送工具结果",
+				zap.String("tool_call_id", tc.ID),
+				zap.Int("输出长度", len(output)),
+			)
 			messages = append(messages, schema.ToolMessage(output, tc.ID))
 		}
 	}
@@ -273,8 +291,8 @@ func BindTools(ctx context.Context, chatModel model.ToolCallingChatModel, regs [
 				}
 
 				einoTools = append(einoTools, &schema.ToolInfo{
-					Name: t.Name(),
-					Desc: t.Description(),
+					Name:        t.Name(),
+					Desc:        t.Description(),
 					ParamsOneOf: schema.NewParamsOneOfByJSONSchema(paramSchema),
 				})
 			}
