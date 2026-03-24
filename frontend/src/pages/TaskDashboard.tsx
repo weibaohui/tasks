@@ -1,11 +1,25 @@
 /**
  * 任务仪表板页面
- * 只显示根任务，点击弹出详情抽屉
+ * 显示任务列表和对话统计数据
  */
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal, Popconfirm, message } from 'antd';
-import { PlusOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal, Popconfirm, message, DatePicker } from 'antd';
+import { PlusOutlined, ReloadOutlined, EyeOutlined, BarChartOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import dayjs from 'dayjs';
 import { TaskForm } from '../components/TaskForm';
 import { TaskDetailDrawer } from '../components/TaskDetailDrawer';
 import { StatusBadge } from '../components/StatusBadge';
@@ -14,6 +28,13 @@ import { useTaskOperations } from '../hooks/useTaskOperations';
 import type { Task, TaskStatus } from '../types/task';
 import { clearAllTasks } from '../api/taskApi';
 import { useAuthStore } from '../stores/authStore';
+import { getConversationStats, StatsParams } from '../api/conversationRecordApi';
+import type { ConversationStats } from '../types/conversationRecord';
+
+const { RangePicker } = DatePicker;
+
+// 颜色配置
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 export const TaskDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -25,9 +46,39 @@ export const TaskDashboard: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
+  // 对话统计状态
+  const [convStats, setConvStats] = useState<ConversationStats | null>(null);
+  const [convLoading, setConvLoading] = useState(false);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+    dayjs().subtract(7, 'day'),
+    dayjs(),
+  ]);
+
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // 获取对话统计
+  const fetchConversationStats = async () => {
+    setConvLoading(true);
+    try {
+      const [start, end] = dateRange;
+      const params: StatsParams = {
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+      };
+      const data = await getConversationStats(params);
+      setConvStats(data);
+    } catch (error) {
+      console.error('获取对话统计失败:', error);
+    } finally {
+      setConvLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchConversationStats();
+  }, []);
 
   const rootTasks = tasks.filter((t) => !t.parent_id);
 
@@ -78,6 +129,37 @@ export const TaskDashboard: React.FC = () => {
     completed: rootTasks.filter((t) => t.status === 'completed').length,
     failed: rootTasks.filter((t) => t.status === 'failed').length,
   };
+
+  // Token 趋势图表数据
+  const tokenTrendData = convStats?.token_stats.daily_trends || [];
+
+  // Agent 分布图表数据
+  const agentDistData =
+    convStats?.agent_distribution.map((item) => ({
+      name: item.name || item.code,
+      value: item.count,
+      count: item.count,
+      tokens: item.tokens,
+    })) || [];
+
+  // Agent 分布表格列定义
+  const agentColumns = [
+    { title: 'Agent', dataIndex: 'name', key: 'name' },
+    { title: '消息数', dataIndex: 'count', key: 'count' },
+    {
+      title: 'Token 数',
+      dataIndex: 'tokens',
+      key: 'tokens',
+      render: (tokens: number) => tokens?.toLocaleString() || 0,
+    },
+  ];
+
+  // Channel 分布图表数据
+  const channelDistData =
+    convStats?.channel_distribution.map((item) => ({
+      name: item.type || '未知',
+      value: item.count,
+    })) || [];
 
   const columns = [
     {
@@ -159,6 +241,7 @@ export const TaskDashboard: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* 任务状态统计 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
@@ -182,6 +265,171 @@ export const TaskDashboard: React.FC = () => {
         </Col>
       </Row>
 
+      {/* 对话统计 */}
+      <Card
+        title={
+          <Space>
+            <BarChartOutlined />
+            <span>对话统计</span>
+          </Space>
+        }
+        extra={
+          <Space>
+            <RangePicker
+              value={dateRange}
+              onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
+              style={{ width: 220 }}
+            />
+            <Button type="primary" onClick={fetchConversationStats} loading={convLoading}>
+              刷新
+            </Button>
+            <Button onClick={() => navigate('/conversation-records')}>
+              查看详情
+            </Button>
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        {/* 对话核心指标 */}
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <Card bordered={false} style={{ background: '#f6ffed' }}>
+              <Statistic
+                title="总会话数"
+                value={convStats?.session_stats.total_sessions || 0}
+                prefix={<TeamOutlined />}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <Card bordered={false} style={{ background: '#e6f7ff' }}>
+              <Statistic
+                title="总 Token 数"
+                value={convStats?.token_stats.total_tokens || 0}
+                prefix={<ThunderboltOutlined />}
+                valueStyle={{ color: '#1890ff' }}
+                formatter={(value) => value.toLocaleString()}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <Card bordered={false} style={{ background: '#fff7e6' }}>
+              <Statistic
+                title="平均消息数/会话"
+                value={convStats?.session_stats.avg_messages_per_session || 0}
+                precision={1}
+                valueStyle={{ color: '#fa8c16' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <Card bordered={false} style={{ background: '#f9f0ff' }}>
+              <Statistic
+                title="平均响应时间"
+                value={convStats?.session_stats.avg_response_time_ms || 0}
+                precision={0}
+                suffix="ms"
+                valueStyle={{ color: '#722ed1' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Token 消耗趋势 */}
+        <Card title="Token 消耗趋势" style={{ marginBottom: 16 }}>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={tokenTrendData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip formatter={(value) => typeof value === 'number' ? value.toLocaleString() : value} />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="prompt_tokens"
+                name="Prompt Tokens"
+                stroke="#1890ff"
+                strokeWidth={2}
+              />
+              <Line
+                type="monotone"
+                dataKey="complete_tokens"
+                name="Completion Tokens"
+                stroke="#52c41a"
+                strokeWidth={2}
+              />
+              <Line
+                type="monotone"
+                dataKey="total_tokens"
+                name="Total Tokens"
+                stroke="#fa8c16"
+                strokeWidth={2}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* 分布图表 */}
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Card title="Agent 使用分布">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={agentDistData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(props: { name?: string; percent?: number }) => `${props.name || ''}: ${((props.percent || 0) * 100).toFixed(0)}%`}
+                    outerRadius={70}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {agentDistData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <Table
+                dataSource={agentDistData}
+                columns={agentColumns}
+                rowKey="name"
+                pagination={false}
+                size="small"
+                style={{ marginTop: 16 }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card title="Channel 来源分布">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={channelDistData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(props: { name?: string; percent?: number }) => `${props.name || ''}: ${((props.percent || 0) * 100).toFixed(0)}%`}
+                    outerRadius={70}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {channelDistData.map((_entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* 任务列表 */}
       <Card
         title={`根任务列表 (${rootTasks.length})`}
         extra={

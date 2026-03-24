@@ -35,3 +35,49 @@ export interface ListConversationRecordsQuery {
   limit?: number;
   offset?: number;
 }
+
+/**
+ * 对话统计数据
+ */
+export interface TokenStats {
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  daily_trends: {
+    date: string;
+    prompt_tokens: number;
+    complete_tokens: number;
+    total_tokens: number;
+  }[];
+}
+
+export interface AgentDistribution {
+  code: string;
+  name: string;
+  count: number;
+  tokens: number;
+}
+
+export interface ChannelDistribution {
+  type: string;
+  count: number;
+}
+
+export interface RoleDistribution {
+  role: string;
+  count: number;
+}
+
+export interface SessionStats {
+  total_sessions: number;
+  avg_messages_per_session: number;
+  avg_response_time_ms: number;
+}
+
+export interface ConversationStats {
+  token_stats: TokenStats;
+  agent_distribution: AgentDistribution[];
+  channel_distribution: ChannelDistribution[];
+  role_distribution: RoleDistribution[];
+  session_stats: SessionStats;
+}

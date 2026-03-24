@@ -2,7 +2,7 @@
  * 对话记录（Conversation Record）API 调用模块
  */
 import apiClient from './taskApi';
-import type { ConversationRecord, ListConversationRecordsQuery } from '../types/conversationRecord';
+import type { ConversationRecord, ListConversationRecordsQuery, ConversationStats } from '../types/conversationRecord';
 
 /**
  * 获取对话记录列表
@@ -17,5 +17,37 @@ export async function listConversationRecords(query: ListConversationRecordsQuer
  */
 export async function getConversationRecord(id: string): Promise<ConversationRecord> {
   const response = await apiClient.get<ConversationRecord>('/conversation-records', { params: { id } });
+  return response.data;
+}
+
+/**
+ * 根据 Session Key 获取对话记录
+ */
+export async function getConversationRecordsBySession(sessionKey: string): Promise<ConversationRecord[]> {
+  const response = await apiClient.get<ConversationRecord[]>(`/conversation-records/session/${sessionKey}`);
+  return response.data;
+}
+
+/**
+ * 根据 Trace ID 获取对话记录
+ */
+export async function getConversationRecordsByTrace(traceId: string): Promise<ConversationRecord[]> {
+  const response = await apiClient.get<ConversationRecord[]>(`/conversation-records/trace/${traceId}`);
+  return response.data;
+}
+
+/**
+ * 获取对话统计数据
+ */
+export interface StatsParams {
+  start_time?: string;
+  end_time?: string;
+  agent_codes?: string;
+  channel_codes?: string;
+  roles?: string;
+}
+
+export async function getConversationStats(params: StatsParams): Promise<ConversationStats> {
+  const response = await apiClient.get<ConversationStats>('/conversation-records/stats', { params });
   return response.data;
 }
