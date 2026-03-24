@@ -178,79 +178,9 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		channelType = callCtx.Metadata["channel_type"]
 	}
 
-	// 提取工具调用信息
-	var toolCallsJSON string
-	var toolCalls []map[string]string
-	if resp.RawResponse != "" {
-		// 尝试从 RawResponse 解析工具调用
-		var rawResp map[string]interface{}
-		if err := json.Unmarshal([]byte(resp.RawResponse), &rawResp); err == nil {
-			if tc, ok := rawResp["tool_calls"].([]interface{}); ok {
-				for _, t := range tc {
-					if tm, ok := t.(map[string]interface{}); ok {
-						call := map[string]string{}
-						if id, ok := tm["id"].(string); ok {
-							call["id"] = id
-						}
-						if fn, ok := tm["function"].(map[string]interface{}); ok {
-							if name, ok := fn["name"].(string); ok {
-								call["name"] = name
-							}
-							if args, ok := fn["arguments"].(string); ok {
-								call["arguments"] = args
-							}
-						}
-						toolCalls = append(toolCalls, call)
-					}
-				}
-			}
-		}
-	}
-
 	// 记录助手响应 - 始终记录 resp.Content 作为最终回复
 	role := "assistant"
 	content := resp.Content
-
-	// 如果有工具调用，同时记录工具调用摘要和完整 JSON（作为独立记录）
-	if len(toolCalls) > 0 {
-		// 工具调用摘要
-		var toolSummaries []string
-		for _, tc := range toolCalls {
-			name := tc["name"]
-			args := tc["arguments"]
-			if len(args) > 100 {
-				args = args[:100] + "..."
-			}
-			toolSummaries = append(toolSummaries, fmt.Sprintf("%s(%s)", name, args))
-		}
-		toolCallsSummary := fmt.Sprintf("tool_calls: %s", join(toolSummaries, "; "))
-
-		// 同时记录原始工具调用 JSON
-		toolCallsJSONBytes, _ := json.Marshal(toolCalls)
-		toolCallsJSON = string(toolCallsJSONBytes)
-
-		// 生成新的 span_id 用于工具调用记录，parent 为 llm_call 的 span
-		toolCallsSpanID := h.idGenerator.Generate()
-
-		// 保存工具调用摘要
-		toolRecord, err := h.createRecord(traceID, toolCallsSpanID, spanID, "tool_calls", "tool", toolCallsSummary)
-		if err == nil {
-			if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
-				toolRecord.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
-			}
-			_ = h.repo.Save(context.Background(), toolRecord)
-		}
-
-		// 生成新的 span_id 用于 tool_calls_json，parent 为 tool_calls 的 span
-		toolCallsJSONSpanID := h.idGenerator.Generate()
-		toolCallsJSONRecord, err := h.createRecord(traceID, toolCallsJSONSpanID, toolCallsSpanID, "tool_calls_json", "metadata", toolCallsJSON)
-		if err == nil {
-			if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
-				toolCallsJSONRecord.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
-			}
-			_ = h.repo.Save(context.Background(), toolCallsJSONRecord)
-		}
-	}
 
 	record, err := h.createRecord(traceID, spanID, parentSpanID, "llm_response", role, content)
 	if err != nil {
@@ -364,7 +294,7 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		return result, nil
 	}
 
-	// 设置范围
+	// 设置范围 - 从 scopeKey 获取
 	if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}

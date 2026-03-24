@@ -20,6 +20,16 @@ import (
 type contextKey string
 
 const spanKey contextKey = "conversation_span"
+const scopeKey contextKey = "conversation_scope"
+
+// scopeInfo 存储对话范围信息
+type scopeInfo struct {
+	SessionKey  string
+	UserCode    string
+	AgentCode   string
+	ChannelCode string
+	ChannelType string
+}
 
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
@@ -233,7 +243,13 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 
 	// 如果是 EinoProvider，设置工具执行钩子（在 StartSpan 之后创建 adapter）
 	if einoProvider, ok := llmProvider.(*llm.EinoProvider); ok && p.hookManager != nil && hookCtx != nil {
-		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID)
+		agentCode := ""
+		userCode := ""
+		if agent != nil {
+			agentCode = agent.AgentCode().String()
+			userCode = agent.UserCode()
+		}
+		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, msg.Channel, msg.Channel)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
 	}
 
@@ -465,15 +481,21 @@ func (c *AgentConfigCache) Clear(key string) {
 
 // toolHookAdapter 将 domain.ToolHook 适配为 llm.ToolHook
 type toolHookAdapter struct {
-	processor   *MessageProcessor
-	hookCtx     *domain.HookContext
-	sessionID   string
-	traceID     string
-	spanID      string
+	processor    *MessageProcessor
+	hookCtx      *domain.HookContext
+	sessionID    string
+	traceID      string
+	spanID       string
 	parentSpanID string
+	// scope 信息
+	sessionKey   string
+	userCode     string
+	agentCode    string
+	channelCode  string
+	channelType  string
 }
 
-func (p *MessageProcessor) newToolHookAdapter(hookCtx *domain.HookContext, sessionID, traceID, parentSpanID string) *toolHookAdapter {
+func (p *MessageProcessor) newToolHookAdapter(hookCtx *domain.HookContext, sessionID, traceID, parentSpanID, sessionKey, userCode, agentCode, channelCode, channelType string) *toolHookAdapter {
 	return &toolHookAdapter{
 		processor:    p,
 		hookCtx:      hookCtx,
@@ -481,6 +503,11 @@ func (p *MessageProcessor) newToolHookAdapter(hookCtx *domain.HookContext, sessi
 		traceID:      traceID,
 		spanID:       p.idGenerator.Generate(),
 		parentSpanID: parentSpanID,
+		sessionKey:   sessionKey,
+		userCode:     userCode,
+		agentCode:    agentCode,
+		channelCode:  channelCode,
+		channelType:  channelType,
 	}
 }
 
@@ -500,8 +527,15 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 		ParentSpanID: a.parentSpanID,
 	}
 
-	// 将 tool_call 的 span_id 设置到 ctx 中，供 PostToolCall 使用
+	// 将 tool_call 的 span_id 和 scope 设置到 ctx 中，供 PostToolCall 使用
 	ctxWithSpan := a.hookCtx.WithValue(spanKey, a.spanID)
+	ctxWithSpan = ctxWithSpan.WithValue(scopeKey, scopeInfo{
+		SessionKey:  a.sessionKey,
+		UserCode:    a.userCode,
+		AgentCode:   a.agentCode,
+		ChannelCode: a.channelCode,
+		ChannelType: a.channelType,
+	})
 
 	// 调用 PreToolCall hooks
 	if a.processor.hookManager != nil {
@@ -550,9 +584,16 @@ func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, o
 		SpanID:  a.spanID,
 	}
 
-	// 调用 PostToolCall hooks
+	// 调用 PostToolCall hooks - 使用带有 scope 信息的 ctx
 	if a.processor.hookManager != nil {
-		_, err := a.processor.hookManager.PostToolCall(a.hookCtx, callCtx, result)
+		ctxWithScope := a.hookCtx.WithValue(scopeKey, scopeInfo{
+			SessionKey:  a.sessionKey,
+			UserCode:    a.userCode,
+			AgentCode:   a.agentCode,
+			ChannelCode: a.channelCode,
+			ChannelType: a.channelType,
+		})
+		_, err := a.processor.hookManager.PostToolCall(ctxWithScope, callCtx, result)
 		if err != nil {
 			a.processor.logger.Error("PostToolCall hook failed", zap.Error(err))
 		}
