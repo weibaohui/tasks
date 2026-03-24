@@ -553,18 +553,6 @@ func (h *ConversationRecordHook) extractTraceID(ctx *domain.HookContext) string 
 	return ctx.GetMetadata("trace_id")
 }
 
-// join 拼接字符串
-func join(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}
-
 // containsToolCalls 检查 RawResponse 是否包含 tool_calls
 func containsToolCalls(rawResponse string) bool {
 	if rawResponse == "" {

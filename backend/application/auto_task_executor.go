@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -33,12 +32,11 @@ type TaskExecutionSummary struct {
 }
 
 type AutoTaskExecutor struct {
-	repo         domain.TaskRepository
-	eventBus     interface{ Publish(domain.DomainEvent) }
-	registry     *TaskRegistry
-	workerPool   interface{ Submit(*domain.Task) bool }
-	llmLookup   *taskLLMProvider
-	resultMu     sync.Mutex // 保护并发保存 execution_summaries
+	repo       domain.TaskRepository
+	eventBus   interface{ Publish(domain.DomainEvent) }
+	registry   *TaskRegistry
+	workerPool interface{ Submit(*domain.Task) bool }
+	llmLookup *taskLLMProvider
 }
 
 func NewAutoTaskExecutor(
@@ -182,7 +180,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					continue
 				}
 
-				e.executeSubTaskAsync(subTask)
+				e.executeSubTaskAsync(ctx, subTask)
 
 				todoList.AddItem(subTaskID, st.Goal, taskType.String(), subSpanID, TodoStatusDistributed)
 				subTaskIDs = append(subTaskIDs, subTaskID)
@@ -265,7 +263,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				continue
 			}
 
-			e.executeSubTaskAsync(subTask)
+			e.executeSubTaskAsync(ctx, subTask)
 
 			todoList.AddItem(subTaskID, st.goal, taskType.String(), subSpanID, TodoStatusDistributed)
 			subTaskIDs = append(subTaskIDs, subTaskID)
@@ -391,7 +389,7 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 			failed := 0
 
 			for _, subTaskID := range subTaskIDs {
-				child, err := e.repo.FindByID(context.Background(), domain.NewTaskID(subTaskID))
+				child, err := e.repo.FindByID(ctx, domain.NewTaskID(subTaskID))
 				if err != nil {
 					continue
 				}
@@ -468,9 +466,9 @@ func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
 	e.repo.Save(context.Background(), task)
 }
 
-func (e *AutoTaskExecutor) executeSubTaskAsync(task *domain.Task) {
+func (e *AutoTaskExecutor) executeSubTaskAsync(ctx context.Context, task *domain.Task) {
 	go func(t *domain.Task) {
-		if err := e.ExecuteAutoTask(context.Background(), t); err != nil {
+		if err := e.ExecuteAutoTask(ctx, t); err != nil {
 			log.Printf("sub-task execute failed: task=%s err=%v", t.ID().String(), err)
 			_ = e.failTask(t, err)
 		}

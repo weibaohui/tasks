@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -167,7 +168,9 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	cli, err := s.createMCPClient(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	defer cli.Close()
@@ -175,7 +178,9 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	defer cancel()
 	if err := cli.Start(ctx2); err != nil {
 		server.SetStatus("error", fmt.Sprintf("启动失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	_, err = cli.Initialize(ctx2, mcp.InitializeRequest{
@@ -187,7 +192,9 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	})
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	server.SetStatus("active", "")
@@ -206,7 +213,9 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	cli, err := s.createMCPClient(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	defer cli.Close()
@@ -214,7 +223,9 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	defer cancel()
 	if err := cli.Start(ctx2); err != nil {
 		server.SetStatus("error", fmt.Sprintf("启动失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	_, err = cli.Initialize(ctx2, mcp.InitializeRequest{
@@ -226,13 +237,17 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	})
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	res, err := cli.ListTools(ctx2, mcp.ListToolsRequest{})
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("获取工具列表失败: %v", err))
-		_ = s.mcpServerRepo.Update(ctx, server)
+		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
+			log.Printf("failed to update server status: %v", updateErr)
+		}
 		return err
 	}
 	// clear and save
@@ -243,8 +258,10 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	for _, t := range res.Tools {
 		var schema map[string]interface{}
 		if t.InputSchema.Properties != nil {
-			b, _ := json.Marshal(t.InputSchema)
-			_ = json.Unmarshal(b, &schema)
+			b, err := json.Marshal(t.InputSchema)
+			if err == nil {
+				_ = json.Unmarshal(b, &schema)
+			}
 		}
 		capabilities = append(capabilities, domain.MCPTool{
 			Name:        t.Name,
