@@ -187,7 +187,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		log.Printf("[AutoExecutor] 获取 LLM Provider 失败: %v", err)
 		if isAgentTask {
 			e.updateProgress(task, 5, "LLM 未配置", "Agent 模式未配置 LLM，任务终止")
-			_ = e.failTask(task, fmt.Errorf("Agent 模式未配置 LLM: %w", err))
+			return e.failTask(task, fmt.Errorf("Agent 模式未配置 LLM: %w", err))
 		}
 		hasSubTasks = false
 	} else if llmProvider != nil {

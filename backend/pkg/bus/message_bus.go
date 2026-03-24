@@ -3,6 +3,7 @@ package bus
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
@@ -21,7 +22,7 @@ type MessageBus struct {
 	outboundSubscribers  map[string][]OutboundCallback
 	streamSubscribers    map[string][]StreamCallback
 	mu                   sync.RWMutex
-	running              bool
+	running              atomic.Bool
 	logger               *zap.Logger
 }
 
@@ -98,19 +99,19 @@ func (b *MessageBus) SubscribeStream(channel string, callback StreamCallback) {
 
 // StartDispatcher starts the outbound message dispatcher
 func (b *MessageBus) StartDispatcher(ctx context.Context) {
-	b.running = true
+	b.running.Store(true)
 	go b.dispatchLoop(ctx)
 	go b.streamDispatchLoop(ctx)
 }
 
 // dispatchLoop dispatches outbound messages to subscribed channels
 func (b *MessageBus) dispatchLoop(ctx context.Context) {
-	for b.running {
+	for b.running.Load() {
 		select {
 		case msg := <-b.outbound:
 			b.dispatchToSubscribers(msg)
 		case <-ctx.Done():
-			b.running = false
+			b.running.Store(false)
 			return
 		}
 	}
@@ -118,12 +119,12 @@ func (b *MessageBus) dispatchLoop(ctx context.Context) {
 
 // streamDispatchLoop dispatches streaming messages to subscribed channels
 func (b *MessageBus) streamDispatchLoop(ctx context.Context) {
-	for b.running {
+	for b.running.Load() {
 		select {
 		case chunk := <-b.stream:
 			b.dispatchStreamToSubscribers(chunk)
 		case <-ctx.Done():
-			b.running = false
+			b.running.Store(false)
 			return
 		}
 	}
@@ -163,7 +164,7 @@ func (b *MessageBus) dispatchStreamToSubscribers(chunk *StreamChunk) {
 
 // Stop stops the dispatcher loops
 func (b *MessageBus) Stop() {
-	b.running = false
+	b.running.Store(false)
 }
 
 // InboundSize returns the number of pending inbound messages
