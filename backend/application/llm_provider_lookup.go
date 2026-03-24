@@ -40,11 +40,11 @@ func (t *taskLLMProvider) getProviderForTask(ctx context.Context, task *domain.T
 		return nil, fmt.Errorf("任务元数据为空")
 	}
 
-	// 1. 尝试从 channel_code 获取
+	// 1. 尝试从 channel_code 获取 (只需要 channel_code，不需要 user_code)
 	channelCode, hasChannel := metadata["channel_code"].(string)
 	userCode, hasUser := metadata["user_code"].(string)
 
-	if hasChannel && hasUser && t.channelRepo != nil && t.agentRepo != nil && t.providerRepo != nil {
+	if hasChannel && t.channelRepo != nil && t.agentRepo != nil && t.providerRepo != nil {
 		channel, err := t.channelRepo.FindByCode(ctx, domain.NewChannelCode(channelCode))
 		if err == nil && channel != nil {
 			agentCode := channel.AgentCode()
@@ -90,7 +90,7 @@ func (t *taskLLMProvider) createProviderFromDomain(provider *domain.LLMProvider,
 		cfg.Model = provider.DefaultModel()
 	}
 	if cfg.Model == "" {
-		cfg.Model = "gpt-4"
+		return nil, fmt.Errorf("provider %q 未配置默认模型", provider.ProviderKey())
 	}
 
 	return llm.NewLLMProvider(cfg)

@@ -108,9 +108,9 @@ func createAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
 
 	logger.Info("管理员用户创建成功",
 		zap.String("username", user.Username()),
-		zap.String("password", DefaultAdminPassword),
 		zap.String("userCode", user.UserCode().String()),
 	)
+	fmt.Printf("初始密码: %s (请登录后立即修改)\n", DefaultAdminPassword)
 }
 
 func deleteAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
