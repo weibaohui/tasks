@@ -94,6 +94,14 @@ func (c *Channel) Start(ctx context.Context) error {
 			c.logger.Error("Failed to send Feishu message", zap.Error(err))
 			return err
 		}
+
+		// Delete reaction after message is sent successfully
+		if msg.Metadata != nil {
+			if replyToMsgID, ok := msg.Metadata["reply_to_message_id"].(string); ok && replyToMsgID != "" {
+				c.deleteReactionFromCache(replyToMsgID)
+			}
+		}
+
 		return nil
 	})
 
