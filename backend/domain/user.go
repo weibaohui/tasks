@@ -1,7 +1,10 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -143,6 +146,51 @@ func (u *User) Activate() {
 func (u *User) Deactivate() {
 	u.isActive = false
 	u.updatedAt = time.Now()
+}
+
+// VerifyPassword verifies the plain password against the stored hash
+func (u *User) VerifyPassword(plainPassword string) bool {
+	return verifyPassword(u.passwordHash, plainPassword)
+}
+
+var sha256HexPattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
+
+func hashPassword(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return "sha256$" + hex.EncodeToString(sum[:])
+}
+
+func verifyPassword(storedHash, plainPassword string) bool {
+	if strings.HasPrefix(storedHash, "sha256$") {
+		sum := sha256.Sum256([]byte(plainPassword))
+		return strings.EqualFold(strings.TrimPrefix(storedHash, "sha256$"), hex.EncodeToString(sum[:]))
+	}
+	if strings.HasPrefix(storedHash, "sha256:") {
+		sum := sha256.Sum256([]byte(plainPassword))
+		return strings.EqualFold(strings.TrimPrefix(storedHash, "sha256:"), hex.EncodeToString(sum[:]))
+	}
+	if sha256HexPattern.MatchString(storedHash) {
+		sum := sha256.Sum256([]byte(plainPassword))
+		return strings.EqualFold(storedHash, hex.EncodeToString(sum[:]))
+	}
+	return false
+}
+
+// BuildStoredPasswordValue builds the stored password value from plain password or existing hash
+func BuildStoredPasswordValue(plainPassword, passwordHash string) string {
+	if plainPassword != "" {
+		return hashPassword(plainPassword)
+	}
+	if passwordHash == "" {
+		return ""
+	}
+	if strings.HasPrefix(passwordHash, "sha256$") || strings.HasPrefix(passwordHash, "sha256:") {
+		return passwordHash
+	}
+	if sha256HexPattern.MatchString(passwordHash) {
+		return "sha256$" + strings.ToLower(passwordHash)
+	}
+	return hashPassword(passwordHash)
 }
 
 type UserSnapshot struct {
