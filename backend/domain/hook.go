@@ -81,6 +81,8 @@ type LLMResponse struct {
 	Model        string
 	FinishReason string
 	RawResponse  string
+	// ContainsToolCalls 表示此响应是否包含 tool_calls（LLM 决定调用工具）
+	ContainsToolCalls bool
 }
 
 // Usage token 使用量
@@ -123,6 +125,17 @@ type ToolHook interface {
 	PreToolCall(ctx *HookContext, callCtx *ToolCallContext) (*ToolCallContext, error)
 	PostToolCall(ctx *HookContext, callCtx *ToolCallContext, result *ToolExecutionResult) (*ToolExecutionResult, error)
 	OnToolError(ctx *HookContext, callCtx *ToolCallContext, err error) (*ToolExecutionResult, error)
+}
+
+// LLMWithToolsHook LLM 带工具调用的钩子接口
+// 用于在 GenerateWithTools 内部回调，监听中间 LLM 响应和工具执行完成事件
+type LLMWithToolsHook interface {
+	Hook
+	// OnLLMCalledWithTools 当 LLM 返回包含 tool_calls 时调用（中间响应）
+	OnLLMCalledWithTools(ctx *HookContext, callCtx *LLMCallContext, resp *LLMResponse)
+	// OnToolExecutionComplete 当一轮工具调用完成后调用
+	// 此时可以记录最终的 llm_response，parent 应为 tool_call 的 span
+	OnToolExecutionComplete(ctx *HookContext)
 }
 
 // ============================================================================

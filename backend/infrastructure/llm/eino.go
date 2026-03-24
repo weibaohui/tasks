@@ -18,11 +18,13 @@ import (
 
 // EinoProvider 使用 eino ChatModel 的 Provider
 type EinoProvider struct {
-	config    *Config
-	chatModel model.ToolCallingChatModel
-	logger    *zap.Logger
-	lastUsage Usage
-	toolHooks []ToolHook // 工具执行钩子
+	config        *Config
+	chatModel     model.ToolCallingChatModel
+	logger        *zap.Logger
+	lastUsage     Usage
+	toolHooks     []ToolHook        // 工具执行钩子
+	toolObserver  ToolExecutionObserver // 工具执行观察者
+	llmCallIndex  int               // 当前 LLM 调用索引
 }
 
 // ToolHook 工具执行钩子接口
@@ -31,9 +33,46 @@ type ToolHook interface {
 	PostToolCall(toolName string, input json.RawMessage, output string, err error)
 }
 
+// ToolCallContext 工具调用上下文（传递给 observer）
+type ToolCallContext struct {
+	TraceID      string
+	SpanID       string
+	ParentSpanID string
+	ToolName     string
+	ToolInput    json.RawMessage
+	Output       string
+	Success      bool
+	Error        error
+}
+
+// LLMCallContext LLM 调用上下文（传递给 observer）
+type LLMCallContext struct {
+	Content    string
+	Usage      Usage
+	ToolCalls  []string // tool names if any
+	TraceID    string
+	SpanID     string
+}
+
+// ToolExecutionObserver 工具执行观察者接口
+// 用于在工具执行完成后通知观察者，让其记录相关信息
+type ToolExecutionObserver interface {
+	// OnLLMCalledWithTools 当 LLM 返回包含 tool_calls 时通知
+	// 此时应该记录 llm_response_with_tools
+	OnLLMCalledWithTools(ctx context.Context, callCtx LLMCallContext)
+	// OnToolExecutionComplete 当一轮工具调用完成后通知
+	// 此时应该更新 span 链，供下一个 LLM 调用使用
+	OnToolExecutionComplete(ctx context.Context, tools []ToolCallContext)
+}
+
 // SetToolHooks 设置工具执行钩子
 func (p *EinoProvider) SetToolHooks(hooks []ToolHook) {
 	p.toolHooks = hooks
+}
+
+// SetToolExecutionObserver 设置工具执行观察者
+func (p *EinoProvider) SetToolExecutionObserver(observer ToolExecutionObserver) {
+	p.toolObserver = observer
 }
 
 var _ LLMProvider = (*EinoProvider)(nil)
@@ -164,12 +203,31 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 			}
 		}
 
+		// 提取 tool names
+		var toolNames []string
+		for _, tc := range resp.ToolCalls {
+			toolNames = append(toolNames, tc.Function.Name)
+		}
+
 		// 如果没有工具调用，返回最终结果
 		if len(resp.ToolCalls) == 0 {
 			return resp.Content, allToolCalls, nil
 		}
 
+		// 通知 observer：LLM 返回了包含 tool_calls 的响应
+		// 这是中间响应，应该被记录为 llm_response_with_tools
+		if p.toolObserver != nil {
+			p.toolObserver.OnLLMCalledWithTools(ctx, LLMCallContext{
+				Content:   resp.Content,
+				Usage:     p.lastUsage,
+				ToolCalls: toolNames,
+			})
+		}
+
 		messages = append(messages, resp)
+
+		// 收集本轮工具执行上下文
+		var toolContexts []ToolCallContext
 
 		// 处理工具调用
 		for _, tc := range resp.ToolCalls {
@@ -201,6 +259,13 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))
 				// 调用 PostToolCall hooks
 				p.callPostToolHooks(tc.Function.Name, toolCall.Input, errMsg, fmt.Errorf("tool not found"))
+				toolContexts = append(toolContexts, ToolCallContext{
+					ToolName:  tc.Function.Name,
+					ToolInput: toolCall.Input,
+					Output:    errMsg,
+					Success:   false,
+					Error:     fmt.Errorf("tool not found"),
+				})
 				continue
 			}
 
@@ -219,6 +284,13 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))
 				// 调用 PostToolCall hooks
 				p.callPostToolHooks(tc.Function.Name, modifiedInput, errMsg, err)
+				toolContexts = append(toolContexts, ToolCallContext{
+					ToolName:  tc.Function.Name,
+					ToolInput: modifiedInput,
+					Output:    errMsg,
+					Success:   false,
+					Error:     err,
+				})
 				continue
 			}
 
@@ -235,6 +307,18 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 
 			// 调用 PostToolCall hooks
 			p.callPostToolHooks(tc.Function.Name, modifiedInput, output, nil)
+			toolContexts = append(toolContexts, ToolCallContext{
+				ToolName:  tc.Function.Name,
+				ToolInput: modifiedInput,
+				Output:    output,
+				Success:   true,
+			})
+		}
+
+		// 通知 observer：一轮工具调用完成
+		// 此时下一个 LLM 调用将以 tool_call span 为 parent
+		if p.toolObserver != nil && len(toolContexts) > 0 {
+			p.toolObserver.OnToolExecutionComplete(ctx, toolContexts)
 		}
 	}
 

@@ -251,6 +251,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, msg.Channel, msg.Channel)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
+		einoProvider.SetToolExecutionObserver(toolHookAdapter) // 设置 observer 以监听工具执行
 	}
 
 	// 调用 LLM (带工具支持)
@@ -598,6 +599,54 @@ func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, o
 			a.processor.logger.Error("PostToolCall hook failed", zap.Error(err))
 		}
 	}
+}
+
+// OnLLMCalledWithTools 实现 llm.ToolExecutionObserver
+func (a *toolHookAdapter) OnLLMCalledWithTools(ctx context.Context, callCtx llm.LLMCallContext) {
+	if a.processor.hookManager == nil {
+		return
+	}
+
+	// 转换为 domain.LLMCallContext
+	domainCallCtx := &domain.LLMCallContext{
+		TraceID:   a.traceID,
+		SessionID: a.sessionID,
+		Metadata: map[string]string{
+			"session_key":  a.sessionKey,
+			"user_code":    a.userCode,
+			"agent_code":   a.agentCode,
+			"channel_code": a.channelCode,
+			"channel_type": a.channelType,
+		},
+	}
+
+	domainResp := &domain.LLMResponse{
+		Content: callCtx.Content,
+		Usage: domain.Usage{
+			PromptTokens:     callCtx.Usage.PromptTokens,
+			CompletionTokens: callCtx.Usage.CompletionTokens,
+			TotalTokens:      callCtx.Usage.TotalTokens,
+		},
+	}
+
+	domainHookCtx := domain.NewHookContext(ctx)
+	domainHookCtx.SetMetadata("trace_id", a.traceID)
+	domainHookCtx.SetMetadata("session_key", a.sessionKey)
+
+	a.processor.hookManager.OnLLMCalledWithTools(domainHookCtx, domainCallCtx, domainResp)
+}
+
+// OnToolExecutionComplete 实现 llm.ToolExecutionObserver
+func (a *toolHookAdapter) OnToolExecutionComplete(ctx context.Context, tools []llm.ToolCallContext) {
+	if a.processor.hookManager == nil {
+		return
+	}
+
+	domainHookCtx := domain.NewHookContext(ctx)
+	domainHookCtx.SetMetadata("trace_id", a.traceID)
+	domainHookCtx.SetMetadata("session_key", a.sessionKey)
+
+	a.processor.hookManager.OnToolExecutionComplete(domainHookCtx)
 }
 
 // createTaskFromMessage 从消息创建任务

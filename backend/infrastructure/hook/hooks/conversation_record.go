@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -62,9 +63,10 @@ func NewConversationRecordHook(
 type contextKey string
 
 const (
-	scopeKey  contextKey = "conversation_scope"
-	spanKey   contextKey = "conversation_span"
-	promptKey contextKey = "conversation_prompt"
+	scopeKey            contextKey = "conversation_scope"
+	spanKey             contextKey = "conversation_span"
+	promptKey           contextKey = "conversation_prompt"
+	deferredResponseKey contextKey = "conversation_deferred_response"
 )
 
 // scopeInfo 存储对话范围信息
@@ -74,6 +76,16 @@ type scopeInfo struct {
 	AgentCode   string
 	ChannelCode string
 	ChannelType string
+}
+
+// deferredLLMResponse 存储延迟的 LLM 响应信息
+type deferredLLMResponse struct {
+	TraceID    string
+	SpanID     string
+	ParentSpanID string
+	Content    string
+	Usage      domain.Usage
+	Scope      scopeInfo
 }
 
 // PreLLMCall 记录 LLM 调用前的用户输入
@@ -151,8 +163,15 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 	if parentSpanID == "" {
 		parentSpanID = trace.GetSpanID(ctx.Context)
 	}
+
+	// 检查 resp.RawResponse 是否包含 tool_calls（LLM 决定调用工具的标志）
+	hasToolCalls := containsToolCalls(resp.RawResponse)
+
 	// LLM 响应生成新的 span_id，parent 指向上游用户输入
 	spanID := h.idGenerator.Generate()
+
+	// 存储新的 span_id 到 HookContext.values，供后续 PreToolCall 使用
+	ctx.WithValue(spanKey, spanID)
 
 	traceID := callCtx.TraceID
 	if traceID == "" {
@@ -178,7 +197,48 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		channelType = callCtx.Metadata["channel_type"]
 	}
 
-	// 记录助手响应 - 始终记录 resp.Content 作为最终回复
+	// 如果 LLM 决定调用工具，先记录中间响应（包含 tool_calls）
+	if hasToolCalls && resp.Content != "" {
+		toolCallsSpanID := h.idGenerator.Generate()
+		// 中间响应的 parent 是用户输入的 span
+		toolCallsRecord, err := h.createRecord(traceID, toolCallsSpanID, parentSpanID, "llm_response_with_tools", "assistant", resp.Content)
+		if err != nil {
+			h.logger.Error("Failed to create conversation record for LLM response with tools", zap.Error(err))
+		} else {
+			toolCallsRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
+			toolCallsRecord.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
+			if err := h.repo.Save(context.Background(), toolCallsRecord); err != nil {
+				h.logger.Error("Failed to save conversation record for LLM response with tools", zap.Error(err))
+			}
+			h.logger.Debug("ConversationRecord: saved LLM response with tools",
+				zap.String("trace_id", traceID),
+				zap.String("span_id", toolCallsSpanID),
+				zap.String("parent_span_id", parentSpanID))
+		}
+
+		// 更新 span 链：后续的 tool_call 应该以这个中间响应为 parent
+		ctx.WithValue(spanKey, toolCallsSpanID)
+
+		// 延迟记录最终的 llm_response：存储信息到 context，由 OnToolExecutionComplete 记录
+		ctx.WithValue(deferredResponseKey, &deferredLLMResponse{
+			TraceID:      traceID,
+			SpanID:       spanID,
+			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_call 的 span
+			Content:      resp.Content,
+			Usage:        resp.Usage,
+			Scope: scopeInfo{
+				SessionKey:  sessionKey,
+				UserCode:    userCode,
+				AgentCode:   agentCode,
+				ChannelCode: channelCode,
+				ChannelType: channelType,
+			},
+		})
+
+		return resp, nil
+	}
+
+	// 没有 tool_calls，正常记录助手响应
 	role := "assistant"
 	content := resp.Content
 
@@ -221,10 +281,19 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	// 生成新的 span_id 用于工具调用
 	spanID := h.idGenerator.Generate()
 
+	// 从 ctx 获取父 span_id（PostLLMCall 会存储新的 span）
+	parentSpanID := ""
+	if p, ok := ctx.Get(spanKey).(string); ok {
+		parentSpanID = p
+	}
+	if parentSpanID == "" {
+		parentSpanID = callCtx.ParentSpanID // 降级：使用传入的 ParentSpanID
+	}
+
 	// 工具参数 JSON
 	argsJSON, _ := json.Marshal(callCtx.ToolInput)
 
-	record, err := h.createRecord(traceID, spanID, callCtx.ParentSpanID, "tool_call", "tool", fmt.Sprintf("%s(%s)", callCtx.ToolName, string(argsJSON)))
+	record, err := h.createRecord(traceID, spanID, parentSpanID, "tool_call", "tool", fmt.Sprintf("%s(%s)", callCtx.ToolName, string(argsJSON)))
 	if err != nil {
 		h.logger.Error("Failed to create conversation record for tool call", zap.Error(err))
 		return callCtx, nil
@@ -363,6 +432,57 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 }
 
+// OnLLMCalledWithTools 当 LLM 返回包含 tool_calls 时调用
+// 此时应该记录 llm_response_with_tools
+func (h *ConversationRecordHook) OnLLMCalledWithTools(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) {
+	// 这个方法在 GenerateWithTools 内部调用时，工具还没有执行
+	// 实际的 llm_response_with_tools 记录已经在 PostLLMCall 中处理了
+	// 这里只做日志记录
+	h.logger.Debug("ConversationRecord: OnLLMCalledWithTools",
+		zap.String("content", resp.Content),
+		zap.Int("content_len", len(resp.Content)))
+}
+
+// OnToolExecutionComplete 当一轮工具调用完成后调用
+// 此时应该记录最终的 llm_response，parent 应为 tool_call 的 span
+func (h *ConversationRecordHook) OnToolExecutionComplete(ctx *domain.HookContext) {
+	// 获取延迟的 LLM 响应信息
+	deferredResp, ok := ctx.Get(deferredResponseKey).(*deferredLLMResponse)
+	if !ok || deferredResp == nil {
+		return
+	}
+
+	// 获取 tool_call 的 span_id 作为 parent
+	// PostToolCall 会将 tool_call 的 span 存储到 spanKey
+	parentSpanID, _ := ctx.Get(spanKey).(string)
+	if parentSpanID == "" {
+		h.logger.Warn("OnToolExecutionComplete: no parent span found, skipping deferred LLM response")
+		return
+	}
+
+	// 记录最终的 llm_response，parent 是 tool_call 的 span
+	record, err := h.createRecord(deferredResp.TraceID, deferredResp.SpanID, parentSpanID, "llm_response", "assistant", deferredResp.Content)
+	if err != nil {
+		h.logger.Error("Failed to create conversation record for deferred LLM response", zap.Error(err))
+		return
+	}
+
+	record.SetScope(deferredResp.Scope.SessionKey, deferredResp.Scope.UserCode, deferredResp.Scope.AgentCode, deferredResp.Scope.ChannelCode, deferredResp.Scope.ChannelType)
+	record.SetTokenUsage(deferredResp.Usage.PromptTokens, deferredResp.Usage.CompletionTokens, deferredResp.Usage.TotalTokens, 0, 0)
+
+	if err := h.repo.Save(context.Background(), record); err != nil {
+		h.logger.Error("Failed to save conversation record for deferred LLM response", zap.Error(err))
+	}
+
+	h.logger.Debug("ConversationRecord: saved deferred LLM response",
+		zap.String("trace_id", deferredResp.TraceID),
+		zap.String("span_id", deferredResp.SpanID),
+		zap.String("parent_span_id", parentSpanID))
+
+	// 清除延迟响应信息
+	ctx.WithValue(deferredResponseKey, nil)
+}
+
 // createRecord 创建 conversation record
 func (h *ConversationRecordHook) createRecord(traceID, spanID, parentSpanID, eventType, role, content string) (*domain.ConversationRecord, error) {
 	id := domain.NewConversationRecordID(h.idGenerator.Generate())
@@ -436,4 +556,12 @@ func join(strs []string, sep string) string {
 		result += sep + strs[i]
 	}
 	return result
+}
+
+// containsToolCalls 检查 RawResponse 是否包含 tool_calls
+func containsToolCalls(rawResponse string) bool {
+	if rawResponse == "" {
+		return false
+	}
+	return strings.Contains(rawResponse, `"tool_calls"`)
 }

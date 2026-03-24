@@ -112,3 +112,13 @@ func (m *Manager) PostToolCall(ctx *domain.HookContext, callCtx *domain.ToolCall
 func (m *Manager) OnToolError(ctx *domain.HookContext, callCtx *domain.ToolCallContext, err error) (*domain.ToolExecutionResult, error) {
 	return m.executor.ExecuteOnToolError(ctx, callCtx, err)
 }
+
+// OnLLMCalledWithTools 当 LLM 返回包含 tool_calls 时调用
+func (m *Manager) OnLLMCalledWithTools(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) {
+	m.executor.ExecuteOnLLMCalledWithTools(ctx, callCtx, resp)
+}
+
+// OnToolExecutionComplete 当工具执行完成时调用
+func (m *Manager) OnToolExecutionComplete(ctx *domain.HookContext) {
+	m.executor.ExecuteOnToolExecutionComplete(ctx)
+}

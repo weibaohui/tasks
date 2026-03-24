@@ -237,6 +237,46 @@ func (e *Executor) ExecuteOnToolError(ctx *domain.HookContext, callCtx *domain.T
 	return modifiedResult, nil
 }
 
+// ExecuteOnLLMCalledWithTools 执行 OnLLMCalledWithTools 钩子
+func (e *Executor) ExecuteOnLLMCalledWithTools(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) {
+	hooks := e.getAllEnabledHooks()
+	hooks = e.sortByPriority(hooks)
+
+	for _, hook := range hooks {
+		llmWithToolsHook, ok := hook.(domain.LLMWithToolsHook)
+		if !ok {
+			continue
+		}
+
+		e.logger.Debug("executing OnLLMCalledWithTools",
+			zap.String("hook", hook.Name()),
+			zap.Int("priority", hook.Priority()))
+
+		llmWithToolsHook.OnLLMCalledWithTools(ctx, callCtx, resp)
+		ctx.AddHook(hook.Name())
+	}
+}
+
+// ExecuteOnToolExecutionComplete 执行 OnToolExecutionComplete 钩子
+func (e *Executor) ExecuteOnToolExecutionComplete(ctx *domain.HookContext) {
+	hooks := e.getAllEnabledHooks()
+	hooks = e.sortByPriority(hooks)
+
+	for _, hook := range hooks {
+		llmWithToolsHook, ok := hook.(domain.LLMWithToolsHook)
+		if !ok {
+			continue
+		}
+
+		e.logger.Debug("executing OnToolExecutionComplete",
+			zap.String("hook", hook.Name()),
+			zap.Int("priority", hook.Priority()))
+
+		llmWithToolsHook.OnToolExecutionComplete(ctx)
+		ctx.AddHook(hook.Name())
+	}
+}
+
 func (e *Executor) getEnabledHooks(hookType domain.HookType) []domain.Hook {
 	hooks := e.registry.ListByType(hookType)
 	var enabled []domain.Hook
