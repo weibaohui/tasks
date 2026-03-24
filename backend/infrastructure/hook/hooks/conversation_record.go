@@ -146,7 +146,7 @@ func (h *ConversationRecordHook) PreLLMCall(ctx *domain.HookContext, callCtx *do
 	}
 
 	record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for user input", zap.Error(err))
 	}
 
@@ -261,7 +261,7 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 	// 设置 token 使用量
 	record.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
 
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for LLM response", zap.Error(err))
 	}
 
@@ -311,7 +311,7 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for tool call", zap.Error(err))
 	}
 
@@ -375,7 +375,7 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for tool result", zap.Error(err))
 	}
 
@@ -422,7 +422,7 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for tool error", zap.Error(err))
 	}
 
@@ -477,7 +477,7 @@ func (h *ConversationRecordHook) OnToolExecutionComplete(ctx *domain.HookContext
 	record.SetScope(deferredResp.Scope.SessionKey, deferredResp.Scope.UserCode, deferredResp.Scope.AgentCode, deferredResp.Scope.ChannelCode, deferredResp.Scope.ChannelType)
 	record.SetTokenUsage(deferredResp.Usage.PromptTokens, deferredResp.Usage.CompletionTokens, deferredResp.Usage.TotalTokens, 0, 0)
 
-	if err := h.repo.Save(context.Background(), record); err != nil {
+	if err := h.repo.Save(ctx.Context, record); err != nil {
 		h.logger.Error("Failed to save conversation record for deferred LLM response", zap.Error(err))
 	}
 

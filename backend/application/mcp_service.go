@@ -149,7 +149,9 @@ func (s *MCPApplicationService) UpdateServer(ctx context.Context, cmd UpdateMCPS
 
 func (s *MCPApplicationService) DeleteServer(ctx context.Context, id domain.MCPServerID) error {
 	// 清理工具
-	_ = s.mcpToolRepo.DeleteByServerID(ctx, id)
+	if err := s.mcpToolRepo.DeleteByServerID(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete tools: %w", err)
+	}
 	return s.mcpServerRepo.Delete(ctx, id)
 }
 
