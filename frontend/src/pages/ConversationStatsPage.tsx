@@ -2,7 +2,7 @@
  * 对话统计分析页面
  * 展示 Token 趋势、Agent 分布、Channel 分布、角色分布等统计信息
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   Row,
@@ -60,7 +60,7 @@ const ConversationStatsPage: React.FC = () => {
     dayjs(),
   ]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const [start, end] = dateRange;
@@ -75,11 +75,11 @@ const ConversationStatsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange]);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
   // Token 趋势图表数据
   const tokenTrendData = stats?.token_stats.daily_trends || [];

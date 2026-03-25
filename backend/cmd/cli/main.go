@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
@@ -59,13 +60,14 @@ func printUsage() {
 }
 
 func getDBAndRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func()) {
-	db, err := sql.Open("sqlite3", "./tasks.db")
+	dbPath := resolveDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		logger.Fatal("Failed to open database", zap.Error(err))
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
 	}
 
 	if err := _persistence.InitSchema(db); err != nil {
-		logger.Fatal("Failed to init schema", zap.Error(err))
+		logger.Fatal("Failed to init schema", zap.String("path", dbPath), zap.Error(err))
 	}
 
 	idGenerator := utils.NewNanoIDGenerator(21)
@@ -135,4 +137,17 @@ func deleteAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
 	}
 
 	logger.Info("管理员用户已删除", zap.String("username", DefaultAdminUsername))
+}
+
+func resolveDBPath() string {
+	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
+		return p
+	}
+	if p := os.Getenv("DB_PATH"); p != "" {
+		return p
+	}
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend/tasks.db")
+	}
+	return filepath.FromSlash("./tasks.db")
 }

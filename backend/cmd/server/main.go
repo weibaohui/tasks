@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,8 +19,8 @@ import (
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/hook"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -28,6 +29,11 @@ import (
 	"github.com/weibh/taskmanager/pkg/channel"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
+)
+
+const (
+	DefaultAdminUsername = "admin"
+	DefaultAdminPassword = "admin123"
 )
 
 // Gateway 渠道网关组件
@@ -43,12 +49,17 @@ func main() {
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
+	if runAdminSubcommandIfMatched(logger) {
+		return
+	}
+
 	logger.Info("启动任务管理服务...")
 
 	// 1. 初始化数据库
-	db, err := sql.Open("sqlite3", "./tasks.db")
+	dbPath := resolveDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		logger.Fatal("Failed to open database", zap.Error(err))
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
 	}
 	defer db.Close()
 
@@ -209,6 +220,130 @@ func main() {
 	}
 
 	logger.Info("服务器已关闭")
+}
+
+// runAdminSubcommandIfMatched 在以 taskmanager 方式运行时，优先处理管理员相关子命令，避免启动主服务。
+func runAdminSubcommandIfMatched(logger *zap.Logger) bool {
+	if len(os.Args) < 2 {
+		return false
+	}
+
+	switch os.Args[1] {
+	case "create-admin":
+		if err := runCreateAdmin(logger); err != nil {
+			logger.Fatal("创建默认管理员用户失败", zap.Error(err))
+		}
+		return true
+	case "delete-admin":
+		if err := runDeleteAdmin(logger); err != nil {
+			logger.Fatal("删除默认管理员用户失败", zap.Error(err))
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+// runCreateAdmin 创建默认管理员用户（admin/admin123），只执行一次性操作并退出进程。
+func runCreateAdmin(logger *zap.Logger) error {
+	userRepo, idGen, cleanup, err := getDBAndUserRepo(logger)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	existingUser, err := userRepo.FindByUsername(ctx, DefaultAdminUsername)
+	if err != nil {
+		return fmt.Errorf("检查用户失败: %w", err)
+	}
+	if existingUser != nil {
+		logger.Info("管理员用户已存在", zap.String("username", DefaultAdminUsername))
+		return nil
+	}
+
+	userService := application.NewUserApplicationService(userRepo, idGen)
+	user, err := userService.CreateUser(ctx, application.CreateUserCommand{
+		Username:    DefaultAdminUsername,
+		DisplayName: "系统管理员",
+		Email:       "admin@local.dev",
+		Password:    DefaultAdminPassword,
+	})
+	if err != nil {
+		return fmt.Errorf("创建管理员用户失败: %w", err)
+	}
+
+	logger.Info("管理员用户创建成功",
+		zap.String("username", user.Username()),
+		zap.String("userCode", user.UserCode().String()),
+	)
+	fmt.Printf("初始密码: %s (请登录后立即修改)\n", DefaultAdminPassword)
+	return nil
+}
+
+// runDeleteAdmin 删除默认管理员用户（admin），只执行一次性操作并退出进程。
+func runDeleteAdmin(logger *zap.Logger) error {
+	userRepo, _, cleanup, err := getDBAndUserRepo(logger)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	existingUser, err := userRepo.FindByUsername(ctx, DefaultAdminUsername)
+	if err != nil {
+		return fmt.Errorf("查找用户失败: %w", err)
+	}
+	if existingUser == nil {
+		logger.Info("管理员用户不存在", zap.String("username", DefaultAdminUsername))
+		return nil
+	}
+
+	if err := userRepo.Delete(ctx, existingUser.ID()); err != nil {
+		return fmt.Errorf("删除管理员用户失败: %w", err)
+	}
+
+	logger.Info("管理员用户已删除", zap.String("username", DefaultAdminUsername))
+	return nil
+}
+
+// getDBAndUserRepo 初始化数据库与用户仓库，并返回清理函数用于关闭数据库连接。
+func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func(), error) {
+	dbPath := resolveDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("打开数据库失败(%s): %w", dbPath, err)
+	}
+
+	if err := _persistence.InitSchema(db); err != nil {
+		_ = db.Close()
+		return nil, nil, nil, fmt.Errorf("初始化数据库结构失败(%s): %w", dbPath, err)
+	}
+
+	idGenerator := utils.NewNanoIDGenerator(21)
+	userRepo := _persistence.NewSQLiteUserRepository(db)
+
+	cleanup := func() {
+		_ = db.Close()
+	}
+
+	return userRepo, idGenerator, cleanup, nil
+}
+
+// resolveDBPath 解析数据库文件路径，支持通过环境变量配置，默认在后端目录下
+func resolveDBPath() string {
+	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
+		return p
+	}
+	if p := os.Getenv("DB_PATH"); p != "" {
+		return p
+	}
+	// 如果当前目录存在 backend 目录，优先写入 backend/tasks.db（适配从仓库根目录执行）
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend/tasks.db")
+	}
+	// 否则使用当前工作目录
+	return filepath.FromSlash("./tasks.db")
 }
 
 // initGateway 初始化渠道网关

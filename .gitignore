@@ -20,3 +20,4 @@ frontend/dist
 .env
 backend/server
 tasks.db
+backend/bin/taskmanager

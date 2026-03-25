@@ -2,7 +2,7 @@
  * 任务仪表板页面
  * 显示任务列表和对话统计数据
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Row, Col, Card, Statistic, Button, Space, Table, Tag, Modal, Popconfirm, message, DatePicker } from 'antd';
 import { PlusOutlined, ReloadOutlined, EyeOutlined, BarChartOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -59,7 +59,7 @@ export const TaskDashboard: React.FC = () => {
   }, [fetchTasks]);
 
   // 获取对话统计
-  const fetchConversationStats = async () => {
+  const fetchConversationStats = useCallback(async () => {
     setConvLoading(true);
     try {
       const [start, end] = dateRange;
@@ -74,11 +74,11 @@ export const TaskDashboard: React.FC = () => {
     } finally {
       setConvLoading(false);
     }
-  };
+  }, [dateRange]);
 
   useEffect(() => {
     fetchConversationStats();
-  }, []);
+  }, [fetchConversationStats]);
 
   const rootTasks = tasks.filter((t) => !t.parent_id);
 
