@@ -67,14 +67,6 @@ func NewMessageProcessor(
 		registry.Register(mcp.NewCallMCPTool(mcpService))
 	}
 
-	// 注册所有可用的 Skill 工具（全局注册，所有 Agent 都能使用）
-	if skillsLoader != nil {
-		skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(skillsLoader)
-		for _, t := range skillToolsRegistry.GetTools() {
-			registry.Register(t)
-		}
-	}
-
 	return &MessageProcessor{
 		bus:              messageBus,
 		logger:           logger,
