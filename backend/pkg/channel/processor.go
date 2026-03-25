@@ -117,19 +117,12 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 	// 生成响应
 	response := p.generateResponse(sessionCtx, msg, session, traceID, spanID)
 
-	// 构建输出消息
+	// 发布响应消息
 	outMsg := &bus.OutboundMessage{
 		Channel:  msg.Channel,
 		ChatID:   msg.ChatID,
 		Content:  response,
 		Metadata: make(map[string]any),
-	}
-
-	// 如果是飞书渠道，使用卡片格式发送 markdown 内容
-	if msg.Channel == "feishu" || msg.Channel == "lark" {
-		card := p.buildFeishuMarkdownCard(response)
-		outMsg.Content = card
-		outMsg.Metadata["msg_type"] = "interactive"
 	}
 
 	// 传递原始消息的 metadata 用于渠道特定功能
@@ -737,22 +730,4 @@ func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.I
 		zap.String("span_id", spanID),
 		zap.String("task_span_id", task.SpanID().String()),
 	)
-}
-
-// buildFeishuMarkdownCard 将 markdown 内容构建为飞书卡片格式
-func (p *MessageProcessor) buildFeishuMarkdownCard(content string) string {
-	card := map[string]interface{}{
-		"config": map[string]interface{}{
-			"wide_screen_mode": true,
-		},
-		"elements": []map[string]interface{}{
-			{
-				"tag":     "markdown",
-				"content": content,
-			},
-		},
-	}
-
-	cardJSON, _ := json.Marshal(card)
-	return string(cardJSON)
 }
