@@ -230,7 +230,7 @@ func initGateway(
 	}
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory())
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

@@ -20,6 +20,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -77,7 +78,7 @@ func main() {
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	// 8. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory())
 	logger.Info("消息处理器初始化完成")
 
 	// 8. 初始化应用服务
