@@ -97,4 +97,21 @@ export async function clearAllTasks(): Promise<{ message: string; deleted: numbe
   return response.data;
 }
 
+/**
+ * 内置工具信息
+ */
+export interface BuiltInTool {
+  name: string;
+  description: string;
+}
+
+/**
+ * 获取内置工具列表
+ * GET /api/v1/tools/builtin
+ */
+export async function listBuiltInTools(): Promise<BuiltInTool[]> {
+  const response = await apiClient.get<BuiltInTool[]>('/tools/builtin');
+  return response.data;
+}
+
 export default apiClient;

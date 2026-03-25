@@ -402,5 +402,15 @@ func SetupRoutesWithManagement(
 		}))
 	}
 
+	// 工具路由
+	toolsHandler := NewToolsHandler()
+	mux.HandleFunc("/api/v1/tools/builtin", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		toolsHandler.ListBuiltInTools(w, r)
+	})
+
 	return mux
 }

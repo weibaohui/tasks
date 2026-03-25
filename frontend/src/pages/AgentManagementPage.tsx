@@ -9,6 +9,7 @@ import { ApiOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, PlusOutlin
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
 import { listProviders } from '../api/providerApi';
 import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCPServers, listMCPTools, updateBinding } from '../api/mcpApi';
+import { listBuiltInTools, type BuiltInTool } from '../api/taskApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
@@ -238,6 +239,7 @@ export const AgentManagementPage: React.FC = () => {
   const [toolsForServer, setToolsForServer] = useState<MCPTool[]>([]);
   const [editingBinding, setEditingBinding] = useState<AgentMCPBinding | null>(null);
   const [toolsForm] = Form.useForm<{ all_tools: boolean; enabled_tools: string[] }>();
+  const [builtInTools, setBuiltInTools] = useState<BuiltInTool[]>([]);
 
   /**
    * 拉取 Agent 列表
@@ -686,6 +688,10 @@ export const AgentManagementPage: React.FC = () => {
     fetchProviders();
   }, [fetchProviders]);
 
+  useEffect(() => {
+    listBuiltInTools().then(setBuiltInTools).catch(console.error);
+  }, []);
+
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -816,7 +822,11 @@ export const AgentManagementPage: React.FC = () => {
                       <ToolOutlined /> 工具配置
                     </Divider>
                     <Form.Item label="Tools（可多选/自定义）" name="tools_list">
-                      <Select mode="tags" placeholder="输入后回车添加" />
+                      <Select
+                        mode="tags"
+                        placeholder="输入后回车添加"
+                        options={builtInTools.map((t) => ({ value: t.name, label: t.name }))}
+                      />
                     </Form.Item>
 
                     <Divider style={{ margin: '12px 0' }}>
