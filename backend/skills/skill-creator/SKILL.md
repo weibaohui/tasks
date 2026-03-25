@@ -47,7 +47,7 @@ Think of the agent as exploring a path: a narrow bridge with cliffs needs specif
 
 Every skill consists of a required SKILL.md file and optional bundled resources:
 
-```
+```text
 skill-name/
 ├── SKILL.md (required)
 │   ├── YAML frontmatter metadata (required)
@@ -139,7 +139,7 @@ Extract text with pdfplumber:
 - **Form filling**: See [FORMS.md](FORMS.md) for complete guide
 - **API reference**: See [REFERENCE.md](REFERENCE.md) for all methods
 - **Examples**: See [EXAMPLES.md](EXAMPLES.md) for common patterns
-```
+```text
 
 the agent loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
@@ -147,10 +147,10 @@ the agent loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
 For Skills with multiple domains, organize content by domain to avoid loading irrelevant context:
 
-```
+```text
 bigquery-skill/
 ├── SKILL.md (overview and navigation)
-└── reference/
+└── references/
     ├── finance.md (revenue, billing metrics)
     ├── sales.md (opportunities, pipeline)
     ├── product.md (API usage, features)
@@ -161,7 +161,7 @@ When a user asks about sales metrics, the agent only reads sales.md.
 
 Similarly, for skills supporting multiple frameworks or variants, organize by variant:
 
-```
+```text
 cloud-deploy/
 ├── SKILL.md (workflow + provider selection)
 └── references/
@@ -189,7 +189,7 @@ For simple edits, modify the XML directly.
 
 **For tracked changes**: See [REDLINING.md](REDLINING.md)
 **For OOXML details**: See [OOXML.md](OOXML.md)
-```
+```markdown
 
 the agent reads REDLINING.md or OOXML.md only when the user needs those features.
 
@@ -318,15 +318,15 @@ If you used `--examples`, delete any placeholder files that are not needed for t
 
 ##### Frontmatter
 
-Write the YAML frontmatter with `name` and `description`:
+Write the YAML frontmatter with these fields:
 
 - `name`: The skill name
 - `description`: This is the primary triggering mechanism for your skill, and helps the agent understand when to use the skill.
   - Include both what the Skill does and specific triggers/contexts for when to use it.
   - Include all "when to use" information here - Not in the body. The body is only loaded after triggering, so "When to Use This Skill" sections in the body are not helpful to the agent.
   - Example description for a `docx` skill: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. Use when the agent needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
-
-Do not include any other fields in YAML frontmatter.
+- `requires_bins` (optional): Comma-separated list of CLI binary names that must be available in PATH (e.g., `git,gh,curl`). The skill will be marked unavailable if any binary is missing.
+- `requires_env` (optional): Comma-separated list of environment variable names that must be set (e.g., `GITHUB_TOKEN,OPENAI_API_KEY`). The skill will be marked unavailable if any variable is missing.
 
 ##### Body
 

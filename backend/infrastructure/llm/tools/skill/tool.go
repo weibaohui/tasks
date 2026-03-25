@@ -67,6 +67,13 @@ func (t *DynamicTool) Run(ctx context.Context, argumentsInJSON string, opts ...t
 		Action string         `json:"action"`
 		Params map[string]any `json:"params"`
 	}
+
+	// 处理空或仅有空白字符的 argumentsInJSON
+	trimmed := strings.TrimSpace(argumentsInJSON)
+	if trimmed == "" || trimmed == "{}" {
+		return t.executeSkill("", nil)
+	}
+
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", err
 	}

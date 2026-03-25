@@ -18,6 +18,15 @@ type SkillHandler struct {
 	loader *skill.SkillsLoader
 }
 
+// SkillListItem 安全技能列表项（不包含内部路径）
+type SkillListItem struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Source      string `json:"source"`
+	Available   bool   `json:"available"`
+	Requires    string `json:"requires,omitempty"`
+}
+
 // NewSkillHandler 创建技能处理器
 func NewSkillHandler(loader *skill.SkillsLoader) *SkillHandler {
 	return &SkillHandler{
@@ -29,10 +38,22 @@ func NewSkillHandler(loader *skill.SkillsLoader) *SkillHandler {
 func (h *SkillHandler) ListSkills(w http.ResponseWriter, r *http.Request) {
 	skills := h.loader.ListSkills()
 
+	// 转换为安全列表项，不暴露内部路径
+	items := make([]SkillListItem, 0, len(skills))
+	for _, s := range skills {
+		items = append(items, SkillListItem{
+			Name:        s.Name,
+			Description: s.Description,
+			Source:      s.Source,
+			Available:   s.Available,
+			Requires:    s.Requires,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"items": skills,
-		"total": len(skills),
+		"items": items,
+		"total": len(items),
 	})
 }
 
@@ -44,7 +65,7 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content := h.loader.LoadSkill(name)
+	content := h.loader.LoadSkillContent(name)
 	if content == "" {
 		http.Error(w, "skill not found", http.StatusNotFound)
 		return
@@ -84,7 +105,7 @@ func (h *SkillHandler) getSkillSource(name string) string {
 func (h *SkillHandler) ListSkillsSimple(w http.ResponseWriter, r *http.Request) {
 	skills := h.loader.ListSkills()
 
-	var result []map[string]string
+	result := make([]map[string]string, 0)
 	for _, s := range skills {
 		result = append(result, map[string]string{
 			"name":        s.Name,

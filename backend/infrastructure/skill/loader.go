@@ -5,10 +5,13 @@
 package skill
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SkillLoaderFunc 技能加载函数类型
@@ -47,7 +50,7 @@ func (s *SkillsLoader) GetWorkspaceSkills() string {
 
 // ListSkills 列出所有可用技能
 func (s *SkillsLoader) ListSkills() []SkillInfo {
-	var skills []SkillInfo
+	skills := make([]SkillInfo, 0)
 
 	// 工作区技能（最高优先级）
 	if dir, err := os.ReadDir(s.workspaceSkills); err == nil {
@@ -124,6 +127,11 @@ func (s *SkillsLoader) ListSkills() []SkillInfo {
 
 // LoadSkill 加载技能内容
 func (s *SkillsLoader) LoadSkill(name string) string {
+	// 验证技能名称，防止路径遍历攻击
+	if err := validateSkillName(name); err != nil {
+		return ""
+	}
+
 	// 先检查工作区
 	workspaceSkill := filepath.Join(s.workspaceSkills, name, "SKILL.md")
 	if data, err := os.ReadFile(workspaceSkill); err == nil {
@@ -152,6 +160,10 @@ func (s *SkillsLoader) LoadSkillContent(name string) string {
 
 // GetSkillMetadata 获取技能元数据
 func (s *SkillsLoader) GetSkillMetadata(name string) map[string]string {
+	// 验证技能名称
+	if err := validateSkillName(name); err != nil {
+		return nil
+	}
 	content := s.LoadSkill(name)
 	if content == "" {
 		return nil
@@ -168,18 +180,20 @@ func (s *SkillsLoader) GetSkillMetadata(name string) map[string]string {
 		return nil
 	}
 
-	metadata := make(map[string]string)
-	for _, line := range strings.Split(match[1], "\n") {
-		if strings.Contains(line, ":") {
-			parts := strings.SplitN(line, ":", 2)
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			value = strings.Trim(value, "\"'")
-			metadata[key] = value
+	// 使用 yaml.v3 解析
+	var metadata map[string]interface{}
+	if err := yaml.Unmarshal([]byte(match[1]), &metadata); err != nil {
+		return nil
+	}
+
+	result := make(map[string]string)
+	for key, value := range metadata {
+		if str, ok := value.(string); ok {
+			result[key] = str
 		}
 	}
 
-	return metadata
+	return result
 }
 
 // CheckRequirements 检查技能需求是否满足
@@ -260,6 +274,26 @@ func (s *SkillsLoader) stripFrontmatter(content string) string {
 		content = re.ReplaceAllString(content, "")
 	}
 	return strings.TrimSpace(content)
+}
+
+// validateSkillName 验证技能名称，防止路径遍历攻击
+func validateSkillName(name string) error {
+	// 检查是否包含路径分隔符
+	if strings.Contains(name, string(filepath.Separator)) || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return fmt.Errorf("skill name contains invalid path characters: %s", name)
+	}
+
+	// 检查是否包含父目录引用
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("skill name contains parent directory reference: %s", name)
+	}
+
+	// 检查是否为空
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("skill name cannot be empty")
+	}
+
+	return nil
 }
 
 // detectBuiltinSkillsDir 解析内置技能目录
