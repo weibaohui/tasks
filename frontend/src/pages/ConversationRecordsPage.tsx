@@ -343,12 +343,14 @@ export const ConversationRecordsPage: React.FC = () => {
 
   // 计算链路统计
   const getTraceStats = (records: ConversationRecord[]) => {
-    const totalTokens = records.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
-    const startTime = records.length > 0 ? records[0].timestamp : null;
-    const endTime = records.length > 0 ? records[records.length - 1].timestamp : null;
+    // 按时间排序
+    const sorted = [...records].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const totalTokens = sorted.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
+    const startTime = sorted.length > 0 ? sorted[0].timestamp : null;
+    const endTime = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : null;
     const duration = startTime && endTime ? (endTime - startTime) : 0;
 
-    return { totalTokens, duration, count: records.length };
+    return { totalTokens, duration, count: sorted.length };
   };
 
   // 构建会话聊天消息
