@@ -257,3 +257,128 @@ func scanConversationRecord(scanner rowScanner) (*domain.ConversationRecord, err
 	})
 	return record, nil
 }
+
+func (r *SQLiteConversationRecordRepository) GetStats(ctx context.Context, filter domain.ConversationStatsFilter) (*domain.ConversationStats, error) {
+	queryBuilder := strings.Builder{}
+	queryBuilder.WriteString(`SELECT 1 FROM conversation_records WHERE 1=1`)
+	args := make([]interface{}, 0)
+
+	if filter.StartTime != nil {
+		queryBuilder.WriteString(` AND timestamp >= ?`)
+		args = append(args, filter.StartTime.UnixMilli())
+	}
+	if filter.EndTime != nil {
+		queryBuilder.WriteString(` AND timestamp <= ?`)
+		args = append(args, filter.EndTime.UnixMilli())
+	}
+	if len(filter.AgentCodes) > 0 {
+		queryBuilder.WriteString(` AND agent_code IN (?` + strings.Repeat(",?", len(filter.AgentCodes)-1) + `)`)
+		for _, code := range filter.AgentCodes {
+			args = append(args, code)
+		}
+	}
+	if len(filter.ChannelCodes) > 0 {
+		queryBuilder.WriteString(` AND channel_code IN (?` + strings.Repeat(",?", len(filter.ChannelCodes)-1) + `)`)
+		for _, code := range filter.ChannelCodes {
+			args = append(args, code)
+		}
+	}
+	if len(filter.Roles) > 0 {
+		queryBuilder.WriteString(` AND role IN (?` + strings.Repeat(",?", len(filter.Roles)-1) + `)`)
+		for _, role := range filter.Roles {
+			args = append(args, role)
+		}
+	}
+
+	whereClause := queryBuilder.String()
+	args = append(args, args...) // for count query
+
+	var totalPromptTokens, totalCompletionTokens, totalTokens, totalRecords, totalSessions int
+	var row *sql.Row
+
+	row = r.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(total_tokens), 0), COUNT(*) FROM conversation_records WHERE 1=1`+whereClause, args...)
+	err := row.Scan(&totalPromptTokens, &totalCompletionTokens, &totalTokens, &totalRecords)
+	if err != nil {
+		return nil, err
+	}
+
+	row = r.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT session_key) FROM conversation_records WHERE 1=1`+whereClause, args...)
+	err = row.Scan(&totalSessions)
+	if err != nil {
+		return nil, err
+	}
+
+	dailyTrendsQuery := `SELECT date(timestamp/1000, 'unixepoch') as date, COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(total_tokens), 0) FROM conversation_records WHERE 1=1` + whereClause + ` GROUP BY date(timestamp/1000, 'unixepoch') ORDER BY date`
+	dailyRows, err := r.db.QueryContext(ctx, dailyTrendsQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer dailyRows.Close()
+
+	dailyTrends := make([]domain.DailyTokenTrend, 0)
+	for dailyRows.Next() {
+		var dt domain.DailyTokenTrend
+		if err := dailyRows.Scan(&dt.Date, &dt.PromptTokens, &dt.CompletionTokens, &dt.TotalTokens); err != nil {
+			return nil, err
+		}
+		dailyTrends = append(dailyTrends, dt)
+	}
+
+	agentRows, err := r.db.QueryContext(ctx, `SELECT agent_code, COUNT(*), COALESCE(SUM(total_tokens), 0) FROM conversation_records WHERE 1=1`+whereClause+` GROUP BY agent_code`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer agentRows.Close()
+
+	agentDistribution := make([]domain.AgentStats, 0)
+	for agentRows.Next() {
+		var as domain.AgentStats
+		if err := agentRows.Scan(&as.Code, &as.Count, &as.Tokens); err != nil {
+			return nil, err
+		}
+		as.Name = as.Code
+		agentDistribution = append(agentDistribution, as)
+	}
+
+	channelRows, err := r.db.QueryContext(ctx, `SELECT channel_type, COUNT(*) FROM conversation_records WHERE 1=1`+whereClause+` GROUP BY channel_type`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer channelRows.Close()
+
+	channelDistribution := make([]domain.ChannelStats, 0)
+	for channelRows.Next() {
+		var cs domain.ChannelStats
+		if err := channelRows.Scan(&cs.Type, &cs.Count); err != nil {
+			return nil, err
+		}
+		channelDistribution = append(channelDistribution, cs)
+	}
+
+	roleRows, err := r.db.QueryContext(ctx, `SELECT role, COUNT(*) FROM conversation_records WHERE 1=1`+whereClause+` GROUP BY role`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer roleRows.Close()
+
+	roleDistribution := make([]domain.RoleStats, 0)
+	for roleRows.Next() {
+		var rs domain.RoleStats
+		if err := roleRows.Scan(&rs.Role, &rs.Count); err != nil {
+			return nil, err
+		}
+		roleDistribution = append(roleDistribution, rs)
+	}
+
+	return &domain.ConversationStats{
+		TotalPromptTokens:     totalPromptTokens,
+		TotalCompletionTokens: totalCompletionTokens,
+		TotalTokens:           totalTokens,
+		DailyTrends:           dailyTrends,
+		AgentDistribution:     agentDistribution,
+		ChannelDistribution:   channelDistribution,
+		RoleDistribution:      roleDistribution,
+		TotalSessions:         totalSessions,
+		TotalRecords:          totalRecords,
+	}, nil
+}

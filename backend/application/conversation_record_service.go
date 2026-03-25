@@ -45,6 +45,14 @@ type ListConversationRecordsQuery struct {
 	Offset      int
 }
 
+type GetConversationStatsQuery struct {
+	StartTime    *time.Time
+	EndTime      *time.Time
+	AgentCodes   []string
+	ChannelCodes []string
+	Roles        []string
+}
+
 type ConversationRecordApplicationService struct {
 	recordRepo   domain.ConversationRecordRepository
 	idGenerator  domain.IDGenerator
@@ -122,4 +130,15 @@ func (s *ConversationRecordApplicationService) ListRecords(ctx context.Context, 
 		Offset:      offset,
 	}
 	return s.recordRepo.List(ctx, filter)
+}
+
+func (s *ConversationRecordApplicationService) GetStats(ctx context.Context, query GetConversationStatsQuery) (*domain.ConversationStats, error) {
+	filter := domain.ConversationStatsFilter{
+		StartTime:    query.StartTime,
+		EndTime:      query.EndTime,
+		AgentCodes:   query.AgentCodes,
+		ChannelCodes: query.ChannelCodes,
+		Roles:        query.Roles,
+	}
+	return s.recordRepo.GetStats(ctx, filter)
 }

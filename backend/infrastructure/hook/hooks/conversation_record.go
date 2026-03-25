@@ -34,6 +34,7 @@ type ConversationRecordHookConfig struct {
 type ConversationRecordHook struct {
 	*domain.BaseHook
 	repo        domain.ConversationRecordRepository
+	agentRepo   domain.AgentRepository
 	idGenerator domain.IDGenerator
 	logger      *zap.Logger
 	config      *ConversationRecordHookConfig
@@ -42,6 +43,7 @@ type ConversationRecordHook struct {
 // NewConversationRecordHook 创建 ConversationRecordHook
 func NewConversationRecordHook(
 	repo domain.ConversationRecordRepository,
+	agentRepo domain.AgentRepository,
 	idGenerator domain.IDGenerator,
 	logger *zap.Logger,
 	config *ConversationRecordHookConfig,
@@ -53,6 +55,7 @@ func NewConversationRecordHook(
 	return &ConversationRecordHook{
 		BaseHook:    domain.NewBaseHook("conversation_record", 50, domain.HookTypeLLM),
 		repo:        repo,
+		agentRepo:   agentRepo,
 		idGenerator: idGenerator,
 		logger:      logger,
 		config:      config,
@@ -540,6 +543,13 @@ func (h *ConversationRecordHook) extractScope(ctx *domain.HookContext, callCtx *
 
 	if scope.ChannelType == "" && h.config.ChannelTypeExtractor != nil && ctx != nil {
 		scope.ChannelType = h.config.ChannelTypeExtractor(ctx)
+	}
+
+	// 如果 agent_code 有值但 user_code 为空，从 Agents 表查询 user_code
+	if scope.AgentCode != "" && scope.UserCode == "" && h.agentRepo != nil {
+		if agent, err := h.agentRepo.FindByAgentCode(context.Background(), domain.NewAgentCode(scope.AgentCode)); err == nil && agent != nil {
+			scope.UserCode = agent.UserCode()
+		}
 	}
 
 	return scope

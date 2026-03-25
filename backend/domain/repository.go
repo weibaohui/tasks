@@ -92,12 +92,57 @@ type ConversationRecordListFilter struct {
 	Offset      int
 }
 
+type ConversationStatsFilter struct {
+	StartTime    *time.Time
+	EndTime      *time.Time
+	AgentCodes   []string
+	ChannelCodes []string
+	Roles        []string
+}
+
+type DailyTokenTrend struct {
+	Date             string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+}
+
+type ConversationStats struct {
+	TotalPromptTokens     int
+	TotalCompletionTokens int
+	TotalTokens           int
+	DailyTrends           []DailyTokenTrend
+	AgentDistribution     []AgentStats
+	ChannelDistribution   []ChannelStats
+	RoleDistribution      []RoleStats
+	TotalSessions         int
+	TotalRecords          int
+}
+
+type AgentStats struct {
+	Code   string
+	Name   string
+	Count  int
+	Tokens int
+}
+
+type ChannelStats struct {
+	Type  string
+	Count int
+}
+
+type RoleStats struct {
+	Role  string
+	Count int
+}
+
 type ConversationRecordRepository interface {
 	Save(ctx context.Context, record *ConversationRecord) error
 	FindByID(ctx context.Context, id ConversationRecordID) (*ConversationRecord, error)
 	FindByTraceID(ctx context.Context, traceID string, limit int) ([]*ConversationRecord, error)
 	FindBySessionKey(ctx context.Context, sessionKey string, limit int) ([]*ConversationRecord, error)
 	List(ctx context.Context, filter ConversationRecordListFilter) ([]*ConversationRecord, error)
+	GetStats(ctx context.Context, filter ConversationStatsFilter) (*ConversationStats, error)
 }
 
 // EventStore 事件存储接口

@@ -50,7 +50,7 @@ func TestPreLLMCall_Basic(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -112,7 +112,7 @@ func TestPostLLMCall_Basic(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -184,7 +184,7 @@ func TestPreToolCall_Basic(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -243,7 +243,7 @@ func TestPostToolCall_Success(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -308,7 +308,7 @@ func TestOnToolError_Basic(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -386,7 +386,7 @@ func TestPreLLMCall_UserCodeAndAgentCodeFromExtractor(t *testing.T) {
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
 
 	// 配置 UserCodeExtractor 和 AgentCodeExtractor
-	hook := NewConversationRecordHook(repo, idGen, logger, &ConversationRecordHookConfig{
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, &ConversationRecordHookConfig{
 		SessionKeyExtractor: func(ctx *domain.HookContext) string {
 			return ctx.GetMetadata("session_key")
 		},
@@ -470,7 +470,7 @@ func TestPostLLMCall_UserCodeAndAgentCodeFromMetadata(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil) // 不配置 extractor，依赖 Metadata
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil) // 不配置 extractor，依赖 Metadata
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -548,7 +548,7 @@ func TestPreLLMCall_AllScopeFields(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
@@ -608,7 +608,7 @@ func TestPreToolCall_UserCodeAndAgentCodePropagation(t *testing.T) {
 	logger := zap.NewNop()
 	idGen := newMockIDGen()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
-	hook := NewConversationRecordHook(repo, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
 
 	ctx := context.Background()
 	hookCtx := domain.NewHookContext(ctx)
