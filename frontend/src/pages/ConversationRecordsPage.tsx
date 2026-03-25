@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
-  Drawer,
   Form,
   Input,
   Select,
@@ -26,7 +25,6 @@ import {
 } from 'antd';
 import {
   EyeOutlined,
-  BranchesOutlined,
   MessageOutlined,
   FilterOutlined,
   ClearOutlined,
@@ -37,7 +35,6 @@ import type { DataNode } from 'antd/es/tree';
 import dayjs from 'dayjs';
 import {
   listConversationRecords,
-  getConversationRecordsBySession,
   getConversationRecordsByTrace,
 } from '../api/conversationRecordApi';
 import type { ConversationRecord, ListConversationRecordsQuery } from '../types/conversationRecord';
@@ -105,21 +102,9 @@ interface TraceNode {
   duration?: number;
 }
 
-// 聊天消息类型
-interface ChatMessage {
-  id: string;
-  role: string;
-  content: string;
-  tokens: number;
-  timestamp: number;
-  agentName?: string;
-}
-
 export const ConversationRecordsPage: React.FC = () => {
   const [items, setItems] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [drawerSessionKey, setDrawerSessionKey] = useState<string | null>(null);
-  const [drawerRecords, setDrawerRecords] = useState<ConversationRecord[]>([]);
   const [form] = Form.useForm<QueryFormValues>();
   const [pagination, setPagination] = useState<TablePaginationConfig>({
     current: 1,
@@ -133,11 +118,6 @@ export const ConversationRecordsPage: React.FC = () => {
   const [traceRecords, setTraceRecords] = useState<ConversationRecord[]>([]);
   const [traceLoading, setTraceLoading] = useState(false);
   const [currentTraceId, setCurrentTraceId] = useState('');
-
-  // 会话对话状态
-  const [sessionVisible, setSessionVisible] = useState(false);
-  const [sessionRecords, setSessionRecords] = useState<ConversationRecord[]>([]);
-  const [sessionLoading, setSessionLoading] = useState(false);
 
   // 筛选面板状态
   const [filterVisible, setFilterVisible] = useState(false);
@@ -214,37 +194,6 @@ export const ConversationRecordsPage: React.FC = () => {
       message.error('获取链路数据失败');
     } finally {
       setTraceLoading(false);
-    }
-  }, []);
-
-  /**
-   * 获取会话对话数据
-   */
-  const fetchSessionRecords = useCallback(async (sessionKey: string) => {
-    setSessionLoading(true);
-    try {
-      const data = await getConversationRecordsBySession(sessionKey);
-      const sorted = [...data].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      setSessionRecords(sorted);
-    } catch (_error) {
-      message.error('获取对话数据失败');
-    } finally {
-      setSessionLoading(false);
-    }
-  }, []);
-
-  /**
-   * 打开会话抽屉
-   */
-  const openSessionDrawer = useCallback(async (sessionKey: string) => {
-    setDrawerSessionKey(sessionKey);
-    try {
-      const data = await getConversationRecordsBySession(sessionKey);
-      const sorted = [...data].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      setDrawerRecords(sorted);
-    } catch (_error) {
-      setDrawerRecords([]);
-      message.error('获取会话对话失败');
     }
   }, []);
 
@@ -397,30 +346,6 @@ export const ConversationRecordsPage: React.FC = () => {
   };
 
   // 构建会话聊天消息
-  const buildChatMessages = (records: ConversationRecord[]): ChatMessage[] => {
-    return records
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(r => ({
-        id: r.id,
-        role: r.role || '',
-        content: r.content || '',
-        tokens: r.total_tokens || 0,
-        timestamp: r.timestamp || 0,
-        agentName: r.agent_code,
-      }));
-  };
-
-  // 计算会话统计
-  const getSessionStats = (records: ConversationRecord[]) => {
-    const totalTokens = records.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
-    const messageCount = records.length;
-    const startTime = records.length > 0 ? records[0].timestamp : null;
-    const endTime = records.length > 0 ? records[records.length - 1].timestamp : null;
-    const duration = startTime && endTime ? (endTime - startTime) : 0;
-
-    return { totalTokens, messageCount, duration };
-  };
-
   const columns: ColumnsType<ConversationRecord> = useMemo(
     () => [
       {
@@ -509,19 +434,6 @@ export const ConversationRecordsPage: React.FC = () => {
                 type="text"
                 icon={<EyeOutlined />}
                 onClick={() => {
-                  if (record.session_key) {
-                    openSessionDrawer(record.session_key);
-                  } else {
-                    message.warning('该记录没有 session_key');
-                  }
-                }}
-              />
-            </Tooltip>
-            <Tooltip title="查看链路">
-              <Button
-                type="text"
-                icon={<BranchesOutlined />}
-                onClick={() => {
                   if (record.trace_id) {
                     setCurrentTraceId(record.trace_id);
                     fetchTraceRecords(record.trace_id);
@@ -537,11 +449,12 @@ export const ConversationRecordsPage: React.FC = () => {
                 type="text"
                 icon={<MessageOutlined />}
                 onClick={() => {
-                  if (record.session_key) {
-                    fetchSessionRecords(record.session_key);
-                    setSessionVisible(true);
+                  if (record.trace_id) {
+                    setCurrentTraceId(record.trace_id);
+                    fetchTraceRecords(record.trace_id);
+                    setTraceVisible(true);
                   } else {
-                    message.warning('该记录没有 session_key');
+                    message.warning('该记录没有 trace_id');
                   }
                 }}
               />
@@ -550,12 +463,10 @@ export const ConversationRecordsPage: React.FC = () => {
         ),
       },
     ],
-    [openSessionDrawer, fetchTraceRecords, fetchSessionRecords],
+    [fetchTraceRecords],
   );
 
   const traceStats = getTraceStats(traceRecords);
-  const sessionStats = getSessionStats(sessionRecords);
-  const chatMessages = buildChatMessages(sessionRecords);
   const traceTreeData = buildTraceTree(traceRecords);
 
   // Convert TraceNode[] to DataNode[] for Ant Design Tree
@@ -681,40 +592,6 @@ export const ConversationRecordsPage: React.FC = () => {
         />
       </Card>
 
-      {/* 详情抽屉 */}
-      <Drawer
-        title="会话对话展示"
-        open={!!drawerSessionKey}
-        onClose={() => {
-          setDrawerSessionKey(null);
-          setDrawerRecords([]);
-        }}
-        width={860}
-      >
-        <Space style={{ marginBottom: 12 }}>
-          <Tag color="blue">{drawerSessionKey || '-'}</Tag>
-          <Tag>共 {drawerRecords.length} 条</Tag>
-        </Space>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {drawerRecords.map((r) => (
-            <Card
-              key={r.id}
-              size="small"
-              title={
-                <Space>
-                  {toRoleTag(r.role)}
-                  <Tag>{r.event_type || '-'}</Tag>
-                  <Text type="secondary">{formatTime(r.timestamp)}</Text>
-                </Space>
-              }
-            >
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{r.content || ''}</pre>
-            </Card>
-          ))}
-          {drawerRecords.length === 0 ? <Text type="secondary">暂无对话记录</Text> : null}
-        </div>
-      </Drawer>
-
       {/* 链路可视化弹窗 */}
       <Modal
         title={`对话链路 - ${currentTraceId.slice(0, 12)}...`}
@@ -750,77 +627,6 @@ export const ConversationRecordsPage: React.FC = () => {
               defaultExpandAll
               style={{ background: '#fafafa', padding: 16, borderRadius: 8 }}
             />
-          </div>
-        )}
-      </Modal>
-
-      {/* 会话对话弹窗 */}
-      <Modal
-        title={`对话详情 - ${currentTraceId?.slice(0, 8) || ''}...`}
-        open={sessionVisible}
-        onCancel={() => {
-          setSessionVisible(false);
-          setSessionRecords([]);
-        }}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setSessionVisible(false)}>关闭</Button>
-          </div>
-        }
-        width={800}
-      >
-        {sessionLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
-        ) : sessionRecords.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
-        ) : (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Statistic title="消息数" value={sessionStats.messageCount} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="总Token" value={sessionStats.totalTokens} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="时长" value={`${Math.round(sessionStats.duration / 1000)}s`} />
-              </Col>
-            </Row>
-            <Divider />
-            <div style={{ maxHeight: 500, overflowY: 'auto', padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
-              {chatMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-                    marginBottom: 16,
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div
-                    style={{
-                      maxWidth: '70%',
-                      padding: '12px 16px',
-                      borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                      background: msg.role === 'user' ? '#1890ff' : '#fff',
-                      color: msg.role === 'user' ? '#fff' : '#333',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-                      {getRoleLabel(msg.role)} · {msg.tokens} tokens
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {msg.content}
-                    </div>
-                    <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
-                      {dayjs(msg.timestamp).format('HH:mm:ss')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </Modal>
