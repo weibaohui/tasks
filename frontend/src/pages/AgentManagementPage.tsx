@@ -689,7 +689,11 @@ export const AgentManagementPage: React.FC = () => {
   }, [fetchProviders]);
 
   useEffect(() => {
-    listBuiltInTools().then(setBuiltInTools).catch(console.error);
+    listBuiltInTools()
+      .then(setBuiltInTools)
+      .catch(() => {
+        message.error('获取内置工具列表失败');
+      });
   }, []);
 
   return (
@@ -825,7 +829,10 @@ export const AgentManagementPage: React.FC = () => {
                       <Select
                         mode="tags"
                         placeholder="输入后回车添加"
-                        options={builtInTools.map((t) => ({ value: t.name, label: t.name }))}
+                        options={builtInTools.map((t) => ({
+                          value: t.name,
+                          label: t.description ? `${t.name} - ${t.description}` : t.name,
+                        }))}
                       />
                     </Form.Item>
 
