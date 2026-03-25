@@ -18,6 +18,7 @@ import (
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
@@ -108,7 +109,8 @@ func main() {
 	// 6.1 初始化自动任务执行器
 	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
 	// 设置仓库用于动态 LLM 查找
-	autoExecutor.SetRepositories(agentRepo, providerRepo, channelRepo)
+	llmFactory := llm.NewLLMProviderFactory()
+	autoExecutor.SetRepositories(agentRepo, providerRepo, channelRepo, llmFactory)
 
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
 		// 所有任务都使用自动执行器，支持递归创建子任务

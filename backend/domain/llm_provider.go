@@ -43,6 +43,7 @@ type LLMProvider struct {
 	providerName          string
 	apiKey                string
 	apiBase               string
+	apiType               string // API 格式：openai, anthropic
 	extraHeaders          map[string]string
 	supportedModels       []ModelInfo
 	defaultModel          string
@@ -96,6 +97,7 @@ func (p *LLMProvider) ProviderKey() string             { return p.providerKey }
 func (p *LLMProvider) ProviderName() string            { return p.providerName }
 func (p *LLMProvider) APIKey() string                  { return p.apiKey }
 func (p *LLMProvider) APIBase() string                 { return p.apiBase }
+func (p *LLMProvider) APIType() string                 { return p.apiType }
 func (p *LLMProvider) ExtraHeaders() map[string]string { return cloneHeaders(p.extraHeaders) }
 func (p *LLMProvider) SupportedModels() []ModelInfo    { return cloneModels(p.supportedModels) }
 func (p *LLMProvider) DefaultModel() string            { return p.defaultModel }
@@ -163,6 +165,11 @@ func (p *LLMProvider) SetActive(isActive bool) {
 	p.updatedAt = time.Now()
 }
 
+func (p *LLMProvider) SetAPIType(apiType string) {
+	p.apiType = apiType
+	p.updatedAt = time.Now()
+}
+
 func (p *LLMProvider) HasEmbeddingModels() bool {
 	return len(p.embeddingModels) > 0
 }
@@ -174,6 +181,7 @@ type LLMProviderSnapshot struct {
 	ProviderName          string
 	APIKey                string
 	APIBase               string
+	APIType               string
 	ExtraHeaders          map[string]string
 	SupportedModels       []ModelInfo
 	DefaultModel          string
@@ -195,6 +203,7 @@ func (p *LLMProvider) ToSnapshot() LLMProviderSnapshot {
 		ProviderName:          p.providerName,
 		APIKey:                p.apiKey,
 		APIBase:               p.apiBase,
+		APIType:               p.apiType,
 		ExtraHeaders:          cloneHeaders(p.extraHeaders),
 		SupportedModels:       cloneModels(p.supportedModels),
 		DefaultModel:          p.defaultModel,
@@ -216,6 +225,7 @@ func (p *LLMProvider) FromSnapshot(snap LLMProviderSnapshot) {
 	p.providerName = snap.ProviderName
 	p.apiKey = snap.APIKey
 	p.apiBase = snap.APIBase
+	p.apiType = snap.APIType
 	p.extraHeaders = cloneHeaders(snap.ExtraHeaders)
 	p.supportedModels = cloneModels(snap.SupportedModels)
 	p.defaultModel = snap.DefaultModel
@@ -257,3 +267,47 @@ func cloneEmbeddingModels(in []EmbeddingModelInfo) []EmbeddingModelInfo {
 	copy(out, in)
 	return out
 }
+
+// LLMProviderConfig LLM Provider 配置，用于传递给基础设施层创建实际的 Provider
+type LLMProviderConfig struct {
+	ProviderType string // Provider 类型：openai, claude, ollama, minimax 等
+	APIType      string // API 格式：openai (OpenAI 兼容格式), anthropic (Claude 原生格式)
+	Model        string
+	APIKey       string
+	BaseURL      string
+	Temperature  float64
+	MaxTokens    int
+}
+
+// APIType 常量
+const (
+	APITypeOpenAI    = "openai"    // OpenAI 兼容格式
+	APITypeAnthropic = "anthropic" // Anthropic/Claude 原生格式
+)
+
+// NewLLMProviderConfig 创建 LLM Provider 配置
+func NewLLMProviderConfig(providerType, model, apiKey, baseURL string) *LLMProviderConfig {
+	return &LLMProviderConfig{
+		ProviderType: providerType,
+		APIType:      APITypeOpenAI, // 默认为 OpenAI 兼容格式
+		Model:        model,
+		APIKey:       apiKey,
+		BaseURL:      baseURL,
+		Temperature:  0.7,
+		MaxTokens:    4096,
+	}
+}
+
+// SetAPIType 设置 API 类型
+func (c *LLMProviderConfig) SetAPIType(apiType string) *LLMProviderConfig {
+	c.APIType = apiType
+	return c
+}
+
+func (c *LLMProviderConfig) ProviderKey() string     { return c.ProviderType }
+func (c *LLMProviderConfig) APIFormat() string       { return c.APIType }
+func (c *LLMProviderConfig) ModelName() string       { return c.Model }
+func (c *LLMProviderConfig) GetAPIKey() string      { return c.APIKey }
+func (c *LLMProviderConfig) GetBaseURL() string     { return c.BaseURL }
+func (c *LLMProviderConfig) GetTemperature() float64 { return c.Temperature }
+func (c *LLMProviderConfig) GetMaxTokens() int       { return c.MaxTokens }
