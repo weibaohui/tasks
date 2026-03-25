@@ -180,7 +180,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger)
+	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -356,6 +356,7 @@ func initGateway(
 	idGenerator *utils.NanoIDGenerator,
 	hookManager *hook.Manager,
 	logger *zap.Logger,
+	mcpService *application.MCPApplicationService,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,
@@ -370,7 +371,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory())
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

@@ -12,6 +12,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
+	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -50,10 +51,17 @@ func NewMessageProcessor(
 	idGenerator domain.IDGenerator,
 	hookManager *hook.Manager,
 	factory domain.LLMProviderFactory,
+	mcpService *application.MCPApplicationService,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注册 Bash 工具
 	registry.Register(tools.NewBashTool())
+
+	// 注册 MCP 工具
+	if mcpService != nil {
+		registry.Register(mcp.NewUseMCPTool(mcpService))
+		registry.Register(mcp.NewCallMCPTool(mcpService))
+	}
 
 	return &MessageProcessor{
 		bus:              messageBus,

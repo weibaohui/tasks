@@ -81,7 +81,7 @@ func main() {
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	// 8. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory())
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil)
 	logger.Info("消息处理器初始化完成")
 
 	// 8. 初始化应用服务
