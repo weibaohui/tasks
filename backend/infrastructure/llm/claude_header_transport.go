@@ -36,8 +36,8 @@ func (t *ClaudeHeaderTransport) RoundTrip(req *http.Request) (*http.Response, er
 		"X-Stainless-Timeout":                       "600",
 		"Anthropic-Version":                         "2023-06-01",
 		"Anthropic-Dangerous-Direct-Browser-Access": "true",
-		"Connection":                                 "keep-alive",
-		"Anthropic-Beta":                             "claude-code-20250219,interleaved-thinking-2025-05-14,prompt-caching-scope-2026-01-05,effort-2025-11-24",
+		"Connection":                                "keep-alive",
+		"Anthropic-Beta":                            "claude-code-20250219,interleaved-thinking-2025-05-14,prompt-caching-scope-2026-01-05,effort-2025-11-24",
 	}
 
 	for k, v := range headers {
