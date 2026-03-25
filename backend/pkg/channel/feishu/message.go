@@ -133,6 +133,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 			"channel_id":   c.config.ChannelID,
 			"channel_code": c.config.ChannelCode,
 			"agent_code":   c.config.AgentCode,
+			"user_code":    c.config.UserCode,
 		},
 	})
 

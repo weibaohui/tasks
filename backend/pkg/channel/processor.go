@@ -277,22 +277,18 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	if msg.Channel != "" {
 		callMetadata["channel_type"] = msg.Channel
 	}
-	if agent != nil {
-		callMetadata["agent_code"] = agent.AgentCode().String()
-	}
 	if msg.Metadata != nil {
 		if v, ok := msg.Metadata["channel_code"].(string); ok {
 			callMetadata["channel_code"] = v
 		}
-		if v, ok := msg.Metadata["user_code"].(string); ok {
-			callMetadata["user_code"] = v
-		}
-		if v, ok := msg.Metadata["agent_code"].(string); ok {
-			callMetadata["agent_code"] = v
-		}
 		if v, ok := msg.Metadata["chat_type"].(string); ok {
 			callMetadata["channel_type"] = v
 		}
+	}
+	// Agent 查询结果优先（覆盖 msg.Metadata 中的值）
+	if agent != nil {
+		callMetadata["agent_code"] = agent.AgentCode().String()
+		callMetadata["user_code"] = agent.UserCode()
 	}
 
 	// PreLLMCall hook

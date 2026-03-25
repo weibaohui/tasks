@@ -23,6 +23,7 @@ type Config struct {
 	ChannelCode       string   `json:"channel_code"` // Channel code from database
 	ChannelID         string   `json:"channel_id"`   // Channel ID from database
 	AgentCode         string   `json:"agent_code"`   // Bound agent code
+	UserCode          string   `json:"user_code"`    // Bound user code (from agent)
 }
 
 // Channel implements the Channel interface for Feishu

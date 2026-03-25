@@ -119,6 +119,9 @@ func (c *Channel) Config() map[string]interface{} {
 	if c.agentCode != "" {
 		m["agent_code"] = c.agentCode
 	}
+	if c.userCode != "" {
+		m["user_code"] = c.userCode
+	}
 	if c.code.String() != "" {
 		m["channel_code"] = c.code.String()
 	}

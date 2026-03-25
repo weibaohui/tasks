@@ -16,6 +16,7 @@ func Factory(config map[string]interface{}, messageBus *bus.MessageBus, logger *
 		ChannelCode:       getString(config, "channel_code"),
 		ChannelID:         getString(config, "channel_id"),
 		AgentCode:         getString(config, "agent_code"),
+		UserCode:          getString(config, "user_code"),
 	}
 
 	// Parse allow_from array
