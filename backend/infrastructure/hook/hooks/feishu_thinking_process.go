@@ -65,7 +65,7 @@ func (h *FeishuThinkingProcessHook) PreLLMCall(ctx *domain.HookContext, callCtx 
 	}
 
 	// 发送开始思考消息
-	h.sendThinkingMessage(ctx, "🤔 开始思考", "🤔 **开始思考**...")
+	h.sendThinkingMessage(ctx, "🤔 开始思考", "**开始思考**...")
 
 	return callCtx, nil
 }
@@ -81,7 +81,7 @@ func (h *FeishuThinkingProcessHook) PostLLMCall(ctx *domain.HookContext, callCtx
 	if resp.ContainsToolCalls {
 		toolNames := h.extractToolNames(resp.RawResponse)
 		if len(toolNames) > 0 {
-			msg := fmt.Sprintf("🤖 **决定调用工具**: %s", strings.Join(toolNames, ", "))
+			msg := fmt.Sprintf("**决策**: 调用 %s", strings.Join(toolNames, ", "))
 			h.sendThinkingMessage(ctx, "🤖 工具决策", msg)
 		}
 	}
@@ -103,7 +103,7 @@ func (h *FeishuThinkingProcessHook) PreToolCall(ctx *domain.HookContext, callCtx
 		args = args[:200] + "..."
 	}
 
-	msg := fmt.Sprintf("🔧 **调用工具**: `%s`\n```json\n%s\n```", callCtx.ToolName, args)
+	msg := fmt.Sprintf("```json\n%s\n```", args)
 	title := fmt.Sprintf("🔧 执行工具: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, msg)
 
@@ -145,8 +145,8 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 	if !result.Success {
 		statusIcon = "❌"
 	}
-	msg := fmt.Sprintf("%s **工具完成**: `%s` (%dms)\n```\n%s\n```",
-		statusIcon, callCtx.ToolName, result.Duration.Milliseconds(), output)
+	msg := fmt.Sprintf("**耗时**: %dms\n```\n%s\n```",
+		result.Duration.Milliseconds(), output)
 	title := fmt.Sprintf("%s 工具完成: %s", statusIcon, callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, msg)
 
@@ -160,7 +160,7 @@ func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx
 		return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 	}
 
-	msg := fmt.Sprintf("❌ **工具错误**: `%s`\n```\n%s\n```", callCtx.ToolName, err.Error())
+	msg := fmt.Sprintf("```\n%s\n```", err.Error())
 	title := fmt.Sprintf("❌ 工具错误: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, msg)
 
