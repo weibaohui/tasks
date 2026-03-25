@@ -65,7 +65,7 @@ func (h *FeishuThinkingProcessHook) PreLLMCall(ctx *domain.HookContext, callCtx 
 	}
 
 	// 发送开始思考消息
-	h.sendThinkingMessage(ctx, "🤔 **开始思考**...")
+	h.sendThinkingMessage(ctx, "🤔 开始思考", "🤔 **开始思考**...")
 
 	return callCtx, nil
 }
@@ -82,7 +82,7 @@ func (h *FeishuThinkingProcessHook) PostLLMCall(ctx *domain.HookContext, callCtx
 		toolNames := h.extractToolNames(resp.RawResponse)
 		if len(toolNames) > 0 {
 			msg := fmt.Sprintf("🤖 **决定调用工具**: %s", strings.Join(toolNames, ", "))
-			h.sendThinkingMessage(ctx, msg)
+			h.sendThinkingMessage(ctx, "🤖 工具决策", msg)
 		}
 	}
 
@@ -104,7 +104,8 @@ func (h *FeishuThinkingProcessHook) PreToolCall(ctx *domain.HookContext, callCtx
 	}
 
 	msg := fmt.Sprintf("🔧 **调用工具**: `%s`\n```json\n%s\n```", callCtx.ToolName, args)
-	h.sendThinkingMessage(ctx, msg)
+	title := fmt.Sprintf("🔧 执行工具: %s", callCtx.ToolName)
+	h.sendThinkingMessage(ctx, title, msg)
 
 	return callCtx, nil
 }
@@ -116,18 +117,14 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 		return result, nil
 	}
 
-	var status string
-	var output string
-
+	output := ""
 	if result.Success {
-		status = "✅"
 		if out, ok := result.Output.(string); ok {
 			output = out
 		} else {
 			output = fmt.Sprintf("%v", result.Output)
 		}
 	} else {
-		status = "❌"
 		if result.Error != nil {
 			output = result.Error.Error()
 		} else {
@@ -144,9 +141,14 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 		output = "(无输出)"
 	}
 
+	statusIcon := "✅"
+	if !result.Success {
+		statusIcon = "❌"
+	}
 	msg := fmt.Sprintf("%s **工具完成**: `%s` (%dms)\n```\n%s\n```",
-		status, callCtx.ToolName, result.Duration.Milliseconds(), output)
-	h.sendThinkingMessage(ctx, msg)
+		statusIcon, callCtx.ToolName, result.Duration.Milliseconds(), output)
+	title := fmt.Sprintf("%s 工具完成: %s", statusIcon, callCtx.ToolName)
+	h.sendThinkingMessage(ctx, title, msg)
 
 	return result, nil
 }
@@ -159,7 +161,8 @@ func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx
 	}
 
 	msg := fmt.Sprintf("❌ **工具错误**: `%s`\n```\n%s\n```", callCtx.ToolName, err.Error())
-	h.sendThinkingMessage(ctx, msg)
+	title := fmt.Sprintf("❌ 工具错误: %s", callCtx.ToolName)
+	h.sendThinkingMessage(ctx, title, msg)
 
 	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 }
@@ -262,7 +265,7 @@ func (h *FeishuThinkingProcessHook) getSessionInfo(ctx *domain.HookContext) *ses
 }
 
 // sendThinkingMessage 发送思考过程消息到飞书（使用卡片格式）
-func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext, content string) {
+func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext, title, content string) {
 	if h.messageBus == nil || ctx == nil {
 		return
 	}
@@ -297,7 +300,7 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 	}
 
 	// 构建卡片内容
-	cardContent := h.buildThinkingCard(content)
+	cardContent := h.buildThinkingCard(title, content)
 
 	contentPreview := content
 	if len(contentPreview) > 100 {
@@ -306,6 +309,7 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 	h.logger.Debug("[ThinkingProcess] 发送思考卡片",
 		zap.String("channel", info.Channel),
 		zap.String("chat_id", chatID),
+		zap.String("title", title),
 		zap.String("content_preview", contentPreview),
 	)
 
@@ -337,9 +341,10 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 }
 
 // buildThinkingCard 构建飞书思考过程卡片
-func (h *FeishuThinkingProcessHook) buildThinkingCard(content string) string {
+func (h *FeishuThinkingProcessHook) buildThinkingCard(title, content string) string {
 	// 转义内容中的特殊字符
 	content = escapeJSON(content)
+	title = escapeJSON(title)
 
 	// 构建飞书交互式卡片
 	card := map[string]interface{}{
@@ -349,7 +354,7 @@ func (h *FeishuThinkingProcessHook) buildThinkingCard(content string) string {
 		"header": map[string]interface{}{
 			"template": "blue",
 			"title": map[string]interface{}{
-				"content": "🤔 思考过程",
+				"content": title,
 				"tag":     "plain_text",
 			},
 		},
