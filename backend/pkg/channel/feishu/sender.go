@@ -33,12 +33,28 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 		}
 	}
 
+	// 判断消息类型：text 或 interactive(卡片)
+	msgType := "text"
+	var contentStr string
+	if msg.Metadata != nil {
+		if mt, ok := msg.Metadata["msg_type"].(string); ok && mt == "interactive" {
+			msgType = "interactive"
+			// 卡片内容直接使用 Content（已经是 JSON 格式）
+			contentStr = content
+		}
+	}
+
+	// 如果不是卡片消息，使用文本格式
+	if msgType == "text" {
+		contentStr = fmt.Sprintf(`{"text":"%s"}`, escapeJSONString(content))
+	}
+
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(receiveIDType).
 		Body(&larkim.CreateMessageReqBody{
 			ReceiveId: &receiveID,
-			MsgType:   ptrString("text"),
-			Content:   ptrRawMessage(fmt.Sprintf(`{"text":"%s"}`, escapeJSONString(content))),
+			MsgType:   ptrString(msgType),
+			Content:   ptrRawMessage(contentStr),
 		}).Build()
 
 	resp, err := c.client.Im.V1.Message.Create(c.ctx, req)
@@ -55,6 +71,7 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 			zap.String("receive_id", receiveID),
 			zap.String("receive_id_type", receiveIDType),
 			zap.String("message_id", *resp.Data.MessageId),
+			zap.String("msg_type", msgType),
 		)
 	}
 

@@ -261,7 +261,7 @@ func (h *FeishuThinkingProcessHook) getSessionInfo(ctx *domain.HookContext) *ses
 	return info
 }
 
-// sendThinkingMessage 发送思考过程消息到飞书
+// sendThinkingMessage 发送思考过程消息到飞书（使用卡片格式）
 func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext, content string) {
 	if h.messageBus == nil || ctx == nil {
 		return
@@ -296,11 +296,14 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 		return
 	}
 
+	// 构建卡片内容
+	cardContent := h.buildThinkingCard(content)
+
 	contentPreview := content
 	if len(contentPreview) > 100 {
 		contentPreview = contentPreview[:100] + "..."
 	}
-	h.logger.Debug("[ThinkingProcess] 发送思考消息",
+	h.logger.Debug("[ThinkingProcess] 发送思考卡片",
 		zap.String("channel", info.Channel),
 		zap.String("chat_id", chatID),
 		zap.String("content_preview", contentPreview),
@@ -309,9 +312,10 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 	msg := &bus.OutboundMessage{
 		Channel: info.Channel,
 		ChatID:  chatID,
-		Content: content,
+		Content: cardContent,
 		Metadata: map[string]any{
 			"type":            "thinking_process",
+			"msg_type":        "interactive", // 标记为卡片消息
 			"agent_code":      info.AgentCode,
 			"user_code":       info.UserCode,
 			"channel_code":    info.ChannelCode,
@@ -330,6 +334,44 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 		}()
 		h.messageBus.PublishOutbound(msg)
 	}()
+}
+
+// buildThinkingCard 构建飞书思考过程卡片
+func (h *FeishuThinkingProcessHook) buildThinkingCard(content string) string {
+	// 转义内容中的特殊字符
+	content = escapeJSON(content)
+
+	// 构建飞书交互式卡片
+	card := map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"template": "blue",
+			"title": map[string]interface{}{
+				"content": "🤔 思考过程",
+				"tag":     "plain_text",
+			},
+		},
+		"elements": []map[string]interface{}{
+			{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"content": content,
+					"tag":     "lark_md",
+				},
+			},
+		},
+	}
+
+	cardJSON, _ := json.Marshal(card)
+	return string(cardJSON)
+}
+
+// escapeJSON 转义 JSON 字符串中的特殊字符
+func escapeJSON(s string) string {
+	result, _ := json.Marshal(s)
+	return string(result)[1 : len(string(result))-1]
 }
 
 // extractToolNames 从 RawResponse 提取工具名称
