@@ -53,7 +53,7 @@ func (r *SQLiteConversationRecordRepository) Save(ctx context.Context, record *d
 		snap.SpanID,
 		snap.ParentSpanID,
 		snap.EventType,
-		snap.Timestamp.Unix(),
+		snap.Timestamp.UnixMilli(),
 		snap.SessionKey,
 		snap.Role,
 		snap.Content,
@@ -66,7 +66,7 @@ func (r *SQLiteConversationRecordRepository) Save(ctx context.Context, record *d
 		snap.AgentCode,
 		snap.ChannelCode,
 		snap.ChannelType,
-		snap.CreatedAt.Unix(),
+		snap.CreatedAt.UnixMilli(),
 	)
 	return err
 }
@@ -240,7 +240,7 @@ func scanConversationRecord(scanner rowScanner) (*domain.ConversationRecord, err
 		SpanID:           spanID,
 		ParentSpanID:     parentSpanID,
 		EventType:        eventType,
-		Timestamp:        time.Unix(timestampUnix, 0),
+		Timestamp:        time.UnixMilli(timestampUnix),
 		SessionKey:       sessionKey,
 		Role:             role,
 		Content:          content,
@@ -253,7 +253,7 @@ func scanConversationRecord(scanner rowScanner) (*domain.ConversationRecord, err
 		AgentCode:        agentCode,
 		ChannelCode:      channelCode,
 		ChannelType:      channelType,
-		CreatedAt:        time.Unix(createdAtUnix, 0),
+		CreatedAt:        time.UnixMilli(createdAtUnix),
 	})
 	return record, nil
 }

@@ -2,7 +2,7 @@
  * Dashboard 页面
  * 显示任务统计概览和对话用量分析
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Row, Col, Card, Statistic, DatePicker, Button, Space, Typography, message } from 'antd';
 import {
   BarChart,
@@ -43,12 +43,7 @@ export const Dashboard: React.FC = () => {
     dayjs(),
   ]);
 
-  useEffect(() => {
-    fetchTasks();
-    fetchStats();
-  }, [fetchTasks]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setStatsLoading(true);
     try {
       const [start, end] = dateRange;
@@ -62,7 +57,12 @@ export const Dashboard: React.FC = () => {
     } finally {
       setStatsLoading(false);
     }
-  };
+  }, [dateRange]);
+
+  useEffect(() => {
+    fetchTasks();
+    fetchStats();
+  }, [fetchTasks, fetchStats]);
 
   // 任务统计计算
   const rootTasks = tasks.filter((t) => !t.parent_id);

@@ -279,7 +279,10 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateAgentMCPBindingColumn(db); err != nil {
 		return err
 	}
-	return migrateLLMProviderTypeColumn(db)
+	if err := migrateLLMProviderTypeColumn(db); err != nil {
+		return err
+	}
+	return migrateConversationRecordsTimestampToMillis(db)
 }
 
 func migrateAgentMCPBindingColumn(db *sql.DB) error {
@@ -310,6 +313,43 @@ func migrateLLMProviderTypeColumn(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateConversationRecordsTimestampToMillis 将 conversation_records 表中的秒级时间戳转换为毫秒级
+// 通过判断时间戳数值大小来区分：秒级时间戳约10位，毫秒级约13位
+func migrateConversationRecordsTimestampToMillis(db *sql.DB) error {
+	// 检查 timestamp 列的数据范围
+	// 如果最大值小于 1e12（约 2001-09-09，秒级），说明是秒级时间戳
+	var maxTimestamp sql.NullInt64
+	var maxCreatedAt sql.NullInt64
+
+	err := db.QueryRow(`SELECT MAX(timestamp), MAX(created_at) FROM conversation_records`).Scan(&maxTimestamp, &maxCreatedAt)
+	if err != nil {
+		return err
+	}
+
+	// 如果没有数据，直接返回
+	if !maxTimestamp.Valid && !maxCreatedAt.Valid {
+		return nil
+	}
+
+	// 判断是否为秒级时间戳（小于 1e12 认为是秒级）
+	isSeconds := false
+	if maxTimestamp.Valid && maxTimestamp.Int64 > 0 && maxTimestamp.Int64 < 1e12 {
+		isSeconds = true
+	}
+	if maxCreatedAt.Valid && maxCreatedAt.Int64 > 0 && maxCreatedAt.Int64 < 1e12 {
+		isSeconds = true
+	}
+
+	if !isSeconds {
+		// 已经是毫秒级或没有需要转换的数据
+		return nil
+	}
+
+	// 执行转换：秒级 * 1000 = 毫秒级
+	_, err = db.Exec(`UPDATE conversation_records SET timestamp = timestamp * 1000, created_at = created_at * 1000 WHERE timestamp < 1000000000000`)
+	return err
 }
 
 func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {

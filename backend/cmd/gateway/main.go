@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -37,9 +38,10 @@ func main() {
 	logger.Info("启动渠道网关服务...")
 
 	// 1. 初始化数据库
-	db, err := sql.Open("sqlite3", "./tasks.db")
+	dbPath := resolveDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		logger.Fatal("Failed to open database", zap.Error(err))
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
 	}
 	defer db.Close()
 
@@ -252,4 +254,20 @@ func runMessageLoop(
 			messageBus.PublishOutbound(outMsg)
 		}
 	}
+}
+
+// resolveDBPath 解析数据库文件路径，支持通过环境变量配置，默认在后端目录下
+func resolveDBPath() string {
+	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
+		return p
+	}
+	if p := os.Getenv("DB_PATH"); p != "" {
+		return p
+	}
+	// 如果当前目录存在 backend 目录，优先写入 backend/tasks.db（适配从仓库根目录执行）
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend/tasks.db")
+	}
+	// 否则使用当前工作目录
+	return filepath.FromSlash("./tasks.db")
 }
