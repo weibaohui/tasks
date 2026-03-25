@@ -258,7 +258,14 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 				channelCode = v
 			}
 		}
-		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, channelCode, msg.Channel)
+		// channel_type 优先从 msg.Metadata["chat_type"] 获取，否则使用 msg.Channel
+		channelType := msg.Channel
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["chat_type"].(string); ok && v != "" {
+				channelType = v
+			}
+		}
+		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, channelCode, channelType)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
 		einoProvider.SetToolExecutionObserver(toolHookAdapter) // 设置 observer 以监听工具执行
 	}
