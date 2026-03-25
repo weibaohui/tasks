@@ -81,10 +81,16 @@ func (f *LLMProviderFactoryImpl) createClaudeProvider(config *domain.LLMProvider
 		baseURL = "https://api.anthropic.com"
 	}
 
+	maxTokens := config.GetMaxTokens()
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+
 	claudeConfig := &claude.Config{
 		APIKey:     config.GetAPIKey(),
 		Model:      config.ModelName(),
 		BaseURL:    &baseURL,
+		MaxTokens:  maxTokens,
 		HTTPClient: NewClaudeHTTPClient(), // 使用 Claude Code 伪装 HTTP Client
 	}
 
