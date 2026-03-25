@@ -90,7 +90,7 @@ func main() {
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
 	// 注册对话记录 Hook
-	convRecordHook := hooks.NewConversationRecordHook(conversationRecordRepo, agentRepo, idGenerator, logger, &hooks.ConversationRecordHookConfig{
+	convRecordHook := hooks.NewConversationRecordHook(conversationRecordRepo, idGenerator, logger, &hooks.ConversationRecordHookConfig{
 		SessionKeyExtractor: func(ctx *domain.HookContext) string {
 			return ctx.GetMetadata("session_key")
 		},

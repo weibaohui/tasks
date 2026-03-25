@@ -48,7 +48,7 @@ func TestE2E_TraceTree(t *testing.T) {
 	logger := zap.NewNop()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
 	idGen := &mockIDGenE2E{}
-	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, idGen, logger, nil)
 
 	ctx := context.Background()
 	traceID := "trace-e2e-simple"
@@ -264,7 +264,7 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	logger := zap.NewNop()
 	repo := persistence.NewSQLiteConversationRecordRepository(db)
 	idGen := &mockIDGenE2E{}
-	hook := NewConversationRecordHook(repo, nil, idGen, logger, nil)
+	hook := NewConversationRecordHook(repo, idGen, logger, nil)
 
 	ctx := context.Background()
 	traceID := "trace-llm-with-tools"
