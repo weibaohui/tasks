@@ -118,7 +118,7 @@ func TestE2E_TraceTree(t *testing.T) {
 	// PostLLMCall 通过 hookCtx2.WithValue(spanKey, spanID) 存储了 llmResponseSpanID
 	// PreToolCall 需要从 hookCtx2 传递到 hookCtx3，这里模拟传递
 	hookCtx3 = hookCtx3.WithValue(spanKey, llmResponseSpanID) // 关键：传递 llmResponseSpanID
-	hookCtx3 = hookCtx3.WithValue(ScopeKey, scopeInfo{
+	hookCtx3 = hookCtx3.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-e2e",
 		UserCode:    "user-e2e",
 		AgentCode:   "agent-e2e",
@@ -145,7 +145,7 @@ func TestE2E_TraceTree(t *testing.T) {
 	ctx4 = trace.WithSpanID(ctx4, "span-4")
 	ctx4 = trace.WithParentSpanID(ctx4, "span-3") // parent 指向 tool_call
 	hookCtx4 := domain.NewHookContext(ctx4)
-	hookCtx4 = hookCtx4.WithValue(ScopeKey, scopeInfo{
+	hookCtx4 = hookCtx4.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-e2e",
 		UserCode:    "user-e2e",
 		AgentCode:   "agent-e2e",
@@ -305,7 +305,7 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	hookCtx2 := domain.NewHookContext(ctx2)
 	hookCtx2 = hookCtx2.WithValue(spanKey, "span-1")
 	// 传递 scope
-	hookCtx2 = hookCtx2.WithValue(ScopeKey, scopeInfo{
+	hookCtx2 = hookCtx2.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
 		UserCode:    "user-tools",
 		AgentCode:   "agent-tools",
@@ -337,7 +337,7 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	ctx3 = trace.WithSpanID(ctx3, "span-3")
 	hookCtx3 := domain.NewHookContext(ctx3)
 	hookCtx3 = hookCtx3.WithValue(spanKey, llmWithToolsSpan)
-	hookCtx3 = hookCtx3.WithValue(ScopeKey, scopeInfo{
+	hookCtx3 = hookCtx3.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
 		UserCode:    "user-tools",
 		AgentCode:   "agent-tools",
@@ -365,7 +365,7 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	ctx4 = trace.WithSpanID(ctx4, "span-4")
 	hookCtx4 := domain.NewHookContext(ctx4)
 	hookCtx4 = hookCtx4.WithValue(spanKey, toolCallSpanID)
-	hookCtx4 = hookCtx4.WithValue(ScopeKey, scopeInfo{
+	hookCtx4 = hookCtx4.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
 		UserCode:    "user-tools",
 		AgentCode:   "agent-tools",

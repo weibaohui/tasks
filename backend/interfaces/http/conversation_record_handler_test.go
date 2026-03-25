@@ -105,6 +105,20 @@ func (m *mockConvRecordRepo) List(ctx context.Context, filter domain.Conversatio
 	return result, nil
 }
 
+func (m *mockConvRecordRepo) GetStats(ctx context.Context, filter domain.ConversationStatsFilter) (*domain.ConversationStats, error) {
+	return &domain.ConversationStats{
+		TotalPromptTokens:     0,
+		TotalCompletionTokens: 0,
+		TotalTokens:           0,
+		DailyTrends:           []domain.DailyTokenTrend{},
+		AgentDistribution:     []domain.AgentStats{},
+		ChannelDistribution:   []domain.ChannelStats{},
+		RoleDistribution:      []domain.RoleStats{},
+		TotalSessions:         0,
+		TotalRecords:          len(m.records),
+	}, nil
+}
+
 type mockConvRecordIDGen struct {
 	count int
 }

@@ -22,15 +22,6 @@ type contextKey string
 
 const spanKey contextKey = "conversation_span"
 
-// scopeInfo 存储对话范围信息
-type scopeInfo struct {
-	SessionKey  string
-	UserCode    string
-	AgentCode   string
-	ChannelCode string
-	ChannelType string
-}
-
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
 	bus              *bus.MessageBus
@@ -537,7 +528,7 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 
 	// 将 tool_call 的 span_id 和 scope 设置到 ctx 中，供 PostToolCall 使用
 	ctxWithSpan := a.hookCtx.WithValue(spanKey, a.spanID)
-	ctxWithSpan = ctxWithSpan.WithValue(hooks.ScopeKey, scopeInfo{
+	ctxWithSpan = ctxWithSpan.WithValue(hooks.ScopeKey, hooks.ScopeInfo{
 		SessionKey:  a.sessionKey,
 		UserCode:    a.userCode,
 		AgentCode:   a.agentCode,
@@ -594,7 +585,7 @@ func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, o
 
 	// 调用 PostToolCall hooks - 使用带有 scope 信息的 ctx
 	if a.processor.hookManager != nil {
-		ctxWithScope := a.hookCtx.WithValue(hooks.ScopeKey, scopeInfo{
+		ctxWithScope := a.hookCtx.WithValue(hooks.ScopeKey, hooks.ScopeInfo{
 			SessionKey:  a.sessionKey,
 			UserCode:    a.userCode,
 			AgentCode:   a.agentCode,

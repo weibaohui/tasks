@@ -69,8 +69,8 @@ const (
 	deferredResponseKey contextKey = "conversation_deferred_response"
 )
 
-// scopeInfo 存储对话范围信息
-type scopeInfo struct {
+// ScopeInfo 存储对话范围信息 - 导出供其他包使用
+type ScopeInfo struct {
 	SessionKey  string
 	UserCode    string
 	AgentCode   string
@@ -85,7 +85,7 @@ type deferredLLMResponse struct {
 	ParentSpanID string
 	Content    string
 	Usage      domain.Usage
-	Scope      scopeInfo
+	Scope      ScopeInfo
 }
 
 // PreLLMCall 记录 LLM 调用前的用户输入
@@ -233,7 +233,7 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_call 的 span
 			Content:      resp.Content,
 			Usage:        resp.Usage,
-			Scope: scopeInfo{
+			Scope: ScopeInfo{
 				SessionKey:  sessionKey,
 				UserCode:    userCode,
 				AgentCode:   agentCode,
@@ -307,7 +307,7 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 设置范围
-	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
+	if scope, ok := ctx.Get(ScopeKey).(ScopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
@@ -371,7 +371,7 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 	}
 
 	// 设置范围 - 从 ScopeKey 获取
-	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
+	if scope, ok := ctx.Get(ScopeKey).(ScopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
@@ -418,7 +418,7 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 设置范围
-	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
+	if scope, ok := ctx.Get(ScopeKey).(ScopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
@@ -507,8 +507,8 @@ func (h *ConversationRecordHook) createRecord(traceID, spanID, parentSpanID, eve
 }
 
 // extractScope 从 context 和 callCtx 提取范围信息
-func (h *ConversationRecordHook) extractScope(ctx *domain.HookContext, callCtx *domain.LLMCallContext) scopeInfo {
-	scope := scopeInfo{}
+func (h *ConversationRecordHook) extractScope(ctx *domain.HookContext, callCtx *domain.LLMCallContext) ScopeInfo {
+	scope := ScopeInfo{}
 
 	// 优先从 callCtx.Metadata 提取（由 processor.go 直接设置）
 	if callCtx != nil && callCtx.Metadata != nil {
