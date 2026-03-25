@@ -37,6 +37,7 @@ type MessageProcessor struct {
 	toolRegistry     *llm.ToolRegistry
 	hookManager      *hook.Manager
 	factory          domain.LLMProviderFactory
+	mcpService      *application.MCPApplicationService
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -76,6 +77,7 @@ func NewMessageProcessor(
 		toolRegistry:     registry,
 		hookManager:      hookManager,
 		factory:          factory,
+		mcpService:      mcpService,
 	}
 }
 
@@ -226,7 +228,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	// 构建对话历史 prompt
-	prompt := p.buildPrompt(session, content)
+	prompt := p.buildPrompt(session, content, agent)
 
 	// 开始 LLM 调用 span
 	ctx, llmSpanID := trace.StartSpan(ctx)
@@ -450,11 +452,20 @@ func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain
 }
 
 // buildPrompt 构建 LLM prompt
-func (p *MessageProcessor) buildPrompt(session *Session, userInput string) string {
+func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent *domain.Agent) string {
 	var sb strings.Builder
 
 	// 添加系统提示
 	sb.WriteString("你是一个智能助手，请根据对话历史回答用户的问题。\n\n")
+
+	// 添加 MCP Server 列表（如果有绑定）
+	if agent != nil && p.mcpService != nil {
+		mcpInfo := p.getAgentMCPServers(agent)
+		if mcpInfo != "" {
+			sb.WriteString(mcpInfo)
+			sb.WriteString("\n")
+		}
+	}
 
 	// 添加对话历史
 	messages := session.Messages()
@@ -471,6 +482,53 @@ func (p *MessageProcessor) buildPrompt(session *Session, userInput string) strin
 
 	// 添加当前用户输入
 	sb.WriteString(fmt.Sprintf("用户: %s\n助手:", userInput))
+
+	return sb.String()
+}
+
+// getAgentMCPServers 获取 Agent 绑定的 MCP Server 列表，生成提示词
+func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
+	if agent == nil {
+		return ""
+	}
+
+	ctx := context.Background()
+	bindings, err := p.mcpService.ListAgentBindings(ctx, agent.ID())
+	if err != nil || len(bindings) == 0 {
+		return ""
+	}
+
+	var servers []string
+	for _, binding := range bindings {
+		if !binding.IsActive() {
+			continue
+		}
+		server, err := p.mcpService.GetServer(ctx, binding.MCPServerID())
+		if err != nil || server == nil {
+			continue
+		}
+		if server.Status() != "active" {
+			continue
+		}
+		desc := server.Description()
+		if desc == "" {
+			desc = "无描述"
+		}
+		servers = append(servers, fmt.Sprintf("- **%s** (%s): %s", server.Code(), server.Name(), desc))
+	}
+
+	if len(servers) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## 可用的 MCP Servers\n")
+	sb.WriteString("你可以使用 `use_mcp` 工具加载以下 MCP Server 的工具:\n\n")
+	for _, s := range servers {
+		sb.WriteString(s)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n使用示例: use_mcp(server_code=\"服务器编码\", action=\"load\")")
 
 	return sb.String()
 }
