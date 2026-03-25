@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Drawer, Grid, Space, Spin, Table, Tag, Typography, Button, Descriptions, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { RobotOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
-import { listSkills, type Skill } from '../api/skillApi';
+import { listSkills, getSkill, type Skill } from '../api/skillApi';
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
@@ -37,8 +37,6 @@ export const SkillsManagementPage: React.FC = () => {
     setDetailDrawerOpen(true);
     setLoadingDetail(true);
     try {
-      // 获取技能详情
-      const { getSkill } = await import('../api/skillApi');
       const detail = await getSkill(skill.name);
       setSkillContent(detail.content);
     } catch (_error) {
@@ -182,7 +180,7 @@ export const SkillsManagementPage: React.FC = () => {
                 <Spin />
               </div>
             ) : (
-              <Card bodyStyle={{ padding: 0 }}>
+              <Card styles={{ body: { padding: 0 } }}>
                 <pre style={{
                   margin: 0,
                   padding: 16,
