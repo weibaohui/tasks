@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/weibh/taskmanager/domain"
+	"go.uber.org/zap"
 )
 
 // LLMProviderFactoryImpl 基础设施层实现：创建 LLM Provider
@@ -69,6 +70,7 @@ func (f *LLMProviderFactoryImpl) createOpenAIProvider(config *domain.LLMProvider
 	return &EinoProvider{
 		config:    cfg,
 		chatModel: chatModel,
+		logger:    zap.NewNop(),
 	}, nil
 }
 
@@ -103,6 +105,7 @@ func (f *LLMProviderFactoryImpl) createClaudeProvider(config *domain.LLMProvider
 	return &EinoProvider{
 		config:    cfg,
 		chatModel: chatModel,
+		logger:    zap.NewNop(),
 	}, nil
 }
 
