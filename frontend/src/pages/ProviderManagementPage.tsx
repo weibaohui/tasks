@@ -196,7 +196,7 @@ export const ProviderManagementPage: React.FC = () => {
         key: 'provider_type',
         width: 120,
         render: (v: string) => {
-          if (v === 'anthropic') return <Tag color="orange">Claude</Tag>;
+          if (v === 'anthropic') return <Tag color="orange">Anthropic</Tag>;
           return <Tag color="blue">OpenAI</Tag>;
         },
       },
