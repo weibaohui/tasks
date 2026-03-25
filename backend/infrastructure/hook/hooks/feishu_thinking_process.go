@@ -66,7 +66,7 @@ func (h *FeishuThinkingProcessHook) PreLLMCall(ctx *domain.HookContext, callCtx 
 
 	// 发送开始思考消息
 	elements := []map[string]interface{}{
-		{"tag": "div", "text": map[string]interface{}{"content": "**开始思考**...", "tag": "lark_md"}},
+		{"tag": "markdown", "content": "**开始思考**..."},
 	}
 	h.sendThinkingMessage(ctx, "🤔 开始思考", elements)
 
@@ -86,7 +86,7 @@ func (h *FeishuThinkingProcessHook) PostLLMCall(ctx *domain.HookContext, callCtx
 		if len(toolNames) > 0 {
 			msg := fmt.Sprintf("**决策**: 调用 %s", strings.Join(toolNames, ", "))
 			elements := []map[string]interface{}{
-				{"tag": "div", "text": map[string]interface{}{"content": msg, "tag": "lark_md"}},
+				{"tag": "markdown", "content": msg},
 			}
 			h.sendThinkingMessage(ctx, "🤖 工具决策", elements)
 		}
@@ -111,11 +111,8 @@ func (h *FeishuThinkingProcessHook) PreToolCall(ctx *domain.HookContext, callCtx
 
 	// 使用 lark_md 渲染 Markdown 代码块
 	elements := []map[string]interface{}{
-		{"tag": "div", "text": map[string]interface{}{"content": "**执行参数**:", "tag": "lark_md"}},
-		{"tag": "div", "text": map[string]interface{}{
-			"content": fmt.Sprintf("```json\n%s\n```", escapeJSON(args)),
-			"tag":     "lark_md",
-		}},
+		{"tag": "markdown", "content": "**执行参数**:"},
+		{"tag": "markdown", "content": fmt.Sprintf("```json\n%s\n```", args)},
 	}
 	title := fmt.Sprintf("🔧 执行工具: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
@@ -159,11 +156,8 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 		statusIcon = "❌"
 	}
 	elements := []map[string]interface{}{
-		{"tag": "div", "text": map[string]interface{}{"content": fmt.Sprintf("**耗时**: %dms", result.Duration.Milliseconds()), "tag": "lark_md"}},
-		{"tag": "div", "text": map[string]interface{}{
-			"content": fmt.Sprintf("```\n%s\n```", escapeJSON(output)),
-			"tag":     "lark_md",
-		}},
+		{"tag": "markdown", "content": fmt.Sprintf("**耗时**: %dms", result.Duration.Milliseconds())},
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", output)},
 	}
 	title := fmt.Sprintf("%s 工具完成: %s", statusIcon, callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
@@ -179,11 +173,8 @@ func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx
 	}
 
 	elements := []map[string]interface{}{
-		{"tag": "div", "text": map[string]interface{}{"content": "**错误信息**:", "tag": "lark_md"}},
-		{"tag": "div", "text": map[string]interface{}{
-			"content": fmt.Sprintf("```\n%s\n```", escapeJSON(err.Error())),
-			"tag":     "lark_md",
-		}},
+		{"tag": "markdown", "content": "**错误信息**:"},
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", err.Error())},
 	}
 	title := fmt.Sprintf("❌ 工具错误: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
