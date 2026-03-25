@@ -34,6 +34,7 @@ type CreateProviderRequest struct {
 	ProviderName    string                     `json:"provider_name"`
 	APIKey          string                     `json:"api_key"`
 	APIBase         string                     `json:"api_base"`
+	ProviderType    string                     `json:"provider_type"`
 	ExtraHeaders    map[string]string          `json:"extra_headers"`
 	SupportedModels []ProviderModelInfoRequest `json:"supported_models"`
 	DefaultModel    string                     `json:"default_model"`
@@ -47,6 +48,7 @@ type UpdateProviderRequest struct {
 	ProviderName          *string                          `json:"provider_name"`
 	APIKey                *string                          `json:"api_key"`
 	APIBase               *string                          `json:"api_base"`
+	ProviderType          *string                          `json:"provider_type"`
 	ExtraHeaders          *map[string]string               `json:"extra_headers"`
 	SupportedModels       *[]ProviderModelInfoRequest      `json:"supported_models"`
 	DefaultModel          *string                          `json:"default_model"`
@@ -77,6 +79,7 @@ func (h *LLMProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Reque
 		ProviderName:    req.ProviderName,
 		APIKey:          req.APIKey,
 		APIBase:         req.APIBase,
+		ProviderType:    req.ProviderType,
 		ExtraHeaders:    req.ExtraHeaders,
 		SupportedModels: toDomainModelInfos(req.SupportedModels),
 		DefaultModel:    req.DefaultModel,
@@ -153,6 +156,7 @@ func (h *LLMProviderHandler) UpdateProvider(w http.ResponseWriter, r *http.Reque
 		ProviderName:          req.ProviderName,
 		APIKey:                req.APIKey,
 		APIBase:               req.APIBase,
+		ProviderType:          req.ProviderType,
 		ExtraHeaders:          req.ExtraHeaders,
 		SupportedModels:       toDomainModelInfosPtr(req.SupportedModels),
 		DefaultModel:          req.DefaultModel,
@@ -259,6 +263,7 @@ func providerToMap(provider *domain.LLMProvider) map[string]interface{} {
 		"provider_key":            provider.ProviderKey(),
 		"provider_name":           provider.ProviderName(),
 		"api_base":                provider.APIBase(),
+		"provider_type":           provider.ProviderType(),
 		"extra_headers":           provider.ExtraHeaders(),
 		"supported_models":        provider.SupportedModels(),
 		"default_model":           provider.DefaultModel(),
