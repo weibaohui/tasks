@@ -234,8 +234,20 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		hookCtx = domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("trace_id", traceID)
 		hookCtx.SetMetadata("session_key", msg.SessionKey())
-		hookCtx.SetMetadata("channel_code", msg.Channel)
-		hookCtx.SetMetadata("channel_type", msg.Channel)
+		// channel_code 从 msg.Metadata 获取
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				hookCtx.SetMetadata("channel_code", v)
+			}
+			// channel_type 优先从 chat_type 获取，否则用 msg.Channel
+			if v, ok := msg.Metadata["chat_type"].(string); ok && v != "" {
+				hookCtx.SetMetadata("channel_type", v)
+			} else if msg.Channel != "" {
+				hookCtx.SetMetadata("channel_type", msg.Channel)
+			}
+		} else if msg.Channel != "" {
+			hookCtx.SetMetadata("channel_type", msg.Channel)
+		}
 		if agent != nil {
 			hookCtx.SetMetadata("agent_code", agent.AgentCode().String())
 			hookCtx.SetMetadata("user_code", agent.UserCode())
