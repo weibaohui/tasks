@@ -109,9 +109,13 @@ func (h *FeishuThinkingProcessHook) PreToolCall(ctx *domain.HookContext, callCtx
 		args = args[:200] + "..."
 	}
 
+	// 使用 lark_md 渲染 Markdown 代码块
 	elements := []map[string]interface{}{
 		{"tag": "div", "text": map[string]interface{}{"content": "**执行参数**:", "tag": "lark_md"}},
-		{"tag": "code", "content": args, "language": "json"},
+		{"tag": "div", "text": map[string]interface{}{
+			"content": fmt.Sprintf("```json\n%s\n```", escapeJSON(args)),
+			"tag":     "lark_md",
+		}},
 	}
 	title := fmt.Sprintf("🔧 执行工具: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
@@ -156,7 +160,10 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 	}
 	elements := []map[string]interface{}{
 		{"tag": "div", "text": map[string]interface{}{"content": fmt.Sprintf("**耗时**: %dms", result.Duration.Milliseconds()), "tag": "lark_md"}},
-		{"tag": "code", "content": output},
+		{"tag": "div", "text": map[string]interface{}{
+			"content": fmt.Sprintf("```\n%s\n```", escapeJSON(output)),
+			"tag":     "lark_md",
+		}},
 	}
 	title := fmt.Sprintf("%s 工具完成: %s", statusIcon, callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
@@ -173,7 +180,10 @@ func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx
 
 	elements := []map[string]interface{}{
 		{"tag": "div", "text": map[string]interface{}{"content": "**错误信息**:", "tag": "lark_md"}},
-		{"tag": "code", "content": err.Error()},
+		{"tag": "div", "text": map[string]interface{}{
+			"content": fmt.Sprintf("```\n%s\n```", escapeJSON(err.Error())),
+			"tag":     "lark_md",
+		}},
 	}
 	title := fmt.Sprintf("❌ 工具错误: %s", callCtx.ToolName)
 	h.sendThinkingMessage(ctx, title, elements)
