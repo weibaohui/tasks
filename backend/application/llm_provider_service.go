@@ -18,7 +18,7 @@ type CreateProviderCommand struct {
 	ProviderName    string
 	APIKey          string
 	APIBase         string
-	APIType         string // API 格式：openai, anthropic
+	ProviderType         string // API 格式：openai, anthropic
 	ExtraHeaders    map[string]string
 	SupportedModels []domain.ModelInfo
 	DefaultModel    string
@@ -33,7 +33,7 @@ type UpdateProviderCommand struct {
 	ProviderName          *string
 	APIKey                *string
 	APIBase               *string
-	APIType               *string
+	ProviderType               *string
 	ExtraHeaders          *map[string]string
 	SupportedModels       *[]domain.ModelInfo
 	DefaultModel          *string
@@ -83,8 +83,8 @@ func (s *LLMProviderApplicationService) Create(ctx context.Context, cmd CreatePr
 	if cmd.AutoMerge != nil {
 		provider.SetAutoMerge(*cmd.AutoMerge)
 	}
-	if cmd.APIType != "" {
-		provider.SetAPIType(cmd.APIType)
+	if cmd.ProviderType != "" {
+		provider.SetProviderType(cmd.ProviderType)
 	}
 
 	if cmd.IsDefault {
@@ -161,8 +161,8 @@ func (s *LLMProviderApplicationService) Update(ctx context.Context, cmd UpdatePr
 	if cmd.IsActive != nil {
 		provider.SetActive(*cmd.IsActive)
 	}
-	if cmd.APIType != nil {
-		provider.SetAPIType(*cmd.APIType)
+	if cmd.ProviderType != nil {
+		provider.SetProviderType(*cmd.ProviderType)
 	}
 	if cmd.EmbeddingModels != nil || cmd.DefaultEmbeddingModel != nil {
 		embeddingModels := provider.EmbeddingModels()

@@ -20,7 +20,7 @@ export interface LLMProvider {
   provider_key: string;
   provider_name: string;
   api_base: string;
-  api_type: string;
+  provider_type: string;
   extra_headers: Record<string, string>;
   supported_models: ProviderModelInfo[];
   default_model: string;
@@ -40,7 +40,7 @@ export interface CreateProviderRequest {
   provider_name: string;
   api_key: string;
   api_base: string;
-  api_type: string;
+  provider_type: string;
   extra_headers: Record<string, string>;
   supported_models: ProviderModelInfo[];
   default_model: string;
@@ -54,7 +54,7 @@ export interface UpdateProviderRequest {
   provider_name?: string;
   api_key?: string;
   api_base?: string;
-  api_type?: string;
+  provider_type?: string;
   extra_headers?: Record<string, string>;
   supported_models?: ProviderModelInfo[];
   default_model?: string;

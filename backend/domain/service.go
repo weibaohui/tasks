@@ -86,10 +86,10 @@ func (s *LLMProviderSelectionService) buildConfigFromProvider(provider *LLMProvi
 	)
 
 	// 设置 API 类型（默认为 openai）
-	if provider.APIType() != "" {
-		cfg.SetAPIType(provider.APIType())
+	if provider.ProviderType() != "" {
+		cfg.SetProviderType(provider.ProviderType())
 	} else {
-		cfg.SetAPIType(APITypeOpenAI)
+		cfg.SetProviderType(ProviderTypeOpenAI)
 	}
 
 	// 模型兜底：如果未指定模型，使用 provider 默认模型
