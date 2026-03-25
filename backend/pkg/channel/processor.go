@@ -13,6 +13,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
+	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -37,7 +38,8 @@ type MessageProcessor struct {
 	toolRegistry     *llm.ToolRegistry
 	hookManager      *hook.Manager
 	factory          domain.LLMProviderFactory
-	mcpService      *application.MCPApplicationService
+	mcpService       *application.MCPApplicationService
+	skillsLoader     *skill.SkillsLoader
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -53,6 +55,7 @@ func NewMessageProcessor(
 	hookManager *hook.Manager,
 	factory domain.LLMProviderFactory,
 	mcpService *application.MCPApplicationService,
+	skillsLoader *skill.SkillsLoader,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注册 Bash 工具
@@ -62,6 +65,14 @@ func NewMessageProcessor(
 	if mcpService != nil {
 		registry.Register(mcp.NewUseMCPTool(mcpService))
 		registry.Register(mcp.NewCallMCPTool(mcpService))
+	}
+
+	// 注册 Skill 工具
+	if skillsLoader != nil {
+		skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(skillsLoader)
+		for _, t := range skillToolsRegistry.GetTools() {
+			registry.Register(t)
+		}
 	}
 
 	return &MessageProcessor{
@@ -77,7 +88,8 @@ func NewMessageProcessor(
 		toolRegistry:     registry,
 		hookManager:      hookManager,
 		factory:          factory,
-		mcpService:      mcpService,
+		mcpService:       mcpService,
+		skillsLoader:     skillsLoader,
 	}
 }
 
