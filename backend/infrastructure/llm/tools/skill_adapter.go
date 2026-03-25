@@ -36,7 +36,11 @@ func (a *SkillToolAdapter) Name() string {
 
 // Description 返回工具描述
 func (a *SkillToolAdapter) Description() string {
-	return fmt.Sprintf("技能工具：%s。使用此工具可以加载并执行 %s 技能的相关操作。", a.skillTool.Name(), a.skillTool.Name())
+	desc := a.skillTool.Description()
+	if desc == "" {
+		desc = fmt.Sprintf("技能工具：%s。使用此工具可以加载并执行 %s 技能的相关操作。", a.skillTool.Name(), a.skillTool.Name())
+	}
+	return desc
 }
 
 // Parameters 返回参数 schema
@@ -62,7 +66,7 @@ func (a *SkillToolAdapter) Execute(ctx context.Context, input json.RawMessage) (
 	result, err := a.skillTool.InvokableRun(ctx, string(input))
 	if err != nil {
 		return &llm.ToolResult{
-			Output: fmt.Sprintf(`{"error": "%v"}`, err),
+			Error: err.Error(),
 		}, nil
 	}
 

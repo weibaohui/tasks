@@ -67,13 +67,7 @@ func NewMessageProcessor(
 		registry.Register(mcp.NewCallMCPTool(mcpService))
 	}
 
-	// 注册 Skill 工具
-	if skillsLoader != nil {
-		skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(skillsLoader)
-		for _, t := range skillToolsRegistry.GetTools() {
-			registry.Register(t)
-		}
-	}
+	// 注意：Skill 工具不在这里注册，而是按 Agent 配置动态注册
 
 	return &MessageProcessor{
 		bus:              messageBus,
@@ -350,7 +344,15 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 	}
 
-	response, toolCalls, err = llmProvider.GenerateWithTools(ctx, prompt, []*llm.ToolRegistry{p.toolRegistry}, 5)
+	// 构建工具注册表（包括 Agent 指定的技能）
+	toolRegistries := []*llm.ToolRegistry{p.toolRegistry}
+	if agent != nil && p.skillsLoader != nil {
+		if agentToolsRegistry := p.buildAgentToolsRegistry(agent); agentToolsRegistry != nil {
+			toolRegistries = append(toolRegistries, agentToolsRegistry)
+		}
+	}
+
+	response, toolCalls, err = llmProvider.GenerateWithTools(ctx, prompt, toolRegistries, 5)
 
 	// 获取 token 使用量
 	usage := llmProvider.GetLastUsage()
@@ -543,6 +545,54 @@ func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
 	sb.WriteString("\n使用示例: use_mcp(server_code=\"服务器编码\", action=\"load\")")
 
 	return sb.String()
+}
+
+// buildAgentToolsRegistry 为 Agent 构建工具注册表（包括 Agent 指定的技能）
+func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.ToolRegistry {
+	if agent == nil || p.skillsLoader == nil {
+		return nil
+	}
+
+	// 获取 Agent 的技能列表
+	skills := p.skillsLoader.ListSkills()
+	if len(skills) == 0 {
+		return nil
+	}
+
+	// Agent.SkillsList 包含启用的技能名称列表
+	// 如果为空，则不注册任何技能工具
+	agentSkills := agent.SkillsList()
+	if len(agentSkills) == 0 {
+		return nil
+	}
+
+	// 构建技能名称集合
+	enabledSkills := make(map[string]bool)
+	for _, s := range agentSkills {
+		enabledSkills[s] = true
+	}
+
+	// 创建新的工具注册表，只包含 Agent 启用的技能
+	registry := llm.NewToolRegistry()
+	skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(p.skillsLoader)
+	for _, t := range skillToolsRegistry.GetTools() {
+		// 检查这个技能是否在 Agent 的启用列表中
+		// 工具名称格式是 "skill__xxx"，需要去掉前缀进行比较
+		toolName := t.Name()
+		if strings.HasPrefix(toolName, "skill__") {
+			skillName := strings.TrimPrefix(toolName, "skill__")
+			if enabledSkills[skillName] {
+				registry.Register(t)
+			}
+		}
+	}
+
+	// 如果没有注册任何工具，返回 nil
+	if len(registry.List()) == 0 {
+		return nil
+	}
+
+	return registry
 }
 
 // AgentConfigCache 缓存 Agent 配置

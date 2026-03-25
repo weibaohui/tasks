@@ -36,6 +36,11 @@ func (t *DynamicTool) Name() string {
 	return t.name
 }
 
+// Description 返回工具描述
+func (t *DynamicTool) Description() string {
+	return t.description
+}
+
 // Info 返回工具信息
 func (t *DynamicTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	desc := t.description
