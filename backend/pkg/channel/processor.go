@@ -44,6 +44,7 @@ type MessageProcessor struct {
 	idGenerator      domain.IDGenerator
 	toolRegistry     *llm.ToolRegistry
 	hookManager      *hook.Manager
+	factory          domain.LLMProviderFactory
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -57,6 +58,7 @@ func NewMessageProcessor(
 	workerPool *application.WorkerPool,
 	idGenerator domain.IDGenerator,
 	hookManager *hook.Manager,
+	factory domain.LLMProviderFactory,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注册 Bash 工具
@@ -74,6 +76,7 @@ func NewMessageProcessor(
 		idGenerator:      idGenerator,
 		toolRegistry:     registry,
 		hookManager:      hookManager,
+		factory:          factory,
 	}
 }
 
@@ -200,19 +203,26 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		model = "gpt-4"
 	}
 
-	llmConfig := &llm.Config{
-		ProviderType: provider.ProviderKey(),
-		Model:        model,
-		APIKey:       provider.APIKey(),
-		BaseURL:      provider.APIBase(),
-		Temperature:  0.7,
-		MaxTokens:    4096,
+	// 使用工厂模式创建 LLM Provider
+	providerConfig := domain.NewLLMProviderConfig(
+		provider.ProviderKey(),
+		model,
+		provider.APIKey(),
+		provider.APIBase(),
+	)
+	if provider.ProviderType() != "" {
+		providerConfig.SetProviderType(provider.ProviderType())
 	}
 
-	// 创建 LLM Provider
-	llmProvider, err := llm.NewLLMProvider(llmConfig)
+	result, err := p.factory.Build(providerConfig)
 	if err != nil {
 		p.logger.Error("创建 LLM Provider 失败", zap.Error(err))
+		return fmt.Sprintf("收到消息: %s\n(LLM 配置错误)", content)
+	}
+
+	llmProvider, ok := result.(llm.LLMProvider)
+	if !ok {
+		p.logger.Error("LLM Provider 类型转换失败")
 		return fmt.Sprintf("收到消息: %s\n(LLM 配置错误)", content)
 	}
 
