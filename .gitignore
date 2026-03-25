@@ -21,3 +21,4 @@ frontend/dist
 backend/server
 tasks.db
 backend/bin/taskmanager
+backend/gateway
