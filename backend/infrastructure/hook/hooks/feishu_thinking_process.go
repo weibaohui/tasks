@@ -65,7 +65,10 @@ func (h *FeishuThinkingProcessHook) PreLLMCall(ctx *domain.HookContext, callCtx 
 	}
 
 	// 发送开始思考消息
-	h.sendThinkingMessage(ctx, "🤔 开始思考", "**开始思考**...")
+	elements := []map[string]interface{}{
+		{"tag": "div", "text": map[string]interface{}{"content": "**开始思考**...", "tag": "lark_md"}},
+	}
+	h.sendThinkingMessage(ctx, "🤔 开始思考", elements)
 
 	return callCtx, nil
 }
@@ -82,7 +85,10 @@ func (h *FeishuThinkingProcessHook) PostLLMCall(ctx *domain.HookContext, callCtx
 		toolNames := h.extractToolNames(resp.RawResponse)
 		if len(toolNames) > 0 {
 			msg := fmt.Sprintf("**决策**: 调用 %s", strings.Join(toolNames, ", "))
-			h.sendThinkingMessage(ctx, "🤖 工具决策", msg)
+			elements := []map[string]interface{}{
+				{"tag": "div", "text": map[string]interface{}{"content": msg, "tag": "lark_md"}},
+			}
+			h.sendThinkingMessage(ctx, "🤖 工具决策", elements)
 		}
 	}
 
@@ -103,9 +109,12 @@ func (h *FeishuThinkingProcessHook) PreToolCall(ctx *domain.HookContext, callCtx
 		args = args[:200] + "..."
 	}
 
-	msg := fmt.Sprintf("```json\n%s\n```", args)
+	elements := []map[string]interface{}{
+		{"tag": "div", "text": map[string]interface{}{"content": "**执行参数**:", "tag": "lark_md"}},
+		{"tag": "code", "content": args, "language": "json"},
+	}
 	title := fmt.Sprintf("🔧 执行工具: %s", callCtx.ToolName)
-	h.sendThinkingMessage(ctx, title, msg)
+	h.sendThinkingMessage(ctx, title, elements)
 
 	return callCtx, nil
 }
@@ -145,10 +154,12 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 	if !result.Success {
 		statusIcon = "❌"
 	}
-	msg := fmt.Sprintf("**耗时**: %dms\n```\n%s\n```",
-		result.Duration.Milliseconds(), output)
+	elements := []map[string]interface{}{
+		{"tag": "div", "text": map[string]interface{}{"content": fmt.Sprintf("**耗时**: %dms", result.Duration.Milliseconds()), "tag": "lark_md"}},
+		{"tag": "code", "content": output},
+	}
 	title := fmt.Sprintf("%s 工具完成: %s", statusIcon, callCtx.ToolName)
-	h.sendThinkingMessage(ctx, title, msg)
+	h.sendThinkingMessage(ctx, title, elements)
 
 	return result, nil
 }
@@ -160,9 +171,12 @@ func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx
 		return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 	}
 
-	msg := fmt.Sprintf("```\n%s\n```", err.Error())
+	elements := []map[string]interface{}{
+		{"tag": "div", "text": map[string]interface{}{"content": "**错误信息**:", "tag": "lark_md"}},
+		{"tag": "code", "content": err.Error()},
+	}
 	title := fmt.Sprintf("❌ 工具错误: %s", callCtx.ToolName)
-	h.sendThinkingMessage(ctx, title, msg)
+	h.sendThinkingMessage(ctx, title, elements)
 
 	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 }
@@ -265,7 +279,7 @@ func (h *FeishuThinkingProcessHook) getSessionInfo(ctx *domain.HookContext) *ses
 }
 
 // sendThinkingMessage 发送思考过程消息到飞书（使用卡片格式）
-func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext, title, content string) {
+func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext, title string, elements []map[string]interface{}) {
 	if h.messageBus == nil || ctx == nil {
 		return
 	}
@@ -300,17 +314,12 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 	}
 
 	// 构建卡片内容
-	cardContent := h.buildThinkingCard(title, content)
+	cardContent := h.buildThinkingCard(title, elements)
 
-	contentPreview := content
-	if len(contentPreview) > 100 {
-		contentPreview = contentPreview[:100] + "..."
-	}
 	h.logger.Debug("[ThinkingProcess] 发送思考卡片",
 		zap.String("channel", info.Channel),
 		zap.String("chat_id", chatID),
 		zap.String("title", title),
-		zap.String("content_preview", contentPreview),
 	)
 
 	msg := &bus.OutboundMessage{
@@ -341,12 +350,7 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 }
 
 // buildThinkingCard 构建飞书思考过程卡片
-func (h *FeishuThinkingProcessHook) buildThinkingCard(title, content string) string {
-	// Markdown 代码块不需要转义，lark_md 会直接渲染
-	// 只有普通文本需要转义
-	if !strings.HasPrefix(content, "```") {
-		content = escapeJSON(content)
-	}
+func (h *FeishuThinkingProcessHook) buildThinkingCard(title string, elements []map[string]interface{}) string {
 	title = escapeJSON(title)
 
 	// 构建飞书交互式卡片
@@ -361,15 +365,7 @@ func (h *FeishuThinkingProcessHook) buildThinkingCard(title, content string) str
 				"tag":     "plain_text",
 			},
 		},
-		"elements": []map[string]interface{}{
-			{
-				"tag": "div",
-				"text": map[string]interface{}{
-					"content": content,
-					"tag":     "lark_md",
-				},
-			},
-		},
+		"elements": elements,
 	}
 
 	cardJSON, _ := json.Marshal(card)
