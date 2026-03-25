@@ -25,8 +25,8 @@ type TraceContext struct {
 	TraceID    string `json:"trace_id"`
 	RootTaskID string `json:"root_task_id"`
 	mu         sync.RWMutex
-	spans      map[string]*Span    `json:"spans"`     // spanID -> Span
-	taskTree   map[string][]string `json:"task_tree"` // parentTaskID -> [childTaskIDs]
+	spans      map[string]*Span    // spanID -> Span
+	taskTree   map[string][]string // parentTaskID -> [childTaskIDs]
 	cancelFunc context.CancelFunc  `json:"-"`
 	rootCtx    context.Context     `json:"-"`
 	logger     interface{ Info(string, ...interface{}) }

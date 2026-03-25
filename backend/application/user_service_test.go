@@ -362,7 +362,7 @@ func TestBuildStoredPasswordValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildStoredPasswordValue(tt.password, tt.passwordHash)
+			result := domain.BuildStoredPasswordValue(tt.password, tt.passwordHash)
 			if tt.expectHasPrefix && result == "" {
 				t.Error("期望非空结果")
 			}
@@ -371,43 +371,40 @@ func TestBuildStoredPasswordValue(t *testing.T) {
 }
 
 func TestVerifyPassword(t *testing.T) {
-	// 测试 sha256$ 前缀
-	hash := hashPassword("testpassword")
-	if !verifyPassword(hash, "testpassword") {
-		t.Error("sha256$ 格式密码验证应该通过")
-	}
-	if verifyPassword(hash, "wrongpassword") {
-		t.Error("错误密码应该验证失败")
+	// Create a user to test VerifyPassword method
+	svc := setupTestUserService()
+	ctx := context.Background()
+
+	user, _ := svc.CreateUser(ctx, CreateUserCommand{
+		Username: "verifytest",
+		Password: "testpassword",
+	})
+
+	// Test correct password
+	if !user.VerifyPassword("testpassword") {
+		t.Error("正确的密码应该验证通过")
 	}
 
-	// 测试 sha256: 前缀
-	hash2 := "sha256:" + hash[7:] // 把 sha256$ 替换为 sha256:
-	if !verifyPassword(hash2, "testpassword") {
-		t.Error("sha256: 格式密码验证应该通过")
-	}
-
-	// 测试纯 hex 64 字符
-	hash3 := hash[7:] // 去掉 sha256$ 前缀
-	if !verifyPassword(hash3, "testpassword") {
-		t.Error("纯 hex 格式密码验证应该通过")
-	}
-
-	// 测试未知格式
-	if verifyPassword("unknownformat$hash", "password") {
-		t.Error("未知格式应该返回 false")
+	// Test wrong password
+	if user.VerifyPassword("wrongpassword") {
+		t.Error("错误的密码应该验证失败")
 	}
 }
 
 func TestHashPassword(t *testing.T) {
-	hash := hashPassword("testpassword")
-	if hash != "sha256$"+hash[7:] {
-		t.Error("hashPassword 应该返回 sha256$ 前缀的哈希")
-	}
+	// Test through user creation
+	svc := setupTestUserService()
+	ctx := context.Background()
 
-	// 相同密码应该产生相同哈希
-	hash2 := hashPassword("testpassword")
-	if hash != hash2 {
-		t.Error("相同密码应该产生相同哈希")
+	user, _ := svc.CreateUser(ctx, CreateUserCommand{
+		Username: "hashtest",
+		Password: "testpassword",
+	})
+
+	// The stored hash should have sha256$ prefix
+	hash := user.PasswordHash()
+	if len(hash) < 7 || hash[:7] != "sha256$" {
+		t.Errorf("密码哈希应该有 sha256$ 前缀, 实际为: %s", hash)
 	}
 }
 

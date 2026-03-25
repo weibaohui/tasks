@@ -38,7 +38,7 @@ func AgentHandlerFunc(ctx context.Context, task *domain.Task, repo domain.TaskRe
 
 	// 更新进度
 	updateAgentProgress(task, repo, 0, "初始化", fmt.Sprintf("Agent 模式启动，深度 %d/%d", currentDepth, MaxAgentTaskDepth))
-	time.Sleep(2 * time.Second)
+	time.Sleep(AgentInitDelay)
 
 	// 检查是否达到最大深度
 	if currentDepth >= MaxAgentTaskDepth {
@@ -137,7 +137,7 @@ func CreateSubTasksFromLLM(
 				"depth":       strconv.Itoa(getCurrentDepth(task)),
 				"llm_reason":  plan.Reason,
 			},
-			60000*time.Millisecond,
+			DefaultTaskTimeout,
 			0,
 			0,
 		)
