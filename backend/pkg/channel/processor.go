@@ -290,11 +290,18 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		if v, ok := msg.Metadata["channel_code"].(string); ok {
 			callMetadata["channel_code"] = v
 		}
+		if v, ok := msg.Metadata["chat_id"].(string); ok {
+			callMetadata["chat_id"] = v
+		}
 	}
 	// Agent 查询结果优先（覆盖 msg.Metadata 中的值）
 	if agent != nil {
 		callMetadata["agent_code"] = agent.AgentCode().String()
 		callMetadata["user_code"] = agent.UserCode()
+		// 传递思考过程配置
+		if agent.EnableThinkingProcess() {
+			callMetadata["enable_thinking_process"] = "true"
+		}
 	}
 
 	// PreLLMCall hook
@@ -307,9 +314,12 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			TraceID:   traceID,
 			Metadata:  callMetadata,
 		}
-		hookCtx := domain.NewHookContext(ctx)
-		hookCtx.SetMetadata("trace_id", traceID)
-		hookCtx.SetMetadata("session_key", msg.SessionKey())
+		// 复用之前创建的 hookCtx，确保元数据一致性
+		if hookCtx == nil {
+			hookCtx = domain.NewHookContext(ctx)
+			hookCtx.SetMetadata("trace_id", traceID)
+			hookCtx.SetMetadata("session_key", msg.SessionKey())
+		}
 		modifiedCtx, err := p.hookManager.PreLLMCall(hookCtx, callCtx)
 		if err != nil {
 			p.logger.Error("PreLLMCall hook failed", zap.Error(err))
@@ -341,13 +351,10 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 				TotalTokens:     usage.TotalTokens,
 			},
 		}
-		// 从 toolCalls 提取 usage 信息（如果可用）
+		// 构造 RawResponse 包含工具调用信息，供 hook 分析
 		if len(toolCalls) > 0 {
-			// 构造 RawResponse 包含工具调用信息，供 hook 分析
-			// 使用 OpenAI 标准格式：function: {name, arguments}
 			toolCallsInfo := make([]map[string]interface{}, 0, len(toolCalls))
 			for _, tc := range toolCalls {
-				// tc.Input 是 json.RawMessage，需要转为字符串
 				argsStr := string(tc.Input)
 				toolCallsInfo = append(toolCallsInfo, map[string]interface{}{
 					"id":   tc.ID,
@@ -362,9 +369,12 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			})
 			resp.RawResponse = string(rawJSON)
 		}
-		hookCtx := domain.NewHookContext(ctx)
-		hookCtx.SetMetadata("trace_id", traceID)
-		hookCtx.SetMetadata("session_key", msg.SessionKey())
+		// 复用之前创建的 hookCtx
+		if hookCtx == nil {
+			hookCtx = domain.NewHookContext(ctx)
+			hookCtx.SetMetadata("trace_id", traceID)
+			hookCtx.SetMetadata("session_key", msg.SessionKey())
+		}
 		_, err := p.hookManager.PostLLMCall(hookCtx, callCtx, resp)
 		if err != nil {
 			p.logger.Error("PostLLMCall hook failed", zap.Error(err))

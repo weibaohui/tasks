@@ -77,6 +77,7 @@ func main() {
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
+	hookManager.Register(hooks.NewFeishuThinkingProcessHook(messageBus, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	// 8. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
