@@ -190,7 +190,7 @@ func TestPreToolCall_Basic(t *testing.T) {
 	hookCtx := domain.NewHookContext(ctx)
 
 	// 设置 scope（模拟真实环境中 toolHookAdapter 的行为）
-	hookCtx = hookCtx.WithValue(scopeKey, scopeInfo{
+	hookCtx = hookCtx.WithValue(ScopeKey, scopeInfo{
 		SessionKey:  "session-tool",
 		UserCode:    "user-tool",
 		AgentCode:   "agent-tool",
@@ -249,7 +249,7 @@ func TestPostToolCall_Success(t *testing.T) {
 	hookCtx := domain.NewHookContext(ctx)
 
 	// 设置 scope
-	hookCtx = hookCtx.WithValue(scopeKey, scopeInfo{
+	hookCtx = hookCtx.WithValue(ScopeKey, scopeInfo{
 		SessionKey:  "session-post",
 		UserCode:    "user-post",
 		AgentCode:   "agent-post",
@@ -314,7 +314,7 @@ func TestOnToolError_Basic(t *testing.T) {
 	hookCtx := domain.NewHookContext(ctx)
 
 	// 设置 scope
-	hookCtx = hookCtx.WithValue(scopeKey, scopeInfo{
+	hookCtx = hookCtx.WithValue(ScopeKey, scopeInfo{
 		SessionKey:  "session-err",
 		UserCode:    "user-err",
 		AgentCode:   "agent-err",
@@ -614,7 +614,7 @@ func TestPreToolCall_UserCodeAndAgentCodePropagation(t *testing.T) {
 	hookCtx := domain.NewHookContext(ctx)
 
 	// 模拟 PreLLMCall 已设置 scope
-	hookCtx = hookCtx.WithValue(scopeKey, scopeInfo{
+	hookCtx = hookCtx.WithValue(ScopeKey, scopeInfo{
 		SessionKey:  "session-tool-propagate",
 		UserCode:    "user-tool-propagate-001",
 		AgentCode:   "agent-tool-propagate-002",

@@ -63,7 +63,7 @@ func NewConversationRecordHook(
 type contextKey string
 
 const (
-	scopeKey            contextKey = "conversation_scope"
+	ScopeKey            contextKey = "conversation_scope"
 	spanKey             contextKey = "conversation_span"
 	promptKey           contextKey = "conversation_prompt"
 	deferredResponseKey contextKey = "conversation_deferred_response"
@@ -130,7 +130,7 @@ func (h *ConversationRecordHook) PreLLMCall(ctx *domain.HookContext, callCtx *do
 
 	// 重新提取 scope，确保使用完整的 Metadata
 	scope = h.extractScope(ctx, callCtx)
-	ctx.WithValue(scopeKey, scope)
+	ctx.WithValue(ScopeKey, scope)
 	ctx.WithValue(spanKey, spanID)
 	ctx.WithValue(promptKey, callCtx.Prompt)
 
@@ -307,7 +307,7 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 设置范围
-	if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
+	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
@@ -370,8 +370,8 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		return result, nil
 	}
 
-	// 设置范围 - 从 scopeKey 获取
-	if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
+	// 设置范围 - 从 ScopeKey 获取
+	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 
@@ -418,7 +418,7 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 设置范围
-	if scope, ok := ctx.Get(scopeKey).(scopeInfo); ok {
+	if scope, ok := ctx.Get(ScopeKey).(scopeInfo); ok {
 		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
 	}
 

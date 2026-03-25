@@ -9,6 +9,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/trace"
@@ -20,7 +21,6 @@ import (
 type contextKey string
 
 const spanKey contextKey = "conversation_span"
-const scopeKey contextKey = "conversation_scope"
 
 // scopeInfo 存储对话范围信息
 type scopeInfo struct {
@@ -537,7 +537,7 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 
 	// 将 tool_call 的 span_id 和 scope 设置到 ctx 中，供 PostToolCall 使用
 	ctxWithSpan := a.hookCtx.WithValue(spanKey, a.spanID)
-	ctxWithSpan = ctxWithSpan.WithValue(scopeKey, scopeInfo{
+	ctxWithSpan = ctxWithSpan.WithValue(hooks.ScopeKey, scopeInfo{
 		SessionKey:  a.sessionKey,
 		UserCode:    a.userCode,
 		AgentCode:   a.agentCode,
@@ -594,7 +594,7 @@ func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, o
 
 	// 调用 PostToolCall hooks - 使用带有 scope 信息的 ctx
 	if a.processor.hookManager != nil {
-		ctxWithScope := a.hookCtx.WithValue(scopeKey, scopeInfo{
+		ctxWithScope := a.hookCtx.WithValue(hooks.ScopeKey, scopeInfo{
 			SessionKey:  a.sessionKey,
 			UserCode:    a.userCode,
 			AgentCode:   a.agentCode,
