@@ -34,7 +34,7 @@ func (f *LLMProviderFactoryImpl) Build(config *domain.LLMProviderConfig) (interf
 
 	// 根据 API 类型选择不同的创建方式
 	switch config.APIFormat() {
-	case domain.APITypeAnthropic:
+	case domain.ProviderTypeAnthropic:
 		return f.createClaudeProvider(config)
 	default:
 		return f.createOpenAIProvider(config)

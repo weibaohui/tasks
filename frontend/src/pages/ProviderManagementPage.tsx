@@ -29,7 +29,7 @@ type ProviderFormValues = {
   provider_name: string;
   api_base: string;
   api_key: string;
-  api_type: string;
+  provider_type: string;
   is_default: boolean;
   is_active: boolean;
   priority: number;
@@ -125,7 +125,7 @@ export const ProviderManagementPage: React.FC = () => {
           provider_name: values.provider_name,
           api_base: values.api_base,
           api_key: values.api_key ? values.api_key : undefined,
-          api_type: values.api_type,
+          provider_type: values.provider_type,
           is_default: values.is_default,
           is_active: values.is_active,
           priority: values.priority,
@@ -143,7 +143,7 @@ export const ProviderManagementPage: React.FC = () => {
           provider_name: values.provider_name,
           api_base: values.api_base,
           api_key: values.api_key,
-          api_type: values.api_type,
+          provider_type: values.provider_type,
           is_default: values.is_default,
           priority: values.priority,
           auto_merge: values.auto_merge,
@@ -192,8 +192,8 @@ export const ProviderManagementPage: React.FC = () => {
       },
       {
         title: 'API类型',
-        dataIndex: 'api_type',
-        key: 'api_type',
+        dataIndex: 'provider_type',
+        key: 'provider_type',
         width: 120,
         render: (v: string) => {
           if (v === 'anthropic') return <Tag color="orange">Claude</Tag>;
@@ -259,7 +259,7 @@ export const ProviderManagementPage: React.FC = () => {
                   provider_name: record.provider_name,
                   api_base: record.api_base,
                   api_key: '',
-                  api_type: record.api_type || 'openai',
+                  provider_type: record.provider_type || 'openai',
                   is_default: record.is_default,
                   is_active: record.is_active,
                   priority: record.priority,
@@ -303,7 +303,7 @@ export const ProviderManagementPage: React.FC = () => {
                   provider_name: '',
                   api_base: '',
                   api_key: '',
-                  api_type: 'openai',
+                  provider_type: 'openai',
                   is_default: false,
                   is_active: true,
                   priority: 0,
@@ -362,7 +362,7 @@ export const ProviderManagementPage: React.FC = () => {
               </Form.Item>
             </div>
             <div style={{ width: 160 }}>
-              <Form.Item label="API 类型" name="api_type" initialValue="openai">
+              <Form.Item label="API 类型" name="provider_type" initialValue="openai">
                 <Select>
                   <Select.Option value="openai">OpenAI 格式</Select.Option>
                   <Select.Option value="anthropic">Anthropic 格式</Select.Option>
