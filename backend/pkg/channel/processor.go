@@ -239,13 +239,9 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			if v, ok := msg.Metadata["channel_code"].(string); ok {
 				hookCtx.SetMetadata("channel_code", v)
 			}
-			// channel_type 优先从 chat_type 获取，否则用 msg.Channel
-			if v, ok := msg.Metadata["chat_type"].(string); ok && v != "" {
-				hookCtx.SetMetadata("channel_type", v)
-			} else if msg.Channel != "" {
-				hookCtx.SetMetadata("channel_type", msg.Channel)
-			}
-		} else if msg.Channel != "" {
+		}
+		// channel_type 统一使用 msg.Channel（feishu/dingtalk/wechat 等）
+		if msg.Channel != "" {
 			hookCtx.SetMetadata("channel_type", msg.Channel)
 		}
 		if agent != nil {
@@ -270,13 +266,8 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 				channelCode = v
 			}
 		}
-		// channel_type 优先从 msg.Metadata["chat_type"] 获取，否则使用 msg.Channel
+		// channel_type 统一使用 msg.Channel（feishu/dingtalk/wechat 等）
 		channelType := msg.Channel
-		if msg.Metadata != nil {
-			if v, ok := msg.Metadata["chat_type"].(string); ok && v != "" {
-				channelType = v
-			}
-		}
 		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, channelCode, channelType)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
 		einoProvider.SetToolExecutionObserver(toolHookAdapter) // 设置 observer 以监听工具执行
@@ -291,15 +282,13 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	if msg.SessionKey() != "" {
 		callMetadata["session_key"] = msg.SessionKey()
 	}
+	// channel_type 统一使用 msg.Channel（feishu/dingtalk/wechat 等）
 	if msg.Channel != "" {
 		callMetadata["channel_type"] = msg.Channel
 	}
 	if msg.Metadata != nil {
 		if v, ok := msg.Metadata["channel_code"].(string); ok {
 			callMetadata["channel_code"] = v
-		}
-		if v, ok := msg.Metadata["chat_type"].(string); ok {
-			callMetadata["channel_type"] = v
 		}
 	}
 	// Agent 查询结果优先（覆盖 msg.Metadata 中的值）
