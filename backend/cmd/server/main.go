@@ -364,6 +364,11 @@ func initGateway(
 		channelManager: channel.NewManager(nil),
 	}
 
+	// 注册 FeishuThinkingProcessHook（需要 messageBus）
+	feishuThinkingHook := hooks.NewFeishuThinkingProcessHook(gw.messageBus, logger)
+	hookManager.Register(feishuThinkingHook)
+	logger.Info("已注册 FeishuThinkingProcessHook")
+
 	// 创建消息处理器
 	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory())
 
