@@ -251,7 +251,14 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			agentCode = agent.AgentCode().String()
 			userCode = agent.UserCode()
 		}
-		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, msg.Channel, msg.Channel)
+		// 从 msg.Metadata 获取 channel_code
+		channelCode := ""
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				channelCode = v
+			}
+		}
+		toolHookAdapter := p.newToolHookAdapter(hookCtx, msg.SessionKey(), traceID, llmSpanID, msg.SessionKey(), userCode, agentCode, channelCode, msg.Channel)
 		einoProvider.SetToolHooks([]llm.ToolHook{toolHookAdapter})
 		einoProvider.SetToolExecutionObserver(toolHookAdapter) // 设置 observer 以监听工具执行
 	}

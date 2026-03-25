@@ -251,6 +251,12 @@ func TestE2E_TraceTree(t *testing.T) {
 		if r.UserCode() != "user-e2e" {
 			t.Errorf("UserCode 应为 user-e2e，实际 %s", r.UserCode())
 		}
+		if r.AgentCode() != "agent-e2e" {
+			t.Errorf("AgentCode 应为 agent-e2e，实际 %s", r.AgentCode())
+		}
+		if r.ChannelCode() != "channel-e2e" {
+			t.Errorf("ChannelCode 应为 channel-e2e，实际 %s", r.ChannelCode())
+		}
 	}
 
 	t.Log("E2E 测试通过！")

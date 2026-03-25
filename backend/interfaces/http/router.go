@@ -391,6 +391,15 @@ func SetupRoutesWithManagement(
 			traceId := strings.TrimPrefix(r.URL.Path, "/api/v1/conversation-records/trace/")
 			conversationRecordHandler.GetRecordsByTrace(w, r, traceId)
 		}))
+
+		// GET /api/v1/conversation-records/stats
+		mux.HandleFunc("/api/v1/conversation-records/stats", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			conversationRecordHandler.GetStats(w, r)
+		}))
 	}
 
 	return mux

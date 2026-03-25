@@ -177,3 +177,83 @@ func conversationRecordToMap(record *domain.ConversationRecord) map[string]inter
 		"created_at":        record.CreatedAt().UnixMilli(),
 	}
 }
+
+func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	startTimeStr := r.URL.Query().Get("start_time")
+	endTimeStr := r.URL.Query().Get("end_time")
+	agentCodes := r.URL.Query()["agent_codes"]
+	channelCodes := r.URL.Query()["channel_codes"]
+	roles := r.URL.Query()["roles"]
+
+	var startTime, endTime *time.Time
+	if startTimeStr != "" {
+		t, err := time.Parse(time.RFC3339, startTimeStr)
+		if err == nil {
+			startTime = &t
+		}
+	}
+	if endTimeStr != "" {
+		t, err := time.Parse(time.RFC3339, endTimeStr)
+		if err == nil {
+			endTime = &t
+		}
+	}
+
+	stats, err := h.recordService.GetStats(r.Context(), application.GetConversationStatsQuery{
+		StartTime:    startTime,
+		EndTime:      endTime,
+		AgentCodes:   agentCodes,
+		ChannelCodes: channelCodes,
+		Roles:        roles,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+
+	tokenStats := map[string]interface{}{
+		"total_prompt_tokens":     stats.TotalPromptTokens,
+		"total_completion_tokens": stats.TotalCompletionTokens,
+		"total_tokens":            stats.TotalTokens,
+		"daily_trends":            stats.DailyTrends,
+	}
+
+	agentDist := make([]map[string]interface{}, 0, len(stats.AgentDistribution))
+	for _, a := range stats.AgentDistribution {
+		agentDist = append(agentDist, map[string]interface{}{
+			"code":   a.Code,
+			"name":   a.Name,
+			"count":  a.Count,
+			"tokens": a.Tokens,
+		})
+	}
+
+	channelDist := make([]map[string]interface{}, 0, len(stats.ChannelDistribution))
+	for _, c := range stats.ChannelDistribution {
+		channelDist = append(channelDist, map[string]interface{}{
+			"type":  c.Type,
+			"count": c.Count,
+		})
+	}
+
+	roleDist := make([]map[string]interface{}, 0, len(stats.RoleDistribution))
+	for _, r := range stats.RoleDistribution {
+		roleDist = append(roleDist, map[string]interface{}{
+			"role":  r.Role,
+			"count": r.Count,
+		})
+	}
+
+	sessionStats := map[string]interface{}{
+		"total_sessions": stats.TotalSessions,
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"token_stats":          tokenStats,
+		"agent_distribution":   agentDist,
+		"channel_distribution": channelDist,
+		"role_distribution":    roleDist,
+		"session_stats":        sessionStats,
+	})
+}
