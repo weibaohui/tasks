@@ -80,9 +80,10 @@ func (f *LLMProviderFactoryImpl) createClaudeProvider(config *domain.LLMProvider
 	}
 
 	claudeConfig := &claude.Config{
-		APIKey:  config.GetAPIKey(),
-		Model:   config.ModelName(),
-		BaseURL: &baseURL,
+		APIKey:     config.GetAPIKey(),
+		Model:      config.ModelName(),
+		BaseURL:    &baseURL,
+		HTTPClient: NewClaudeHTTPClient(), // 使用 Claude Code 伪装 HTTP Client
 	}
 
 	chatModel, err := claude.NewChatModel(context.Background(), claudeConfig)
