@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS llm_providers (
     provider_name TEXT,
     api_key TEXT,
     api_base TEXT,
+    provider_type TEXT NOT NULL DEFAULT 'openai',
     extra_headers TEXT,
     supported_models TEXT,
     default_model TEXT,
@@ -275,7 +276,10 @@ func InitSchema(db *sql.DB) error {
 	if _, err := db.Exec(Schema); err != nil {
 		return err
 	}
-	return migrateAgentMCPBindingColumn(db)
+	if err := migrateAgentMCPBindingColumn(db); err != nil {
+		return err
+	}
+	return migrateLLMProviderTypeColumn(db)
 }
 
 func migrateAgentMCPBindingColumn(db *sql.DB) error {
@@ -289,6 +293,19 @@ func migrateAgentMCPBindingColumn(db *sql.DB) error {
 	}
 	if hasOld && !hasNew {
 		if _, err := db.Exec("ALTER TABLE agent_mcp_bindings RENAME COLUMN is_enabled TO is_active"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateLLMProviderTypeColumn(db *sql.DB) error {
+	hasColumn, err := tableHasColumn(db, "llm_providers", "provider_type")
+	if err != nil {
+		return err
+	}
+	if !hasColumn {
+		if _, err := db.Exec("ALTER TABLE llm_providers ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'"); err != nil {
 			return err
 		}
 	}

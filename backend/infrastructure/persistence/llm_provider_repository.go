@@ -25,16 +25,17 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 
 	query := `
 		INSERT INTO llm_providers (
-			id, user_code, provider_key, provider_name, api_key, api_base, extra_headers,
+			id, user_code, provider_key, provider_name, api_key, api_base, provider_type, extra_headers,
 			supported_models, default_model, is_default, priority, auto_merge,
 			embedding_models, default_embedding_model, is_active, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			provider_key=excluded.provider_key,
 			provider_name=excluded.provider_name,
 			api_key=excluded.api_key,
 			api_base=excluded.api_base,
+			provider_type=excluded.provider_type,
 			extra_headers=excluded.extra_headers,
 			supported_models=excluded.supported_models,
 			default_model=excluded.default_model,
@@ -55,6 +56,7 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 		snap.ProviderName,
 		snap.APIKey,
 		snap.APIBase,
+		snap.ProviderType,
 		extraHeaders,
 		supportedModels,
 		snap.DefaultModel,
@@ -162,6 +164,7 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 		providerName          string
 		apiKey                string
 		apiBase               string
+		providerType          string
 		extraHeadersJSON      []byte
 		supportedModelsJSON   []byte
 		defaultModel          string
@@ -182,6 +185,7 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 		&providerName,
 		&apiKey,
 		&apiBase,
+		&providerType,
 		&extraHeadersJSON,
 		&supportedModelsJSON,
 		&defaultModel,
@@ -216,6 +220,7 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 		ProviderName:          providerName,
 		APIKey:                apiKey,
 		APIBase:               apiBase,
+		ProviderType:          providerType,
 		ExtraHeaders:          extraHeaders,
 		SupportedModels:       supportedModels,
 		DefaultModel:          defaultModel,
