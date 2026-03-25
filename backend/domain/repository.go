@@ -182,14 +182,14 @@ type AgentMCPBindingRepository interface {
 }
 
 type MCPToolModel struct {
-	ID          string
-	MCPServerID MCPServerID
-	Name        string
-	Description string
-	InputSchema string // JSON
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
+	ID          string     `json:"id"`
+	MCPServerID MCPServerID `json:"mcp_server_id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	InputSchema string     `json:"input_schema"` // JSON
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
 type MCPToolRepository interface {
