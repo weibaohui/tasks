@@ -119,6 +119,10 @@ export const ConversationRecordsPage: React.FC = () => {
   const [traceLoading, setTraceLoading] = useState(false);
   const [currentTraceId, setCurrentTraceId] = useState('');
 
+  // 对话详情弹窗状态
+  const [chatVisible, setChatVisible] = useState(false);
+  const [chatRecords, setChatRecords] = useState<ConversationRecord[]>([]);
+
   // 筛选面板状态
   const [filterVisible, setFilterVisible] = useState(false);
 
@@ -190,8 +194,10 @@ export const ConversationRecordsPage: React.FC = () => {
     try {
       const data = await getConversationRecordsByTrace(traceId);
       setTraceRecords(data);
+      return data;
     } catch (_error) {
       message.error('获取链路数据失败');
+      return [];
     } finally {
       setTraceLoading(false);
     }
@@ -451,8 +457,10 @@ export const ConversationRecordsPage: React.FC = () => {
                 onClick={() => {
                   if (record.trace_id) {
                     setCurrentTraceId(record.trace_id);
-                    fetchTraceRecords(record.trace_id);
-                    setTraceVisible(true);
+                    fetchTraceRecords(record.trace_id).then(data => {
+                      setChatRecords(data);
+                      setChatVisible(true);
+                    });
                   } else {
                     message.warning('该记录没有 trace_id');
                   }
@@ -463,7 +471,7 @@ export const ConversationRecordsPage: React.FC = () => {
         ),
       },
     ],
-    [fetchTraceRecords],
+    [fetchTraceRecords, setChatRecords, setChatVisible, setCurrentTraceId],
   );
 
   const traceStats = getTraceStats(traceRecords);
@@ -627,6 +635,75 @@ export const ConversationRecordsPage: React.FC = () => {
               defaultExpandAll
               style={{ background: '#fafafa', padding: 16, borderRadius: 8 }}
             />
+          </div>
+        )}
+      </Modal>
+
+      {/* 对话详情弹窗 */}
+      <Modal
+        title={`对话详情 - ${currentTraceId?.slice(0, 12) || ''}...`}
+        open={chatVisible}
+        onCancel={() => {
+          setChatVisible(false);
+          setChatRecords([]);
+        }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setChatVisible(false)}>关闭</Button>
+          </div>
+        }
+        width={800}
+      >
+        {chatRecords.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
+        ) : (
+          <div>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Statistic title="消息数" value={chatRecords.length} />
+              </Col>
+              <Col span={8}>
+                <Statistic title="总Token" value={chatRecords.reduce((sum, r) => sum + (r.total_tokens || 0), 0)} />
+              </Col>
+              <Col span={8}>
+                <Statistic title="时长" value={`${Math.round(((chatRecords[chatRecords.length - 1]?.timestamp || 0) - (chatRecords[0]?.timestamp || 0)) / 1000)}s`} />
+              </Col>
+            </Row>
+            <Divider />
+            <div style={{ maxHeight: 500, overflowY: 'auto', padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+              {chatRecords.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: r.role === 'user' ? 'row-reverse' : 'row',
+                    marginBottom: 16,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: '70%',
+                      padding: '12px 16px',
+                      borderRadius: r.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                      background: r.role === 'user' ? '#1890ff' : '#fff',
+                      color: r.role === 'user' ? '#fff' : '#333',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+                      {getRoleLabel(r.role)} · {r.total_tokens || 0} tokens
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {r.content || ''}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
+                      {dayjs(r.timestamp).format('HH:mm:ss')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Modal>
