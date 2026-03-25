@@ -17,7 +17,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -30,6 +30,7 @@ func SetupRoutesWithManagement(
 	conversationRecordHandler *ConversationRecordHandler,
 	authHandler *AuthHandler,
 	mcpHandler *MCPHandler,
+	skillHandler *SkillHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -411,6 +412,32 @@ func SetupRoutesWithManagement(
 		}
 		toolsHandler.ListBuiltInTools(w, r)
 	})
+
+	// Skill 路由
+	if skillHandler != nil {
+		mux.HandleFunc("/api/v1/skills", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				skillHandler.ListSkills(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+		mux.HandleFunc("/api/v1/skills/detail", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			skillHandler.GetSkill(w, r)
+		}))
+		mux.HandleFunc("/api/v1/skills/simple", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			skillHandler.ListSkillsSimple(w, r)
+		}))
+	}
 
 	return mux
 }

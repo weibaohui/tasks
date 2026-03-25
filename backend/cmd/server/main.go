@@ -21,6 +21,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/skill"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -168,7 +169,12 @@ func main() {
 		authSecret = "taskmanager-dev-secret"
 	}
 	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler)
+
+	// 7.1 初始化技能加载器
+	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
+	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
+
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
@@ -344,6 +350,19 @@ func resolveDBPath() string {
 	}
 	// 否则使用当前工作目录
 	return filepath.FromSlash("./tasks.db")
+}
+
+// resolveWorkspace 解析工作区目录路径
+func resolveWorkspace() string {
+	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
+		return p
+	}
+	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend")
+	}
+	// 否则使用当前工作目录
+	return "."
 }
 
 // initGateway 初始化渠道网关

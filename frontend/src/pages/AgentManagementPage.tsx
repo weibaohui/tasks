@@ -10,6 +10,7 @@ import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentA
 import { listProviders } from '../api/providerApi';
 import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCPServers, listMCPTools, updateBinding } from '../api/mcpApi';
 import { listBuiltInTools, type BuiltInTool } from '../api/taskApi';
+import { listSkillsSimple, type Skill } from '../api/skillApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
@@ -240,6 +241,7 @@ export const AgentManagementPage: React.FC = () => {
   const [editingBinding, setEditingBinding] = useState<AgentMCPBinding | null>(null);
   const [toolsForm] = Form.useForm<{ all_tools: boolean; enabled_tools: string[] }>();
   const [builtInTools, setBuiltInTools] = useState<BuiltInTool[]>([]);
+  const [skillsOptions, setSkillsOptions] = useState<Skill[]>([]);
 
   /**
    * 拉取 Agent 列表
@@ -696,6 +698,14 @@ export const AgentManagementPage: React.FC = () => {
       });
   }, []);
 
+  useEffect(() => {
+    listSkillsSimple()
+      .then(setSkillsOptions)
+      .catch(() => {
+        message.error('获取技能列表失败');
+      });
+  }, []);
+
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -819,7 +829,14 @@ export const AgentManagementPage: React.FC = () => {
                       <ThunderboltOutlined /> 技能配置
                     </Divider>
                     <Form.Item label="Skills（可多选/自定义）" name="skills_list">
-                      <Select mode="tags" placeholder="输入后回车添加" />
+                      <Select
+                        mode="tags"
+                        placeholder="从列表选择或输入添加"
+                        options={skillsOptions.map((s) => ({
+                          value: s.name,
+                          label: s.description ? `${s.name} - ${s.description}` : s.name,
+                        }))}
+                      />
                     </Form.Item>
 
                     <Divider style={{ margin: '12px 0' }}>
