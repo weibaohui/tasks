@@ -1,6 +1,9 @@
 /**
  * LLM Provider 查找逻辑
  * 封装任务到 LLM Provider 的映射关系
+ *
+ * 选择策略已下沉到 domain 层的 LLMProviderSelectionService
+ * Provider 构造由基础设施层 LLMProviderFactory 实现
  */
 package application
 
@@ -12,11 +15,11 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
-// taskLLMProvider 任务与 LLM Provider 的关联查找器
+// taskLLMProvider LLM Provider 查找器
+// 协调 domain service 和 infrastructure factory
 type taskLLMProvider struct {
-	agentRepo    domain.AgentRepository
-	providerRepo domain.LLMProviderRepository
-	channelRepo  domain.ChannelRepository
+	selectionService *domain.LLMProviderSelectionService
+	factory         domain.LLMProviderFactory
 }
 
 // newTaskLLMProvider 创建 LLM Provider 查找器
@@ -24,74 +27,42 @@ func newTaskLLMProvider(
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
 	channelRepo domain.ChannelRepository,
+	factory domain.LLMProviderFactory,
 ) *taskLLMProvider {
 	return &taskLLMProvider{
-		agentRepo:    agentRepo,
-		providerRepo: providerRepo,
-		channelRepo:  channelRepo,
+		selectionService: domain.NewLLMProviderSelectionService(
+			agentRepo,
+			providerRepo,
+			channelRepo,
+		),
+		factory: factory,
 	}
 }
 
 // getProviderForTask 根据任务元数据获取 LLM Provider
-// 优先从 channel_code 查找，否则使用默认 provider
+// 1. 调用 domain service 选择合适的 provider 配置
+// 2. 调用 infrastructure factory 创建实际的 provider
 func (t *taskLLMProvider) getProviderForTask(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
-	metadata := task.Metadata()
-	if metadata == nil {
-		return nil, fmt.Errorf("任务元数据为空")
+	// 1. 调用 domain service 获取 provider 配置
+	config, err := t.selectionService.SelectProviderForTask(ctx, task)
+	if err != nil {
+		return nil, err
 	}
 
-	// 1. 尝试从 channel_code 获取 (只需要 channel_code，不需要 user_code)
-	channelCode, hasChannel := metadata["channel_code"].(string)
-	userCode, hasUser := metadata["user_code"].(string)
-
-	if hasChannel && t.channelRepo != nil && t.agentRepo != nil && t.providerRepo != nil {
-		channel, err := t.channelRepo.FindByCode(ctx, domain.NewChannelCode(channelCode))
-		if err == nil && channel != nil {
-			agentCode := channel.AgentCode()
-			if agentCode != "" {
-				agent, err := t.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
-				if err == nil && agent != nil {
-					provider, err := t.providerRepo.FindDefaultActive(ctx, agent.UserCode())
-					if err == nil && provider != nil {
-						return t.createProviderFromDomain(provider, agent.Model())
-					}
-				}
-			}
-		}
+	// 2. 验证配置
+	if err := t.selectionService.ValidateConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 
-	// 2. 尝试直接从 user_code 获取
-	if hasUser && t.providerRepo != nil {
-		provider, err := t.providerRepo.FindDefaultActive(ctx, userCode)
-		if err == nil && provider != nil {
-			return t.createProviderFromDomain(provider, "")
-		}
+	// 3. 调用 infrastructure factory 创建实际的 provider
+	provider, err := t.factory.Build(config)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("未找到可用的 LLM Provider")
-}
-
-// createProviderFromDomain 从 domain LLMProvider 创建 infrastructure LLMProvider
-func (t *taskLLMProvider) createProviderFromDomain(provider *domain.LLMProvider, model string) (llm.LLMProvider, error) {
-	if provider == nil {
-		return nil, fmt.Errorf("provider is nil")
+	// 4. 类型断言为 llm.LLMProvider
+	if p, ok := provider.(llm.LLMProvider); ok {
+		return p, nil
 	}
-
-	cfg := &llm.Config{
-		ProviderType: provider.ProviderKey(),
-		Model:        model,
-		APIKey:       provider.APIKey(),
-		BaseURL:      provider.APIBase(),
-		Temperature:  0.7,
-		MaxTokens:    4096,
-	}
-
-	if cfg.Model == "" {
-		cfg.Model = provider.DefaultModel()
-	}
-	if cfg.Model == "" {
-		return nil, fmt.Errorf("provider %q 未配置默认模型", provider.ProviderKey())
-	}
-
-	return llm.NewLLMProvider(cfg)
+	return nil, fmt.Errorf("provider type assertion failed")
 }

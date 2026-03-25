@@ -58,8 +58,9 @@ func (e *AutoTaskExecutor) SetRepositories(
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
 	channelRepo domain.ChannelRepository,
+	factory domain.LLMProviderFactory,
 ) {
-	e.llmLookup = newTaskLLMProvider(agentRepo, providerRepo, channelRepo)
+	e.llmLookup = newTaskLLMProvider(agentRepo, providerRepo, channelRepo, factory)
 }
 
 // SetLLMProvider 设置 LLM Provider (已废弃，使用 SetRepositories 代替)
