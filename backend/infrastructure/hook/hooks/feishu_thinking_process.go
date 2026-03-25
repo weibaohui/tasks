@@ -59,17 +59,7 @@ func (h *FeishuThinkingProcessHook) PreLLMCall(ctx *domain.HookContext, callCtx 
 	// 更新会话缓存
 	h.updateSessionCache(ctx, callCtx)
 
-	// 检查是否开启思考过程
-	if !h.isThinkingProcessEnabled(ctx, callCtx) {
-		return callCtx, nil
-	}
-
-	// 发送开始思考消息
-	elements := []map[string]interface{}{
-		{"tag": "markdown", "content": "**开始思考**..."},
-	}
-	h.sendThinkingMessage(ctx, "🤔 开始思考", elements)
-
+	// 检查是否开启思考过程（不在此发送消息，信息量太少）
 	return callCtx, nil
 }
 
