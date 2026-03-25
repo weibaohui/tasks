@@ -342,8 +342,11 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 
 // buildThinkingCard 构建飞书思考过程卡片
 func (h *FeishuThinkingProcessHook) buildThinkingCard(title, content string) string {
-	// 转义内容中的特殊字符
-	content = escapeJSON(content)
+	// Markdown 代码块不需要转义，lark_md 会直接渲染
+	// 只有普通文本需要转义
+	if !strings.HasPrefix(content, "```") {
+		content = escapeJSON(content)
+	}
 	title = escapeJSON(title)
 
 	// 构建飞书交互式卡片
