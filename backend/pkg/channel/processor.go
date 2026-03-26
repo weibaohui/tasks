@@ -461,8 +461,29 @@ func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain
 func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent *domain.Agent) string {
 	var sb strings.Builder
 
-	// 添加系统提示
-	sb.WriteString("你是一个智能助手，请根据对话历史回答用户的问题。\n\n")
+	// 添加 Agent 人格信息
+	if agent != nil {
+		if identity := agent.IdentityContent(); identity != "" {
+			sb.WriteString(identity)
+			sb.WriteString("\n\n")
+		}
+		if soul := agent.SoulContent(); soul != "" {
+			sb.WriteString(soul)
+			sb.WriteString("\n\n")
+		}
+		if agents := agent.AgentsContent(); agents != "" {
+			sb.WriteString(agents)
+			sb.WriteString("\n\n")
+		}
+		if tools := agent.ToolsContent(); tools != "" {
+			sb.WriteString(tools)
+			sb.WriteString("\n\n")
+		}
+		if user := agent.UserContent(); user != "" {
+			sb.WriteString(user)
+			sb.WriteString("\n\n")
+		}
+	}
 
 	// 添加 MCP Server 列表（如果有绑定）
 	if agent != nil && p.mcpService != nil {
