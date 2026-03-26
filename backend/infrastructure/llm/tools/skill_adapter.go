@@ -94,6 +94,19 @@ func (r *SkillToolsAdapterRegistry) GetTools() []llm.Tool {
 	}
 
 	skills := r.loader.ListSkills()
+	return r.filterAndConvertTools(skills)
+}
+
+// GetToolsForSkills 返回指定技能列表的适配后工具（避免重复发现）
+func (r *SkillToolsAdapterRegistry) GetToolsForSkills(skills []skill.SkillInfo) []llm.Tool {
+	if r.loader == nil {
+		return nil
+	}
+	return r.filterAndConvertTools(skills)
+}
+
+// filterAndConvertTools 根据技能列表过滤并转换工具
+func (r *SkillToolsAdapterRegistry) filterAndConvertTools(skills []skill.SkillInfo) []llm.Tool {
 	tools := make([]llm.Tool, 0, len(skills))
 
 	for _, s := range skills {

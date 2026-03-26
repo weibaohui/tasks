@@ -590,7 +590,8 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.Too
 			}
 
 			skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(p.skillsLoader)
-			for _, t := range skillToolsRegistry.GetTools() {
+			// 使用 GetToolsForSkills 避免重复发现技能（复用已获取的 skills 列表）
+			for _, t := range skillToolsRegistry.GetToolsForSkills(skills) {
 				toolName := t.Name()
 				if strings.HasPrefix(toolName, "skill__") {
 					skillName := strings.TrimPrefix(toolName, "skill__")
@@ -607,8 +608,6 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.Too
 	if !registered {
 		return nil
 	}
-
-	return registry
 
 	return registry
 }
