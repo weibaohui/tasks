@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Button, ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
+import { ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
   ApiOutlined,
@@ -17,7 +17,6 @@ import {
   ToolOutlined,
   UserOutlined,
   ClusterOutlined,
-  LogoutOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
 import { TaskManagement } from './pages/TaskManagement';
@@ -45,7 +44,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const selectedKey = location.pathname.startsWith('/users')
     ? '/users'
     : location.pathname.startsWith('/providers')
@@ -77,16 +76,6 @@ const MainLayout: React.FC = () => {
             <UserOutlined style={{ marginRight: 8 }} />
             {user?.username || user?.user_code || '用户'}
           </span>
-          <Button
-            type="text"
-            icon={<LogoutOutlined />}
-            onClick={() => {
-              logout();
-              navigate('/login');
-            }}
-          >
-            退出登录
-          </Button>
         </Space>
       </Layout.Header>
       <Layout>
