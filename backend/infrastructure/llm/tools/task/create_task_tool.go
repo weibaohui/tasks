@@ -58,12 +58,12 @@ func (t *CreateTaskTool) Description() string {
 	return `创建一个新任务。
 参数 name: 任务名称（必填）
 参数 description: 任务描述（可选）
-参数 task_type: 任务类型（可选），可选值: data_processing, file_operation, api_call, agent, custom，默认 custom
+参数 task_type: 任务类型（可选），可选值: agent, coding, custom，默认 custom
 参数 timeout_ms: 超时时间毫秒数（可选），默认 60000
 参数 priority: 优先级（可选），默认 0
 参数 parent_id: 父任务 ID（可选），用于创建子任务
 
-示例：create_task(name="数据分析任务", description="分析销售数据", task_type="data_processing", timeout_ms=30000)`
+示例：create_task(name="测试任务", description="执行测试", task_type="agent", timeout_ms=30000)`
 }
 
 // Parameters 返回参数 schema
@@ -81,8 +81,8 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 			},
 			"task_type": {
 				"type": "string",
-				"description": "任务类型（可选），可选值: data_processing, file_operation, api_call, agent, custom",
-				"enum": ["data_processing", "file_operation", "api_call", "agent", "custom"]
+				"description": "任务类型（可选），可选值: agent, coding, custom",
+				"enum": ["agent", "coding", "custom"]
 			},
 			"timeout_ms": {
 				"type": "integer",
@@ -131,14 +131,10 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	taskType := domain.TaskTypeCustom
 	if args.TaskType != "" {
 		switch args.TaskType {
-		case "data_processing":
-			taskType = domain.TaskTypeDataProcessing
-		case "file_operation":
-			taskType = domain.TaskTypeFileOperation
-		case "api_call":
-			taskType = domain.TaskTypeAPICall
 		case "agent":
 			taskType = domain.TaskTypeAgent
+		case "coding":
+			taskType = domain.TaskTypeCoding
 		case "custom":
 			taskType = domain.TaskTypeCustom
 		default:

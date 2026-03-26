@@ -107,26 +107,21 @@ func ParseTaskStatus(s string) (TaskStatus, error) {
 }
 
 // TaskType 任务类型枚举
+// 模式：agent（智能体）、coding（编码）、custom（自定义）
 type TaskType int
 
 const (
-	TaskTypeDataProcessing TaskType = 0
-	TaskTypeFileOperation  TaskType = 1
-	TaskTypeAPICall        TaskType = 2
-	TaskTypeAgent          TaskType = 3
-	TaskTypeCustom         TaskType = 4
+	TaskTypeAgent  TaskType = 0
+	TaskTypeCoding TaskType = 1 // 编码模式（待实现）
+	TaskTypeCustom TaskType = 2
 )
 
 func (t TaskType) String() string {
 	switch t {
-	case TaskTypeDataProcessing:
-		return "data_processing"
-	case TaskTypeFileOperation:
-		return "file_operation"
-	case TaskTypeAPICall:
-		return "api_call"
 	case TaskTypeAgent:
 		return "agent"
+	case TaskTypeCoding:
+		return "coding"
 	case TaskTypeCustom:
 		return "custom"
 	default:
@@ -137,14 +132,10 @@ func (t TaskType) String() string {
 // ParseTaskType 解析任务类型字符串
 func ParseTaskType(s string) (TaskType, error) {
 	switch s {
-	case "data_processing":
-		return TaskTypeDataProcessing, nil
-	case "file_operation":
-		return TaskTypeFileOperation, nil
-	case "api_call":
-		return TaskTypeAPICall, nil
 	case "agent":
 		return TaskTypeAgent, nil
+	case "coding":
+		return TaskTypeCoding, nil
 	case "custom":
 		return TaskTypeCustom, nil
 	default:

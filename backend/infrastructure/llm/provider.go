@@ -15,7 +15,7 @@ import (
 // SubTask 子任务结构
 type SubTask struct {
 	Goal     string `yaml:"goal"`
-	TaskType string `yaml:"type"` // data_processing, file_operation, api_call, agent, custom
+	TaskType string `yaml:"type"` // agent, coding, custom
 }
 
 // SubTaskPlan 子任务计划
@@ -86,7 +86,7 @@ func SubTaskPrompt(taskName, taskDesc string, depth, maxDepth int) string {
 
 请根据任务实际情况决定子任务分解策略：
 - goal: 任务目标描述
-- type: 任务类型（data_processing, file_operation, api_call, agent, custom 之一）
+- type: 任务类型（agent, coding, custom 之一）
 
 分解原则：
 1. 子任务应该是完成父任务的关键步骤

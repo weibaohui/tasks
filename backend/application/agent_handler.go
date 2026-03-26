@@ -54,14 +54,10 @@ func AgentHandlerFunc(ctx context.Context, task *domain.Task, repo domain.TaskRe
 // parseTaskType 解析任务类型字符串
 func parseTaskType(typeStr string) domain.TaskType {
 	switch typeStr {
-	case "data_processing":
-		return domain.TaskTypeDataProcessing
-	case "file_operation":
-		return domain.TaskTypeFileOperation
-	case "api_call":
-		return domain.TaskTypeAPICall
 	case "agent":
 		return domain.TaskTypeAgent
+	case "coding":
+		return domain.TaskTypeCoding
 	case "custom":
 		return domain.TaskTypeCustom
 	default:

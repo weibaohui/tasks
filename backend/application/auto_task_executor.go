@@ -246,9 +246,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			goal     string
 			taskType domain.TaskType
 		}{
-			{"处理前50%数据", domain.TaskTypeDataProcessing},
-			{"处理后50%数据", domain.TaskTypeFileOperation},
-			{"验证处理结果", domain.TaskTypeAPICall},
+			{"处理前50%数据", domain.TaskTypeCustom},
+			{"处理后50%数据", domain.TaskTypeCustom},
+			{"验证处理结果", domain.TaskTypeCustom},
 		}
 
 		idGen := utils.NewNanoIDGenerator(21)

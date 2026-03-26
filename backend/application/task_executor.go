@@ -88,7 +88,7 @@ func DataProcessingHandler(ctx context.Context, task *domain.Task, repo domain.T
 
 	result := domain.NewResult(map[string]interface{}{
 		"task_name": taskName,
-		"type":      "data_processing",
+		"type":      "custom",
 		"processed": iterations,
 		"timestamp": time.Now().Unix(),
 	}, fmt.Sprintf("成功处理 %d 批数据", iterations))
@@ -123,7 +123,7 @@ func FileOperationHandler(ctx context.Context, task *domain.Task, repo domain.Ta
 
 	result := domain.NewResult(map[string]interface{}{
 		"task_name":  taskName,
-		"type":       "file_operation",
+		"type":       "custom",
 		"files":      files,
 		"file_count": fileCount,
 		"timestamp":  time.Now().Unix(),
@@ -162,7 +162,7 @@ func APICallHandler(ctx context.Context, task *domain.Task, repo domain.TaskRepo
 
 	resultData := map[string]interface{}{
 		"task_name": taskName,
-		"type":      "api_call",
+		"type":      "custom",
 		"method":    method,
 		"url":       url,
 		"status":    "success",
