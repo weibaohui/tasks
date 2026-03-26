@@ -838,6 +838,9 @@ export const AgentManagementPage: React.FC = () => {
                         }))}
                       />
                     </Form.Item>
+                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
+                      说明：留空则该 Agent 不启用任何 Skills 技能
+                    </div>
 
                     <Divider style={{ margin: '12px 0' }}>
                       <ToolOutlined /> 工具配置
@@ -852,10 +855,16 @@ export const AgentManagementPage: React.FC = () => {
                         }))}
                       />
                     </Form.Item>
+                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
+                      说明：留空则该 Agent 不启用任何内置工具（如需 Bash 工具，请添加 "bash"）
+                    </div>
 
                     <Divider style={{ margin: '12px 0' }}>
                       <ApiOutlined /> MCP Server 绑定
                     </Divider>
+                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
+                      说明：不绑定任何 MCP Server 则该 Agent 无法使用 MCP 工具
+                    </div>
 
                     {!editing && <Tag>请先创建 Agent 后再绑定 MCP Server</Tag>}
                     {editing && (
