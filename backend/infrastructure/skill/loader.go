@@ -1,6 +1,6 @@
 /**
  * Skills Loader
- * 技能加载器 - 从文件系统加载技能
+ * 技能加载器 - 从多个目录加载技能，支持灵活的搜索路径
  */
 package skill
 
@@ -21,127 +21,176 @@ type SkillLoaderFunc func(name string) string
 type SkillInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Source      string `json:"source"` // "workspace" 或 "builtin"
-	Path        string `json:"path"`
 	Available   bool   `json:"available"`
 	Requires    string `json:"requires,omitempty"`
 }
 
 // SkillsLoader 技能加载器
 type SkillsLoader struct {
-	workspace       string
-	workspaceSkills string
-	builtinSkills   string
+	searchPaths []string // 搜索路径列表，按优先级排序（后面的覆盖前面的）
 }
 
-// NewSkillsLoader 创建技能加载器
+// NewSkillsLoader 创建技能加载器，使用默认搜索路径
 func NewSkillsLoader(workspace string) *SkillsLoader {
+	paths := detectDefaultSearchPaths(workspace)
 	return &SkillsLoader{
-		workspace:       workspace,
-		workspaceSkills: filepath.Join(workspace, "skills"),
-		builtinSkills:   detectBuiltinSkillsDir(),
+		searchPaths: paths,
 	}
 }
 
-// GetWorkspaceSkills 获取工作区技能目录路径
-func (s *SkillsLoader) GetWorkspaceSkills() string {
-	return s.workspaceSkills
+// NewSkillsLoaderWithPaths 创建技能加载器，使用指定的搜索路径
+// searchPaths 列表中，靠后的路径优先级更高（同名技能会被后面的覆盖）
+func NewSkillsLoaderWithPaths(searchPaths []string) *SkillsLoader {
+	// 过滤掉不存在的路径
+	validPaths := make([]string, 0, len(searchPaths))
+	for _, p := range searchPaths {
+		if p != "" && isDir(p) {
+			validPaths = append(validPaths, p)
+		}
+	}
+	return &SkillsLoader{
+		searchPaths: validPaths,
+	}
 }
 
-// ListSkills 列出所有可用技能
+// GetSearchPaths 返回当前配置的搜索路径
+func (s *SkillsLoader) GetSearchPaths() []string {
+	return s.searchPaths
+}
+
+// detectDefaultSearchPaths 检测默认搜索路径
+// 优先级从低到高，后面的会覆盖前面的同名技能
+func detectDefaultSearchPaths(workspace string) []string {
+	var paths []string
+
+	// 1. 环境变量指定的路径（最高优先级，如果存在）
+	if envPath := os.Getenv("TASKMANAGER_SKILLS_DIR"); envPath != "" {
+		if isDir(envPath) {
+			paths = append(paths, envPath)
+		}
+	}
+
+	// 2. 内置技能目录（从可执行文件所在目录推断）
+	if exePath := detectExecutableDir(); exePath != "" {
+		builtinPath := filepath.Join(exePath, "skills")
+		if isDir(builtinPath) {
+			paths = append(paths, builtinPath)
+		}
+	}
+
+	// 3. 用户目录下的 Skills
+	if homeDir := os.Getenv("HOME"); homeDir != "" {
+		userPath := filepath.Join(homeDir, ".taskmanager", "skills")
+		if isDir(userPath) {
+			paths = append(paths, userPath)
+		}
+	}
+
+	// 4. 工作区技能目录
+	if workspace != "" {
+		workspacePath := filepath.Join(workspace, "skills")
+		if isDir(workspacePath) {
+			paths = append(paths, workspacePath)
+		}
+	}
+
+	// 5. 当前工作目录下的 Skills（最低优先级）
+	cwd, err := os.Getwd()
+	if err == nil {
+		cwdPath := filepath.Join(cwd, "skills")
+		if isDir(cwdPath) {
+			paths = append(paths, cwdPath)
+		}
+	}
+
+	return paths
+}
+
+// detectExecutableDir 检测可执行文件所在目录
+func detectExecutableDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(exe)
+}
+
+// ListSkills 列出所有可用技能（从所有搜索路径合并）
 func (s *SkillsLoader) ListSkills() []SkillInfo {
-	skills := make([]SkillInfo, 0)
+	// 使用 map 去重，后加载的同名技能覆盖前面的
+	skillsMap := make(map[string]SkillInfo)
 
-	// 工作区技能（最高优先级）
-	if dir, err := os.ReadDir(s.workspaceSkills); err == nil {
-		for _, entry := range dir {
-			if entry.IsDir() {
-				skillFile := filepath.Join(s.workspaceSkills, entry.Name(), "SKILL.md")
-				if _, err := os.Stat(skillFile); err == nil {
-					meta := s.GetSkillMetadata(entry.Name())
-					available := s.CheckRequirements(entry.Name())
-					var requires string
-					if !available {
-						requires = s.GetMissingRequirements(entry.Name())
-					}
-					desc := ""
-					if d, ok := meta["description"]; ok {
-						desc = d
-					}
-					skills = append(skills, SkillInfo{
-						Name:        entry.Name(),
-						Description: desc,
-						Source:      "workspace",
-						Path:        skillFile,
-						Available:   available,
-						Requires:    requires,
-					})
-				}
+	for _, searchPath := range s.searchPaths {
+		if !isDir(searchPath) {
+			continue
+		}
+
+		entries, err := os.ReadDir(searchPath)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+
+			skillName := entry.Name()
+			skillFile := filepath.Join(searchPath, skillName, "SKILL.md")
+
+			// 验证技能名称
+			if err := validateSkillName(skillName); err != nil {
+				continue
+			}
+
+			if _, err := os.Stat(skillFile); err != nil {
+				continue
+			}
+
+			// 获取技能元数据
+			meta := s.GetSkillMetadata(skillName)
+			available := s.CheckRequirements(skillName)
+			var requires string
+			if !available {
+				requires = s.GetMissingRequirements(skillName)
+			}
+			desc := ""
+			if d, ok := meta["description"]; ok {
+				desc = d
+			}
+
+			// 放入 map，后面的会覆盖前面的
+			skillsMap[skillName] = SkillInfo{
+				Name:        skillName,
+				Description: desc,
+				Available:   available,
+				Requires:    requires,
 			}
 		}
 	}
 
-	// 内置技能
-	if s.builtinSkills != "" {
-		if dir, err := os.ReadDir(s.builtinSkills); err == nil {
-			for _, entry := range dir {
-				if entry.IsDir() {
-					skillFile := filepath.Join(s.builtinSkills, entry.Name(), "SKILL.md")
-					if _, err := os.Stat(skillFile); err == nil {
-						// 检查是否已存在
-						exists := false
-						for _, sk := range skills {
-							if sk.Name == entry.Name() {
-								exists = true
-								break
-							}
-						}
-						if !exists {
-							meta := s.GetSkillMetadata(entry.Name())
-							available := s.CheckRequirements(entry.Name())
-							var requires string
-							if !available {
-								requires = s.GetMissingRequirements(entry.Name())
-							}
-							desc := ""
-							if d, ok := meta["description"]; ok {
-								desc = d
-							}
-							skills = append(skills, SkillInfo{
-								Name:        entry.Name(),
-								Description: desc,
-								Source:      "builtin",
-								Path:        skillFile,
-								Available:   available,
-								Requires:    requires,
-							})
-						}
-					}
-				}
-			}
-		}
+	// 转换为切片
+	skills := make([]SkillInfo, 0, len(skillsMap))
+	for _, info := range skillsMap {
+		skills = append(skills, info)
 	}
 
 	return skills
 }
 
-// LoadSkill 加载技能内容
+// LoadSkill 加载技能内容（搜索所有路径）
 func (s *SkillsLoader) LoadSkill(name string) string {
 	// 验证技能名称，防止路径遍历攻击
 	if err := validateSkillName(name); err != nil {
 		return ""
 	}
 
-	// 先检查工作区
-	workspaceSkill := filepath.Join(s.workspaceSkills, name, "SKILL.md")
-	if data, err := os.ReadFile(workspaceSkill); err == nil {
-		return string(data)
-	}
+	// 从后往前搜索，后面的路径优先级更高
+	for i := len(s.searchPaths) - 1; i >= 0; i-- {
+		searchPath := s.searchPaths[i]
+		skillFile := filepath.Join(searchPath, name, "SKILL.md")
 
-	// 检查内置
-	if s.builtinSkills != "" {
-		builtinSkill := filepath.Join(s.builtinSkills, name, "SKILL.md")
-		if data, err := os.ReadFile(builtinSkill); err == nil {
+		if data, err := os.ReadFile(skillFile); err == nil {
 			return string(data)
 		}
 	}
@@ -164,7 +213,19 @@ func (s *SkillsLoader) GetSkillMetadata(name string) map[string]string {
 	if err := validateSkillName(name); err != nil {
 		return nil
 	}
-	content := s.LoadSkill(name)
+
+	// 尝试从各个路径加载
+	var content string
+	for i := len(s.searchPaths) - 1; i >= 0; i-- {
+		searchPath := s.searchPaths[i]
+		skillFile := filepath.Join(searchPath, name, "SKILL.md")
+
+		if data, err := os.ReadFile(skillFile); err == nil {
+			content = string(data)
+			break
+		}
+	}
+
 	if content == "" {
 		return nil
 	}
@@ -207,7 +268,7 @@ func (s *SkillsLoader) CheckRequirements(name string) bool {
 	if bins, ok := meta["requires_bins"]; ok {
 		for _, bin := range strings.Split(bins, ",") {
 			bin = strings.TrimSpace(bin)
-			if bin != "" && !s.hasBinary(bin) {
+			if bin != "" && !hasBinary(bin) {
 				return false
 			}
 		}
@@ -238,7 +299,7 @@ func (s *SkillsLoader) GetMissingRequirements(name string) string {
 	if bins, ok := meta["requires_bins"]; ok {
 		for _, bin := range strings.Split(bins, ",") {
 			bin = strings.TrimSpace(bin)
-			if bin != "" && !s.hasBinary(bin) {
+			if bin != "" && !hasBinary(bin) {
 				missing = append(missing, "CLI: "+bin)
 			}
 		}
@@ -257,7 +318,7 @@ func (s *SkillsLoader) GetMissingRequirements(name string) string {
 }
 
 // hasBinary 检查二进制文件是否存在
-func (s *SkillsLoader) hasBinary(name string) bool {
+func hasBinary(name string) bool {
 	path := os.Getenv("PATH")
 	for _, dir := range strings.Split(path, string(os.PathListSeparator)) {
 		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
@@ -294,32 +355,6 @@ func validateSkillName(name string) error {
 	}
 
 	return nil
-}
-
-// detectBuiltinSkillsDir 解析内置技能目录
-func detectBuiltinSkillsDir() string {
-	// 优先从环境变量读取
-	if env := strings.TrimSpace(os.Getenv("TASKMANAGER_SKILLS_DIR")); env != "" {
-		return env
-	}
-
-	// 从当前工作目录查找
-	if cwd, err := os.Getwd(); err == nil {
-		dir := filepath.Join(cwd, "skills")
-		if isDir(dir) {
-			return dir
-		}
-	}
-
-	// 从可执行文件目录查找
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Join(filepath.Dir(exe), "skills")
-		if isDir(dir) {
-			return dir
-		}
-	}
-
-	return ""
 }
 
 // isDir 判断路径是否为目录
