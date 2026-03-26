@@ -40,10 +40,19 @@
 ## 常用命令
 
 ```bash
-# 后端
+# 启动开发环境（后端 + 前端）
+make dev
+
+# 停止开发环境
+make stop
+
+# 后端单独热重载开发
+make dev-backend
+
+# 后端编译和测试
 cd backend && go build ./cmd/server && go test ./...
 
-# 前端
+# 前端开发
 cd frontend && bun run dev
 
 # E2E（必须会话隔离）
@@ -52,6 +61,20 @@ playwright-cli -s="$PW_SESSION" open http://localhost:3000
 
 # 数据库
 sqlite3 backend/tasks.db
+```
+
+## 调试与日志
+
+**日志文件（开发环境）：**
+| 文件 | 内容 |
+|------|------|
+| `backend/logs/air.log` | Air 运行日志 + 应用所有 stdout/stderr |
+| `backend/logs/air_build.log` | Air 构建日志 |
+
+**查看日志：**
+```bash
+tail -f backend/logs/air.log          # 实时跟踪应用日志
+tail -f backend/logs/air_build.log   # 实时跟踪构建日志
 ```
 
 ## 详细文档
