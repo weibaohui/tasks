@@ -358,6 +358,7 @@ func resolveWorkspace() string {
 		return p
 	}
 	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
+	// 注意：这可能导致工作区技能与内置技能目录重叠
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./backend")
 	}

@@ -6,9 +6,11 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/weibh/taskmanager/infrastructure/skill"
 )
@@ -91,6 +93,11 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 
 // getSkillSource 获取技能来源
 func (h *SkillHandler) getSkillSource(name string) string {
+	// 验证技能名称，防止路径遍历攻击
+	if err := validateSkillName(name); err != nil {
+		return ""
+	}
+
 	// 检查工作区
 	workspaceSkill := filepath.Join(h.loader.GetWorkspaceSkills(), name, "SKILL.md")
 	if _, err := os.Stat(workspaceSkill); err == nil {
@@ -99,6 +106,26 @@ func (h *SkillHandler) getSkillSource(name string) string {
 
 	// 内置技能
 	return "builtin"
+}
+
+// validateSkillName 验证技能名称，防止路径遍历攻击
+func validateSkillName(name string) error {
+	// 检查是否包含路径分隔符
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return fmt.Errorf("skill name contains invalid path characters")
+	}
+
+	// 检查是否包含父目录引用
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("skill name contains parent directory reference")
+	}
+
+	// 检查是否为空
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("skill name cannot be empty")
+	}
+
+	return nil
 }
 
 // ListSkillsSimple 获取所有技能名称列表（简单版，用于下拉选择）
