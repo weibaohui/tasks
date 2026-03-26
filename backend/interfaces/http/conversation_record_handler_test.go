@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/weibh/taskmanager/application"
@@ -125,7 +126,7 @@ type mockConvRecordIDGen struct {
 
 func (m *mockConvRecordIDGen) Generate() string {
 	m.count++
-	return "conv-id-" + string(rune('0'+m.count))
+	return "conv-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestConvRecordHandler() (*ConversationRecordHandler, *mockConvRecordRepo) {

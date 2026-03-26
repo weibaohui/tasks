@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/weibh/taskmanager/application"
@@ -23,7 +24,7 @@ type mockIDGenerator struct {
 
 func (m *mockIDGenerator) Generate() string {
 	m.count++
-	return "id-" + string(rune('0'+m.count))
+	return "id-" + strconv.Itoa(m.count)
 }
 
 type mockTaskRepository struct {

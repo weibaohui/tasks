@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/weibh/taskmanager/application"
@@ -76,7 +77,7 @@ type mockAgentIDGenerator struct {
 
 func (m *mockAgentIDGenerator) Generate() string {
 	m.count++
-	return "agent-id-" + string(rune('0'+m.count))
+	return "agent-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestAgentHandler() (*AgentHandler, *http.ServeMux) {

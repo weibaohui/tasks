@@ -7,6 +7,7 @@ package hooks
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -36,7 +37,7 @@ type mockIDGenE2E struct {
 
 func (m *mockIDGenE2E) Generate() string {
 	m.counter++
-	return "span-" + string(rune('0'+m.counter))
+	return "span-" + strconv.Itoa(m.counter)
 }
 
 // TestE2E_TraceTree 数据库端到端测试（简化版）

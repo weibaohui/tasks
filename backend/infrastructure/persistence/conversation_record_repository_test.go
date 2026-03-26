@@ -6,6 +6,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -120,7 +121,7 @@ func TestSQLiteConversationRecordRepository_FindBySessionKey(t *testing.T) {
 
 	// 保存同一 session 的多条记录
 	for i := 0; i < 2; i++ {
-		record := createTestRecord("rec-"+string(rune('a'+i)), "trace-"+string(rune('0'+i)), "llm_call", "user", "msg")
+		record := createTestRecord("rec-"+string(rune('a'+i)), "trace-"+strconv.Itoa(i), "llm_call", "user", "msg")
 		record.SetScope(sessionKey, "", "", "", "")
 		repo.Save(ctx, record)
 	}

@@ -6,6 +6,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -23,7 +24,7 @@ func (m *mockIDGenerator) Generate() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.count++
-	return "id-" + string(rune('0'+m.count))
+	return "id-" + strconv.Itoa(m.count)
 }
 
 type mockTaskRepository struct {

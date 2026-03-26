@@ -5,6 +5,7 @@ package application
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -110,7 +111,7 @@ func newMockSessionIDGenerator(prefix string) *mockSessionIDGenerator {
 
 func (g *mockSessionIDGenerator) Generate() string {
 	g.count++
-	return g.prefix + "-" + string(rune('0'+g.count))
+	return g.prefix + "-" + strconv.Itoa(g.count)
 }
 
 func TestSessionApplicationService_CreateSession(t *testing.T) {

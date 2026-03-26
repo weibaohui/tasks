@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -118,7 +119,7 @@ func newMockSessionIDGeneratorForHandler(prefix string) *mockSessionIDGeneratorF
 
 func (g *mockSessionIDGeneratorForHandler) Generate() string {
 	g.count++
-	return g.prefix + "-" + string(rune('0'+g.count))
+	return g.prefix + "-" + strconv.Itoa(g.count)
 }
 
 func TestSessionHandler_CreateSession_InvalidJSON(t *testing.T) {

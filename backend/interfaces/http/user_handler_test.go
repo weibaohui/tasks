@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -74,7 +75,7 @@ func newMockUserIDGenerator(prefix string) *mockUserIDGenerator {
 
 func (g *mockUserIDGenerator) Generate() string {
 	g.count++
-	return g.prefix + "-id-" + string(rune('0'+g.count))
+	return g.prefix + "-id-" + strconv.Itoa(g.count)
 }
 
 func TestUserHandler_CreateUser_InvalidJSON(t *testing.T) {

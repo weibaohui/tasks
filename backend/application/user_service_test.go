@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ type mockUserIDGenerator struct {
 
 func (m *mockUserIDGenerator) Generate() string {
 	m.count++
-	return "user-id-" + string(rune('0'+m.count))
+	return "user-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestUserService() *UserApplicationService {

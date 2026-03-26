@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -99,7 +100,7 @@ func newMockChannelIDGenerator(prefix string) *mockChannelIDGenerator {
 
 func (g *mockChannelIDGenerator) Generate() string {
 	g.count++
-	return g.prefix + "-id-" + string(rune('0'+g.count))
+	return g.prefix + "-id-" + strconv.Itoa(g.count)
 }
 
 func TestChannelHandler_ListChannelTypes(t *testing.T) {

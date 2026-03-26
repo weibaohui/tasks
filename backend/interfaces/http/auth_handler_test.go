@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ type mockAuthIDGenerator struct {
 
 func (m *mockAuthIDGenerator) Generate() string {
 	m.count++
-	return "user-id-" + string(rune('0'+m.count))
+	return "user-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestAuthHandler() (*AuthHandler, *mockAuthUserRepository) {
