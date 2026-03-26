@@ -58,7 +58,7 @@ func (t *CreateTaskTool) Description() string {
 	return `创建一个新任务。
 参数 name: 任务名称（必填）
 参数 description: 任务描述（可选）
-参数 task_type: 任务类型（可选），可选值: agent, coding, custom，默认 custom
+参数 task_type: 任务类型（可选），可选值: agent(智能体), coding(编码), custom(自定义)，默认 agent
 参数 timeout_ms: 超时时间毫秒数（可选），默认 60000
 参数 priority: 优先级（可选），默认 0
 参数 parent_id: 父任务 ID（可选），用于创建子任务
@@ -81,8 +81,7 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 			},
 			"task_type": {
 				"type": "string",
-				"description": "任务类型（可选），可选值: agent, coding, custom",
-				"enum": ["agent", "coding", "custom"]
+				"description": "任务类型（可选），可选值: agent(智能体), coding(编码), custom(自定义)，默认 agent"
 			},
 			"timeout_ms": {
 				"type": "integer",
@@ -127,8 +126,8 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		}, nil
 	}
 
-	// 确定任务类型
-	taskType := domain.TaskTypeCustom
+	// 确定任务类型，默认 agent（智能体）
+	taskType := domain.TaskTypeAgent
 	if args.TaskType != "" {
 		switch args.TaskType {
 		case "agent":
