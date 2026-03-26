@@ -484,22 +484,24 @@ export const AgentManagementPage: React.FC = () => {
   /**
    * 保存 Agent（创建/更新）
    */
-  const handleSubmit = useCallback(async (values: AgentFormValues) => {
+  const handleSubmit = useCallback(async (_values: AgentFormValues) => {
     if (!userCode) {
       message.error('未获取到用户信息，请重新登录');
       return;
     }
     setSaving(true);
     try {
+      // 使用 getFieldsValue 获取所有表单值，避免未访问的 tab 中的字段丢失
+      const values = form.getFieldsValue() as AgentFormValues;
       if (editing) {
         const req: UpdateAgentRequest = {
           name: values.name,
           description: values.description,
-          identity_content: values.identity_content,
-          soul_content: values.soul_content,
-          agents_content: values.agents_content,
-          user_content: values.user_content,
-          tools_content: values.tools_content,
+          identity_content: values.identity_content || '',
+          soul_content: values.soul_content || '',
+          agents_content: values.agents_content || '',
+          user_content: values.user_content || '',
+          tools_content: values.tools_content || '',
           model: values.model,
           max_tokens: values.max_tokens,
           temperature: values.temperature,
