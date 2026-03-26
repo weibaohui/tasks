@@ -65,6 +65,16 @@ func (s *TaskApplicationService) SetWorkerPool(wp *WorkerPool) {
 	s.workerPool = wp
 }
 
+// GetTask 获取任务
+func (s *TaskApplicationService) GetTask(ctx context.Context, taskID domain.TaskID) (*domain.Task, error) {
+	return s.taskRepo.FindByID(ctx, taskID)
+}
+
+// GetChildTasks 获取子任务
+func (s *TaskApplicationService) GetChildTasks(ctx context.Context, parentID domain.TaskID) ([]*domain.Task, error) {
+	return s.taskRepo.FindByParentID(ctx, parentID)
+}
+
 // CreateTask 创建任务用例
 func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskCommand) (*domain.Task, error) {
 	// 1. 生成ID

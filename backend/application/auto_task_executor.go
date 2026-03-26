@@ -20,6 +20,28 @@ import (
 
 const MaxTaskDepth = 4
 
+// inheritContextFromTask 从父任务继承上下文信息（agent_code, user_code, channel_code, session_key）
+func inheritContextFromTask(parent *domain.Task, metadata map[string]interface{}) {
+	if parent == nil || parent.Metadata() == nil {
+		return
+	}
+	parentMeta := parent.Metadata()
+
+	// 继承上下文字段
+	if v, ok := parentMeta["agent_code"].(string); ok && v != "" {
+		metadata["agent_code"] = v
+	}
+	if v, ok := parentMeta["user_code"].(string); ok && v != "" {
+		metadata["user_code"] = v
+	}
+	if v, ok := parentMeta["channel_code"].(string); ok && v != "" {
+		metadata["channel_code"] = v
+	}
+	if v, ok := parentMeta["session_key"].(string); ok && v != "" {
+		metadata["session_key"] = v
+	}
+}
+
 // TaskExecutionSummary 单个任务的执行摘要
 type TaskExecutionSummary struct {
 	TaskID      string `json:"task_id"`
@@ -151,6 +173,16 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					taskType = domain.TaskTypeAgent
 				}
 
+				// 构建子任务 metadata 并继承父任务上下文
+				subTaskMeta := map[string]interface{}{
+					"goal":        st.Goal,
+					"parent_id":   taskID,
+					"parent_span": spanID,
+					"depth":       strconv.Itoa(currentDepth),
+					"llm_reason":  plan.Reason,
+				}
+				inheritContextFromTask(task, subTaskMeta)
+
 				subTask, err := domain.NewTask(
 					domain.NewTaskID(subTaskID),
 					domain.NewTraceID(traceID),
@@ -159,13 +191,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					st.Goal,
 					"",
 					taskType,
-					map[string]interface{}{
-						"goal":        st.Goal,
-						"parent_id":   taskID,
-						"parent_span": spanID,
-						"depth":       strconv.Itoa(currentDepth),
-						"llm_reason":  plan.Reason,
-					},
+					subTaskMeta,
 					DefaultTaskTimeout,
 					0,
 					0,
@@ -220,9 +246,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			goal     string
 			taskType domain.TaskType
 		}{
-			{"处理前50%数据", domain.TaskTypeDataProcessing},
-			{"处理后50%数据", domain.TaskTypeFileOperation},
-			{"验证处理结果", domain.TaskTypeAPICall},
+			{"处理前50%数据", domain.TaskTypeCustom},
+			{"处理后50%数据", domain.TaskTypeCustom},
+			{"验证处理结果", domain.TaskTypeCustom},
 		}
 
 		idGen := utils.NewNanoIDGenerator(21)
@@ -235,6 +261,15 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				taskType = domain.TaskTypeAgent
 			}
 
+			// 构建子任务 metadata 并继承父任务上下文
+			subTaskMeta := map[string]interface{}{
+				"goal":        st.goal,
+				"parent_id":   taskID,
+				"parent_span": spanID,
+				"depth":       strconv.Itoa(currentDepth),
+			}
+			inheritContextFromTask(task, subTaskMeta)
+
 			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
 				domain.NewTraceID(traceID),
@@ -243,12 +278,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				st.goal,
 				"",
 				taskType,
-				map[string]interface{}{
-					"goal":        st.goal,
-					"parent_id":   taskID,
-					"parent_span": spanID,
-					"depth":       strconv.Itoa(currentDepth),
-				},
+				subTaskMeta,
 				DefaultTaskTimeout,
 				0,
 				0,
