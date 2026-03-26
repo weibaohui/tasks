@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
@@ -90,7 +91,7 @@ type mockChannelIDGen struct {
 
 func (m *mockChannelIDGen) Generate() string {
 	m.count++
-	return "channel-id-" + string(rune('0'+m.count))
+	return "channel-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestChannelSvc() *ChannelApplicationService {

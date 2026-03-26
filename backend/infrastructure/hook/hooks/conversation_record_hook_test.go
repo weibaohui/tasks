@@ -7,6 +7,7 @@ package hooks
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -23,7 +24,7 @@ type mockIDGen struct {
 func (m *mockIDGen) Generate() string {
 	id := m.nextID
 	m.nextID++
-	return "span-" + string(rune('0'+id))
+	return "span-" + strconv.Itoa(id)
 }
 
 func newMockIDGen() *mockIDGen {

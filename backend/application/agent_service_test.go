@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
@@ -68,7 +69,7 @@ type mockAgentIDGen struct {
 
 func (m *mockAgentIDGen) Generate() string {
 	m.count++
-	return "agent-id-" + string(rune('0'+m.count))
+	return "agent-id-" + strconv.Itoa(m.count)
 }
 
 func setupTestAgentSvc() *AgentApplicationService {

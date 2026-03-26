@@ -6,6 +6,7 @@ package application
 import (
 	"container/heap"
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -285,7 +286,7 @@ func TestWorkerPool_GracefulShutdown(t *testing.T) {
 	// 提交任务
 	for i := 0; i < 5; i++ {
 		task, _ := domain.NewTask(
-			domain.NewTaskID("task-shutdown-"+string(rune('0'+i))),
+			domain.NewTaskID("task-shutdown-"+strconv.Itoa(i)),
 			domain.NewTraceID("trace-1"),
 			domain.NewSpanID("span-1"),
 			nil,
