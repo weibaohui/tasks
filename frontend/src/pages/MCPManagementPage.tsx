@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
+import type { MCPTool } from '../types/mcp';
 import type { ColumnsType } from 'antd/es/table';
 import {
   createMCPServer,
@@ -151,11 +152,16 @@ export const MCPManagementPage: React.FC = () => {
 
   const columns: ColumnsType<MCPServer> = useMemo(() => [
     { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: 'Code', dataIndex: 'code', key: 'code', width: 160, render: (v: string) => <Tag color="blue">{v}</Tag> },
+    { title: 'Code', dataIndex: 'code', key: 'code', width: 120, render: (v: string) => <Tag color="blue">{v}</Tag> },
     { title: '传输', dataIndex: 'transport_type', key: 'transport_type', width: 100 },
     { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (v: string) =>
       v === 'active' ? <Tag color="green">active</Tag> : v === 'error' ? <Tag color="red">error</Tag> : <Tag>{v || 'inactive'}</Tag> },
-    { title: '最后连接', dataIndex: 'last_connected', key: 'last_connected', width: 180, render: (ts: number | null) => ts ? new Date(ts).toLocaleString() : '-' },
+    { title: '工具数', key: 'tools_count', width: 80, render: (_: unknown, record: MCPServer) =>
+      record.capabilities && record.capabilities.length > 0
+        ? <Tag color="cyan">{record.capabilities.length}</Tag>
+        : <Tag color="default">0</Tag>
+    },
+    { title: '最后连接', dataIndex: 'last_connected', key: 'last_connected', width: 160, render: (ts: number | null) => ts ? new Date(ts).toLocaleString() : '-' },
     {
       title: '操作',
       key: 'action',
@@ -213,7 +219,33 @@ export const MCPManagementPage: React.FC = () => {
           </Space>
         }
       >
-        <Table<MCPServer> rowKey="id" loading={loading} columns={columns} dataSource={items} />
+        <Table<MCPServer>
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: '8px 0' }}>
+                <span style={{ fontWeight: 'bold' }}>工具列表（{record.capabilities?.length || 0}）：</span>
+                {record.capabilities && record.capabilities.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {record.capabilities.map((tool: MCPTool) => (
+                      <Tag key={tool.name} color="blue" style={{ margin: 0 }}>
+                        {tool.name}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ color: '#999', marginTop: 8, display: 'block' }}>
+                    暂无工具，请点击「刷新工具」获取
+                  </span>
+                )}
+              </div>
+            ),
+            rowExpandable: () => true,
+          }}
+        />
       </Card>
 
       <Modal

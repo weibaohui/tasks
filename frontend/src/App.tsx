@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ConfigProvider, Layout, Menu, Typography } from 'antd';
+import { Button, ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
   ApiOutlined,
@@ -17,6 +17,7 @@ import {
   ToolOutlined,
   UserOutlined,
   ClusterOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
 import { TaskManagement } from './pages/TaskManagement';
@@ -44,6 +45,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
   const selectedKey = location.pathname.startsWith('/users')
     ? '/users'
     : location.pathname.startsWith('/providers')
@@ -66,6 +68,24 @@ const MainLayout: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
+      <Layout.Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <Space size="middle">
+          <span style={{ color: '#666' }}>
+            <UserOutlined style={{ marginRight: 8 }} />
+            {user?.username || user?.user_code || '用户'}
+          </span>
+          <Button
+            type="text"
+            icon={<LogoutOutlined />}
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+          >
+            退出登录
+          </Button>
+        </Space>
+      </Layout.Header>
       <Layout.Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
         <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px' }}>
           <Typography.Title level={5} style={{ margin: 0 }}>
