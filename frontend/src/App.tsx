@@ -68,7 +68,10 @@ const MainLayout: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Layout.Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+      <Layout.Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography.Title level={5} style={{ margin: 0 }}>
+          任务管理后台
+        </Typography.Title>
         <Space size="middle">
           <span style={{ color: '#666' }}>
             <UserOutlined style={{ marginRight: 8 }} />
@@ -86,33 +89,30 @@ const MainLayout: React.FC = () => {
           </Button>
         </Space>
       </Layout.Header>
-      <Layout.Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px' }}>
-          <Typography.Title level={5} style={{ margin: 0 }}>
-            任务管理后台
-          </Typography.Title>
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={[
-            { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
-            { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
-            { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
-            { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
-            { key: '/skills', icon: <ClusterOutlined />, label: 'Skills 管理' },
-            { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
-            { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
-            { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
-            { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
-            { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-          ]}
-          onClick={(item) => navigate(item.key)}
-        />
-      </Layout.Sider>
-      <Layout.Content style={{ background: '#f5f5f5' }}>
-        <Outlet />
-      </Layout.Content>
+      <Layout>
+        <Layout.Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
+          <Menu
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={[
+              { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
+              { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
+              { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
+              { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
+              { key: '/skills', icon: <ClusterOutlined />, label: 'Skills 管理' },
+              { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
+              { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
+              { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
+              { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
+              { key: '/users', icon: <UserOutlined />, label: '用户管理' },
+            ]}
+            onClick={(item) => navigate(item.key)}
+          />
+        </Layout.Sider>
+        <Layout.Content style={{ background: '#f5f5f5', padding: 24 }}>
+          <Outlet />
+        </Layout.Content>
+      </Layout>
     </Layout>
   );
 };
