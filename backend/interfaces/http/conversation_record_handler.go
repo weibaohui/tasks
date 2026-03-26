@@ -212,11 +212,22 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// 转换 daily_trends 字段名：completion_tokens -> complete_tokens
+	dailyTrends := make([]map[string]interface{}, 0, len(stats.DailyTrends))
+	for _, dt := range stats.DailyTrends {
+		dailyTrends = append(dailyTrends, map[string]interface{}{
+			"date":             dt.Date,
+			"prompt_tokens":    dt.PromptTokens,
+			"complete_tokens":  dt.CompletionTokens,
+			"total_tokens":     dt.TotalTokens,
+		})
+	}
+
 	tokenStats := map[string]interface{}{
 		"total_prompt_tokens":     stats.TotalPromptTokens,
 		"total_completion_tokens": stats.TotalCompletionTokens,
 		"total_tokens":            stats.TotalTokens,
-		"daily_trends":            stats.DailyTrends,
+		"daily_trends":            dailyTrends,
 	}
 
 	agentDist := make([]map[string]interface{}, 0, len(stats.AgentDistribution))

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 var (
@@ -213,12 +215,54 @@ func (s *LLMProviderApplicationService) TestConnection(ctx context.Context, id d
 			"message": "API Key 未配置",
 		}, nil
 	}
+
+	// 构建 LLM 配置
+	model := provider.DefaultModel()
+	if model == "" && len(provider.SupportedModels()) > 0 {
+		model = provider.SupportedModels()[0].ID
+	}
+	if model == "" {
+		model = "gpt-3.5-turbo" // 默认模型
+	}
+
+	config := &llm.Config{
+		ProviderType: provider.ProviderKey(),
+		Model:        model,
+		APIKey:       provider.APIKey(),
+		BaseURL:      provider.APIBase(),
+		Temperature:  0.7,
+		MaxTokens:    1024,
+	}
+
+	// 创建 LLM 客户端
+	client, err := llm.NewLLMProvider(config)
+	if err != nil {
+		return map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("创建 LLM 客户端失败: %v", err),
+		}, nil
+	}
+
+	// 设置超时
+	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// 发送测试请求
+	_, err = client.Generate(testCtx, "Hi, please respond with 'OK' if you receive this message.")
+	if err != nil {
+		return map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("API 调用失败: %v", err),
+		}, nil
+	}
+
 	return map[string]interface{}{
 		"success":     true,
-		"message":     "连接配置检查通过",
+		"message":     "连接测试成功",
 		"provider":    provider.ProviderName(),
 		"providerKey": provider.ProviderKey(),
 		"api_base":    provider.APIBase(),
+		"model":       model,
 		"model_count": len(provider.SupportedModels()),
 	}, nil
 }

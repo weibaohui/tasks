@@ -22,3 +22,7 @@ backend/server
 tasks.db
 backend/bin/taskmanager
 backend/gateway
+.playwright-cli
+.cc-connect
+backend/cli
+myenv
