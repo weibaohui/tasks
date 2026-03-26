@@ -213,6 +213,12 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		}, nil
 	}
 
+	// 启动任务并提交到工作池执行
+	if err := t.taskService.StartTask(ctx, task.ID()); err != nil {
+		// 启动失败也返回成功，因为任务已创建成功
+		// 任务保持 Pending 状态，可以后续手动启动
+	}
+
 	// 构建成功响应
 	result := map[string]interface{}{
 		"success":    true,
