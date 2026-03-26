@@ -23,6 +23,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
+	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
@@ -30,6 +31,19 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
+
+// resolveGatewayWorkspace 解析工作区目录路径
+func resolveGatewayWorkspace() string {
+	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
+		return p
+	}
+	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend")
+	}
+	// 否则使用当前工作目录
+	return "."
+}
 
 func main() {
 	logger, _ := zap.NewProduction()
@@ -80,17 +94,22 @@ func main() {
 	hookManager.Register(hooks.NewFeishuThinkingProcessHook(messageBus, logger))
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
-	// 8. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil)
+	// 8. 初始化技能加载器
+	gatewayWorkspace := resolveGatewayWorkspace()
+	gatewaySkillsLoader := skill.NewSkillsLoader(gatewayWorkspace)
+	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
+
+	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader)
 	logger.Info("消息处理器初始化完成")
 
-	// 8. 初始化应用服务
+	// 10. 初始化应用服务
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	logger.Info("应用服务初始化完成")
 
-	// 9. 初始化渠道管理器
+	// 11. 初始化渠道管理器
 	channelRegistry := channel.DefaultRegistry(messageBus, logger)
 	channelManager := channel.NewManager(messageBus)
 
@@ -99,16 +118,16 @@ func main() {
 		logger.Error("加载渠道配置失败", zap.Error(err))
 	}
 
-	// 10. 启动消息分发器
+	// 12. 启动消息分发器
 	ctx, cancel := context.WithCancel(context.Background())
 	messageBus.StartDispatcher(ctx)
 
-	// 11. 启动所有渠道
+	// 13. 启动所有渠道
 	if err := channelManager.StartAll(ctx); err != nil {
 		logger.Error("启动渠道失败", zap.Error(err))
 	}
 
-	// 12. 初始化 HTTP Handler (仅管理API)
+	// 14. 初始化 HTTP Handler (仅管理API)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
 		authSecret = "taskmanager-dev-secret"
@@ -123,7 +142,7 @@ func main() {
 	mux.HandleFunc("/api/tasks", taskHandler.CreateTask)
 	mux.HandleFunc("/api/tasks/", taskHandler.GetTask)
 
-	// 13. 启动 HTTP Server
+	// 15. 启动 HTTP Server
 	server := &http.Server{
 		Addr:         ":8889",
 		Handler:      mux,
@@ -139,7 +158,7 @@ func main() {
 		}
 	}()
 
-	// 14. 启动消息处理循环
+	// 16. 启动消息处理循环
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -151,7 +170,7 @@ func main() {
 		zap.Int("channels", len(channelManager.List())),
 	)
 
-	// 15. 等待中断信号
+	// 17. 等待中断信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan

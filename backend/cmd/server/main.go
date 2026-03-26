@@ -21,6 +21,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/skill"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
@@ -168,7 +169,12 @@ func main() {
 		authSecret = "taskmanager-dev-secret"
 	}
 	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler)
+
+	// 7.1 初始化技能加载器
+	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
+	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
+
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
@@ -180,7 +186,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService)
+	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -346,6 +352,20 @@ func resolveDBPath() string {
 	return filepath.FromSlash("./tasks.db")
 }
 
+// resolveWorkspace 解析工作区目录路径
+func resolveWorkspace() string {
+	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
+		return p
+	}
+	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
+	// 注意：这可能导致工作区技能与内置技能目录重叠
+	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./backend")
+	}
+	// 否则使用当前工作目录
+	return "."
+}
+
 // initGateway 初始化渠道网关
 func initGateway(
 	channelService *application.ChannelApplicationService,
@@ -357,6 +377,7 @@ func initGateway(
 	hookManager *hook.Manager,
 	logger *zap.Logger,
 	mcpService *application.MCPApplicationService,
+	skillsLoader *skill.SkillsLoader,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,
@@ -371,7 +392,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)
