@@ -13,6 +13,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
+	tasktools "github.com/weibh/taskmanager/infrastructure/llm/tools/task"
 	skilltools "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
@@ -339,7 +340,20 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	// 构建工具注册表（包括 Agent 指定的 Bash、MCP、Skills 工具）
 	toolRegistries := []*llm.ToolRegistry{p.toolRegistry}
 	if agent != nil {
-		if agentToolsRegistry := p.buildAgentToolsRegistry(agent); agentToolsRegistry != nil {
+		// 构建上下文参数
+		contextParams := map[string]string{
+			"agentCode":   agent.AgentCode().String(),
+			"userCode":    agent.UserCode(),
+			"sessionKey":  msg.SessionKey(),
+			"traceID":     traceID,
+			"spanID":      llmSpanID,
+		}
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				contextParams["channelCode"] = v
+			}
+		}
+		if agentToolsRegistry := p.buildAgentToolsRegistry(agent, contextParams); agentToolsRegistry != nil {
 			toolRegistries = append(toolRegistries, agentToolsRegistry)
 		}
 	}
@@ -554,7 +568,8 @@ func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
 // buildAgentToolsRegistry 为 Agent 构建工具注册表
 // 包括 Bash（按 agent.ToolsList 配置）、MCP（按 agent 绑定）、Skills（按 agent.SkillsList 配置）
 // 如果各项配置都为空，则不注册任何工具
-func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.ToolRegistry {
+// contextParams 包含: agentCode, userCode, channelCode, sessionKey, traceID, spanID
+func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextParams map[string]string) *llm.ToolRegistry {
 	if agent == nil {
 		return nil
 	}
@@ -619,6 +634,22 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.Too
 			registry.Register(skilltools.NewUseSkillTool(p.skillsLoader))
 			registered = true
 		}
+	}
+
+	// 4. 注册任务工具（所有 Agent 都可以创建和查询任务）
+	if p.taskService != nil {
+		registry.Register(tasktools.NewCreateTaskTool(
+			p.taskService,
+			p.idGenerator,
+			contextParams["agentCode"],
+			contextParams["userCode"],
+			contextParams["channelCode"],
+			contextParams["sessionKey"],
+			contextParams["traceID"],
+			contextParams["spanID"],
+		))
+		registry.Register(tasktools.NewQueryTaskTool(p.taskService))
+		registered = true
 	}
 
 	// 如果没有注册任何工具，返回 nil
