@@ -39,15 +39,23 @@ func TestSyncMap_Add(t *testing.T) {
 func TestSyncMap_Add_Expiration(t *testing.T) {
 	m := newSyncMap(3)
 
+	// Add 3 items
 	m.add("key1")
 	m.add("key2")
 	m.add("key3")
 
 	// Adding a 4th key should trigger cleanup
-	m.add("key4")
+	result := m.add("key4")
 
-	// key1 might be deleted due to cleanup (20% of maxSize = 0.6, so at least 0 entries removed)
-	// But we can't guarantee which keys remain due to map iteration randomness
+	// Cleanup should have occurred, but key4 should still be added
+	if !result {
+		t.Error("期望添加 key4 成功")
+	}
+
+	// Adding same key should fail
+	if m.add("key4") {
+		t.Error("期望重复添加 key4 失败")
+	}
 }
 
 func TestGetString(t *testing.T) {

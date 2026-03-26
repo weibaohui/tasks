@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // mockMCPService - 用于测试的 MCP 服务模拟
@@ -101,7 +103,7 @@ func TestUseMCPTool_Parameters(t *testing.T) {
 
 func TestUseMCPTool_ImplementsToolInterface(t *testing.T) {
 	tool := NewUseMCPTool(nil)
-	var _ interface{} = tool
+	var _ llm.Tool = tool
 }
 
 // CallMCPTool tests
@@ -157,7 +159,7 @@ func TestCallMCPTool_Parameters(t *testing.T) {
 
 func TestCallMCPTool_ImplementsToolInterface(t *testing.T) {
 	tool := NewCallMCPTool(nil)
-	var _ interface{} = tool
+	var _ llm.Tool = tool
 }
 
 // Test validation logic

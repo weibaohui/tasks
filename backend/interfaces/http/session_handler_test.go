@@ -89,6 +89,10 @@ func (r *mockSessionRepositoryForHandler) DeleteBySessionKey(ctx context.Context
 	if r.deleteErr != nil {
 		return r.deleteErr
 	}
+	// Find session by key and delete from both maps
+	if session, exists := r.sessionKeys[sessionKey]; exists {
+		delete(r.sessions, session.ID())
+	}
 	delete(r.sessionKeys, sessionKey)
 	return nil
 }
@@ -184,11 +188,14 @@ func TestSessionHandler_ListSessions_ByUserCode(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 
 	// 先创建一个 session
-	svc.CreateSession(context.Background(), application.CreateSessionCommand{
+	_, err := svc.CreateSession(context.Background(), application.CreateSessionCommand{
 		UserCode:    "user-001",
 		ChannelCode: "channel-001",
 		SessionKey:  "key-001",
 	})
+	if err != nil {
+		t.Fatalf("CreateSession 失败: %v", err)
+	}
 
 	handler := NewSessionHandler(svc)
 
@@ -322,7 +329,7 @@ func TestExtractSessionKey(t *testing.T) {
 }
 
 func TestSessionToMap(t *testing.T) {
-	session, _ := domain.NewSession(
+	session, err := domain.NewSession(
 		domain.NewSessionID("sess-001"),
 		"user-001",
 		"channel-001",
@@ -330,6 +337,9 @@ func TestSessionToMap(t *testing.T) {
 		"ext-001",
 		"agent-001",
 	)
+	if err != nil {
+		t.Fatalf("创建 Session 失败: %v", err)
+	}
 
 	result := sessionToMap(session)
 

@@ -54,7 +54,7 @@ func TestSession_AddMessage_DefaultTimestamp(t *testing.T) {
 
 	msgs := session.Messages()
 	if msgs[0].Timestamp.Before(before) {
-		t.Error("时间戳应该在添加之前")
+		t.Error("时间戳应该在添加之后或相等")
 	}
 }
 
