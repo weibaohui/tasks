@@ -58,14 +58,7 @@ func NewMessageProcessor(
 	skillsLoader *skill.SkillsLoader,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
-	// 注册 Bash 工具
-	registry.Register(tools.NewBashTool())
-
-	// 注册 MCP 工具
-	if mcpService != nil {
-		registry.Register(mcp.NewUseMCPTool(mcpService))
-		registry.Register(mcp.NewCallMCPTool(mcpService))
-	}
+	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
 
 	return &MessageProcessor{
 		bus:              messageBus,
@@ -342,9 +335,9 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 	}
 
-	// 构建工具注册表（包括 Agent 指定的技能）
+	// 构建工具注册表（包括 Agent 指定的 Bash、MCP、Skills 工具）
 	toolRegistries := []*llm.ToolRegistry{p.toolRegistry}
-	if agent != nil && p.skillsLoader != nil {
+	if agent != nil {
 		if agentToolsRegistry := p.buildAgentToolsRegistry(agent); agentToolsRegistry != nil {
 			toolRegistries = append(toolRegistries, agentToolsRegistry)
 		}
@@ -545,50 +538,77 @@ func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
 	return sb.String()
 }
 
-// buildAgentToolsRegistry 为 Agent 构建工具注册表（包括 Agent 指定的技能）
+// buildAgentToolsRegistry 为 Agent 构建工具注册表
+// 包括 Bash（按 agent.ToolsList 配置）、MCP（按 agent 绑定）、Skills（按 agent.SkillsList 配置）
+// 如果各项配置都为空，则不注册任何工具
 func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.ToolRegistry {
-	if agent == nil || p.skillsLoader == nil {
+	if agent == nil {
 		return nil
 	}
 
-	// 获取 Agent 的技能列表
-	skills := p.skillsLoader.ListSkills()
-	if len(skills) == 0 {
-		return nil
-	}
-
-	// Agent.SkillsList 包含启用的技能名称列表
-	// 如果为空，则不注册任何技能工具
-	agentSkills := agent.SkillsList()
-	if len(agentSkills) == 0 {
-		return nil
-	}
-
-	// 构建技能名称集合
-	enabledSkills := make(map[string]bool)
-	for _, s := range agentSkills {
-		enabledSkills[s] = true
-	}
-
-	// 创建新的工具注册表，只包含 Agent 启用的技能
 	registry := llm.NewToolRegistry()
-	skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(p.skillsLoader)
-	for _, t := range skillToolsRegistry.GetTools() {
-		// 检查这个技能是否在 Agent 的启用列表中
-		// 工具名称格式是 "skill__xxx"，需要去掉前缀进行比较
-		toolName := t.Name()
-		if strings.HasPrefix(toolName, "skill__") {
-			skillName := strings.TrimPrefix(toolName, "skill__")
-			if enabledSkills[skillName] {
-				registry.Register(t)
+	registered := false
+
+	// 1. 注册 Bash 工具（如果 agent.ToolsList 包含 "bash"）
+	agentTools := agent.ToolsList()
+	for _, t := range agentTools {
+		if t == "bash" {
+			registry.Register(tools.NewBashTool())
+			registered = true
+			break
+		}
+	}
+
+	// 2. 注册 MCP 工具（如果 agent 有 MCP 绑定）
+	if p.mcpService != nil {
+		bindings, err := p.mcpService.ListAgentBindings(context.Background(), agent.ID())
+		if err == nil && len(bindings) > 0 {
+			// 检查是否有任何启用的绑定
+			hasActiveBinding := false
+			for _, b := range bindings {
+				if b.IsActive() {
+					hasActiveBinding = true
+					break
+				}
+			}
+			if hasActiveBinding {
+				registry.Register(mcp.NewUseMCPTool(p.mcpService))
+				registry.Register(mcp.NewCallMCPTool(p.mcpService))
+				registered = true
+			}
+		}
+	}
+
+	// 3. 注册 Skills 工具（如果 agent.SkillsList 非空）
+	if p.skillsLoader != nil {
+		skills := p.skillsLoader.ListSkills()
+		agentSkills := agent.SkillsList()
+		if len(agentSkills) > 0 && len(skills) > 0 {
+			enabledSkills := make(map[string]bool)
+			for _, s := range agentSkills {
+				enabledSkills[s] = true
+			}
+
+			skillToolsRegistry := tools.NewSkillToolsAdapterRegistry(p.skillsLoader)
+			for _, t := range skillToolsRegistry.GetTools() {
+				toolName := t.Name()
+				if strings.HasPrefix(toolName, "skill__") {
+					skillName := strings.TrimPrefix(toolName, "skill__")
+					if enabledSkills[skillName] {
+						registry.Register(t)
+						registered = true
+					}
+				}
 			}
 		}
 	}
 
 	// 如果没有注册任何工具，返回 nil
-	if len(registry.List()) == 0 {
+	if !registered {
 		return nil
 	}
+
+	return registry
 
 	return registry
 }
