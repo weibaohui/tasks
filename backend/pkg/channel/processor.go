@@ -13,6 +13,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
+	skilltools "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
@@ -601,6 +602,10 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent) *llm.Too
 					}
 				}
 			}
+
+			// 注册 use_skill 工具（用于动态加载技能）
+			registry.Register(skilltools.NewUseSkillTool(p.skillsLoader))
+			registered = true
 		}
 	}
 

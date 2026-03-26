@@ -392,8 +392,7 @@ export const AgentManagementPage: React.FC = () => {
     setEditingBinding(null);
     setToolsDrawerOpen(false);
     setToolsForServer([]);
-    toolsForm.resetFields();
-    mcpForm.resetFields();
+    mcpForm.setFieldsValue({ is_active: true, auto_load: false });
 
     if (agent) {
       form.setFieldsValue({
@@ -441,8 +440,7 @@ export const AgentManagementPage: React.FC = () => {
     setMcpBindings([]);
     setEditingBinding(null);
     setToolsDrawerOpen(false);
-    toolsForm.resetFields();
-  }, [form, mcpForm, toolsForm]);
+  }, [form, mcpForm]);
 
   /**
    * 快捷设置默认 Agent
@@ -706,6 +704,55 @@ export const AgentManagementPage: React.FC = () => {
       });
   }, []);
 
+  // 自动更新工具列表：根据 skills 和 MCP 绑定自动添加/删除对应工具
+  useEffect(() => {
+    if (!open || !editing) return;
+
+    const currentTools = (form.getFieldValue('tools_list') as string[]) || [];
+    const toolsSet = new Set(currentTools);
+    let changed = false;
+
+    // 检查 Skills 绑定
+    const skills = (form.getFieldValue('skills_list') as string[]) || [];
+    if (skills.length > 0) {
+      if (!toolsSet.has('use_skill')) {
+        toolsSet.add('use_skill');
+        changed = true;
+      }
+    } else {
+      if (toolsSet.has('use_skill')) {
+        toolsSet.delete('use_skill');
+        changed = true;
+      }
+    }
+
+    // 检查 MCP 绑定
+    const hasActiveMCP = mcpBindings.length > 0 && mcpBindings.some((b) => b.is_active);
+    if (hasActiveMCP) {
+      if (!toolsSet.has('use_mcp')) {
+        toolsSet.add('use_mcp');
+        changed = true;
+      }
+      if (!toolsSet.has('call_mcp_tool')) {
+        toolsSet.add('call_mcp_tool');
+        changed = true;
+      }
+    } else {
+      if (toolsSet.has('use_mcp')) {
+        toolsSet.delete('use_mcp');
+        changed = true;
+      }
+      if (toolsSet.has('call_mcp_tool')) {
+        toolsSet.delete('call_mcp_tool');
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      form.setFieldsValue({ tools_list: Array.from(toolsSet) });
+    }
+  }, [open, editing, mcpBindings]);
+
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -836,27 +883,28 @@ export const AgentManagementPage: React.FC = () => {
                           value: s.name,
                           label: s.description ? `${s.name} - ${s.description}` : s.name,
                         }))}
+                        onChange={() => {
+                          // 自动更新工具列表
+                          const currentTools = (form.getFieldValue('tools_list') as string[]) || [];
+                          const toolsSet = new Set(currentTools);
+                          const skills = (form.getFieldValue('skills_list') as string[]) || [];
+                          // Skills 为空时移除 use_skill
+                          if (skills.length > 0) {
+                            toolsSet.add('use_skill');
+                          } else {
+                            toolsSet.delete('use_skill');
+                          }
+                          // 同时检查 MCP 绑定
+                          if (mcpBindings.length > 0 && mcpBindings.some((b) => b.is_active)) {
+                            toolsSet.add('use_mcp');
+                            toolsSet.add('call_mcp_tool');
+                          }
+                          form.setFieldsValue({ tools_list: Array.from(toolsSet) });
+                        }}
                       />
                     </Form.Item>
                     <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
                       说明：留空则该 Agent 不启用任何 Skills 技能
-                    </div>
-
-                    <Divider style={{ margin: '12px 0' }}>
-                      <ToolOutlined /> 工具配置
-                    </Divider>
-                    <Form.Item label="Tools（可多选/自定义）" name="tools_list">
-                      <Select
-                        mode="tags"
-                        placeholder="输入后回车添加"
-                        options={builtInTools.map((t) => ({
-                          value: t.name,
-                          label: t.description ? `${t.name} - ${t.description}` : t.name,
-                        }))}
-                      />
-                    </Form.Item>
-                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
-                      说明：留空则该 Agent 不启用任何内置工具（如需 Bash 工具，请添加 "bash"）
                     </div>
 
                     <Divider style={{ margin: '12px 0' }}>
@@ -883,52 +931,47 @@ export const AgentManagementPage: React.FC = () => {
                           </Space>
                         </div>
 
-                        <Form
-                          form={mcpForm}
-                          layout="inline"
-                          initialValues={{ is_active: true, auto_load: false }}
-                          onFinish={async (values) => {
-                            if (!editing) return;
-                            try {
-                              await createBinding({
-                                agent_id: editing.id,
-                                mcp_server_id: values.mcp_server_id,
-                                is_active: values.is_active,
-                                auto_load: values.auto_load,
-                              });
-                              message.success('绑定成功');
-                              mcpForm.resetFields();
-                              await reloadMCP(editing.id);
-                            } catch (e) {
-                              message.error(getMCPErrorMessage(e) || '绑定失败');
-                            }
-                          }}
-                          style={{ marginBottom: 12 }}
-                        >
-                          <Form.Item
-                            name="mcp_server_id"
-                            rules={[{ required: true, message: '请选择 MCP Server' }]}
+                        <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                          <Select
+                            placeholder="选择 MCP Server"
                             style={{ flex: 1, minWidth: 260 }}
+                            value={mcpForm.getFieldValue('mcp_server_id')}
+                            onChange={(value) => mcpForm.setFieldValue('mcp_server_id', value)}
+                            options={mcpServers
+                              .filter((s) => !mcpBindings.some((b) => b.mcp_server_id === s.id))
+                              .map((s) => ({ value: s.id, label: `${s.name}（${s.code}）` }))}
+                            showSearch
+                            optionFilterProp="label"
+                          />
+                          <Button
+                            type="primary"
+                            loading={mcpLoading}
+                            onClick={() => {
+                              const mcpServerId = mcpForm.getFieldValue('mcp_server_id');
+                              if (!mcpServerId) {
+                                message.error('请选择 MCP Server');
+                                return;
+                              }
+                              if (!editing) return;
+                              createBinding({
+                                agent_id: editing.id,
+                                mcp_server_id: mcpServerId,
+                                is_active: true,
+                                auto_load: false,
+                              })
+                                .then(() => {
+                                  message.success('绑定成功');
+                                  mcpForm.resetFields();
+                                  return reloadMCP(editing.id);
+                                })
+                                .catch((e) => {
+                                  message.error(getMCPErrorMessage(e) || '绑定失败');
+                                });
+                            }}
                           >
-                            <Select
-                              placeholder="选择 MCP Server"
-                              options={mcpServers
-                                .filter((s) => !mcpBindings.some((b) => b.mcp_server_id === s.id))
-                                .map((s) => ({ value: s.id, label: `${s.name}（${s.code}）` }))}
-                              showSearch
-                              optionFilterProp="label"
-                            />
-                          </Form.Item>
-                          <Form.Item name="is_active" valuePropName="checked">
-                            <Switch checkedChildren="启用" unCheckedChildren="停用" />
-                          </Form.Item>
-                          <Form.Item name="auto_load" valuePropName="checked">
-                            <Switch checkedChildren="自动加载" unCheckedChildren="手动" />
-                          </Form.Item>
-                          <Button type="primary" onClick={() => mcpForm.submit()} loading={mcpLoading}>
                             绑定
                           </Button>
-                        </Form>
+                        </div>
 
                         <Table<AgentMCPBinding>
                           dataSource={mcpBindings}
@@ -1046,6 +1089,23 @@ export const AgentManagementPage: React.FC = () => {
                         />
                       </>
                     )}
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ToolOutlined /> 工具配置
+                    </Divider>
+                    <Form.Item label="Tools（可多选/自定义）" name="tools_list">
+                      <Select
+                        mode="tags"
+                        placeholder="输入后回车添加"
+                        options={builtInTools.map((t) => ({
+                          value: t.name,
+                          label: t.description ? `${t.name} - ${t.description}` : t.name,
+                        }))}
+                      />
+                    </Form.Item>
+                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
+                      说明：绑定 Skills 会自动添加 use_skill，绑定 MCP 会自动添加 use_mcp 和 call_mcp_tool
+                    </div>
                   </div>
                 ),
               },
