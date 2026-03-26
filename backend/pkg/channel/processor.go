@@ -463,26 +463,17 @@ func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent
 
 	// 添加 Agent 人格信息
 	if agent != nil {
-		if identity := agent.IdentityContent(); identity != "" {
-			sb.WriteString(identity)
-			sb.WriteString("\n\n")
+		appendIfNotEmpty := func(content string) {
+			if strings.TrimSpace(content) != "" {
+				sb.WriteString(content)
+				sb.WriteString("\n\n")
+			}
 		}
-		if soul := agent.SoulContent(); soul != "" {
-			sb.WriteString(soul)
-			sb.WriteString("\n\n")
-		}
-		if agents := agent.AgentsContent(); agents != "" {
-			sb.WriteString(agents)
-			sb.WriteString("\n\n")
-		}
-		if tools := agent.ToolsContent(); tools != "" {
-			sb.WriteString(tools)
-			sb.WriteString("\n\n")
-		}
-		if user := agent.UserContent(); user != "" {
-			sb.WriteString(user)
-			sb.WriteString("\n\n")
-		}
+		appendIfNotEmpty(agent.IdentityContent())
+		appendIfNotEmpty(agent.SoulContent())
+		appendIfNotEmpty(agent.AgentsContent())
+		appendIfNotEmpty(agent.ToolsContent())
+		appendIfNotEmpty(agent.UserContent())
 	}
 
 	// 添加 MCP Server 列表（如果有绑定）
