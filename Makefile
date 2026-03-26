@@ -43,11 +43,13 @@ dev:
 	@echo "========================================="
 	@echo "  后端 API: http://localhost:8888"
 	@echo "  前端界面: http://localhost:3000"
+	@echo "  日志文件: backend/logs/air.log"
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
+	@mkdir -p backend/logs
 	@(trap 'kill 0' INT; \
 		set -a; source backend/.env; set +a; \
-		cd backend && air 2>&1 & \
+		cd backend && air 2>&1 | tee logs/air.log & \
 		cd frontend && pnpm run dev 2>&1 & \
 		wait)
 
@@ -55,7 +57,8 @@ dev:
 dev-backend:
 	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
 	@echo "启动后端开发服务器 (air 热重载)..."
-	set -a; source backend/.env; set +a; cd backend && air
+	@mkdir -p backend/logs
+	set -a; source backend/.env; set +a; cd backend && air 2>&1 | tee logs/air.log
 
 # 启动前端开发服务器
 dev-web:
