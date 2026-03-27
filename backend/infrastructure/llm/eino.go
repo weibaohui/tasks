@@ -33,6 +33,12 @@ type ToolHook interface {
 	PostToolCall(toolName string, input json.RawMessage, output string, err error)
 }
 
+// ToolHookWithContext 工具执行钩子接口（带 context）
+// 用于在工具执行时获取包含 span 信息的 context
+type ToolHookWithContext interface {
+	GetCurrentCtx() context.Context
+}
+
 // ToolCallContext 工具调用上下文（传递给 observer）
 type ToolCallContext struct {
 	TraceID      string
@@ -271,14 +277,21 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 
 			// 执行工具前调用 PreToolCall hooks
 			modifiedInput := toolCall.Input
+			toolCtx := ctx // 默认使用原始 context
 			for _, hook := range p.toolHooks {
 				if modInput, err := hook.PreToolCall(tc.Function.Name, modifiedInput); err == nil {
 					modifiedInput = modInput
 				}
+				// 如果 hook 提供了 context（包含 span 信息），使用它
+				if withCtx, ok := hook.(ToolHookWithContext); ok {
+					if hookCtx := withCtx.GetCurrentCtx(); hookCtx != nil {
+						toolCtx = hookCtx
+					}
+				}
 			}
 
 			// 执行工具
-			result, err := t.Execute(ctx, modifiedInput)
+			result, err := t.Execute(toolCtx, modifiedInput)
 			if err != nil {
 				errMsg := fmt.Sprintf(`{"error": "%v"}`, err)
 				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))

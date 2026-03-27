@@ -135,7 +135,8 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		Description: task.Description(),
 		Type:        task.Type().String(),
 		Status:      task.Status().String(),
-		Metadata:    task.Metadata(),
+		Depth:       task.Depth(),
+		ParentSpan:  task.ParentSpan(),
 		Timeout:     int64(task.Timeout()),
 		MaxRetries:  task.MaxRetries(),
 		Priority:    task.Priority(),
@@ -159,12 +160,8 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 
 	progress := task.Progress()
 	dto.Progress = ProgressDTO{
-		Total:      progress.Total(),
-		Current:    progress.Current(),
-		Percentage: progress.Percentage(),
-		Stage:      progress.Stage(),
-		Detail:     progress.Detail(),
-		UpdatedAt:  progress.UpdatedAt().UnixMilli(),
+		Value:     progress.Value(),
+		UpdatedAt: progress.UpdatedAt().UnixMilli(),
 	}
 
 	if task.Result() != nil {

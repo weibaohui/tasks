@@ -8,11 +8,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 )
 
 // CreateTaskTool 任务创建工具
@@ -24,15 +26,13 @@ type CreateTaskTool struct {
 	userCode    string
 	channelCode string
 	sessionKey  string
-	traceID     string
-	spanID      string
 }
 
 // NewCreateTaskTool 创建任务创建工具
 func NewCreateTaskTool(
 	taskService *application.TaskApplicationService,
 	idGenerator domain.IDGenerator,
-	agentCode, userCode, channelCode, sessionKey, traceID, spanID string,
+	agentCode, userCode, channelCode, sessionKey string,
 ) *CreateTaskTool {
 	return &CreateTaskTool{
 		taskService: taskService,
@@ -41,8 +41,6 @@ func NewCreateTaskTool(
 		userCode:    userCode,
 		channelCode: channelCode,
 		sessionKey:  sessionKey,
-		traceID:    traceID,
-		spanID:     spanID,
 	}
 }
 
@@ -57,13 +55,15 @@ func (t *CreateTaskTool) Name() string {
 func (t *CreateTaskTool) Description() string {
 	return `创建一个新任务。
 参数 name: 任务名称（必填）
+参数 task_requirement: 任务目标/要求（必填）- 描述任务要达成的具体目标
+参数 acceptance_criteria: 验收标准（必填）- 描述如何判断任务完成
 参数 description: 任务描述（可选）
 参数 task_type: 任务类型（可选），可选值: agent(智能体), coding(编码), custom(自定义)，默认 agent
 参数 timeout_ms: 超时时间毫秒数（可选），默认 60000
 参数 priority: 优先级（可选），默认 0
 参数 parent_id: 父任务 ID（可选），用于创建子任务
 
-示例：create_task(name="测试任务", description="执行测试", task_type="agent", timeout_ms=30000)`
+示例：create_task(name="测试任务", task_requirement="执行单元测试", acceptance_criteria="所有测试通过", task_type="agent")`
 }
 
 // Parameters 返回参数 schema
@@ -74,6 +74,14 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 			"name": {
 				"type": "string",
 				"description": "任务名称（必填）"
+			},
+			"task_requirement": {
+				"type": "string",
+				"description": "任务目标/要求（必填）- 描述任务要达成的具体目标"
+			},
+			"acceptance_criteria": {
+				"type": "string",
+				"description": "验收标准（必填）- 描述如何判断任务完成"
 			},
 			"description": {
 				"type": "string",
@@ -96,19 +104,21 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 				"description": "父任务 ID（可选），用于创建子任务"
 			}
 		},
-		"required": ["name"]
+		"required": ["name", "task_requirement", "acceptance_criteria"]
 	}`)
 }
 
 // Execute 执行工具
 func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
 	var args struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		TaskType    string  `json:"task_type"`
-		TimeoutMs   int64   `json:"timeout_ms"`
-		Priority    int     `json:"priority"`
-		ParentID    string  `json:"parent_id"`
+		Name               string `json:"name"`
+		TaskRequirement    string `json:"task_requirement"`
+		AcceptanceCriteria string `json:"acceptance_criteria"`
+		Description        string `json:"description"`
+		TaskType          string `json:"task_type"`
+		TimeoutMs         int64  `json:"timeout_ms"`
+		Priority          int    `json:"priority"`
+		ParentID          string `json:"parent_id"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
@@ -119,9 +129,25 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	}
 
 	// 验证必填参数
-	if args.Name == "" {
+	if strings.TrimSpace(args.Name) == "" {
 		return &llm.ToolResult{
-			Output: `{"success": false, "error": "name 不能为空"}`,
+			Output: `{"success": false, "error": "缺少必填参数 name（任务名称）"}`,
+			Error:  "",
+		}, nil
+	}
+
+	// 验证必填参数
+	if strings.TrimSpace(args.TaskRequirement) == "" {
+		return &llm.ToolResult{
+			Output: `{"success": false, "error": "缺少必填参数 task_requirement（任务目标）"}`,
+			Error:  "",
+		}, nil
+	}
+
+	// 验证必填参数
+	if strings.TrimSpace(args.AcceptanceCriteria) == "" {
+		return &llm.ToolResult{
+			Output: `{"success": false, "error": "缺少必填参数 acceptance_criteria（验收标准）"}`,
 			Error:  "",
 		}, nil
 	}
@@ -156,22 +182,16 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		priority = args.Priority
 	}
 
-	// 构建元数据
-	metadata := map[string]interface{}{
-		"source":    "agent_tool",
-		"tool":      "create_task",
-		"createdAt": time.Now().Format(time.RFC3339),
-	}
-
 	// 构建创建命令
 	cmd := application.CreateTaskCommand{
-		Name:        args.Name,
-		Description: args.Description,
-		Type:        taskType,
-		Metadata:    metadata,
-		Timeout:     timeout,
-		MaxRetries:  0,
-		Priority:    priority,
+		Name:               args.Name,
+		TaskRequirement:    args.TaskRequirement,
+		AcceptanceCriteria: args.AcceptanceCriteria,
+		Description:        args.Description,
+		Type:               taskType,
+		Timeout:            timeout,
+		MaxRetries:         0,
+		Priority:           priority,
 	}
 
 	// 添加上下文信息到命令（用于设置独立字段）
@@ -188,14 +208,29 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		cmd.SessionKey = t.sessionKey
 	}
 
-	// 设置 TraceID 和 SpanID（继承自当前会话）
-	if t.traceID != "" {
-		traceID := domain.NewTraceID(t.traceID)
-		cmd.TraceID = &traceID
+	// 设置 TraceID 和 SpanID（从 ctx 提取）
+	traceIDStr := trace.GetTraceID(ctx)
+	spanIDStr := trace.MustGetSpanID(ctx)
+	if traceIDStr != "" {
+		traceIDVal := domain.NewTraceID(traceIDStr)
+		cmd.TraceID = &traceIDVal
 	}
-	if t.spanID != "" {
-		spanID := domain.NewSpanID(t.spanID)
-		cmd.SpanID = &spanID
+	if spanIDStr != "" {
+		spanIDVal := domain.NewSpanID(spanIDStr)
+		cmd.SpanID = &spanIDVal
+	}
+
+	// 设置 ParentSpanID（从 ctx 提取）- 用于 trace 链路
+	// 优先从 HookContext metadata 获取（PreToolCall 设置），其次从 trace context 获取
+	parentSpanID := trace.GetParentSpanID(ctx)
+	if parentSpanID == "" {
+		// 尝试从 HookContext metadata 获取
+		if hc, ok := ctx.(*domain.HookContext); ok {
+			parentSpanID = hc.GetMetadata("span_id")
+		}
+	}
+	if parentSpanID != "" {
+		cmd.ParentSpanID = parentSpanID
 	}
 
 	// 处理父任务 ID

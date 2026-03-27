@@ -53,14 +53,14 @@ func (m *mockTask) CreatedAt() time.Time { return m.createdAt }
 // CreateTaskTool tests
 
 func TestCreateTaskTool_Name(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 	if tool.Name() != "create_task" {
 		t.Errorf("期望名称为 create_task, 实际为 %s", tool.Name())
 	}
 }
 
 func TestCreateTaskTool_Description(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 	desc := tool.Description()
 	if desc == "" {
 		t.Error("期望有描述")
@@ -68,7 +68,7 @@ func TestCreateTaskTool_Description(t *testing.T) {
 }
 
 func TestCreateTaskTool_Parameters(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 	params := tool.Parameters()
 	if params == nil {
 		t.Fatal("期望有参数")
@@ -111,12 +111,12 @@ func TestCreateTaskTool_Parameters(t *testing.T) {
 }
 
 func TestCreateTaskTool_ImplementsToolInterface(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 	var _ llm.Tool = tool
 }
 
 func TestCreateTaskTool_Execute_EmptyName(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 
 	result, err := tool.Execute(context.Background(), []byte(`{"name": ""}`))
 	if err != nil {
@@ -135,7 +135,7 @@ func TestCreateTaskTool_Execute_EmptyName(t *testing.T) {
 }
 
 func TestCreateTaskTool_Execute_InvalidJSON(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 
 	result, err := tool.Execute(context.Background(), []byte(`invalid json`))
 	if err != nil {
@@ -149,7 +149,7 @@ func TestCreateTaskTool_Execute_InvalidJSON(t *testing.T) {
 }
 
 func TestCreateTaskTool_Execute_InvalidTaskType(t *testing.T) {
-	tool := NewCreateTaskTool(nil, nil, "", "", "", "", "", "")
+	tool := NewCreateTaskTool(nil, nil, "", "", "", "")
 
 	result, err := tool.Execute(context.Background(), []byte(`{"name": "test", "task_type": "invalid"}`))
 	if err != nil {

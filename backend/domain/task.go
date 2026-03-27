@@ -12,11 +12,14 @@ import (
 
 // 领域错误定义
 var (
-	ErrInvalidStatusTransition = errors.New("invalid status transition")
-	ErrTaskAlreadyStarted      = errors.New("task already started")
-	ErrTaskNotRunning          = errors.New("task is not running")
-	ErrTaskAlreadyFinished     = errors.New("task already finished")
-	ErrTimeoutNotPositive      = errors.New("timeout must be positive")
+	ErrInvalidStatusTransition    = errors.New("invalid status transition")
+	ErrTaskAlreadyStarted         = errors.New("task already started")
+	ErrTaskNotRunning             = errors.New("task is not running")
+	ErrTaskAlreadyFinished        = errors.New("task already finished")
+	ErrTimeoutNotPositive         = errors.New("timeout must be positive")
+	ErrTaskRequirementRequired    = errors.New("task requirement is required")
+	ErrAcceptanceCriteriaRequired = errors.New("acceptance criteria is required")
+	ErrTaskConclusionRequired     = errors.New("task conclusion is required to complete task")
 )
 
 // Task 任务聚合根
@@ -29,7 +32,6 @@ type Task struct {
 	name        string
 	description string
 	taskType    TaskType
-	metadata    map[string]interface{}
 
 	timeout    time.Duration
 	maxRetries int
@@ -48,9 +50,12 @@ type Task struct {
 	agentCode          string
 	channelCode        string
 	sessionKey         string
-	executionSummary   map[string]interface{} // 执行摘要
 	todoList           string                 // 待办列表
 	analysis           string                 // Agent 分析结果
+
+	// 任务层级和追踪字段
+	depth       int    // 任务深度（从1开始）
+	parentSpan  string // 父任务的 span ID
 
 	createdAt  time.Time
 	startedAt  *time.Time
@@ -62,6 +67,9 @@ type Task struct {
 }
 
 // NewTask 工厂方法：创建任务
+// name: 任务名称
+// taskRequirement: 任务目标/要求（必填）
+// acceptanceCriteria: 验收标准（必填）
 func NewTask(
 	id TaskID,
 	traceID TraceID,
@@ -70,7 +78,8 @@ func NewTask(
 	name string,
 	description string,
 	taskType TaskType,
-	metadata map[string]interface{},
+	taskRequirement string,
+	acceptanceCriteria string,
 	timeout time.Duration,
 	maxRetries int,
 	priority int,
@@ -78,25 +87,32 @@ func NewTask(
 	if name == "" {
 		return nil, errors.New("task name is required")
 	}
+	if taskRequirement == "" {
+		return nil, ErrTaskRequirementRequired
+	}
+	if acceptanceCriteria == "" {
+		return nil, ErrAcceptanceCriteriaRequired
+	}
 	if timeout < 0 {
 		return nil, ErrTimeoutNotPositive
 	}
 
 	task := &Task{
-		id:          id,
-		traceID:     traceID,
-		spanID:      spanID,
-		parentID:    parentID,
-		name:        name,
-		description: description,
-		taskType:    taskType,
-		metadata:    metadata,
-		timeout:     timeout,
-		maxRetries:  maxRetries,
-		priority:    priority,
-		status:      TaskStatusPending,
-		progress:    NewProgress(),
-		createdAt:   time.Now(),
+		id:                 id,
+		traceID:            traceID,
+		spanID:             spanID,
+		parentID:           parentID,
+		name:               name,
+		description:        description,
+		taskType:           taskType,
+		taskRequirement:    taskRequirement,
+		acceptanceCriteria: acceptanceCriteria,
+		timeout:            timeout,
+		maxRetries:         maxRetries,
+		priority:           priority,
+		status:             TaskStatusPending,
+		progress:           NewProgress(),
+		createdAt:          time.Now(),
 	}
 
 	task.recordEvent(NewTaskCreatedEvent(task))
@@ -105,15 +121,13 @@ func NewTask(
 }
 
 // 标识访问方法
-func (t *Task) ID() TaskID                           { return t.id }
-func (t *Task) TraceID() TraceID                     { return t.traceID }
-func (t *Task) SpanID() SpanID                       { return t.spanID }
-func (t *Task) ParentID() *TaskID                    { return t.parentID }
-func (t *Task) Name() string                         { return t.name }
-func (t *Task) Description() string                  { return t.description }
-func (t *Task) Type() TaskType                       { return t.taskType }
-func (t *Task) Metadata() map[string]interface{}     { return t.metadata }
-func (t *Task) SetMetadata(m map[string]interface{}) { t.metadata = m }
+func (t *Task) ID() TaskID        { return t.id }
+func (t *Task) TraceID() TraceID   { return t.traceID }
+func (t *Task) SpanID() SpanID     { return t.spanID }
+func (t *Task) ParentID() *TaskID  { return t.parentID }
+func (t *Task) Name() string       { return t.name }
+func (t *Task) Description() string { return t.description }
+func (t *Task) Type() TaskType     { return t.taskType }
 
 // 独立字段访问方法
 func (t *Task) AcceptanceCriteria() string {
@@ -193,17 +207,6 @@ func (t *Task) SetSessionKey(key string) {
 	t.sessionKey = key
 }
 
-func (t *Task) ExecutionSummary() map[string]interface{} {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.executionSummary
-}
-func (t *Task) SetExecutionSummary(summary map[string]interface{}) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.executionSummary = summary
-}
-
 func (t *Task) TodoList() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -224,6 +227,28 @@ func (t *Task) SetAnalysis(analysis string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.analysis = analysis
+}
+
+func (t *Task) Depth() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.depth
+}
+func (t *Task) SetDepth(depth int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.depth = depth
+}
+
+func (t *Task) ParentSpan() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.parentSpan
+}
+func (t *Task) SetParentSpan(span string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.parentSpan = span
 }
 
 func (t *Task) Timeout() time.Duration { return t.timeout }
@@ -299,7 +324,8 @@ func (t *Task) Start() error {
 	return nil
 }
 
-// Complete 完成任务
+// Complete 完成任务（需要先设置任务结论）
+// result 参数被忽略，result 字段直接使用 taskConclusion 的值
 func (t *Task) Complete(result Result) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -308,10 +334,19 @@ func (t *Task) Complete(result Result) error {
 		return ErrInvalidStatusTransition
 	}
 
+	// 验证任务结论必填
+	if t.taskConclusion == "" {
+		return ErrTaskConclusionRequired
+	}
+
 	now := time.Now()
 	t.status = TaskStatusCompleted
 	t.finishedAt = &now
-	t.result = &result
+	// result 字段直接使用 taskConclusion 的值，不存储复杂结构
+	t.result = &Result{
+		data:    t.taskConclusion,
+		message: t.taskConclusion,
+	}
 
 	t.recordEvent(NewTaskCompletedEvent(t))
 
@@ -319,10 +354,15 @@ func (t *Task) Complete(result Result) error {
 }
 
 // UpdateResult 更新任务结果（用于聚合子任务结果后更新父任务）
+// result 参数被忽略，result 字段直接使用 taskConclusion 的值
 func (t *Task) UpdateResult(result Result) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.result = &result
+	// result 字段直接使用 taskConclusion 的值，不存储复杂结构
+	t.result = &Result{
+		data:    t.taskConclusion,
+		message: t.taskConclusion,
+	}
 }
 
 // Fail 任务失败
@@ -363,11 +403,11 @@ func (t *Task) Cancel() error {
 }
 
 // UpdateProgress 更新进度
-func (t *Task) UpdateProgress(total, current int, stage, detail string) {
+func (t *Task) UpdateProgress(progress int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.progress.Update(total, current, stage, detail)
+	t.progress.Update(progress)
 	t.recordEvent(NewTaskProgressUpdatedEvent(t, t.progress))
 }
 
@@ -399,7 +439,6 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		Name:               t.name,
 		Description:        t.description,
 		Type:               t.taskType,
-		Metadata:           t.metadata,
 		Timeout:            t.timeout,
 		MaxRetries:         t.maxRetries,
 		Priority:           t.priority,
@@ -412,14 +451,15 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		FinishedAt:         t.finishedAt,
 		AcceptanceCriteria: t.acceptanceCriteria,
 		TaskRequirement:    t.taskRequirement,
-		TaskConclusion:     t.taskConclusion,
+		TaskConclusion:    t.taskConclusion,
 		UserCode:           t.userCode,
 		AgentCode:          t.agentCode,
 		ChannelCode:        t.channelCode,
 		SessionKey:         t.sessionKey,
-		ExecutionSummary:   t.executionSummary,
 		TodoList:           t.todoList,
 		Analysis:           t.analysis,
+		Depth:              t.depth,
+		ParentSpan:         t.parentSpan,
 	}
 }
 
@@ -435,7 +475,6 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.name = snap.Name
 	t.description = snap.Description
 	t.taskType = snap.Type
-	t.metadata = snap.Metadata
 	t.timeout = snap.Timeout
 	t.maxRetries = snap.MaxRetries
 	t.priority = snap.Priority
@@ -455,7 +494,8 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.agentCode = snap.AgentCode
 	t.channelCode = snap.ChannelCode
 	t.sessionKey = snap.SessionKey
-	t.executionSummary = snap.ExecutionSummary
 	t.todoList = snap.TodoList
 	t.analysis = snap.Analysis
+	t.depth = snap.Depth
+	t.parentSpan = snap.ParentSpan
 }

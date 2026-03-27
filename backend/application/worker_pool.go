@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 	"go.uber.org/zap"
 )
 
@@ -130,13 +131,19 @@ func (wp *WorkerPool) worker(id int) {
 
 		wp.mu.Unlock()
 
-		// 创建任务上下文
+		// 从 task 提取 trace 信息并注入到 context
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = trace.WithTraceID(ctx, task.TraceID().String())
+		ctx = trace.WithSpanID(ctx, task.SpanID().String())
+		if task.ParentSpan() != "" {
+			ctx = trace.WithParentSpanID(ctx, task.ParentSpan())
+		}
 		defer cancel()
 
 		// 执行任务
 		if wp.executeFn != nil {
-			wp.logger.Info("开始执行任务", zap.String("taskID", task.ID().String()), zap.Int("worker", id))
+			wp.logger.Info("开始执行任务", zap.String("taskID", task.ID().String()), zap.Int("worker", id),
+				zap.String("traceID", task.TraceID().String()), zap.String("spanID", task.SpanID().String()))
 			wp.executeFn(ctx, task)
 		}
 

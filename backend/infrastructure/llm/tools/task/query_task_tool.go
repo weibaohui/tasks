@@ -103,9 +103,7 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		"name":       task.Name(),
 		"status":     task.Status().String(),
 		"type":       task.Type().String(),
-		"progress":   task.Progress().Percentage(),
-		"stage":      task.Progress().Stage(),
-		"detail":     task.Progress().Detail(),
+		"progress":   task.Progress().Value(),
 		"created_at": task.CreatedAt().Format(time.RFC3339),
 	}
 
@@ -149,18 +147,13 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 				"task_id": child.ID().String(),
 				"name":    child.Name(),
 				"status":  child.Status().String(),
-				"progress": child.Progress().Percentage(),
-				"stage":   child.Progress().Stage(),
+				"progress": child.Progress().Value(),
 			})
 		}
 		taskInfo["sub_tasks"] = subTasks
 		taskInfo["sub_tasks_count"] = len(subTasks)
 	}
 
-	// 添加执行摘要（使用独立字段）
-	if summary := task.ExecutionSummary(); summary != nil {
-		taskInfo["execution_summary"] = summary
-	}
 	// 添加 todo_list（使用独立字段）
 	if todoList := task.TodoList(); todoList != "" {
 		taskInfo["todo_list"] = todoList

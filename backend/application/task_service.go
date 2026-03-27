@@ -22,19 +22,21 @@ var (
 
 // CreateTaskCommand 创建任务命令
 type CreateTaskCommand struct {
-	Name        string
-	Description string
-	Type        domain.TaskType
-	Metadata    map[string]interface{}
-	Timeout     int64
-	MaxRetries  int
-	Priority    int
-	ParentID    *domain.TaskID
-	TraceID     *domain.TraceID
-	SpanID      *domain.SpanID
+	Name               string // 任务名称
+	TaskRequirement    string // 任务目标（必填）
+	AcceptanceCriteria string // 验收标准（必填）
+	Description        string
+	Type               domain.TaskType
+	Timeout            int64
+	MaxRetries         int
+	Priority           int
+	ParentID           *domain.TaskID
+	TraceID            *domain.TraceID
+	SpanID             *domain.SpanID
+	ParentSpanID       string // 父 span ID（用于 trace 链路）
 	// 上下文字段（独立存储）
-	AgentCode  string
-	UserCode   string
+	AgentCode   string
+	UserCode    string
 	ChannelCode string
 	SessionKey  string
 }
@@ -117,7 +119,8 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		cmd.Name,
 		cmd.Description,
 		cmd.Type,
-		cmd.Metadata,
+		cmd.TaskRequirement,
+		cmd.AcceptanceCriteria,
 		timeout,
 		cmd.MaxRetries,
 		cmd.Priority,
@@ -138,6 +141,11 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 	}
 	if cmd.SessionKey != "" {
 		task.SetSessionKey(cmd.SessionKey)
+	}
+
+	// 设置父 span ID（用于 trace 链路）
+	if cmd.ParentSpanID != "" {
+		task.SetParentSpan(cmd.ParentSpanID)
 	}
 
 	// 4. 持久化
@@ -306,7 +314,7 @@ func (s *TaskApplicationService) FailTask(ctx context.Context, taskID domain.Tas
 }
 
 // UpdateProgress 更新任务进度
-func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID domain.TaskID, total, current int, stage, detail string) error {
+func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID domain.TaskID, progress int) error {
 	// 1. 获取任务
 	task, err := s.taskRepo.FindByID(ctx, taskID)
 	if err != nil {
@@ -314,7 +322,7 @@ func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID doma
 	}
 
 	// 2. 更新进度
-	task.UpdateProgress(total, current, stage, detail)
+	task.UpdateProgress(progress)
 
 	// 3. 持久化
 	if err := s.taskRepo.Save(ctx, task); err != nil {

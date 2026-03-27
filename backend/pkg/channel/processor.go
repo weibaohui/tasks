@@ -645,8 +645,6 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextP
 			contextParams["userCode"],
 			contextParams["channelCode"],
 			contextParams["sessionKey"],
-			contextParams["traceID"],
-			contextParams["spanID"],
 		))
 		registry.Register(tasktools.NewQueryTaskTool(p.taskService))
 		registered = true
@@ -710,6 +708,8 @@ type toolHookAdapter struct {
 	agentCode    string
 	channelCode  string
 	channelType  string
+	// 当前工具执行的 context（包含 span 信息）
+	currentCtx context.Context
 }
 
 func (p *MessageProcessor) newToolHookAdapter(hookCtx *domain.HookContext, sessionID, traceID, parentSpanID, sessionKey, userCode, agentCode, channelCode, channelType string) *toolHookAdapter {
@@ -744,19 +744,30 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 		ParentSpanID: a.parentSpanID,
 	}
 
+	// 将 tool_call 的 span_id 设置到 hookCtx 的 metadata 中，供工具执行时获取
+	a.hookCtx.SetMetadata("span_id", a.spanID)
+	a.hookCtx.SetMetadata("parent_span_id", a.parentSpanID)
+
 	// 将 tool_call 的 span_id 和 scope 设置到 ctx 中，供 PostToolCall 使用
 	ctxWithSpan := a.hookCtx.WithValue(spanKey, a.spanID)
-	ctxWithSpan = ctxWithSpan.WithValue(hooks.ScopeKey, hooks.ScopeInfo{
+	ctxWithScope := ctxWithSpan.WithValue(hooks.ScopeKey, hooks.ScopeInfo{
 		SessionKey:  a.sessionKey,
 		UserCode:    a.userCode,
 		AgentCode:   a.agentCode,
 		ChannelCode: a.channelCode,
 		ChannelType: a.channelType,
 	})
+	// 使用 trace.WithSpanID 设置 span，供工具执行时通过 trace.GetSpanID 获取
+	execCtx := trace.WithSpanID(ctxWithScope, a.spanID)
+	if a.parentSpanID != "" {
+		execCtx = trace.WithParentSpanID(execCtx, a.parentSpanID)
+	}
+	// 存储当前 context，供工具执行时使用
+	a.currentCtx = execCtx
 
 	// 调用 PreToolCall hooks
 	if a.processor.hookManager != nil {
-		modifiedCtx, err := a.processor.hookManager.PreToolCall(ctxWithSpan, callCtx)
+		modifiedCtx, err := a.processor.hookManager.PreToolCall(ctxWithScope, callCtx)
 		if err != nil {
 			a.processor.logger.Error("PreToolCall hook failed", zap.Error(err))
 		} else if modifiedCtx != nil {
@@ -771,6 +782,11 @@ func (a *toolHookAdapter) PreToolCall(toolName string, input json.RawMessage) (j
 	}
 
 	return input, nil
+}
+
+// GetCurrentCtx 获取当前工具执行的 context（包含 span 信息）
+func (a *toolHookAdapter) GetCurrentCtx() context.Context {
+	return a.currentCtx
 }
 
 func (a *toolHookAdapter) PostToolCall(toolName string, input json.RawMessage, output string, toolErr error) {
@@ -867,12 +883,6 @@ func (a *toolHookAdapter) OnToolExecutionComplete(ctx context.Context, tools []l
 
 // createTaskFromMessage 从消息创建任务
 func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.InboundMessage, traceID, spanID string, session *Session) {
-	// 构建任务元数据
-	metadata := make(map[string]interface{})
-	metadata["channel"] = msg.Channel
-	metadata["sender_id"] = msg.SenderID
-	metadata["content"] = msg.Content
-
 	// 从消息 metadata 中提取上下文信息
 	var agentCode, userCode, channelCode string
 	if msg.Metadata != nil {
@@ -890,7 +900,6 @@ func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.I
 		Name:        fmt.Sprintf("会话任务: %s", msg.SessionKey()),
 		Description: msg.Content,
 		Type:        domain.TaskTypeAgent,
-		Metadata:    metadata,
 		Timeout:     60000, // 60秒超时
 		MaxRetries:  0,
 		Priority:    0,
