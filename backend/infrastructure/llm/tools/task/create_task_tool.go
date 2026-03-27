@@ -103,12 +103,14 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 // Execute 执行工具
 func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
 	var args struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		TaskType    string  `json:"task_type"`
-		TimeoutMs   int64   `json:"timeout_ms"`
-		Priority    int     `json:"priority"`
-		ParentID    string  `json:"parent_id"`
+		Name               string `json:"name"`
+		TaskRequirement    string `json:"task_requirement"`
+		AcceptanceCriteria string `json:"acceptance_criteria"`
+		Description        string `json:"description"`
+		TaskType          string `json:"task_type"`
+		TimeoutMs         int64  `json:"timeout_ms"`
+		Priority          int    `json:"priority"`
+		ParentID          string `json:"parent_id"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
@@ -122,6 +124,22 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	if args.Name == "" {
 		return &llm.ToolResult{
 			Output: `{"success": false, "error": "name 不能为空"}`,
+			Error:  "",
+		}, nil
+	}
+
+	// 验证必填参数
+	if args.TaskRequirement == "" {
+		return &llm.ToolResult{
+			Output: `{"success": false, "error": "task_requirement 不能为空"}`,
+			Error:  "",
+		}, nil
+	}
+
+	// 验证必填参数
+	if args.AcceptanceCriteria == "" {
+		return &llm.ToolResult{
+			Output: `{"success": false, "error": "acceptance_criteria 不能为空"}`,
 			Error:  "",
 		}, nil
 	}
@@ -165,13 +183,15 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 
 	// 构建创建命令
 	cmd := application.CreateTaskCommand{
-		Name:        args.Name,
-		Description: args.Description,
-		Type:        taskType,
-		Metadata:    metadata,
-		Timeout:     timeout,
-		MaxRetries:  0,
-		Priority:    priority,
+		Name:               args.Name,
+		TaskRequirement:    args.TaskRequirement,
+		AcceptanceCriteria: args.AcceptanceCriteria,
+		Description:        args.Description,
+		Type:              taskType,
+		Metadata:           metadata,
+		Timeout:            timeout,
+		MaxRetries:         0,
+		Priority:           priority,
 	}
 
 	// 添加上下文信息到命令（用于设置独立字段）
