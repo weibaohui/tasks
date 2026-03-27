@@ -645,8 +645,6 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextP
 			contextParams["userCode"],
 			contextParams["channelCode"],
 			contextParams["sessionKey"],
-			contextParams["traceID"],
-			contextParams["spanID"],
 		))
 		registry.Register(tasktools.NewQueryTaskTool(p.taskService))
 		registered = true

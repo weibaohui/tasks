@@ -13,6 +13,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 )
 
 // CreateTaskTool 任务创建工具
@@ -24,15 +25,13 @@ type CreateTaskTool struct {
 	userCode    string
 	channelCode string
 	sessionKey  string
-	traceID     string
-	spanID      string
 }
 
 // NewCreateTaskTool 创建任务创建工具
 func NewCreateTaskTool(
 	taskService *application.TaskApplicationService,
 	idGenerator domain.IDGenerator,
-	agentCode, userCode, channelCode, sessionKey, traceID, spanID string,
+	agentCode, userCode, channelCode, sessionKey string,
 ) *CreateTaskTool {
 	return &CreateTaskTool{
 		taskService: taskService,
@@ -41,8 +40,6 @@ func NewCreateTaskTool(
 		userCode:    userCode,
 		channelCode: channelCode,
 		sessionKey:  sessionKey,
-		traceID:    traceID,
-		spanID:     spanID,
 	}
 }
 
@@ -210,14 +207,16 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		cmd.SessionKey = t.sessionKey
 	}
 
-	// 设置 TraceID 和 SpanID（继承自当前会话）
-	if t.traceID != "" {
-		traceID := domain.NewTraceID(t.traceID)
-		cmd.TraceID = &traceID
+	// 设置 TraceID 和 SpanID（从 ctx 提取）
+	traceIDStr := trace.GetTraceID(ctx)
+	spanIDStr := trace.MustGetSpanID(ctx)
+	if traceIDStr != "" {
+		traceIDVal := domain.NewTraceID(traceIDStr)
+		cmd.TraceID = &traceIDVal
 	}
-	if t.spanID != "" {
-		spanID := domain.NewSpanID(t.spanID)
-		cmd.SpanID = &spanID
+	if spanIDStr != "" {
+		spanIDVal := domain.NewSpanID(spanIDStr)
+		cmd.SpanID = &spanIDVal
 	}
 
 	// 处理父任务 ID
