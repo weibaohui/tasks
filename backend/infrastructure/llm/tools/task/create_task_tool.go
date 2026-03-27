@@ -219,6 +219,19 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		cmd.SpanID = &spanIDVal
 	}
 
+	// 设置 ParentSpanID（从 ctx 提取）- 用于 trace 链路
+	// 优先从 HookContext metadata 获取（PreToolCall 设置），其次从 trace context 获取
+	parentSpanID := trace.GetParentSpanID(ctx)
+	if parentSpanID == "" {
+		// 尝试从 HookContext metadata 获取
+		if hc, ok := ctx.(*domain.HookContext); ok {
+			parentSpanID = hc.GetMetadata("span_id")
+		}
+	}
+	if parentSpanID != "" {
+		cmd.ParentSpanID = parentSpanID
+	}
+
 	// 处理父任务 ID
 	if args.ParentID != "" {
 		parentID := domain.NewTaskID(args.ParentID)

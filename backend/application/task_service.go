@@ -33,6 +33,7 @@ type CreateTaskCommand struct {
 	ParentID           *domain.TaskID
 	TraceID            *domain.TraceID
 	SpanID             *domain.SpanID
+	ParentSpanID       string // 父 span ID（用于 trace 链路）
 	// 上下文字段（独立存储）
 	AgentCode   string
 	UserCode    string
@@ -140,6 +141,11 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 	}
 	if cmd.SessionKey != "" {
 		task.SetSessionKey(cmd.SessionKey)
+	}
+
+	// 设置父 span ID（用于 trace 链路）
+	if cmd.ParentSpanID != "" {
+		task.SetParentSpan(cmd.ParentSpanID)
 	}
 
 	// 4. 持久化

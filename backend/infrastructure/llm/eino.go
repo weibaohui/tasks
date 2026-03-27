@@ -25,12 +25,21 @@ type EinoProvider struct {
 	toolHooks     []ToolHook        // 工具执行钩子
 	toolObserver  ToolExecutionObserver // 工具执行观察者
 	llmCallIndex  int               // 当前 LLM 调用索引
+	// 当前工具执行的 span 信息（用于 trace 链路）
+	currentSpanID     string
+	currentParentSpanID string
 }
 
 // ToolHook 工具执行钩子接口
 type ToolHook interface {
 	PreToolCall(toolName string, input json.RawMessage) (json.RawMessage, error)
 	PostToolCall(toolName string, input json.RawMessage, output string, err error)
+}
+
+// ToolHookWithContext 工具执行钩子接口（带 context）
+// 用于在工具执行时获取包含 span 信息的 context
+type ToolHookWithContext interface {
+	GetCurrentCtx() context.Context
 }
 
 // ToolCallContext 工具调用上下文（传递给 observer）
@@ -73,6 +82,17 @@ func (p *EinoProvider) SetToolHooks(hooks []ToolHook) {
 // SetToolExecutionObserver 设置工具执行观察者
 func (p *EinoProvider) SetToolExecutionObserver(observer ToolExecutionObserver) {
 	p.toolObserver = observer
+}
+
+// SetCurrentSpan 设置当前工具执行的 span 信息
+func (p *EinoProvider) SetCurrentSpan(spanID, parentSpanID string) {
+	p.currentSpanID = spanID
+	p.currentParentSpanID = parentSpanID
+}
+
+// GetCurrentSpan 获取当前工具执行的 span 信息
+func (p *EinoProvider) GetCurrentSpan() (spanID, parentSpanID string) {
+	return p.currentSpanID, p.currentParentSpanID
 }
 
 var _ LLMProvider = (*EinoProvider)(nil)
@@ -271,14 +291,21 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 
 			// 执行工具前调用 PreToolCall hooks
 			modifiedInput := toolCall.Input
+			toolCtx := ctx // 默认使用原始 context
 			for _, hook := range p.toolHooks {
 				if modInput, err := hook.PreToolCall(tc.Function.Name, modifiedInput); err == nil {
 					modifiedInput = modInput
 				}
+				// 如果 hook 提供了 context（包含 span 信息），使用它
+				if withCtx, ok := hook.(ToolHookWithContext); ok {
+					if hookCtx := withCtx.GetCurrentCtx(); hookCtx != nil {
+						toolCtx = hookCtx
+					}
+				}
 			}
 
 			// 执行工具
-			result, err := t.Execute(ctx, modifiedInput)
+			result, err := t.Execute(toolCtx, modifiedInput)
 			if err != nil {
 				errMsg := fmt.Sprintf(`{"error": "%v"}`, err)
 				messages = append(messages, schema.ToolMessage(errMsg, tc.ID))
