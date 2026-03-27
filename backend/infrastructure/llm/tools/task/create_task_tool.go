@@ -184,21 +184,13 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		priority = args.Priority
 	}
 
-	// 构建元数据
-	metadata := map[string]interface{}{
-		"source":    "agent_tool",
-		"tool":      "create_task",
-		"createdAt": time.Now().Format(time.RFC3339),
-	}
-
 	// 构建创建命令
 	cmd := application.CreateTaskCommand{
 		Name:               args.Name,
 		TaskRequirement:    args.TaskRequirement,
 		AcceptanceCriteria: args.AcceptanceCriteria,
 		Description:        args.Description,
-		Type:              taskType,
-		Metadata:           metadata,
+		Type:               taskType,
 		Timeout:            timeout,
 		MaxRetries:         0,
 		Priority:           priority,

@@ -27,7 +27,6 @@ type CreateTaskCommand struct {
 	AcceptanceCriteria string // 验收标准（必填）
 	Description        string
 	Type               domain.TaskType
-	Metadata           map[string]interface{}
 	Timeout            int64
 	MaxRetries         int
 	Priority           int
@@ -121,7 +120,6 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		cmd.Type,
 		cmd.TaskRequirement,
 		cmd.AcceptanceCriteria,
-		cmd.Metadata,
 		timeout,
 		cmd.MaxRetries,
 		cmd.Priority,
@@ -310,7 +308,7 @@ func (s *TaskApplicationService) FailTask(ctx context.Context, taskID domain.Tas
 }
 
 // UpdateProgress 更新任务进度
-func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID domain.TaskID, total, current int, stage, detail string) error {
+func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID domain.TaskID, progress int) error {
 	// 1. 获取任务
 	task, err := s.taskRepo.FindByID(ctx, taskID)
 	if err != nil {
@@ -318,7 +316,7 @@ func (s *TaskApplicationService) UpdateProgress(ctx context.Context, taskID doma
 	}
 
 	// 2. 更新进度
-	task.UpdateProgress(total, current, stage, detail)
+	task.UpdateProgress(progress)
 
 	// 3. 持久化
 	if err := s.taskRepo.Save(ctx, task); err != nil {

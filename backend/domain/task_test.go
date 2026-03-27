@@ -24,7 +24,6 @@ func TestNewTask(t *testing.T) {
 		TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		map[string]interface{}{"key": "value"},
 		60*time.Second,
 		3,
 		5,
@@ -70,7 +69,6 @@ func TestNewTask_EmptyName(t *testing.T) {
 		TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		nil,
 		0,
 		0,
 		0,
@@ -96,7 +94,6 @@ func TestNewTask_NegativeTimeout(t *testing.T) {
 		TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		nil,
 		-1*time.Second, // 负数超时
 		0,
 		0,
@@ -176,8 +173,13 @@ func TestTask_Complete(t *testing.T) {
 		t.Fatal("期望 Result 不为 nil")
 	}
 
-	if task.Result().Message() != "处理完成" {
-		t.Errorf("期望结果消息为 '处理完成', 实际为 '%s'", task.Result().Message())
+	// result 现在直接使用 taskConclusion 的值
+	if task.Result().Message() != "测试结论" {
+		t.Errorf("期望结果消息为 '测试结论', 实际为 '%s'", task.Result().Message())
+	}
+
+	if task.Result().Data() != "测试结论" {
+		t.Errorf("期望结果数据为 '测试结论', 实际为 '%v'", task.Result().Data())
 	}
 
 	if task.FinishedAt() == nil {
@@ -270,23 +272,11 @@ func TestTask_UpdateProgress(t *testing.T) {
 	task := createTestTask()
 	task.Start()
 
-	task.UpdateProgress(100, 50, "处理中", "已处理50项")
+	task.UpdateProgress(50)
 
 	progress := task.Progress()
-	if progress.Total() != 100 {
-		t.Errorf("期望总数为 100, 实际为 %d", progress.Total())
-	}
-
-	if progress.Current() != 50 {
-		t.Errorf("期望当前为 50, 实际为 %d", progress.Current())
-	}
-
-	if progress.Percentage() != 50.0 {
-		t.Errorf("期望百分比为 50.0, 实际为 %f", progress.Percentage())
-	}
-
-	if progress.Stage() != "处理中" {
-		t.Errorf("期望阶段为 '处理中', 实际为 '%s'", progress.Stage())
+	if progress.Value() != 50 {
+		t.Errorf("期望进度为 50, 实际为 %d", progress.Value())
 	}
 }
 
@@ -294,11 +284,11 @@ func TestTask_UpdateProgress_ZeroTotal(t *testing.T) {
 	task := createTestTask()
 	task.Start()
 
-	task.UpdateProgress(0, 0, "准备中", "初始化")
+	task.UpdateProgress(0)
 
 	progress := task.Progress()
-	if progress.Percentage() != 0.0 {
-		t.Errorf("期望百分比为 0.0, 实际为 %f", progress.Percentage())
+	if progress.Value() != 0 {
+		t.Errorf("期望进度为 0, 实际为 %d", progress.Value())
 	}
 }
 
@@ -383,13 +373,6 @@ func TestNewTask_AgentType(t *testing.T) {
 	traceID := NewTraceID("agent-trace-1")
 	spanID := NewSpanID("agent-span-1")
 
-	metadata := map[string]interface{}{
-		"model":       "claude-3-opus",
-		"prompt":      "请帮我分析这个数据",
-		"max_tokens":  4096,
-		"temperature": 0.7,
-	}
-
 	task, err := NewTask(
 		taskID,
 		traceID,
@@ -400,7 +383,6 @@ func TestNewTask_AgentType(t *testing.T) {
 		TaskTypeAgent,
 		"测试目标",
 		"测试验收标准",
-		metadata,
 		120*time.Second,
 		3,
 		10,
@@ -416,10 +398,6 @@ func TestNewTask_AgentType(t *testing.T) {
 
 	if task.Name() != "Agent任务" {
 		t.Errorf("期望任务名称为 'Agent任务', 实际为 '%s'", task.Name())
-	}
-
-	if task.Metadata()["model"] != "claude-3-opus" {
-		t.Errorf("期望 model 为 'claude-3-opus', 实际为 '%v'", task.Metadata()["model"])
 	}
 }
 
@@ -455,8 +433,9 @@ func TestTask_AgentType_Lifecycle(t *testing.T) {
 		t.Errorf("期望状态为 Completed, 实际为 %v", task.Status())
 	}
 
-	if task.Result().Data().(map[string]interface{})["response"] != "分析完成，发现3个关键洞察" {
-		t.Error("Agent任务结果不正确")
+	// result 现在直接使用 taskConclusion 的值
+	if task.Result().Data() != "分析完成，发现3个关键洞察" {
+		t.Errorf("期望结果数据为 '分析完成，发现3个关键洞察', 实际为 '%v'", task.Result().Data())
 	}
 }
 
@@ -464,28 +443,28 @@ func TestTask_AgentType_Progress(t *testing.T) {
 	task := createAgentTestTask()
 	task.Start()
 
-	task.UpdateProgress(4, 1, "思考中", "分析问题...")
+	task.UpdateProgress(25)
 	progress := task.Progress()
-	if progress.Stage() != "思考中" {
-		t.Errorf("期望阶段为 '思考中', 实际为 '%s'", progress.Stage())
+	if progress.Value() != 25 {
+		t.Errorf("期望进度为 25, 实际为 %d", progress.Value())
 	}
 
-	task.UpdateProgress(4, 2, "执行中", "调用工具...")
+	task.UpdateProgress(50)
 	progress = task.Progress()
-	if progress.Percentage() != 50.0 {
-		t.Errorf("期望百分比为 50.0, 实际为 %f", progress.Percentage())
+	if progress.Value() != 50 {
+		t.Errorf("期望进度为 50, 实际为 %d", progress.Value())
 	}
 
-	task.UpdateProgress(4, 3, "生成中", "整合结果...")
+	task.UpdateProgress(75)
 	progress = task.Progress()
-	if progress.Current() != 3 {
-		t.Errorf("期望当前为 3, 实际为 %d", progress.Current())
+	if progress.Value() != 75 {
+		t.Errorf("期望进度为 75, 实际为 %d", progress.Value())
 	}
 
-	task.UpdateProgress(4, 4, "完成", "任务结束")
+	task.UpdateProgress(100)
 	progress = task.Progress()
-	if progress.Percentage() != 100.0 {
-		t.Errorf("期望百分比为 100.0, 实际为 %f", progress.Percentage())
+	if progress.Value() != 100 {
+		t.Errorf("期望进度为 100, 实际为 %d", progress.Value())
 	}
 }
 
@@ -510,7 +489,7 @@ func TestTask_AgentType_FailAndRetry(t *testing.T) {
 func TestTask_AgentType_ToFromSnapshot(t *testing.T) {
 	task := createAgentTestTask()
 	task.Start()
-	task.UpdateProgress(100, 50, "处理中", "已完成一半")
+	task.UpdateProgress(50)
 
 	snap := task.ToSnapshot()
 
@@ -529,8 +508,8 @@ func TestTask_AgentType_ToFromSnapshot(t *testing.T) {
 		t.Errorf("恢复后状态不匹配")
 	}
 
-	if newTask.Progress().Current() != 50 {
-		t.Errorf("恢复后进度不匹配: 期望 50, 实际 %d", newTask.Progress().Current())
+	if newTask.Progress().Value() != 50 {
+		t.Errorf("恢复后进度不匹配: 期望 50, 实际 %d", newTask.Progress().Value())
 	}
 }
 
@@ -569,11 +548,6 @@ func createAgentTestTask() *Task {
 		TaskTypeAgent,
 		"测试目标",
 		"测试验收标准",
-		map[string]interface{}{
-			"model":      "claude-3-opus",
-			"prompt":     "测试prompt",
-			"max_tokens": 4096,
-		},
 		120*time.Second,
 		3,
 		10,
@@ -592,7 +566,6 @@ func createTestTask() *Task {
 		TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		nil,
 		60*time.Second,
 		0,
 		0,

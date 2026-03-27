@@ -103,9 +103,7 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		"name":       task.Name(),
 		"status":     task.Status().String(),
 		"type":       task.Type().String(),
-		"progress":   task.Progress().Percentage(),
-		"stage":      task.Progress().Stage(),
-		"detail":     task.Progress().Detail(),
+		"progress":   task.Progress().Value(),
 		"created_at": task.CreatedAt().Format(time.RFC3339),
 	}
 
@@ -149,8 +147,7 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 				"task_id": child.ID().String(),
 				"name":    child.Name(),
 				"status":  child.Status().String(),
-				"progress": child.Progress().Percentage(),
-				"stage":   child.Progress().Stage(),
+				"progress": child.Progress().Value(),
 			})
 		}
 		taskInfo["sub_tasks"] = subTasks

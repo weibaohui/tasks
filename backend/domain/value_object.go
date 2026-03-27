@@ -145,63 +145,27 @@ func ParseTaskType(s string) (TaskType, error) {
 
 // Progress 进度值对象
 type Progress struct {
-	total      int
-	current    int
-	percentage float64
-	stage      string
-	detail     string
-	updatedAt  time.Time
+	value     int
+	updatedAt time.Time
 }
 
 // NewProgress 创建进度对象
 func NewProgress() Progress {
 	return Progress{
-		total:      0,
-		current:    0,
-		percentage: 0,
-		stage:      "",
-		detail:     "",
-		updatedAt:  time.Now(),
+		value:     0,
+		updatedAt: time.Now(),
 	}
 }
 
 // Update 更新进度
-func (p *Progress) Update(total, current int, stage, detail string) {
-	p.total = total
-	p.current = current
-	if total > 0 {
-		p.percentage = float64(current) / float64(total) * 100
-	} else if current > 0 {
-		p.percentage = 0
-	}
-	p.stage = stage
-	p.detail = detail
+func (p *Progress) Update(value int) {
+	p.value = value
 	p.updatedAt = time.Now()
 }
 
-// Total 总数
-func (p Progress) Total() int {
-	return p.total
-}
-
-// Current 当前数
-func (p Progress) Current() int {
-	return p.current
-}
-
-// Percentage 百分比
-func (p Progress) Percentage() float64 {
-	return p.percentage
-}
-
-// Stage 阶段
-func (p Progress) Stage() string {
-	return p.stage
-}
-
-// Detail 详情
-func (p Progress) Detail() string {
-	return p.detail
+// Value 获取进度值
+func (p Progress) Value() int {
+	return p.value
 }
 
 // UpdatedAt 更新时间
@@ -212,11 +176,7 @@ func (p Progress) UpdatedAt() time.Time {
 // ToMap 转换为map
 func (p Progress) ToMap() map[string]interface{} {
 	return map[string]interface{}{
-		"total":      p.total,
-		"current":    p.current,
-		"percentage": p.percentage,
-		"stage":      p.stage,
-		"detail":     p.detail,
+		"value":      p.value,
 		"updated_at": p.updatedAt.Unix(),
 	}
 }
@@ -272,7 +232,8 @@ type TaskSnapshot struct {
 	ExecutionSummary   map[string]interface{} // 执行摘要
 	TodoList           string                 // 待办列表
 	Analysis           string                 // Agent 分析结果
-	Metadata           map[string]interface{}
+	Depth              int                    // 任务深度
+	ParentSpan         string                 // 父任务的 span ID
 	Timeout            time.Duration
 	MaxRetries         int
 	Priority           int

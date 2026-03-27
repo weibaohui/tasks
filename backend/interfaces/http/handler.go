@@ -61,18 +61,17 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	Name               string                 `json:"name"`
-	TaskRequirement    string                 `json:"task_requirement"`    // 任务目标（必填）
-	AcceptanceCriteria string                 `json:"acceptance_criteria"` // 验收标准（必填）
-	Description        string                 `json:"description"`
-	Type               string                 `json:"type"`
-	Metadata           map[string]interface{} `json:"metadata"`
-	Timeout            int64                  `json:"timeout"`
-	MaxRetries         int                    `json:"max_retries"`
-	Priority           int                    `json:"priority"`
-	ParentID           *string                `json:"parent_id"`
-	TraceID            *string                `json:"trace_id"`
-	SpanID             *string                `json:"span_id"`
+	Name               string `json:"name"`
+	TaskRequirement    string `json:"task_requirement"`    // 任务目标（必填）
+	AcceptanceCriteria string `json:"acceptance_criteria"` // 验收标准（必填）
+	Description        string `json:"description"`
+	Type               string `json:"type"`
+	Timeout            int64  `json:"timeout"`
+	MaxRetries         int    `json:"max_retries"`
+	Priority           int    `json:"priority"`
+	ParentID           *string `json:"parent_id"`
+	TraceID            *string `json:"trace_id"`
+	SpanID             *string `json:"span_id"`
 }
 
 // CreateTask 创建任务
@@ -135,7 +134,6 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		AcceptanceCriteria: req.AcceptanceCriteria,
 		Description:        req.Description,
 		Type:               domain.TaskTypeAgent,
-		Metadata:           req.Metadata,
 		Timeout:            req.Timeout,
 		MaxRetries:         req.MaxRetries,
 		Priority:           req.Priority,

@@ -44,7 +44,6 @@ func createTestTask() *domain.Task {
 		domain.TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		map[string]interface{}{"key": "value"},
 		60*time.Second,
 		3,
 		5,
@@ -85,7 +84,7 @@ func TestSQLiteTaskRepository_SaveAndFind(t *testing.T) {
 
 	// 4. 更新任务并再次保存
 	task.Start()
-	task.UpdateProgress(100, 50, "处理中", "一半")
+	task.UpdateProgress(50)
 	err = repo.Save(ctx, task)
 	if err != nil {
 		t.Fatalf("更新任务失败: %v", err)
@@ -100,8 +99,8 @@ func TestSQLiteTaskRepository_SaveAndFind(t *testing.T) {
 	if updatedTask.Status() != domain.TaskStatusRunning {
 		t.Errorf("期望状态为 Running, 实际为 %v", updatedTask.Status())
 	}
-	if updatedTask.Progress().Current() != 50 {
-		t.Errorf("期望进度为 50, 实际为 %d", updatedTask.Progress().Current())
+	if updatedTask.Progress().Value() != 50 {
+		t.Errorf("期望进度为 50, 实际为 %d", updatedTask.Progress().Value())
 	}
 }
 
@@ -125,7 +124,6 @@ func TestSQLiteTaskRepository_FindByTraceID(t *testing.T) {
 		domain.TaskTypeCustom,
 		"测试目标",
 		"测试验收标准",
-		nil,
 		60*time.Second,
 		0,
 		0,

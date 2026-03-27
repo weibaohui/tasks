@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -26,15 +25,8 @@ func AgentHandlerFunc(ctx context.Context, task *domain.Task, repo domain.TaskRe
 
 	log.Printf("[AgentHandler] 执行 Agent 任务: %s, spanID: %s", taskID, spanID)
 
-	// 获取当前深度
-	currentDepth := 1
-	if task.Metadata() != nil {
-		if depthStr, ok := task.Metadata()["depth"].(string); ok {
-			if depth, err := strconv.Atoi(depthStr); err == nil {
-				currentDepth = depth + 1
-			}
-		}
-	}
+	// 获取当前深度（使用独立字段）
+	currentDepth := task.Depth() + 1
 
 	// 更新进度
 	updateAgentProgress(task, repo, 0, "初始化", fmt.Sprintf("Agent 模式启动，深度 %d/%d", currentDepth, MaxAgentTaskDepth))
@@ -66,41 +58,25 @@ func parseTaskType(typeStr string) domain.TaskType {
 }
 
 func updateAgentProgress(task *domain.Task, repo domain.TaskRepository, progress int, stage, detail string) {
-	task.UpdateProgress(100, progress, stage, detail)
+	task.UpdateProgress(progress)
 	saveAgentTaskPreservingMetadata(task, repo)
 }
 
 func saveAgentTaskPreservingMetadata(task *domain.Task, repo domain.TaskRepository) {
-	current, err := repo.FindByID(context.Background(), task.ID())
-	if err == nil && current.Metadata() != nil {
-		if task.Metadata() == nil {
-			task.SetMetadata(map[string]interface{}{})
-		}
-		for k, v := range current.Metadata() {
-			if _, ok := task.Metadata()[k]; !ok {
-				task.Metadata()[k] = v
-			}
-		}
-	}
 	repo.Save(context.Background(), task)
 }
 
 func finishAgentTask(task *domain.Task, repo domain.TaskRepository) error {
-	resultData := map[string]interface{}{
-		"completed_at": time.Now().UnixMilli(),
-		"handler":      "agent",
-	}
-
 	// 获取任务自身的结论
 	taskConclusion := task.TaskConclusion()
 	if taskConclusion == "" {
 		taskConclusion = "Agent 任务完成"
 	}
-	resultData["task_conclusion"] = taskConclusion
-
-	result := domain.NewResult(resultData, "Agent 任务完成")
-	task.Complete(result)
+	// 必须先设置结论，Complete 会使用 taskConclusion 作为 result 的值
 	task.SetTaskConclusion(taskConclusion)
+
+	result := domain.NewResult(nil, taskConclusion)
+	task.Complete(result)
 	updateAgentProgress(task, repo, 100, "完成", "Agent 任务执行完成")
 	return nil
 }
@@ -144,12 +120,6 @@ func CreateSubTasksFromLLM(
 			taskType,
 			taskRequirement,
 			acceptanceCriteria,
-			map[string]interface{}{
-				"goal":        st.Goal,
-				"parent_id":   taskID,
-				"parent_span": spanID,
-				"depth":       strconv.Itoa(getCurrentDepth(task)),
-			},
 			DefaultTaskTimeout,
 			0,
 			0,
@@ -158,6 +128,10 @@ func CreateSubTasksFromLLM(
 			log.Printf("[AgentHandler] 创建子任务失败: %v", err)
 			continue
 		}
+
+		// 设置深度和父 span（独立字段）
+		subTask.SetDepth(getCurrentDepth(task))
+		subTask.SetParentSpan(spanID)
 
 		subTask.Start()
 		if err := repo.Save(context.Background(), subTask); err != nil {
@@ -179,13 +153,5 @@ func CreateSubTasksFromLLM(
 }
 
 func getCurrentDepth(task *domain.Task) int {
-	depth := 1
-	if task.Metadata() != nil {
-		if depthStr, ok := task.Metadata()["depth"].(string); ok {
-			if d, err := strconv.Atoi(depthStr); err == nil {
-				depth = d + 1
-			}
-		}
-	}
-	return depth
+	return task.Depth() + 1
 }

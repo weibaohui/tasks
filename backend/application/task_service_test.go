@@ -117,7 +117,6 @@ func TestTaskApplicationService_CreateTask(t *testing.T) {
 		AcceptanceCriteria: "测试验收标准",
 		Description:        "任务描述",
 		Type:              domain.TaskTypeCustom,
-		Metadata:           map[string]interface{}{"key": "value"},
 		Timeout:           60000,
 		MaxRetries:        3,
 		Priority:          5,
@@ -296,15 +295,15 @@ func TestTaskApplicationService_UpdateProgress(t *testing.T) {
 
 	service.StartTask(context.Background(), task.ID())
 
-	err := service.UpdateProgress(context.Background(), task.ID(), 100, 50, "处理中", "已完成50%")
+	err := service.UpdateProgress(context.Background(), task.ID(), 50)
 	if err != nil {
 		t.Fatalf("更新进度失败: %v", err)
 	}
 
 	updatedTask, _ := repo.FindByID(context.Background(), task.ID())
 	progress := updatedTask.Progress()
-	if progress.Current() != 50 {
-		t.Errorf("期望当前进度为 50, 实际为 %d", progress.Current())
+	if progress.Value() != 50 {
+		t.Errorf("期望当前进度为 50, 实际为 %d", progress.Value())
 	}
 }
 

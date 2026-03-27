@@ -147,71 +147,39 @@ func TestParseTaskType(t *testing.T) {
 func TestProgress(t *testing.T) {
 	p := NewProgress()
 
-	if p.Total() != 0 {
-		t.Errorf("期望初始总数为 0, 实际为 %d", p.Total())
-	}
-
-	if p.Current() != 0 {
-		t.Errorf("期望初始当前为 0, 实际为 %d", p.Current())
-	}
-
-	if p.Percentage() != 0 {
-		t.Errorf("期望初始百分比为 0, 实际为 %f", p.Percentage())
+	if p.Value() != 0 {
+		t.Errorf("期望初始进度为 0, 实际为 %d", p.Value())
 	}
 }
 
 func TestProgress_Update(t *testing.T) {
 	p := NewProgress()
 
-	p.Update(100, 50, "处理中", "已处理50项")
+	p.Update(50)
 
-	if p.Total() != 100 {
-		t.Errorf("期望总数为 100, 实际为 %d", p.Total())
-	}
-
-	if p.Current() != 50 {
-		t.Errorf("期望当前为 50, 实际为 %d", p.Current())
-	}
-
-	if p.Percentage() != 50.0 {
-		t.Errorf("期望百分比为 50.0, 实际为 %f", p.Percentage())
-	}
-
-	if p.Stage() != "处理中" {
-		t.Errorf("期望阶段为 '处理中', 实际为 '%s'", p.Stage())
-	}
-
-	if p.Detail() != "已处理50项" {
-		t.Errorf("期望详情为 '已处理50项', 实际为 '%s'", p.Detail())
+	if p.Value() != 50 {
+		t.Errorf("期望进度为 50, 实际为 %d", p.Value())
 	}
 }
 
 func TestProgress_Update_ZeroTotal(t *testing.T) {
 	p := NewProgress()
 
-	p.Update(0, 0, "准备中", "初始化")
+	p.Update(0)
 
-	if p.Percentage() != 0.0 {
-		t.Errorf("期望百分比为 0.0, 实际为 %f", p.Percentage())
+	if p.Value() != 0 {
+		t.Errorf("期望进度为 0, 实际为 %d", p.Value())
 	}
 }
 
 func TestProgress_ToMap(t *testing.T) {
 	p := NewProgress()
-	p.Update(100, 75, "处理中", "已完成75%")
+	p.Update(75)
 
 	m := p.ToMap()
 
-	if m["total"].(int) != 100 {
-		t.Errorf("ToMap total 期望 100, 实际 %v", m["total"])
-	}
-
-	if m["current"].(int) != 75 {
-		t.Errorf("ToMap current 期望 75, 实际 %v", m["current"])
-	}
-
-	if m["percentage"].(float64) != 75.0 {
-		t.Errorf("ToMap percentage 期望 75.0, 实际 %v", m["percentage"])
+	if m["value"].(int) != 75 {
+		t.Errorf("ToMap value 期望 75, 实际 %v", m["value"])
 	}
 }
 
@@ -247,7 +215,7 @@ func TestProgress_UpdatedAt(t *testing.T) {
 	p := NewProgress()
 	before := time.Now()
 
-	p.Update(100, 50, "处理中", "")
+	p.Update(50)
 
 	after := time.Now()
 
