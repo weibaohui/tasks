@@ -40,14 +40,9 @@ func NewLLMProviderSelectionService(
 // SelectProviderForTask 根据任务元数据选择合适的 LLM Provider 配置
 // 优先从 agent_code 查找，其次从 channel_code 查找，最后使用 user_code
 func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context, task *Task) (*LLMProviderConfig, error) {
-	metadata := task.Metadata()
-	if metadata == nil {
-		return nil, fmt.Errorf("任务元数据为空")
-	}
-
 	// 0. 尝试直接从 agent_code 获取（最高优先级，用于 Agent 工具创建的任务）
-	agentCode, hasAgentCode := metadata["agent_code"].(string)
-	if hasAgentCode && s.agentRepo != nil && s.providerRepo != nil {
+	agentCode := task.AgentCode()
+	if agentCode != "" && s.agentRepo != nil && s.providerRepo != nil {
 		agent, err := s.agentRepo.FindByAgentCode(ctx, NewAgentCode(agentCode))
 		if err == nil && agent != nil {
 			provider, err := s.providerRepo.FindDefaultActive(ctx, agent.UserCode())
@@ -58,10 +53,10 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 	}
 
 	// 1. 尝试从 channel_code 获取
-	channelCode, hasChannel := metadata["channel_code"].(string)
-	userCode, hasUser := metadata["user_code"].(string)
+	channelCode := task.ChannelCode()
+	userCode := task.UserCode()
 
-	if hasChannel && s.channelRepo != nil && s.agentRepo != nil && s.providerRepo != nil {
+	if channelCode != "" && s.channelRepo != nil && s.agentRepo != nil && s.providerRepo != nil {
 		channel, err := s.channelRepo.FindByCode(ctx, NewChannelCode(channelCode))
 		if err == nil && channel != nil {
 			agentCode := channel.AgentCode()
@@ -78,7 +73,7 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 	}
 
 	// 2. 尝试直接从 user_code 获取
-	if hasUser && s.providerRepo != nil {
+	if userCode != "" && s.providerRepo != nil {
 		provider, err := s.providerRepo.FindDefaultActive(ctx, userCode)
 		if err == nil && provider != nil {
 			return s.buildConfigFromProvider(provider, ""), nil

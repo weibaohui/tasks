@@ -5,7 +5,9 @@ package persistence
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Schema SQL Schema 定义
@@ -18,6 +20,16 @@ CREATE TABLE IF NOT EXISTS tasks (
     name TEXT NOT NULL,
     description TEXT,
     type TEXT NOT NULL,
+    acceptance_criteria TEXT,
+    task_requirement TEXT,
+    task_conclusion TEXT,
+    user_code TEXT,
+    agent_code TEXT,
+    channel_code TEXT,
+    session_key TEXT,
+    execution_summary TEXT,
+    todo_list TEXT,
+    analysis TEXT,
     metadata TEXT,
     timeout INTEGER NOT NULL,
     max_retries INTEGER NOT NULL,
@@ -34,6 +46,10 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_trace_id ON tasks(trace_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_user_code ON tasks(user_code);
+CREATE INDEX IF NOT EXISTS idx_tasks_agent_code ON tasks(agent_code);
+CREATE INDEX IF NOT EXISTS idx_tasks_channel_code ON tasks(channel_code);
+CREATE INDEX IF NOT EXISTS idx_tasks_session_key ON tasks(session_key);
 
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -276,6 +292,9 @@ func InitSchema(db *sql.DB) error {
 	if _, err := db.Exec(Schema); err != nil {
 		return err
 	}
+	if err := migrateTasksNewColumns(db); err != nil {
+		return err
+	}
 	if err := migrateAgentMCPBindingColumn(db); err != nil {
 		return err
 	}
@@ -283,6 +302,124 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	return migrateConversationRecordsTimestampToMillis(db)
+}
+
+// migrateTasksNewColumns 迁移 tasks 表新增字段
+func migrateTasksNewColumns(db *sql.DB) error {
+	newColumns := []struct {
+		name     string
+		sqlType  string
+		oldName  string // 如果旧列存在，数据迁移到新列
+	}{
+		{"acceptance_criteria", "TEXT", ""},
+		{"task_requirement", "TEXT", "llm_reason"},
+		{"task_conclusion", "TEXT", ""},
+		{"user_code", "TEXT", ""},
+		{"agent_code", "TEXT", ""},
+		{"channel_code", "TEXT", ""},
+		{"session_key", "TEXT", ""},
+		{"execution_summary", "TEXT", ""},
+		{"todo_list", "TEXT", ""},
+		{"analysis", "TEXT", ""},
+	}
+
+	for _, col := range newColumns {
+		has, err := tableHasColumn(db, "tasks", col.name)
+		if err != nil {
+			return err
+		}
+		if !has {
+			if col.oldName != "" {
+				// 检查旧列是否存在，如果存在则重命名
+				oldHas, err := tableHasColumn(db, "tasks", col.oldName)
+				if err != nil {
+					return err
+				}
+				if oldHas {
+					// 重命名旧列为新列
+					if _, err := db.Exec(fmt.Sprintf("ALTER TABLE tasks RENAME COLUMN %s TO %s", col.oldName, col.name)); err != nil {
+						return err
+					}
+					continue
+				}
+			}
+			// 添加新列
+			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE tasks ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// 迁移 metadata 中的数据到新列
+	if err := migrateMetadataToColumns(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// migrateMetadataToColumns 将 metadata 中的 execution_summary、todo_list、analysis 迁移到独立列
+func migrateMetadataToColumns(db *sql.DB) error {
+	// 查询所有有 metadata 但新列为空的任务
+	rows, err := db.Query(`SELECT id, metadata FROM tasks WHERE metadata IS NOT NULL AND metadata != '' AND (execution_summary IS NULL OR execution_summary = '')`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type taskMeta struct {
+		id       string
+		metadata string
+	}
+	var tasks []taskMeta
+
+	for rows.Next() {
+		var t taskMeta
+		if err := rows.Scan(&t.id, &t.metadata); err != nil {
+			return err
+		}
+		tasks = append(tasks, t)
+	}
+
+	for _, t := range tasks {
+		var metadata map[string]interface{}
+		if err := json.Unmarshal([]byte(t.metadata), &metadata); err != nil {
+			continue // 跳过无效 JSON
+		}
+
+		var updates []string
+		var args []interface{}
+
+		// 迁移 execution_summary
+		if summary, ok := metadata["execution_summary"]; ok {
+			if summaryBytes, err := json.Marshal(summary); err == nil {
+				updates = append(updates, "execution_summary = ?")
+				args = append(args, string(summaryBytes))
+			}
+		}
+
+		// 迁移 todo_list
+		if todoList, ok := metadata["todo_list"].(string); ok && todoList != "" {
+			updates = append(updates, "todo_list = ?")
+			args = append(args, todoList)
+		}
+
+		// 迁移 analysis
+		if analysis, ok := metadata["analysis"].(string); ok && analysis != "" {
+			updates = append(updates, "analysis = ?")
+			args = append(args, analysis)
+		}
+
+		if len(updates) > 0 {
+			args = append(args, t.id)
+			query := fmt.Sprintf("UPDATE tasks SET %s WHERE id = ?", strings.Join(updates, ", "))
+			if _, err := db.Exec(query, args...); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func migrateAgentMCPBindingColumn(db *sql.DB) error {

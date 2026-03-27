@@ -867,24 +867,18 @@ func (a *toolHookAdapter) OnToolExecutionComplete(ctx context.Context, tools []l
 
 // createTaskFromMessage 从消息创建任务
 func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.InboundMessage, traceID, spanID string, session *Session) {
-	// 构建任务元数据，包含会话和渠道信息
+	// 构建任务元数据
 	metadata := make(map[string]interface{})
-	metadata["session_key"] = msg.SessionKey()
 	metadata["channel"] = msg.Channel
 	metadata["sender_id"] = msg.SenderID
 	metadata["content"] = msg.Content
 
-	// 从消息 metadata 中提取 agent_code 和其他信息
+	// 从消息 metadata 中提取上下文信息
+	var agentCode, userCode, channelCode string
 	if msg.Metadata != nil {
-		if agentCode, ok := msg.Metadata["agent_code"].(string); ok {
-			metadata["agent_code"] = agentCode
-		}
-		if channelCode, ok := msg.Metadata["channel_code"].(string); ok {
-			metadata["channel_code"] = channelCode
-		}
-		if userCode, ok := msg.Metadata["user_code"].(string); ok {
-			metadata["user_code"] = userCode
-		}
+		agentCode, _ = msg.Metadata["agent_code"].(string)
+		channelCode, _ = msg.Metadata["channel_code"].(string)
+		userCode, _ = msg.Metadata["user_code"].(string)
 	}
 
 	// 使用消息的 trace_id 和 span_id
@@ -902,6 +896,10 @@ func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.I
 		Priority:    0,
 		TraceID:     &taskTraceID,
 		SpanID:      &taskSpanID,
+		SessionKey:  msg.SessionKey(),
+		AgentCode:   agentCode,
+		UserCode:    userCode,
+		ChannelCode: channelCode,
 	}
 
 	// 创建任务

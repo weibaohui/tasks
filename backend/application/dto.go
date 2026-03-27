@@ -37,8 +37,9 @@ type ProgressDTO struct {
 
 // ResultDTO 结果 DTO
 type ResultDTO struct {
-	Data    interface{} `json:"data"`
-	Message string      `json:"message"`
+	Data           interface{} `json:"data"`
+	Message        string      `json:"message"`
+	TaskConclusion string     `json:"task_conclusion,omitempty"`
 }
 
 // ListTasksDTO 任务列表 DTO

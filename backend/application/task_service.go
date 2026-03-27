@@ -32,6 +32,11 @@ type CreateTaskCommand struct {
 	ParentID    *domain.TaskID
 	TraceID     *domain.TraceID
 	SpanID      *domain.SpanID
+	// 上下文字段（独立存储）
+	AgentCode  string
+	UserCode   string
+	ChannelCode string
+	SessionKey  string
 }
 
 // TaskApplicationService 任务应用服务
@@ -119,6 +124,20 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// 设置上下文字段（独立存储）
+	if cmd.AgentCode != "" {
+		task.SetAgentCode(cmd.AgentCode)
+	}
+	if cmd.UserCode != "" {
+		task.SetUserCode(cmd.UserCode)
+	}
+	if cmd.ChannelCode != "" {
+		task.SetChannelCode(cmd.ChannelCode)
+	}
+	if cmd.SessionKey != "" {
+		task.SetSessionKey(cmd.SessionKey)
 	}
 
 	// 4. 持久化

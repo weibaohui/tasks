@@ -35,10 +35,22 @@ type Task struct {
 	maxRetries int
 	priority   int
 
-	status   TaskStatus
-	progress Progress
-	result   *Result
-	execErr  error
+	status         TaskStatus
+	progress       Progress
+	result         *Result
+	execErr        error
+
+	// 独立字段（不再存储在 metadata 中）
+	acceptanceCriteria string
+	taskRequirement    string
+	taskConclusion     string
+	userCode           string
+	agentCode          string
+	channelCode        string
+	sessionKey         string
+	executionSummary   map[string]interface{} // 执行摘要
+	todoList           string                 // 待办列表
+	analysis           string                 // Agent 分析结果
 
 	createdAt  time.Time
 	startedAt  *time.Time
@@ -102,7 +114,119 @@ func (t *Task) Description() string                  { return t.description }
 func (t *Task) Type() TaskType                       { return t.taskType }
 func (t *Task) Metadata() map[string]interface{}     { return t.metadata }
 func (t *Task) SetMetadata(m map[string]interface{}) { t.metadata = m }
-func (t *Task) Timeout() time.Duration               { return t.timeout }
+
+// 独立字段访问方法
+func (t *Task) AcceptanceCriteria() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.acceptanceCriteria
+}
+func (t *Task) SetAcceptanceCriteria(criteria string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.acceptanceCriteria = criteria
+}
+
+func (t *Task) TaskRequirement() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.taskRequirement
+}
+func (t *Task) SetTaskRequirement(requirement string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.taskRequirement = requirement
+}
+
+func (t *Task) TaskConclusion() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.taskConclusion
+}
+func (t *Task) SetTaskConclusion(conclusion string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.taskConclusion = conclusion
+}
+
+func (t *Task) UserCode() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.userCode
+}
+func (t *Task) SetUserCode(code string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.userCode = code
+}
+
+func (t *Task) AgentCode() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.agentCode
+}
+func (t *Task) SetAgentCode(code string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.agentCode = code
+}
+
+func (t *Task) ChannelCode() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.channelCode
+}
+func (t *Task) SetChannelCode(code string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.channelCode = code
+}
+
+func (t *Task) SessionKey() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.sessionKey
+}
+func (t *Task) SetSessionKey(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sessionKey = key
+}
+
+func (t *Task) ExecutionSummary() map[string]interface{} {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.executionSummary
+}
+func (t *Task) SetExecutionSummary(summary map[string]interface{}) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.executionSummary = summary
+}
+
+func (t *Task) TodoList() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.todoList
+}
+func (t *Task) SetTodoList(todoList string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.todoList = todoList
+}
+
+func (t *Task) Analysis() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.analysis
+}
+func (t *Task) SetAnalysis(analysis string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.analysis = analysis
+}
+
+func (t *Task) Timeout() time.Duration { return t.timeout }
 func (t *Task) MaxRetries() int                      { return t.maxRetries }
 func (t *Task) Priority() int                        { return t.priority }
 func (t *Task) CreatedAt() time.Time                 { return t.createdAt }
@@ -194,6 +318,13 @@ func (t *Task) Complete(result Result) error {
 	return nil
 }
 
+// UpdateResult 更新任务结果（用于聚合子任务结果后更新父任务）
+func (t *Task) UpdateResult(result Result) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.result = &result
+}
+
 // Fail 任务失败
 func (t *Task) Fail(err error) error {
 	t.mu.Lock()
@@ -261,24 +392,34 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 	defer t.mu.RUnlock()
 
 	return TaskSnapshot{
-		ID:          t.id,
-		TraceID:     t.traceID,
-		SpanID:      t.spanID,
-		ParentID:    t.parentID,
-		Name:        t.name,
-		Description: t.description,
-		Type:        t.taskType,
-		Metadata:    t.metadata,
-		Timeout:     t.timeout,
-		MaxRetries:  t.maxRetries,
-		Priority:    t.priority,
-		Status:      t.status,
-		Progress:    t.progress,
-		Result:      t.result,
-		ErrorMsg:    "",
-		CreatedAt:   t.createdAt,
-		StartedAt:   t.startedAt,
-		FinishedAt:  t.finishedAt,
+		ID:                 t.id,
+		TraceID:            t.traceID,
+		SpanID:             t.spanID,
+		ParentID:           t.parentID,
+		Name:               t.name,
+		Description:        t.description,
+		Type:               t.taskType,
+		Metadata:           t.metadata,
+		Timeout:            t.timeout,
+		MaxRetries:         t.maxRetries,
+		Priority:           t.priority,
+		Status:             t.status,
+		Progress:           t.progress,
+		Result:             t.result,
+		ErrorMsg:           "",
+		CreatedAt:          t.createdAt,
+		StartedAt:          t.startedAt,
+		FinishedAt:         t.finishedAt,
+		AcceptanceCriteria: t.acceptanceCriteria,
+		TaskRequirement:    t.taskRequirement,
+		TaskConclusion:     t.taskConclusion,
+		UserCode:           t.userCode,
+		AgentCode:          t.agentCode,
+		ChannelCode:        t.channelCode,
+		SessionKey:         t.sessionKey,
+		ExecutionSummary:   t.executionSummary,
+		TodoList:           t.todoList,
+		Analysis:           t.analysis,
 	}
 }
 
@@ -305,4 +446,16 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.createdAt = snap.CreatedAt
 	t.startedAt = snap.StartedAt
 	t.finishedAt = snap.FinishedAt
+
+	// 直接设置独立字段
+	t.acceptanceCriteria = snap.AcceptanceCriteria
+	t.taskRequirement = snap.TaskRequirement
+	t.taskConclusion = snap.TaskConclusion
+	t.userCode = snap.UserCode
+	t.agentCode = snap.AgentCode
+	t.channelCode = snap.ChannelCode
+	t.sessionKey = snap.SessionKey
+	t.executionSummary = snap.ExecutionSummary
+	t.todoList = snap.TodoList
+	t.analysis = snap.Analysis
 }

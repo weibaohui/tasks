@@ -89,6 +89,12 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
         </Card>
       )}
 
+      {task.result?.task_conclusion && (
+        <Card title="执行结论" style={{ marginTop: 16 }}>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{task.result.task_conclusion}</div>
+        </Card>
+      )}
+
       {task.result && (
         <Card title="执行结果" style={{ marginTop: 16 }}>
           <pre>{JSON.stringify(task.result, null, 2)}</pre>

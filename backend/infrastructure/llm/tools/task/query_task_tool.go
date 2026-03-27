@@ -157,23 +157,22 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		taskInfo["sub_tasks_count"] = len(subTasks)
 	}
 
-	// 添加执行摘要（如果存在）
-	if metadata := task.Metadata(); metadata != nil {
-		if summary, ok := metadata["execution_summary"].(map[string]interface{}); ok {
-			taskInfo["execution_summary"] = summary
-		}
-		// 添加 todo_list（如果存在）
-		if todoList, ok := metadata["todo_list"].(string); ok && todoList != "" {
-			taskInfo["todo_list"] = todoList
-		}
-		// 添加 Agent 模式的分析结果（如果有）
-		if analysis, ok := metadata["analysis"].(string); ok && analysis != "" {
-			taskInfo["analysis"] = analysis
-		}
-		// 兼容 agent_result 字段
-		if agentResult, ok := metadata["agent_result"].(string); ok && agentResult != "" {
-			taskInfo["agent_result"] = agentResult
-		}
+	// 添加执行摘要（使用独立字段）
+	if summary := task.ExecutionSummary(); summary != nil {
+		taskInfo["execution_summary"] = summary
+	}
+	// 添加 todo_list（使用独立字段）
+	if todoList := task.TodoList(); todoList != "" {
+		taskInfo["todo_list"] = todoList
+	}
+	// 添加 Agent 模式的分析结果（使用独立字段）
+	if analysis := task.Analysis(); analysis != "" {
+		taskInfo["analysis"] = analysis
+	}
+
+	// 添加 task_conclusion（任务结论）
+	if taskConclusion := task.TaskConclusion(); taskConclusion != "" {
+		taskInfo["task_conclusion"] = taskConclusion
 	}
 
 	resultJSON, _ := json.Marshal(taskInfo)

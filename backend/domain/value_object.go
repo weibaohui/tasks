@@ -255,22 +255,32 @@ func (r Result) ToMap() map[string]interface{} {
 
 // TaskSnapshot 任务快照，用于持久化
 type TaskSnapshot struct {
-	ID          TaskID
-	TraceID     TraceID
-	SpanID      SpanID
-	ParentID    *TaskID
-	Name        string
-	Description string
-	Type        TaskType
-	Metadata    map[string]interface{}
-	Timeout     time.Duration
-	MaxRetries  int
-	Priority    int
-	Status      TaskStatus
-	Progress    Progress
-	Result      *Result
-	ErrorMsg    string
-	CreatedAt   time.Time
-	StartedAt   *time.Time
-	FinishedAt  *time.Time
+	ID                 TaskID
+	TraceID            TraceID
+	SpanID             SpanID
+	ParentID           *TaskID
+	Name               string
+	Description        string
+	Type               TaskType
+	AcceptanceCriteria string
+	TaskRequirement    string
+	TaskConclusion     string
+	UserCode           string
+	AgentCode          string
+	ChannelCode        string
+	SessionKey         string
+	ExecutionSummary   map[string]interface{} // 执行摘要
+	TodoList           string                 // 待办列表
+	Analysis           string                 // Agent 分析结果
+	Metadata           map[string]interface{}
+	Timeout            time.Duration
+	MaxRetries         int
+	Priority           int
+	Status             TaskStatus
+	Progress           Progress
+	Result             *Result
+	ErrorMsg           string
+	CreatedAt          time.Time
+	StartedAt          *time.Time
+	FinishedAt         *time.Time
 }

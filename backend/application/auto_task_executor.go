@@ -21,24 +21,23 @@ import (
 const MaxTaskDepth = 4
 
 // inheritContextFromTask 从父任务继承上下文信息（agent_code, user_code, channel_code, session_key）
-func inheritContextFromTask(parent *domain.Task, metadata map[string]interface{}) {
-	if parent == nil || parent.Metadata() == nil {
+func inheritContextFromTask(parent *domain.Task, childTask *domain.Task) {
+	if parent == nil {
 		return
 	}
-	parentMeta := parent.Metadata()
 
-	// 继承上下文字段
-	if v, ok := parentMeta["agent_code"].(string); ok && v != "" {
-		metadata["agent_code"] = v
+	// 继承上下文字段到子任务
+	if v := parent.AgentCode(); v != "" {
+		childTask.SetAgentCode(v)
 	}
-	if v, ok := parentMeta["user_code"].(string); ok && v != "" {
-		metadata["user_code"] = v
+	if v := parent.UserCode(); v != "" {
+		childTask.SetUserCode(v)
 	}
-	if v, ok := parentMeta["channel_code"].(string); ok && v != "" {
-		metadata["channel_code"] = v
+	if v := parent.ChannelCode(); v != "" {
+		childTask.SetChannelCode(v)
 	}
-	if v, ok := parentMeta["session_key"].(string); ok && v != "" {
-		metadata["session_key"] = v
+	if v := parent.SessionKey(); v != "" {
+		childTask.SetSessionKey(v)
 	}
 }
 
@@ -120,12 +119,6 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	e.updateProgress(task, 0, "初始化", fmt.Sprintf("开始执行任务，深度 %d", currentDepth))
 	time.Sleep(AgentInitDelay)
 
-	// 检查是否达到最大深度
-	if currentDepth >= MaxTaskDepth {
-		e.updateProgress(task, 100, "完成", "达到最大深度，直接完成")
-		return e.finishTask(task)
-	}
-
 	// 使用 LLM 动态生成子任务
 	subTaskIDs := make([]string, 0)
 	hasSubTasks := false
@@ -133,6 +126,26 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 	// 动态获取 LLM Provider
 	llmProvider, err := e.getLLMProviderForTask(ctx, task)
+
+	// 检查是否达到最大深度
+	if currentDepth >= MaxTaskDepth {
+		// 达到最大深度时，仍然需要调用 LLM 获取最终结论
+		if llmProvider != nil {
+			e.updateProgress(task, 95, "获取最终结论", "达到最大深度，调用 LLM 获取结论")
+			plan, llmErr := llmProvider.GenerateSubTasks(
+				ctx,
+				task.Name(),
+				task.Description(),
+				currentDepth,
+				MaxTaskDepth,
+			)
+			if llmErr == nil && plan != nil && plan.Reason != "" {
+				task.SetTaskConclusion(plan.Reason)
+			}
+		}
+		e.updateProgress(task, 100, "完成", "任务执行完成")
+		return e.finishTask(task)
+	}
 	if err != nil {
 		log.Printf("[AutoExecutor] 获取 LLM Provider 失败: %v", err)
 		if isAgentTask {
@@ -173,15 +186,14 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					taskType = domain.TaskTypeAgent
 				}
 
-				// 构建子任务 metadata 并继承父任务上下文
+				// 构建子任务 metadata
 				subTaskMeta := map[string]interface{}{
-					"goal":        st.Goal,
-					"parent_id":   taskID,
-					"parent_span": spanID,
-					"depth":       strconv.Itoa(currentDepth),
-					"llm_reason":  plan.Reason,
+					"goal":             st.Goal,
+					"parent_id":        taskID,
+					"parent_span":      spanID,
+					"depth":            strconv.Itoa(currentDepth),
+					"task_requirement": plan.Reason,
 				}
-				inheritContextFromTask(task, subTaskMeta)
 
 				subTask, err := domain.NewTask(
 					domain.NewTaskID(subTaskID),
@@ -200,6 +212,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					log.Printf("Failed to create sub-task: %v", err)
 					continue
 				}
+
+				// 继承父任务上下文
+				inheritContextFromTask(task, subTask)
 
 				subTask.Start()
 				if err := e.repo.Save(context.Background(), subTask); err != nil {
@@ -232,12 +247,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 			e.publishAndPersistTodoList(task, todoList)
 		} else if isAgentTask {
 			log.Printf("[AutoExecutor] Agent 模式下 LLM 未返回子任务，任务直接完成")
-			// Agent 模式下 LLM 认为不需要子任务是正常的，把 LLM 的分析结果作为结果返回
+			// Agent 模式下 LLM 认为不需要子任务是正常的，把 LLM 的分析结果作为结论
 			if plan != nil && plan.Reason != "" {
-				if task.Metadata() == nil {
-					task.SetMetadata(map[string]interface{}{})
-				}
-				task.Metadata()["agent_result"] = plan.Reason
+				task.SetTaskConclusion(plan.Reason)
 			}
 			return e.finishTask(task)
 		}
@@ -267,14 +279,13 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				taskType = domain.TaskTypeAgent
 			}
 
-			// 构建子任务 metadata 并继承父任务上下文
+			// 构建子任务 metadata
 			subTaskMeta := map[string]interface{}{
 				"goal":        st.goal,
 				"parent_id":   taskID,
 				"parent_span": spanID,
 				"depth":       strconv.Itoa(currentDepth),
 			}
-			inheritContextFromTask(task, subTaskMeta)
 
 			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
@@ -293,6 +304,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				log.Printf("Failed to create sub-task: %v", err)
 				continue
 			}
+
+			// 继承父任务上下文
+			inheritContextFromTask(task, subTask)
 
 			subTask.Start()
 			if err := e.repo.Save(context.Background(), subTask); err != nil {
@@ -378,10 +392,8 @@ func (e *AutoTaskExecutor) collectTaskResult(task *domain.Task, stage, detail st
 		"status":       task.Status().String(),
 	}
 
-	if task.Metadata() == nil {
-		task.SetMetadata(map[string]interface{}{})
-	}
-	task.Metadata()["execution_summary"] = summary
+	// 使用独立字段存储 execution_summary
+	task.SetExecutionSummary(summary)
 
 	if err := e.repo.Save(context.Background(), task); err != nil {
 		log.Printf("[AutoExecutor] collectTaskResult: save failed, err=%v", err)
@@ -401,10 +413,8 @@ func (e *AutoTaskExecutor) publishTodoList(taskID, traceID string, todoList *Tod
 }
 
 func (e *AutoTaskExecutor) publishAndPersistTodoList(task *domain.Task, todoList *TodoList) {
-	if task.Metadata() == nil {
-		task.SetMetadata(map[string]interface{}{})
-	}
-	task.Metadata()["todo_list"] = todoList.ToJSON()
+	// 使用独立字段存储 todo_list
+	task.SetTodoList(todoList.ToJSON())
 	e.saveTaskPreservingMetadata(task)
 	e.publishTodoList(task.ID().String(), task.TraceID().String(), todoList)
 }
@@ -465,14 +475,11 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 		"completed_at": time.Now().UnixMilli(),
 	}
 
-	// 收集 Agent 模式的 LLM 分析结果
-	if metadata := task.Metadata(); metadata != nil {
-		if agentResult, ok := metadata["agent_result"].(string); ok && agentResult != "" {
-			resultData["analysis"] = agentResult
-		}
-	}
+	// 获取任务自身的结论
+	taskConclusion := task.TaskConclusion()
 
-	// 收集子任务结果
+	// 收集子任务结果，提取每个子任务的 task_conclusion
+	var allChildConclusions []string
 	if metadata := task.Metadata(); metadata != nil {
 		if todoListStr, ok := metadata["todo_list"].(string); ok && todoListStr != "" {
 			var todoList TodoList
@@ -495,6 +502,11 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 								subResult["result_data"] = res.Data()
 							}
 						}
+						// 从子任务获取 task_conclusion
+						if childConclusion := subTask.TaskConclusion(); childConclusion != "" {
+							subResult["task_conclusion"] = childConclusion
+							allChildConclusions = append(allChildConclusions, childConclusion)
+						}
 						subTaskResults = append(subTaskResults, subResult)
 					}
 				}
@@ -505,8 +517,28 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 		}
 	}
 
+	// 如果任务没有自己的结论，聚合子任务的结论
+	if taskConclusion == "" && len(allChildConclusions) > 0 {
+		combinedConclusion := ""
+		for i, r := range allChildConclusions {
+			if i > 0 {
+				combinedConclusion += "\n\n"
+			}
+			combinedConclusion += r
+		}
+		taskConclusion = combinedConclusion
+	}
+
+	// 确保 task_conclusion 一定有值
+	if taskConclusion == "" {
+		taskConclusion = "任务完成"
+	}
+	resultData["task_conclusion"] = taskConclusion
+
 	result := domain.NewResult(resultData, "任务完成")
 	task.Complete(result)
+	// 确保 task_conclusion 已设置
+	task.SetTaskConclusion(taskConclusion)
 	e.updateProgress(task, 100, "完成", "任务执行完成")
 	e.saveTaskPreservingMetadata(task)
 
@@ -515,6 +547,52 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 		e.eventBus.Publish(evt)
 	}
 	return nil
+}
+
+// updateParentWithChildResult 更新父任务的 result，将当前任务的 task_conclusion 追加到父任务的 sub_tasks_results 中
+func (e *AutoTaskExecutor) updateParentWithChildResult(task *domain.Task) {
+	parentID := task.ParentID()
+	if parentID == nil {
+		return
+	}
+
+	// 获取当前任务的 task_conclusion
+	taskConclusion := task.TaskConclusion()
+	if taskConclusion == "" {
+		return
+	}
+
+	// 获取父任务
+	parent, err := e.repo.FindByID(context.Background(), *parentID)
+	if err != nil || parent == nil {
+		return
+	}
+
+	// 更新父任务的 result，在 sub_tasks_results 中找到当前任务并追加 task_conclusion
+	parentRes := parent.Result()
+	if parentRes == nil || parentRes.Data() == nil {
+		return
+	}
+
+	if dataMap, ok := parentRes.Data().(map[string]interface{}); ok {
+		if subTasks, ok := dataMap["sub_tasks_results"].([]map[string]interface{}); ok {
+			taskID := task.ID().String()
+			for i := range subTasks {
+				if subTasks[i]["task_id"] == taskID {
+					subTasks[i]["task_conclusion"] = taskConclusion
+					break
+				}
+			}
+			// 重新保存父任务（只更新 result，不改变其他字段）
+			parentResultData := make(map[string]interface{})
+			for k, v := range dataMap {
+				parentResultData[k] = v
+			}
+			newParentResult := domain.NewResult(parentResultData, parentRes.Message())
+			parent.UpdateResult(newParentResult)
+			e.repo.Save(context.Background(), parent)
+		}
+	}
 }
 
 func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {

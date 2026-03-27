@@ -35,12 +35,28 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 		resultJSON, _ = json.Marshal(snap.Result.ToMap())
 	}
 
+	var executionSummaryJSON []byte
+	if snap.ExecutionSummary != nil {
+		executionSummaryJSON, _ = json.Marshal(snap.ExecutionSummary)
+	}
+
 	query := `
 		INSERT INTO tasks (id, trace_id, span_id, parent_id, name, description, type,
-			metadata, timeout, max_retries, priority, status, progress, result,
+			acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			error_msg, created_at, started_at, finished_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
+			acceptance_criteria=excluded.acceptance_criteria,
+			task_requirement=excluded.task_requirement,
+			task_conclusion=excluded.task_conclusion,
+			user_code=excluded.user_code,
+			agent_code=excluded.agent_code,
+			channel_code=excluded.channel_code,
+			session_key=excluded.session_key,
+			execution_summary=excluded.execution_summary,
+			todo_list=excluded.todo_list,
+			analysis=excluded.analysis,
 			status=excluded.status,
 			progress=excluded.progress,
 			result=excluded.result,
@@ -65,7 +81,10 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 
 	_, err := r.db.ExecContext(ctx, query,
 		snap.ID.String(), snap.TraceID.String(), snap.SpanID.String(), parentID,
-		snap.Name, snap.Description, snap.Type.String(), metadata,
+		snap.Name, snap.Description, snap.Type.String(),
+		snap.AcceptanceCriteria, snap.TaskRequirement, snap.TaskConclusion,
+		snap.UserCode, snap.AgentCode, snap.ChannelCode, snap.SessionKey,
+		executionSummaryJSON, snap.TodoList, snap.Analysis, metadata,
 		snap.Timeout.Milliseconds(), snap.MaxRetries, snap.Priority, int(snap.Status),
 		progress, resultJSON, snap.ErrorMsg, snap.CreatedAt.Unix(),
 		startedAt, finishedAt,
@@ -78,7 +97,8 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 func (r *SQLiteTaskRepository) FindByID(ctx context.Context, id domain.TaskID) (*domain.Task, error) {
 	query := `
 		SELECT id, trace_id, span_id, parent_id, name, description, type,
-			   metadata, timeout, max_retries, priority, status, progress, result,
+			   acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			   execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			   error_msg, created_at, started_at, finished_at
 		FROM tasks WHERE id = ?`
 
@@ -90,7 +110,8 @@ func (r *SQLiteTaskRepository) FindByID(ctx context.Context, id domain.TaskID) (
 func (r *SQLiteTaskRepository) FindAll(ctx context.Context) ([]*domain.Task, error) {
 	query := `
 		SELECT id, trace_id, span_id, parent_id, name, description, type,
-			   metadata, timeout, max_retries, priority, status, progress, result,
+			   acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			   execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			   error_msg, created_at, started_at, finished_at
 		FROM tasks ORDER BY created_at DESC`
 
@@ -107,7 +128,8 @@ func (r *SQLiteTaskRepository) FindAll(ctx context.Context) ([]*domain.Task, err
 func (r *SQLiteTaskRepository) FindByTraceID(ctx context.Context, traceID domain.TraceID) ([]*domain.Task, error) {
 	query := `
 		SELECT id, trace_id, span_id, parent_id, name, description, type,
-			   metadata, timeout, max_retries, priority, status, progress, result,
+			   acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			   execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			   error_msg, created_at, started_at, finished_at
 		FROM tasks WHERE trace_id = ? ORDER BY created_at`
 
@@ -124,7 +146,8 @@ func (r *SQLiteTaskRepository) FindByTraceID(ctx context.Context, traceID domain
 func (r *SQLiteTaskRepository) FindByParentID(ctx context.Context, parentID domain.TaskID) ([]*domain.Task, error) {
 	query := `
 		SELECT id, trace_id, span_id, parent_id, name, description, type,
-			   metadata, timeout, max_retries, priority, status, progress, result,
+			   acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			   execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			   error_msg, created_at, started_at, finished_at
 		FROM tasks WHERE parent_id = ?`
 
@@ -141,7 +164,8 @@ func (r *SQLiteTaskRepository) FindByParentID(ctx context.Context, parentID doma
 func (r *SQLiteTaskRepository) FindByStatus(ctx context.Context, status domain.TaskStatus) ([]*domain.Task, error) {
 	query := `
 		SELECT id, trace_id, span_id, parent_id, name, description, type,
-			   metadata, timeout, max_retries, priority, status, progress, result,
+			   acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			   execution_summary, todo_list, analysis, metadata, timeout, max_retries, priority, status, progress, result,
 			   error_msg, created_at, started_at, finished_at
 		FROM tasks WHERE status = ?`
 
@@ -183,7 +207,7 @@ func (r *SQLiteTaskRepository) Exists(ctx context.Context, id domain.TaskID) (bo
 // scanToTask 将 row 扫描为 Task
 func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var snap domain.TaskSnapshot
-	var metadataJSON, progressJSON, resultJSON []byte
+	var metadataJSON, progressJSON, resultJSON, executionSummaryJSON []byte
 	var idStr, traceIDStr, spanIDStr string
 	var parentIDStr *string
 	var typeStr string
@@ -191,10 +215,15 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var createdAtUnix int64
 	var startedAtUnix, finishedAtUnix *int64
 	var timeoutMs int64
+	var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
+	var todoList, analysis sql.NullString
 
 	err := row.Scan(
 		&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
-		&snap.Name, &snap.Description, &typeStr, &metadataJSON,
+		&snap.Name, &snap.Description, &typeStr,
+		&acceptanceCriteria, &taskRequirement, &taskConclusion,
+		&userCode, &agentCode, &channelCode, &sessionKey,
+		&executionSummaryJSON, &todoList, &analysis, &metadataJSON,
 		&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
 		&progressJSON, &resultJSON, &snap.ErrorMsg, &createdAtUnix,
 		&startedAtUnix, &finishedAtUnix,
@@ -206,10 +235,23 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	snap.ID = domain.NewTaskID(idStr)
 	snap.TraceID = domain.NewTraceID(traceIDStr)
 	snap.SpanID = domain.NewSpanID(spanIDStr)
+	snap.AcceptanceCriteria = acceptanceCriteria.String
+	snap.TaskRequirement = taskRequirement.String
+	snap.TaskConclusion = taskConclusion.String
+	snap.UserCode = userCode.String
+	snap.AgentCode = agentCode.String
+	snap.ChannelCode = channelCode.String
+	snap.SessionKey = sessionKey.String
+	snap.TodoList = todoList.String
+	snap.Analysis = analysis.String
 
 	// 反序列化
 	if err := json.Unmarshal(metadataJSON, &snap.Metadata); err != nil {
 		snap.Metadata = make(map[string]interface{})
+	}
+
+	if err := json.Unmarshal(executionSummaryJSON, &snap.ExecutionSummary); err != nil {
+		snap.ExecutionSummary = nil
 	}
 
 	var progressMap map[string]interface{}
@@ -254,7 +296,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 	var tasks []*domain.Task
 	for rows.Next() {
 		var snap domain.TaskSnapshot
-		var metadataJSON, progressJSON, resultJSON []byte
+		var metadataJSON, progressJSON, resultJSON, executionSummaryJSON []byte
 		var idStr, traceIDStr, spanIDStr string
 		var parentIDStr *string
 		var typeStr string
@@ -262,10 +304,15 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		var createdAtUnix int64
 		var startedAtUnix, finishedAtUnix *int64
 		var timeoutMs int64
+		var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
+		var todoList, analysis sql.NullString
 
 		err := rows.Scan(
 			&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
-			&snap.Name, &snap.Description, &typeStr, &metadataJSON,
+			&snap.Name, &snap.Description, &typeStr,
+			&acceptanceCriteria, &taskRequirement, &taskConclusion,
+			&userCode, &agentCode, &channelCode, &sessionKey,
+			&executionSummaryJSON, &todoList, &analysis, &metadataJSON,
 			&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
 			&progressJSON, &resultJSON, &snap.ErrorMsg, &createdAtUnix,
 			&startedAtUnix, &finishedAtUnix,
@@ -277,10 +324,23 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		snap.ID = domain.NewTaskID(idStr)
 		snap.TraceID = domain.NewTraceID(traceIDStr)
 		snap.SpanID = domain.NewSpanID(spanIDStr)
+		snap.AcceptanceCriteria = acceptanceCriteria.String
+		snap.TaskRequirement = taskRequirement.String
+		snap.TaskConclusion = taskConclusion.String
+		snap.UserCode = userCode.String
+		snap.AgentCode = agentCode.String
+		snap.ChannelCode = channelCode.String
+		snap.SessionKey = sessionKey.String
+		snap.TodoList = todoList.String
+		snap.Analysis = analysis.String
 
 		// 反序列化
 		if err := json.Unmarshal(metadataJSON, &snap.Metadata); err != nil {
 			snap.Metadata = make(map[string]interface{})
+		}
+
+		if err := json.Unmarshal(executionSummaryJSON, &snap.ExecutionSummary); err != nil {
+			snap.ExecutionSummary = nil
 		}
 
 		var progressMap map[string]interface{}

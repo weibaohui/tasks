@@ -163,20 +163,6 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		"createdAt": time.Now().Format(time.RFC3339),
 	}
 
-	// 添加上下文信息用于后续任务执行
-	if t.agentCode != "" {
-		metadata["agent_code"] = t.agentCode
-	}
-	if t.userCode != "" {
-		metadata["user_code"] = t.userCode
-	}
-	if t.channelCode != "" {
-		metadata["channel_code"] = t.channelCode
-	}
-	if t.sessionKey != "" {
-		metadata["session_key"] = t.sessionKey
-	}
-
 	// 构建创建命令
 	cmd := application.CreateTaskCommand{
 		Name:        args.Name,
@@ -186,6 +172,20 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		Timeout:     timeout,
 		MaxRetries:  0,
 		Priority:    priority,
+	}
+
+	// 添加上下文信息到命令（用于设置独立字段）
+	if t.agentCode != "" {
+		cmd.AgentCode = t.agentCode
+	}
+	if t.userCode != "" {
+		cmd.UserCode = t.userCode
+	}
+	if t.channelCode != "" {
+		cmd.ChannelCode = t.channelCode
+	}
+	if t.sessionKey != "" {
+		cmd.SessionKey = t.sessionKey
 	}
 
 	// 设置 TraceID 和 SpanID（继承自当前会话）

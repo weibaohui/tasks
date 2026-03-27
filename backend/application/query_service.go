@@ -169,8 +169,9 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 
 	if task.Result() != nil {
 		dto.Result = &ResultDTO{
-			Data:    task.Result().Data(),
-			Message: task.Result().Message(),
+			Data:           task.Result().Data(),
+			Message:        task.Result().Message(),
+			TaskConclusion: task.TaskConclusion(),
 		}
 	}
 

@@ -90,8 +90,17 @@ func finishAgentTask(task *domain.Task, repo domain.TaskRepository) error {
 		"completed_at": time.Now().UnixMilli(),
 		"handler":      "agent",
 	}
+
+	// 获取任务自身的结论
+	taskConclusion := task.TaskConclusion()
+	if taskConclusion == "" {
+		taskConclusion = "Agent 任务完成"
+	}
+	resultData["task_conclusion"] = taskConclusion
+
 	result := domain.NewResult(resultData, "Agent 任务完成")
 	task.Complete(result)
+	task.SetTaskConclusion(taskConclusion)
 	updateAgentProgress(task, repo, 100, "完成", "Agent 任务执行完成")
 	return nil
 }
@@ -127,11 +136,11 @@ func CreateSubTasksFromLLM(
 			fmt.Sprintf("LLM 生成的子任务: %s", st.Goal),
 			taskType,
 			map[string]interface{}{
-				"goal":        st.Goal,
-				"parent_id":   taskID,
-				"parent_span": spanID,
-				"depth":       strconv.Itoa(getCurrentDepth(task)),
-				"llm_reason":  plan.Reason,
+				"goal":             st.Goal,
+				"parent_id":        taskID,
+				"parent_span":      spanID,
+				"depth":            strconv.Itoa(getCurrentDepth(task)),
+				"task_requirement": plan.Reason,
 			},
 			DefaultTaskTimeout,
 			0,
@@ -154,11 +163,8 @@ func CreateSubTasksFromLLM(
 		log.Printf("[AgentHandler] 创建子任务: %s, spanID: %s, type: %s", subTaskID, subSpanID, taskType.String())
 	}
 
-	// 持久化 todo list
-	if task.Metadata() == nil {
-		task.SetMetadata(map[string]interface{}{})
-	}
-	task.Metadata()["todo_list"] = todoList.ToJSON()
+	// 持久化 todo list（使用独立字段）
+	task.SetTodoList(todoList.ToJSON())
 	saveAgentTaskPreservingMetadata(task, repo)
 
 	return subTaskIDs, nil

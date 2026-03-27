@@ -50,6 +50,7 @@ export interface Progress {
 export interface Result {
   data: unknown;
   message: string;
+  task_conclusion?: string;
 }
 
 /**
