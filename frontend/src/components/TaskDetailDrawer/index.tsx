@@ -225,6 +225,11 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
               <Descriptions.Item label="完成时间">
                 {activeTask.finished_at ? new Date(activeTask.finished_at).toLocaleString() : '-'}
               </Descriptions.Item>
+              <Descriptions.Item label="结论" span={2}>
+                {activeTask.task_conclusion
+                  ? <ExpandableText text={activeTask.task_conclusion} />
+                  : <span style={{ color: '#999' }}>-</span>}
+              </Descriptions.Item>
             </Descriptions>
             <Divider />
 
@@ -280,6 +285,24 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
 };
 
 export default TaskDetailDrawer;
+
+const ExpandableText: React.FC<{ text: string; maxLen?: number }> = ({ text, maxLen = 60 }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (text.length <= maxLen) {
+    return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>;
+  }
+  return expanded ? (
+    <span>
+      <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>
+      <a onClick={() => setExpanded(false)} style={{ marginLeft: 4, fontSize: 12 }}>收起</a>
+    </span>
+  ) : (
+    <span>
+      {text.slice(0, maxLen)}...
+      <a onClick={() => setExpanded(true)} style={{ marginLeft: 4, fontSize: 12 }}>展开</a>
+    </span>
+  );
+};
 
 const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
