@@ -37,6 +37,11 @@ func SetIDGenerator(gen IDGenerator) {
 	defaultGenerator = gen
 }
 
+// ResetIDGenerator 重置为默认生成器（用于测试清理）
+func ResetIDGenerator() {
+	defaultGenerator = &defaultIDGenerator{}
+}
+
 // NewTraceID 生成新的 TraceID
 func NewTraceID() string {
 	return defaultGenerator.NewTraceID()
