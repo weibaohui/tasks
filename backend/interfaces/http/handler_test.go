@@ -110,6 +110,8 @@ func TestCreateTask(t *testing.T) {
 
 	body := `{
 		"name": "测试任务",
+		"task_requirement": "测试目标：完成指定功能",
+		"acceptance_criteria": "验收标准：所有功能正常运行",
 		"description": "任务描述",
 		"type": "agent",
 		"timeout": 60000,
@@ -194,7 +196,7 @@ func TestCreateTask_NonAgentType(t *testing.T) {
 func TestGetTask(t *testing.T) {
 	_, mux := setupTestHandler()
 
-	createBody := `{"name": "测试任务", "type": "agent", "timeout": 60000}`
+	createBody := `{"name": "测试任务", "task_requirement": "测试目标", "acceptance_criteria": "测试验收标准", "type": "agent", "timeout": 60000}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
@@ -250,7 +252,7 @@ func TestGetTask_MissingID(t *testing.T) {
 func TestCancelTask(t *testing.T) {
 	_, mux := setupTestHandler()
 
-	createBody := `{"name": "测试任务", "type": "agent", "timeout": 60000}`
+	createBody := `{"name": "测试任务", "task_requirement": "测试目标", "acceptance_criteria": "测试验收标准", "type": "agent", "timeout": 60000}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
@@ -297,7 +299,7 @@ func TestCancelTask_NotFound(t *testing.T) {
 func TestListTasksByTrace(t *testing.T) {
 	_, mux := setupTestHandler()
 
-	createBody := `{"name": "测试任务1", "type": "agent", "timeout": 60000}`
+	createBody := `{"name": "测试任务1", "task_requirement": "测试目标1", "acceptance_criteria": "测试验收标准1", "type": "agent", "timeout": 60000}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
@@ -328,7 +330,7 @@ func TestListTasksByTrace(t *testing.T) {
 func TestGetTaskTree(t *testing.T) {
 	_, mux := setupTestHandler()
 
-	createBody := `{"name": "父任务", "type": "agent", "timeout": 60000}`
+	createBody := `{"name": "父任务", "task_requirement": "父任务目标", "acceptance_criteria": "父任务验收标准", "type": "agent", "timeout": 60000}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()

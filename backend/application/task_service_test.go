@@ -112,13 +112,15 @@ func TestTaskApplicationService_CreateTask(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	cmd := CreateTaskCommand{
-		Name:        "测试任务",
-		Description: "任务描述",
-		Type:        domain.TaskTypeCustom,
-		Metadata:    map[string]interface{}{"key": "value"},
-		Timeout:     60000,
-		MaxRetries:  3,
-		Priority:    5,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Description:        "任务描述",
+		Type:              domain.TaskTypeCustom,
+		Metadata:           map[string]interface{}{"key": "value"},
+		Timeout:           60000,
+		MaxRetries:        3,
+		Priority:          5,
 	}
 
 	task, err := service.CreateTask(context.Background(), cmd)
@@ -148,19 +150,23 @@ func TestTaskApplicationService_CreateTask_WithParent(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	parentCmd := CreateTaskCommand{
-		Name:    "父任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "父任务",
+		TaskRequirement:    "父任务目标",
+		AcceptanceCriteria: "父任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	}
 
 	parent, _ := service.CreateTask(context.Background(), parentCmd)
 	parentID := parent.ID()
 
 	cmd := CreateTaskCommand{
-		Name:     "子任务",
-		Type:     domain.TaskTypeCustom,
-		Timeout:  30000,
-		ParentID: &parentID,
+		Name:               "子任务",
+		TaskRequirement:    "子任务目标",
+		AcceptanceCriteria: "子任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            30000,
+		ParentID:           &parentID,
 	}
 
 	child, err := service.CreateTask(context.Background(), cmd)
@@ -182,9 +188,11 @@ func TestTaskApplicationService_StartTask(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
-		Name:    "测试任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	})
 
 	err := service.StartTask(context.Background(), task.ID())
@@ -221,9 +229,11 @@ func TestTaskApplicationService_CancelTask(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
-		Name:    "测试任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	})
 
 	err := service.CancelTask(context.Background(), task.ID())
@@ -246,12 +256,15 @@ func TestTaskApplicationService_CompleteTask(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
-		Name:    "测试任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	})
 
 	service.StartTask(context.Background(), task.ID())
+	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
 
 	result := domain.NewResult(map[string]interface{}{"status": "ok"}, "完成")
 	err := service.CompleteTask(context.Background(), task.ID(), result)
@@ -274,9 +287,11 @@ func TestTaskApplicationService_UpdateProgress(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
-		Name:    "测试任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	})
 
 	service.StartTask(context.Background(), task.ID())
@@ -302,9 +317,11 @@ func TestTaskApplicationService_FailTask(t *testing.T) {
 	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
-		Name:    "测试任务",
-		Type:    domain.TaskTypeCustom,
-		Timeout: 60000,
+		Name:               "测试任务",
+		TaskRequirement:    "测试目标",
+		AcceptanceCriteria: "测试验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
 	})
 
 	service.StartTask(context.Background(), task.ID())

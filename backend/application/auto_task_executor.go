@@ -186,13 +186,11 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					taskType = domain.TaskTypeAgent
 				}
 
-				// 构建子任务 metadata
-				subTaskMeta := map[string]interface{}{
-					"goal":             st.Goal,
-					"parent_id":        taskID,
-					"parent_span":      spanID,
-					"depth":            strconv.Itoa(currentDepth),
-					"task_requirement": plan.Reason,
+				// 子任务目标来自 LLM 生成的 Goal，验收标准来自规划原因
+				taskRequirement := st.Goal
+				acceptanceCriteria := fmt.Sprintf("完成目标: %s", st.Goal)
+				if plan.Reason != "" {
+					acceptanceCriteria = plan.Reason
 				}
 
 				subTask, err := domain.NewTask(
@@ -203,7 +201,14 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					st.Goal,
 					"",
 					taskType,
-					subTaskMeta,
+					taskRequirement,
+					acceptanceCriteria,
+					map[string]interface{}{
+						"goal":        st.Goal,
+						"parent_id":   taskID,
+						"parent_span": spanID,
+						"depth":       strconv.Itoa(currentDepth),
+					},
 					DefaultTaskTimeout,
 					0,
 					0,
@@ -279,13 +284,9 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				taskType = domain.TaskTypeAgent
 			}
 
-			// 构建子任务 metadata
-			subTaskMeta := map[string]interface{}{
-				"goal":        st.goal,
-				"parent_id":   taskID,
-				"parent_span": spanID,
-				"depth":       strconv.Itoa(currentDepth),
-			}
+			// 默认子任务：目标来自 st.goal，验收标准来自父任务的 acceptanceCriteria
+			taskRequirement := st.goal
+			acceptanceCriteria := task.AcceptanceCriteria()
 
 			subTask, err := domain.NewTask(
 				domain.NewTaskID(subTaskID),
@@ -295,7 +296,14 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 				st.goal,
 				"",
 				taskType,
-				subTaskMeta,
+				taskRequirement,
+				acceptanceCriteria,
+				map[string]interface{}{
+					"goal":        st.goal,
+					"parent_id":   taskID,
+					"parent_span": spanID,
+					"depth":       strconv.Itoa(currentDepth),
+				},
 				DefaultTaskTimeout,
 				0,
 				0,

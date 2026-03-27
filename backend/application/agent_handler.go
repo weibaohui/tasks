@@ -127,6 +127,13 @@ func CreateSubTasksFromLLM(
 
 		taskType := domain.TaskTypeAgent
 
+		// 子任务目标来自 LLM 生成的 Goal，验收标准来自父任务的规划原因
+		taskRequirement := st.Goal
+		acceptanceCriteria := fmt.Sprintf("完成目标: %s", st.Goal)
+		if plan.Reason != "" {
+			acceptanceCriteria = plan.Reason
+		}
+
 		subTask, err := domain.NewTask(
 			domain.NewTaskID(subTaskID),
 			domain.NewTraceID(traceID),
@@ -135,12 +142,13 @@ func CreateSubTasksFromLLM(
 			st.Goal,
 			fmt.Sprintf("LLM 生成的子任务: %s", st.Goal),
 			taskType,
+			taskRequirement,
+			acceptanceCriteria,
 			map[string]interface{}{
-				"goal":             st.Goal,
-				"parent_id":        taskID,
-				"parent_span":      spanID,
-				"depth":            strconv.Itoa(getCurrentDepth(task)),
-				"task_requirement": plan.Reason,
+				"goal":        st.Goal,
+				"parent_id":   taskID,
+				"parent_span": spanID,
+				"depth":       strconv.Itoa(getCurrentDepth(task)),
 			},
 			DefaultTaskTimeout,
 			0,

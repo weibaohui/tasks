@@ -61,16 +61,18 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Type        string                 `json:"type"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	Timeout     int64                  `json:"timeout"`
-	MaxRetries  int                    `json:"max_retries"`
-	Priority    int                    `json:"priority"`
-	ParentID    *string                `json:"parent_id"`
-	TraceID     *string                `json:"trace_id"`
-	SpanID      *string                `json:"span_id"`
+	Name               string                 `json:"name"`
+	TaskRequirement    string                 `json:"task_requirement"`    // 任务目标（必填）
+	AcceptanceCriteria string                 `json:"acceptance_criteria"` // 验收标准（必填）
+	Description        string                 `json:"description"`
+	Type               string                 `json:"type"`
+	Metadata           map[string]interface{} `json:"metadata"`
+	Timeout            int64                  `json:"timeout"`
+	MaxRetries         int                    `json:"max_retries"`
+	Priority           int                    `json:"priority"`
+	ParentID           *string                `json:"parent_id"`
+	TraceID            *string                `json:"trace_id"`
+	SpanID             *string                `json:"span_id"`
 }
 
 // CreateTask 创建任务
@@ -85,6 +87,18 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "name is required"})
+		return
+	}
+
+	if req.TaskRequirement == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "task_requirement is required"})
+		return
+	}
+
+	if req.AcceptanceCriteria == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "acceptance_criteria is required"})
 		return
 	}
 
@@ -116,16 +130,18 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmd := application.CreateTaskCommand{
-		Name:        req.Name,
-		Description: req.Description,
-		Type:        domain.TaskTypeAgent,
-		Metadata:    req.Metadata,
-		Timeout:     req.Timeout,
-		MaxRetries:  req.MaxRetries,
-		Priority:    req.Priority,
-		ParentID:    parentID,
-		TraceID:     traceID,
-		SpanID:      spanID,
+		Name:               req.Name,
+		TaskRequirement:    req.TaskRequirement,
+		AcceptanceCriteria: req.AcceptanceCriteria,
+		Description:        req.Description,
+		Type:               domain.TaskTypeAgent,
+		Metadata:           req.Metadata,
+		Timeout:            req.Timeout,
+		MaxRetries:         req.MaxRetries,
+		Priority:           req.Priority,
+		ParentID:           parentID,
+		TraceID:            traceID,
+		SpanID:             spanID,
 	}
 
 	task, err := h.taskService.CreateTask(r.Context(), cmd)

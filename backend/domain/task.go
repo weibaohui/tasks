@@ -12,11 +12,14 @@ import (
 
 // 领域错误定义
 var (
-	ErrInvalidStatusTransition = errors.New("invalid status transition")
-	ErrTaskAlreadyStarted      = errors.New("task already started")
-	ErrTaskNotRunning          = errors.New("task is not running")
-	ErrTaskAlreadyFinished     = errors.New("task already finished")
-	ErrTimeoutNotPositive      = errors.New("timeout must be positive")
+	ErrInvalidStatusTransition    = errors.New("invalid status transition")
+	ErrTaskAlreadyStarted         = errors.New("task already started")
+	ErrTaskNotRunning             = errors.New("task is not running")
+	ErrTaskAlreadyFinished        = errors.New("task already finished")
+	ErrTimeoutNotPositive         = errors.New("timeout must be positive")
+	ErrTaskRequirementRequired    = errors.New("task requirement is required")
+	ErrAcceptanceCriteriaRequired = errors.New("acceptance criteria is required")
+	ErrTaskConclusionRequired     = errors.New("task conclusion is required to complete task")
 )
 
 // Task 任务聚合根
@@ -62,6 +65,9 @@ type Task struct {
 }
 
 // NewTask 工厂方法：创建任务
+// name: 任务名称
+// taskRequirement: 任务目标/要求（必填）
+// acceptanceCriteria: 验收标准（必填）
 func NewTask(
 	id TaskID,
 	traceID TraceID,
@@ -70,6 +76,8 @@ func NewTask(
 	name string,
 	description string,
 	taskType TaskType,
+	taskRequirement string,
+	acceptanceCriteria string,
 	metadata map[string]interface{},
 	timeout time.Duration,
 	maxRetries int,
@@ -78,25 +86,33 @@ func NewTask(
 	if name == "" {
 		return nil, errors.New("task name is required")
 	}
+	if taskRequirement == "" {
+		return nil, ErrTaskRequirementRequired
+	}
+	if acceptanceCriteria == "" {
+		return nil, ErrAcceptanceCriteriaRequired
+	}
 	if timeout < 0 {
 		return nil, ErrTimeoutNotPositive
 	}
 
 	task := &Task{
-		id:          id,
-		traceID:     traceID,
-		spanID:      spanID,
-		parentID:    parentID,
-		name:        name,
-		description: description,
-		taskType:    taskType,
-		metadata:    metadata,
-		timeout:     timeout,
-		maxRetries:  maxRetries,
-		priority:    priority,
-		status:      TaskStatusPending,
-		progress:    NewProgress(),
-		createdAt:   time.Now(),
+		id:                 id,
+		traceID:            traceID,
+		spanID:             spanID,
+		parentID:           parentID,
+		name:               name,
+		description:        description,
+		taskType:           taskType,
+		taskRequirement:    taskRequirement,
+		acceptanceCriteria: acceptanceCriteria,
+		metadata:           metadata,
+		timeout:            timeout,
+		maxRetries:         maxRetries,
+		priority:           priority,
+		status:             TaskStatusPending,
+		progress:           NewProgress(),
+		createdAt:          time.Now(),
 	}
 
 	task.recordEvent(NewTaskCreatedEvent(task))
@@ -299,13 +315,18 @@ func (t *Task) Start() error {
 	return nil
 }
 
-// Complete 完成任务
+// Complete 完成任务（需要先设置任务结论）
 func (t *Task) Complete(result Result) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if !t.canTransitionTo(TaskStatusCompleted) {
 		return ErrInvalidStatusTransition
+	}
+
+	// 验证任务结论必填
+	if t.taskConclusion == "" {
+		return ErrTaskConclusionRequired
 	}
 
 	now := time.Now()

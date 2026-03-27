@@ -22,19 +22,21 @@ var (
 
 // CreateTaskCommand 创建任务命令
 type CreateTaskCommand struct {
-	Name        string
-	Description string
-	Type        domain.TaskType
-	Metadata    map[string]interface{}
-	Timeout     int64
-	MaxRetries  int
-	Priority    int
-	ParentID    *domain.TaskID
-	TraceID     *domain.TraceID
-	SpanID      *domain.SpanID
+	Name               string // 任务名称
+	TaskRequirement    string // 任务目标（必填）
+	AcceptanceCriteria string // 验收标准（必填）
+	Description        string
+	Type               domain.TaskType
+	Metadata           map[string]interface{}
+	Timeout            int64
+	MaxRetries         int
+	Priority           int
+	ParentID           *domain.TaskID
+	TraceID            *domain.TraceID
+	SpanID             *domain.SpanID
 	// 上下文字段（独立存储）
-	AgentCode  string
-	UserCode   string
+	AgentCode   string
+	UserCode    string
 	ChannelCode string
 	SessionKey  string
 }
@@ -117,6 +119,8 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		cmd.Name,
 		cmd.Description,
 		cmd.Type,
+		cmd.TaskRequirement,
+		cmd.AcceptanceCriteria,
 		cmd.Metadata,
 		timeout,
 		cmd.MaxRetries,

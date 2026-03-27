@@ -22,6 +22,8 @@ func TestNewTask(t *testing.T) {
 		"测试任务",
 		"任务描述",
 		TaskTypeCustom,
+		"测试目标",
+		"测试验收标准",
 		map[string]interface{}{"key": "value"},
 		60*time.Second,
 		3,
@@ -66,6 +68,8 @@ func TestNewTask_EmptyName(t *testing.T) {
 		"", // 空名称
 		"",
 		TaskTypeCustom,
+		"测试目标",
+		"测试验收标准",
 		nil,
 		0,
 		0,
@@ -90,6 +94,8 @@ func TestNewTask_NegativeTimeout(t *testing.T) {
 		"测试任务",
 		"",
 		TaskTypeCustom,
+		"测试目标",
+		"测试验收标准",
 		nil,
 		-1*time.Second, // 负数超时
 		0,
@@ -153,6 +159,7 @@ func TestTask_Start_FromCompleted(t *testing.T) {
 func TestTask_Complete(t *testing.T) {
 	task := createTestTask()
 	task.Start()
+	task.SetTaskConclusion("测试结论")
 
 	result := NewResult(map[string]interface{}{"data": "test"}, "处理完成")
 	err := task.Complete(result)
@@ -180,6 +187,7 @@ func TestTask_Complete(t *testing.T) {
 
 func TestTask_Complete_InvalidTransition(t *testing.T) {
 	task := createTestTask()
+	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
 
 	result := NewResult(nil, "")
 	err := task.Complete(result)
@@ -248,6 +256,7 @@ func TestTask_Cancel_FromPending(t *testing.T) {
 func TestTask_Cancel_InvalidTransition(t *testing.T) {
 	task := createTestTask()
 	task.Start()
+	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
 	result := NewResult(nil, "")
 	task.Complete(result)
 
@@ -389,6 +398,8 @@ func TestNewTask_AgentType(t *testing.T) {
 		"Agent任务",
 		"使用LLM Agent进行数据分析",
 		TaskTypeAgent,
+		"测试目标",
+		"测试验收标准",
 		metadata,
 		120*time.Second,
 		3,
@@ -427,6 +438,8 @@ func TestTask_AgentType_Lifecycle(t *testing.T) {
 	if task.Status() != TaskStatusRunning {
 		t.Errorf("期望状态为 Running, 实际为 %v", task.Status())
 	}
+
+	task.SetTaskConclusion("分析完成，发现3个关键洞察")
 
 	result := NewResult(map[string]interface{}{
 		"response": "分析完成，发现3个关键洞察",
@@ -534,6 +547,7 @@ func TestTaskType_Agent_AllTransitions(t *testing.T) {
 	}
 
 	// Running -> Completed
+	task.SetTaskConclusion("Agent任务完成")
 	result := NewResult("success", "完成")
 	err = task.Complete(result)
 	if err != nil {
@@ -553,6 +567,8 @@ func createAgentTestTask() *Task {
 		"Agent测试任务",
 		"Agent模式测试",
 		TaskTypeAgent,
+		"测试目标",
+		"测试验收标准",
 		map[string]interface{}{
 			"model":      "claude-3-opus",
 			"prompt":     "测试prompt",
@@ -574,6 +590,8 @@ func createTestTask() *Task {
 		"测试任务",
 		"",
 		TaskTypeCustom,
+		"测试目标",
+		"测试验收标准",
 		nil,
 		60*time.Second,
 		0,
