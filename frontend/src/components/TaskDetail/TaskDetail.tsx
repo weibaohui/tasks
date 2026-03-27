@@ -56,6 +56,8 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
           <Descriptions.Item label="父任务">
             {task.parent_id ? <Tag color="orange">{task.parent_id}</Tag> : <span style={{ color: '#999' }}>顶级任务</span>}
           </Descriptions.Item>
+          <Descriptions.Item label="深度">{task.depth}</Descriptions.Item>
+          <Descriptions.Item label="父Span">{task.parent_span || '-'}</Descriptions.Item>
           <Descriptions.Item label="优先级">{task.priority}</Descriptions.Item>
           <Descriptions.Item label="超时时间">{task.timeout}ms</Descriptions.Item>
           <Descriptions.Item label="最大重试">{task.max_retries}</Descriptions.Item>
@@ -75,12 +77,22 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
             <Descriptions.Item label="任务描述">{task.description}</Descriptions.Item>
           </Descriptions>
         )}
+
+        {task.task_requirement && (
+          <Descriptions column={1} bordered style={{ marginTop: 16 }}>
+            <Descriptions.Item label="任务要求">{task.task_requirement}</Descriptions.Item>
+          </Descriptions>
+        )}
+
+        {task.acceptance_criteria && (
+          <Descriptions column={1} bordered style={{ marginTop: 16 }}>
+            <Descriptions.Item label="验收标准">{task.acceptance_criteria}</Descriptions.Item>
+          </Descriptions>
+        )}
       </Card>
 
       <Card title="执行进度" style={{ marginTop: 16 }}>
         <ProgressBar progress={task.progress} />
-        <p><strong>阶段：</strong>{task.progress.stage || '-'}</p>
-        <p><strong>详情：</strong>{task.progress.detail || '-'}</p>
       </Card>
 
       {task.error && (
@@ -89,21 +101,21 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
         </Card>
       )}
 
-      {task.result?.task_conclusion && (
+      {task.task_conclusion && (
         <Card title="执行结论" style={{ marginTop: 16 }}>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{task.result.task_conclusion}</div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{task.task_conclusion}</div>
+        </Card>
+      )}
+
+      {task.analysis && (
+        <Card title="分析" style={{ marginTop: 16 }}>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#666' }}>{task.analysis}</div>
         </Card>
       )}
 
       {task.result && (
         <Card title="执行结果" style={{ marginTop: 16 }}>
           <pre>{JSON.stringify(task.result, null, 2)}</pre>
-        </Card>
-      )}
-
-      {task.metadata && Object.keys(task.metadata).length > 0 && (
-        <Card title="元数据" style={{ marginTop: 16 }}>
-          <pre>{JSON.stringify(task.metadata, null, 2)}</pre>
         </Card>
       )}
 

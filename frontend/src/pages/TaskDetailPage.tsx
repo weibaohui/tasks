@@ -46,9 +46,9 @@ export const TaskDetailPage: React.FC = () => {
   };
 
   const todoList: TodoListType | null = (() => {
-    if (!currentTask?.metadata?.todo_list) return null;
+    if (!currentTask?.todo_list) return null;
     try {
-      return JSON.parse(currentTask.metadata.todo_list as string);
+      return JSON.parse(currentTask.todo_list);
     } catch {
       return null;
     }

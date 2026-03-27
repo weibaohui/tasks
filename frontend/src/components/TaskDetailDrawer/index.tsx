@@ -9,13 +9,13 @@ import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
 import { TodoList } from '../TodoList';
 import { getAllTasks, getTask } from '../../api/taskApi';
-import type { Task, TodoItem, TodoList as TodoListType, TaskStatus, ExecutionSummary } from '../../types/task';
+import type { Task, TodoItem, TodoList as TodoListType, TaskStatus } from '../../types/task';
 
-// 解析当前任务的执行结果
-const parseExecutionSummary = (metadata: Record<string, unknown> | undefined): ExecutionSummary | null => {
-  if (!metadata?.execution_summary) return null;
+// 解析 TodoList 从 task.todo_list 字段
+const parseTodoList = (todoListStr: string | undefined): TodoListType | null => {
+  if (!todoListStr) return null;
   try {
-    return metadata.execution_summary as ExecutionSummary;
+    return JSON.parse(todoListStr) as TodoListType;
   } catch {
     return null;
   }
@@ -42,22 +42,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
     return 'cancelled';
   }, []);
 
-  const parseMetadataTodo = useCallback((metadata: Record<string, unknown> | undefined): TodoListType | null => {
-    if (!metadata?.todo_list) return null;
-    try {
-      return JSON.parse(metadata.todo_list as string) as TodoListType;
-    } catch {
-      return null;
-    }
-  }, []);
-
   const buildTodoList = useCallback((currentTask: Task, allTasks: Task[]): TodoListType | null => {
     const childTasks = allTasks.filter((t) => t.parent_id === currentTask.id);
-    const metadataTodo = parseMetadataTodo(currentTask.metadata);
+    const dbTodoList = parseTodoList(currentTask.todo_list);
     const baseMap = new Map<string, TodoItem>();
 
-    if (metadataTodo?.items) {
-      metadataTodo.items.forEach((item) => {
+    if (dbTodoList?.items) {
+      dbTodoList.items.forEach((item) => {
         baseMap.set(item.sub_task_id, item);
       });
     }
@@ -69,24 +60,24 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
         sub_task_type: child.type,
         goal: base?.goal || child.name,
         status: normalizeStatus(child.status),
-        progress: Math.round(child.progress?.percentage || 0),
+        progress: Math.round(child.progress?.value || 0),
         span_id: child.span_id,
         created_at: child.created_at,
         completed_at: child.finished_at,
       };
     });
 
-    if (mergedItems.length === 0 && metadataTodo) {
-      return metadataTodo;
+    if (mergedItems.length === 0 && dbTodoList) {
+      return dbTodoList;
     }
 
     return {
       task_id: currentTask.id,
       items: mergedItems,
-      created_at: metadataTodo?.created_at || Date.now(),
+      created_at: dbTodoList?.created_at || Date.now(),
       updated_at: Date.now(),
     };
-  }, [normalizeStatus, parseMetadataTodo]);
+  }, [normalizeStatus]);
 
   const loadTask = useCallback(async (silent: boolean, preferredTaskId?: string) => {
     if (!taskId) return;
@@ -221,6 +212,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
               <Descriptions.Item label="SpanID">
                 <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{activeTask.span_id}</span>
               </Descriptions.Item>
+              <Descriptions.Item label="深度">{activeTask.depth}</Descriptions.Item>
+              <Descriptions.Item label="父Span">{activeTask.parent_span || '-'}</Descriptions.Item>
               <Descriptions.Item label="优先级">{activeTask.priority}</Descriptions.Item>
               <Descriptions.Item label="超时">{activeTask.timeout}ms</Descriptions.Item>
               <Descriptions.Item label="创建时间">
@@ -241,17 +234,21 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
               </Descriptions>
             )}
 
+            {activeTask.task_requirement && (
+              <Descriptions column={1} bordered size="small" title="任务要求">
+                <Descriptions.Item>{activeTask.task_requirement}</Descriptions.Item>
+              </Descriptions>
+            )}
+
+            {activeTask.acceptance_criteria && (
+              <Descriptions column={1} bordered size="small" title="验收标准">
+                <Descriptions.Item>{activeTask.acceptance_criteria}</Descriptions.Item>
+              </Descriptions>
+            )}
+
             <Descriptions column={1} bordered size="small" title="执行进度">
               <Descriptions.Item>
                 <ProgressBar progress={activeTask.progress} />
-                <div style={{ marginTop: 8 }}>
-                  <Tag color={activeTask.progress.stage ? 'blue' : 'default'}>
-                    {activeTask.progress.stage || '无'}
-                  </Tag>
-                  <span style={{ marginLeft: 8, color: '#666' }}>
-                    {activeTask.progress.detail || '-'}
-                  </span>
-                </div>
               </Descriptions.Item>
             </Descriptions>
             <Divider />
@@ -284,6 +281,24 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
 
 export default TaskDetailDrawer;
 
+const ExpandableText: React.FC<{ text: string; maxLen?: number }> = ({ text, maxLen = 60 }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (text.length <= maxLen) {
+    return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>;
+  }
+  return expanded ? (
+    <span>
+      <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>
+      <a onClick={() => setExpanded(false)} style={{ marginLeft: 4, fontSize: 12 }}>收起</a>
+    </span>
+  ) : (
+    <span>
+      {text.slice(0, maxLen)}...
+      <a onClick={() => setExpanded(true)} style={{ marginLeft: 4, fontSize: 12 }}>展开</a>
+    </span>
+  );
+};
+
 const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
     style={{
@@ -304,85 +319,56 @@ const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }
  * 任务执行结果面板
  */
 const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ task, traceTasks }) => {
-  // 当前任务的执行结果
-  const ownSummary = parseExecutionSummary(task.metadata);
-  // 直接子任务的执行结果
   const childTasks = traceTasks.filter((t) => t.parent_id === task.id);
-  const childSummaries = childTasks
-    .map((t) => parseExecutionSummary(t.metadata))
-    .filter((s): s is ExecutionSummary => s !== null)
-    .sort((a, b) => a.completed_at - b.completed_at);
 
-  // 如果没有任何汇总记录，则不显示
-  if (!ownSummary && childSummaries.length === 0) {
+  // 如果没有任何结果信息，则不显示
+  if (!task.task_conclusion && !task.analysis && childTasks.length === 0) {
     return null;
   }
 
   return (
     <Descriptions column={1} bordered size="small" title="执行结果">
       <Descriptions.Item>
-        {ownSummary && (
+        {task.task_conclusion && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>本任务执行记录：</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>任务ID</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>目标</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>结果</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>状态</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>完成时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
-                    {ownSummary.task_id.slice(0, 8)}...
-                  </td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{ownSummary.goal}</td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                    {ownSummary.result}
-                  </td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                    <StatusBadge status={ownSummary.status as TaskStatus} />
-                  </td>
-                  <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                    {new Date(ownSummary.completed_at).toLocaleTimeString()}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>任务结论：</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{task.task_conclusion}</div>
           </div>
         )}
 
-        {childSummaries.length > 0 && (
+        {task.analysis && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>分析：</div>
+            <div style={{ whiteSpace: 'pre-wrap', color: '#666' }}>{task.analysis}</div>
+          </div>
+        )}
+
+        {childTasks.length > 0 && (
           <div>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>子任务执行记录：</div>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>子任务：</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#fafafa' }}>
                   <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>任务ID</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>目标</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>结果</th>
+                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>名称</th>
                   <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>状态</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>完成时间</th>
+                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>结论</th>
                 </tr>
               </thead>
               <tbody>
-                {childSummaries.map((summary) => (
-                  <tr key={summary.task_id}>
+                {childTasks.map((child) => (
+                  <tr key={child.id}>
                     <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
-                      {summary.task_id.slice(0, 8)}...
+                      {child.id.slice(0, 8)}...
                     </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{summary.goal}</td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{child.name}</td>
+                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
+                      <StatusBadge status={child.status as TaskStatus} />
+                    </td>
                     <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                      {summary.result}
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                      <StatusBadge status={summary.status as TaskStatus} />
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                      {new Date(summary.completed_at).toLocaleTimeString()}
+                      {child.task_conclusion
+                        ? <ExpandableText text={child.task_conclusion} />
+                        : '-'}
                     </td>
                   </tr>
                 ))}
