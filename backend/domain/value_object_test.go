@@ -103,10 +103,8 @@ func TestTaskType(t *testing.T) {
 		taskType TaskType
 		expected string
 	}{
-		{TaskTypeDataProcessing, "data_processing"},
-		{TaskTypeFileOperation, "file_operation"},
-		{TaskTypeAPICall, "api_call"},
 		{TaskTypeAgent, "agent"},
+		{TaskTypeCoding, "coding"},
 		{TaskTypeCustom, "custom"},
 	}
 
@@ -123,10 +121,8 @@ func TestParseTaskType(t *testing.T) {
 		expected TaskType
 		hasError bool
 	}{
-		{"data_processing", TaskTypeDataProcessing, false},
-		{"file_operation", TaskTypeFileOperation, false},
-		{"api_call", TaskTypeAPICall, false},
 		{"agent", TaskTypeAgent, false},
+		{"coding", TaskTypeCoding, false},
 		{"custom", TaskTypeCustom, false},
 		{"unknown", TaskTypeCustom, true},
 	}

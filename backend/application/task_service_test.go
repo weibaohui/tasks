@@ -114,7 +114,7 @@ func TestTaskApplicationService_CreateTask(t *testing.T) {
 	cmd := CreateTaskCommand{
 		Name:        "测试任务",
 		Description: "任务描述",
-		Type:        domain.TaskTypeDataProcessing,
+		Type:        domain.TaskTypeCustom,
 		Metadata:    map[string]interface{}{"key": "value"},
 		Timeout:     60000,
 		MaxRetries:  3,
@@ -149,7 +149,7 @@ func TestTaskApplicationService_CreateTask_WithParent(t *testing.T) {
 
 	parentCmd := CreateTaskCommand{
 		Name:    "父任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	}
 
@@ -158,7 +158,7 @@ func TestTaskApplicationService_CreateTask_WithParent(t *testing.T) {
 
 	cmd := CreateTaskCommand{
 		Name:     "子任务",
-		Type:     domain.TaskTypeDataProcessing,
+		Type:     domain.TaskTypeCustom,
 		Timeout:  30000,
 		ParentID: &parentID,
 	}
@@ -183,7 +183,7 @@ func TestTaskApplicationService_StartTask(t *testing.T) {
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
 		Name:    "测试任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	})
 
@@ -222,7 +222,7 @@ func TestTaskApplicationService_CancelTask(t *testing.T) {
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
 		Name:    "测试任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	})
 
@@ -247,7 +247,7 @@ func TestTaskApplicationService_CompleteTask(t *testing.T) {
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
 		Name:    "测试任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	})
 
@@ -275,7 +275,7 @@ func TestTaskApplicationService_UpdateProgress(t *testing.T) {
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
 		Name:    "测试任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	})
 
@@ -303,7 +303,7 @@ func TestTaskApplicationService_FailTask(t *testing.T) {
 
 	task, _ := service.CreateTask(context.Background(), CreateTaskCommand{
 		Name:    "测试任务",
-		Type:    domain.TaskTypeDataProcessing,
+		Type:    domain.TaskTypeCustom,
 		Timeout: 60000,
 	})
 
