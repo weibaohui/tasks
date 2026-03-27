@@ -47,11 +47,7 @@ export interface Task {
  * 进度接口
  */
 export interface Progress {
-  total: number;
-  current: number;
-  percentage: number;
-  stage: string;
-  detail: string;
+  value: number;
   updated_at: number;
 }
 

@@ -18,8 +18,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, showInfo = t
 
   return (
     <Progress
-      percent={progress.percentage}
-      status={progress.percentage >= 100 ? 'success' : 'active'}
+      percent={progress.value}
+      status={progress.value >= 100 ? 'success' : 'active'}
       format={showInfo ? formatPercent : undefined}
       strokeColor="#1890ff"
     />

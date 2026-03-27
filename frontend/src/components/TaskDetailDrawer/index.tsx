@@ -60,7 +60,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
         sub_task_type: child.type,
         goal: base?.goal || child.name,
         status: normalizeStatus(child.status),
-        progress: Math.round(child.progress?.percentage || 0),
+        progress: Math.round(child.progress?.value || 0),
         span_id: child.span_id,
         created_at: child.created_at,
         completed_at: child.finished_at,
@@ -249,14 +249,6 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
             <Descriptions column={1} bordered size="small" title="执行进度">
               <Descriptions.Item>
                 <ProgressBar progress={activeTask.progress} />
-                <div style={{ marginTop: 8 }}>
-                  <Tag color={activeTask.progress.stage ? 'blue' : 'default'}>
-                    {activeTask.progress.stage || '无'}
-                  </Tag>
-                  <span style={{ marginLeft: 8, color: '#666' }}>
-                    {activeTask.progress.detail || '-'}
-                  </span>
-                </div>
               </Descriptions.Item>
             </Descriptions>
             <Divider />

@@ -93,8 +93,6 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
 
       <Card title="执行进度" style={{ marginTop: 16 }}>
         <ProgressBar progress={task.progress} />
-        <p><strong>阶段：</strong>{task.progress.stage || '-'}</p>
-        <p><strong>详情：</strong>{task.progress.detail || '-'}</p>
       </Card>
 
       {task.error && (

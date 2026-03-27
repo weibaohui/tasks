@@ -187,7 +187,7 @@ export const TaskDashboard: React.FC = () => {
       key: 'progress',
       width: 150,
       render: (_: unknown, record: Task) => {
-        const p = record.progress?.percentage || 0;
+        const p = record.progress?.value || 0;
         return (
           <div style={{ width: 100 }}>
             <div style={{ fontSize: 12, marginBottom: 4 }}>
