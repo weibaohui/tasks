@@ -154,10 +154,6 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		taskInfo["sub_tasks_count"] = len(subTasks)
 	}
 
-	// 添加执行摘要（使用独立字段）
-	if summary := task.ExecutionSummary(); summary != nil {
-		taskInfo["execution_summary"] = summary
-	}
 	// 添加 todo_list（使用独立字段）
 	if todoList := task.TodoList(); todoList != "" {
 		taskInfo["todo_list"] = todoList

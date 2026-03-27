@@ -40,17 +40,6 @@ func inheritContextFromTask(parent *domain.Task, childTask *domain.Task) {
 	}
 }
 
-// TaskExecutionSummary 单个任务的执行摘要
-type TaskExecutionSummary struct {
-	TaskID      string `json:"task_id"`
-	SpanID      string `json:"span_id"`
-	Goal        string `json:"goal"`   // 目标是什么
-	Result      string `json:"result"` // 结果是什么
-	Stage       string `json:"stage"`
-	CompletedAt int64  `json:"completed_at"`
-	Status      string `json:"status"`
-}
-
 type AutoTaskExecutor struct {
 	repo       domain.TaskRepository
 	eventBus   interface{ Publish(domain.DomainEvent) }
@@ -365,34 +354,9 @@ func (e *AutoTaskExecutor) updateProgress(task *domain.Task, progress int, stage
 	task.UpdateProgress(progress)
 	e.saveTaskPreservingMetadata(task)
 
-	// 当任务完成（100% progress）时，收集执行结果
-	if progress == 100 {
-		e.collectTaskResult(task, stage, detail)
-	}
-
 	if e.eventBus != nil {
 		evt := domain.NewTaskProgressUpdatedEvent(task, task.Progress())
 		e.eventBus.Publish(evt)
-	}
-}
-
-// collectTaskResult 收集任务执行结果到自身
-func (e *AutoTaskExecutor) collectTaskResult(task *domain.Task, stage, detail string) {
-	summary := map[string]interface{}{
-		"task_id":      task.ID().String(),
-		"span_id":      task.SpanID().String(),
-		"goal":         task.Name(),
-		"result":       detail,
-		"stage":        stage,
-		"completed_at": time.Now().UnixMilli(),
-		"status":       task.Status().String(),
-	}
-
-	// 使用独立字段存储 execution_summary
-	task.SetExecutionSummary(summary)
-
-	if err := e.repo.Save(context.Background(), task); err != nil {
-		log.Printf("[AutoExecutor] collectTaskResult: save failed, err=%v", err)
 	}
 }
 

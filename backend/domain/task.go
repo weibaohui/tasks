@@ -50,7 +50,6 @@ type Task struct {
 	agentCode          string
 	channelCode        string
 	sessionKey         string
-	executionSummary   map[string]interface{} // 执行摘要
 	todoList           string                 // 待办列表
 	analysis           string                 // Agent 分析结果
 
@@ -206,17 +205,6 @@ func (t *Task) SetSessionKey(key string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.sessionKey = key
-}
-
-func (t *Task) ExecutionSummary() map[string]interface{} {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.executionSummary
-}
-func (t *Task) SetExecutionSummary(summary map[string]interface{}) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.executionSummary = summary
 }
 
 func (t *Task) TodoList() string {
@@ -468,7 +456,6 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		AgentCode:          t.agentCode,
 		ChannelCode:        t.channelCode,
 		SessionKey:         t.sessionKey,
-		ExecutionSummary:   t.executionSummary,
 		TodoList:           t.todoList,
 		Analysis:           t.analysis,
 		Depth:              t.depth,
@@ -507,7 +494,6 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.agentCode = snap.AgentCode
 	t.channelCode = snap.ChannelCode
 	t.sessionKey = snap.SessionKey
-	t.executionSummary = snap.ExecutionSummary
 	t.todoList = snap.TodoList
 	t.analysis = snap.Analysis
 	t.depth = snap.Depth

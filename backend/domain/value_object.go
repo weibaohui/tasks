@@ -229,7 +229,6 @@ type TaskSnapshot struct {
 	AgentCode          string
 	ChannelCode        string
 	SessionKey         string
-	ExecutionSummary   map[string]interface{} // 执行摘要
 	TodoList           string                 // 待办列表
 	Analysis           string                 // Agent 分析结果
 	Depth              int                    // 任务深度
