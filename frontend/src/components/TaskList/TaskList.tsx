@@ -1,12 +1,14 @@
 /**
  * 任务列表组件
- * 展示任务列表，支持查看详情和取消操作
+ * 展示任务列表，支持查看详情、查看对话和取消操作
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Table, Tag, Space, Button } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { MessageOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
+import { ConversationChatModal } from '../ConversationChatModal';
 import type { Task } from '../../types/task';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +20,13 @@ interface TaskListProps {
 
 export const TaskList: React.FC<TaskListProps> = ({ tasks, loading, onCancel }) => {
   const navigate = useNavigate();
+  const [chatTraceId, setChatTraceId] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const handleOpenChat = (traceId: string) => {
+    setChatTraceId(traceId);
+    setChatOpen(true);
+  };
 
   const columns: ColumnsType<Task> = [
     {
@@ -67,6 +76,13 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, loading, onCancel }) 
           <Button size="small" onClick={() => navigate(`/tasks/${record.id}`)}>
             详情
           </Button>
+          <Button
+            size="small"
+            icon={<MessageOutlined />}
+            onClick={() => handleOpenChat(record.trace_id)}
+          >
+            对话
+          </Button>
           {record.status === 'running' && (
             <Button size="small" danger onClick={() => onCancel?.(record.id)}>
               取消
@@ -77,5 +93,14 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, loading, onCancel }) 
     },
   ];
 
-  return <Table columns={columns} dataSource={tasks} rowKey="id" loading={loading} />;
+  return (
+    <>
+      <Table columns={columns} dataSource={tasks} rowKey="id" loading={loading} />
+      <ConversationChatModal
+        traceId={chatTraceId}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
+    </>
+  );
 };
