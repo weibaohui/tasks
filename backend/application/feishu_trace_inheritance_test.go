@@ -160,9 +160,9 @@ func TestTraceContext_FromFeishuMetadata(t *testing.T) {
 	t.Run("新会话生成新Trace", func(t *testing.T) {
 		ctx := context.Background()
 
-		// 如果消息 metadata 中没有 traceID，则生成新的
+		// MustGetTraceID 在不存在时返回空字符串
 		// 这模拟了第一消息进入时的处理
-		if traceID := trace.GetTraceID(ctx); traceID == "" {
+		if traceID := trace.MustGetTraceID(ctx); traceID == "" {
 			ctx = trace.WithTraceID(ctx, trace.NewTraceID())
 		}
 		if spanID := trace.MustGetSpanID(ctx); spanID == "" {

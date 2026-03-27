@@ -6,6 +6,7 @@ package application
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/trace"
@@ -167,7 +168,7 @@ func createTaskForTest(ctx context.Context, name string, t *testing.T) *domain.T
 		domain.TaskTypeAgent,
 		"目标",
 		"验收标准",
-		60000,
+		60*time.Second,
 		0,
 		0,
 	)

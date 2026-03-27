@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/application"
@@ -128,7 +129,7 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	}
 
 	// 验证必填参数
-	if args.Name == "" {
+	if strings.TrimSpace(args.Name) == "" {
 		return &llm.ToolResult{
 			Output: `{"success": false, "error": "缺少必填参数 name（任务名称）"}`,
 			Error:  "",
@@ -136,7 +137,7 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	}
 
 	// 验证必填参数
-	if args.TaskRequirement == "" {
+	if strings.TrimSpace(args.TaskRequirement) == "" {
 		return &llm.ToolResult{
 			Output: `{"success": false, "error": "缺少必填参数 task_requirement（任务目标）"}`,
 			Error:  "",
@@ -144,7 +145,7 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	}
 
 	// 验证必填参数
-	if args.AcceptanceCriteria == "" {
+	if strings.TrimSpace(args.AcceptanceCriteria) == "" {
 		return &llm.ToolResult{
 			Output: `{"success": false, "error": "缺少必填参数 acceptance_criteria（验收标准）"}`,
 			Error:  "",
