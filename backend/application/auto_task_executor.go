@@ -14,6 +14,7 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
@@ -87,8 +88,9 @@ func (e *AutoTaskExecutor) getLLMProviderForTask(ctx context.Context, task *doma
 
 func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Task) error {
 	taskID := task.ID().String()
-	traceID := task.TraceID().String()
-	spanID := task.SpanID().String()
+	// 从 context 中获取 trace 信息，不再从 task 提取
+	traceID := trace.GetTraceID(ctx)
+	spanID := trace.MustGetSpanID(ctx)
 
 	// 使用独立字段获取当前深度
 	currentDepth := task.Depth() + 1
@@ -160,7 +162,8 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 			for _, st := range plan.SubTasks {
 				subTaskID := idGen.Generate()
-				subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
+				// 使用 trace.StartSpan 从 context 自动获取新 spanID，parentSpanID 自动注入
+				subCtx, subSpanID := trace.StartSpan(ctx)
 
 				taskType := parseTaskType(st.TaskType)
 				if isAgentTask {
@@ -176,7 +179,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 				subTask, err := domain.NewTask(
 					domain.NewTaskID(subTaskID),
-					domain.NewTraceID(traceID),
+					domain.NewTraceID(trace.GetTraceID(subCtx)),
 					domain.NewSpanID(subSpanID),
 					func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
 					st.Goal,
@@ -193,9 +196,10 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					continue
 				}
 
-				// 设置深度和父 span（独立字段）
+				// 设置深度（parentSpan 已通过 StartSpan 自动注入 context）
 				subTask.SetDepth(currentDepth)
-				subTask.SetParentSpan(spanID)
+				// 从 context 获取 parentSpanID 并设置
+				subTask.SetParentSpan(trace.GetParentSpanID(subCtx))
 
 				// 继承父任务上下文
 				inheritContextFromTask(task, subTask)
@@ -206,7 +210,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 					continue
 				}
 
-				e.executeSubTaskAsync(ctx, subTask)
+				e.executeSubTaskAsync(subCtx, subTask)
 
 				todoList.AddItem(subTaskID, st.Goal, taskType.String(), subSpanID, TodoStatusDistributed)
 				subTaskIDs = append(subTaskIDs, subTaskID)

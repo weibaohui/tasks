@@ -12,6 +12,7 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
@@ -20,8 +21,8 @@ const MaxAgentTaskDepth = 4
 // AgentHandlerFunc Agent 模式任务处理函数 (实现 TaskHandler 接口)
 func AgentHandlerFunc(ctx context.Context, task *domain.Task, repo domain.TaskRepository) error {
 	taskID := task.ID().String()
-	_ = task.TraceID().String() // traceID 可用于后续扩展
-	spanID := task.SpanID().String()
+	// 从 context 获取 trace 信息
+	spanID := trace.MustGetSpanID(ctx)
 
 	log.Printf("[AgentHandler] 执行 Agent 任务: %s, spanID: %s", taskID, spanID)
 
@@ -89,8 +90,6 @@ func CreateSubTasksFromLLM(
 	plan *llm.SubTaskPlan,
 ) ([]string, error) {
 	taskID := task.ID().String()
-	traceID := task.TraceID().String()
-	spanID := task.SpanID().String()
 
 	subTaskIDs := make([]string, 0)
 	idGen := utils.NewNanoIDGenerator(21)
@@ -99,7 +98,8 @@ func CreateSubTasksFromLLM(
 
 	for _, st := range plan.SubTasks {
 		subTaskID := idGen.Generate()
-		subSpanID := fmt.Sprintf("%s-%s", spanID, idGen.Generate()[:4])
+		// 使用 trace.StartSpan 从 context 自动获取新 spanID，parentSpanID 自动注入
+		subCtx, subSpanID := trace.StartSpan(ctx)
 
 		taskType := domain.TaskTypeAgent
 
@@ -112,7 +112,7 @@ func CreateSubTasksFromLLM(
 
 		subTask, err := domain.NewTask(
 			domain.NewTaskID(subTaskID),
-			domain.NewTraceID(traceID),
+			domain.NewTraceID(trace.GetTraceID(subCtx)),
 			domain.NewSpanID(subSpanID),
 			func() *domain.TaskID { pid := domain.NewTaskID(taskID); return &pid }(),
 			st.Goal,
@@ -129,9 +129,10 @@ func CreateSubTasksFromLLM(
 			continue
 		}
 
-		// 设置深度和父 span（独立字段）
+		// 设置深度（parentSpan 已通过 StartSpan 自动注入 context）
 		subTask.SetDepth(getCurrentDepth(task))
-		subTask.SetParentSpan(spanID)
+		// 从 context 获取 parentSpanID 并设置
+		subTask.SetParentSpan(trace.GetParentSpanID(subCtx))
 
 		subTask.Start()
 		if err := repo.Save(context.Background(), subTask); err != nil {
