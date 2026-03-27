@@ -4,9 +4,10 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Card, Button, Space, Table, Tag, Modal, Popconfirm, message } from 'antd';
-import { PlusOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, EyeOutlined, MessageOutlined } from '@ant-design/icons';
 import { TaskForm } from '../components/TaskForm';
 import { TaskDetailDrawer } from '../components/TaskDetailDrawer';
+import { ConversationChatModal } from '../components/ConversationChatModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { useTaskStore } from '../stores/taskStore';
 import { useTaskOperations } from '../hooks/useTaskOperations';
@@ -20,6 +21,8 @@ export const TaskManagement: React.FC = () => {
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [chatTraceId, setChatTraceId] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     fetchTasks();
@@ -136,6 +139,14 @@ export const TaskManagement: React.FC = () => {
           >
             查看
           </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<MessageOutlined />}
+            onClick={() => { setChatTraceId(record.trace_id); setChatOpen(true); }}
+          >
+            对话
+          </Button>
           {record.status === 'pending' && (
             <Button type="link" size="small" danger onClick={() => handleCancelTask(record.id)}>
               取消
@@ -199,6 +210,12 @@ export const TaskManagement: React.FC = () => {
       </Modal>
 
       <TaskDetailDrawer taskId={drawerTaskId} open={drawerOpen} onClose={handleDrawerClose} />
+
+      <ConversationChatModal
+        traceId={chatTraceId}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
     </div>
   );
 };
