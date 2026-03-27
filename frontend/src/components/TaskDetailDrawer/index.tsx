@@ -225,11 +225,6 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
               <Descriptions.Item label="完成时间">
                 {activeTask.finished_at ? new Date(activeTask.finished_at).toLocaleString() : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="结论" span={2}>
-                {activeTask.task_conclusion
-                  ? <ExpandableText text={activeTask.task_conclusion} />
-                  : <span style={{ color: '#999' }}>-</span>}
-              </Descriptions.Item>
             </Descriptions>
             <Divider />
 
@@ -371,7 +366,9 @@ const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ t
                       <StatusBadge status={child.status as TaskStatus} />
                     </td>
                     <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                      {child.task_conclusion || '-'}
+                      {child.task_conclusion
+                        ? <ExpandableText text={child.task_conclusion} />
+                        : '-'}
                     </td>
                   </tr>
                 ))}
