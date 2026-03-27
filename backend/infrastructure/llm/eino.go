@@ -25,9 +25,6 @@ type EinoProvider struct {
 	toolHooks     []ToolHook        // 工具执行钩子
 	toolObserver  ToolExecutionObserver // 工具执行观察者
 	llmCallIndex  int               // 当前 LLM 调用索引
-	// 当前工具执行的 span 信息（用于 trace 链路）
-	currentSpanID     string
-	currentParentSpanID string
 }
 
 // ToolHook 工具执行钩子接口
@@ -82,17 +79,6 @@ func (p *EinoProvider) SetToolHooks(hooks []ToolHook) {
 // SetToolExecutionObserver 设置工具执行观察者
 func (p *EinoProvider) SetToolExecutionObserver(observer ToolExecutionObserver) {
 	p.toolObserver = observer
-}
-
-// SetCurrentSpan 设置当前工具执行的 span 信息
-func (p *EinoProvider) SetCurrentSpan(spanID, parentSpanID string) {
-	p.currentSpanID = spanID
-	p.currentParentSpanID = parentSpanID
-}
-
-// GetCurrentSpan 获取当前工具执行的 span 信息
-func (p *EinoProvider) GetCurrentSpan() (spanID, parentSpanID string) {
-	return p.currentSpanID, p.currentParentSpanID
 }
 
 var _ LLMProvider = (*EinoProvider)(nil)
