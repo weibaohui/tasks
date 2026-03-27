@@ -176,6 +176,17 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		dto.Error = task.Error().Error()
 	}
 
+	// 映射新的独立字段
+	dto.AcceptanceCriteria = task.AcceptanceCriteria()
+	dto.TaskRequirement = task.TaskRequirement()
+	dto.TaskConclusion = task.TaskConclusion()
+	dto.UserCode = task.UserCode()
+	dto.AgentCode = task.AgentCode()
+	dto.ChannelCode = task.ChannelCode()
+	dto.SessionKey = task.SessionKey()
+	dto.TodoList = task.TodoList()
+	dto.Analysis = task.Analysis()
+
 	return dto
 }
 

@@ -23,13 +23,24 @@ export interface Task {
   progress: Progress;
   result?: Result;
   error?: string;
-  metadata: Record<string, unknown>;
+  depth: number;
+  parent_span: string;
   timeout: number;
   max_retries: number;
   priority: number;
   created_at: number;
   started_at?: number;
   finished_at?: number;
+  // 独立字段（从 metadata 迁移）
+  acceptance_criteria: string;
+  task_requirement: string;
+  task_conclusion: string;
+  user_code: string;
+  agent_code: string;
+  channel_code: string;
+  session_key: string;
+  todo_list: string;
+  analysis: string;
 }
 
 /**
