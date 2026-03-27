@@ -47,7 +47,7 @@ type Gateway struct {
 }
 
 func main() {
-	logger, _ := zap.NewDevelopment()
+	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
 	if runAdminSubcommandIfMatched(logger) {

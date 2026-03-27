@@ -166,6 +166,14 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		if todoList, ok := metadata["todo_list"].(string); ok && todoList != "" {
 			taskInfo["todo_list"] = todoList
 		}
+		// 添加 Agent 模式的分析结果（如果有）
+		if analysis, ok := metadata["analysis"].(string); ok && analysis != "" {
+			taskInfo["analysis"] = analysis
+		}
+		// 兼容 agent_result 字段
+		if agentResult, ok := metadata["agent_result"].(string); ok && agentResult != "" {
+			taskInfo["agent_result"] = agentResult
+		}
 	}
 
 	resultJSON, _ := json.Marshal(taskInfo)

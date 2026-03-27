@@ -231,9 +231,15 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 
 			e.publishAndPersistTodoList(task, todoList)
 		} else if isAgentTask {
-			log.Printf("[AutoExecutor] Agent 模式下 LLM 未返回可用子任务")
-			e.updateProgress(task, 10, "LLM 规划为空", "Agent 模式要求 LLM 返回子任务，任务终止")
-			return e.failTask(task, errors.New("Agent 模式下 LLM 未生成子任务"))
+			log.Printf("[AutoExecutor] Agent 模式下 LLM 未返回子任务，任务直接完成")
+			// Agent 模式下 LLM 认为不需要子任务是正常的，把 LLM 的分析结果作为结果返回
+			if plan != nil && plan.Reason != "" {
+				if task.Metadata() == nil {
+					task.SetMetadata(map[string]interface{}{})
+				}
+				task.Metadata()["agent_result"] = plan.Reason
+			}
+			return e.finishTask(task)
 		}
 	}
 
@@ -457,6 +463,46 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	resultData := map[string]interface{}{
 		"completed_at": time.Now().UnixMilli(),
+	}
+
+	// 收集 Agent 模式的 LLM 分析结果
+	if metadata := task.Metadata(); metadata != nil {
+		if agentResult, ok := metadata["agent_result"].(string); ok && agentResult != "" {
+			resultData["analysis"] = agentResult
+		}
+	}
+
+	// 收集子任务结果
+	if metadata := task.Metadata(); metadata != nil {
+		if todoListStr, ok := metadata["todo_list"].(string); ok && todoListStr != "" {
+			var todoList TodoList
+			if err := json.Unmarshal([]byte(todoListStr), &todoList); err == nil {
+				subTaskResults := make([]map[string]interface{}, 0, len(todoList.Items))
+				for _, item := range todoList.Items {
+					// 获取子任务
+					subTask, err := e.repo.FindByID(context.Background(), domain.NewTaskID(item.SubTaskID))
+					if err == nil && subTask != nil {
+						subResult := map[string]interface{}{
+							"task_id":   item.SubTaskID,
+							"goal":      item.Goal,
+							"status":    string(item.Status),
+							"progress":  item.Progress,
+						}
+						// 添加子任务的结果（如果有）
+						if res := subTask.Result(); res != nil {
+							subResult["result_message"] = res.Message()
+							if res.Data() != nil {
+								subResult["result_data"] = res.Data()
+							}
+						}
+						subTaskResults = append(subTaskResults, subResult)
+					}
+				}
+				if len(subTaskResults) > 0 {
+					resultData["sub_tasks_results"] = subTaskResults
+				}
+			}
+		}
 	}
 
 	result := domain.NewResult(resultData, "任务完成")
