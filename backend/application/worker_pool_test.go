@@ -99,8 +99,8 @@ func TestWorkerPool_PriorityQueue(t *testing.T) {
 		"测试目标",
 		"测试验收标准",
 		60*time.Second,
-		0,   // maxRetries
-		1,   // 优先级1
+		0, // maxRetries
+		1, // 优先级1
 	)
 
 	task2, _ := domain.NewTask(
@@ -114,8 +114,8 @@ func TestWorkerPool_PriorityQueue(t *testing.T) {
 		"测试目标",
 		"测试验收标准",
 		60*time.Second,
-		0,   // maxRetries
-		10,  // 优先级10（更高）
+		0,  // maxRetries
+		10, // 优先级10（更高）
 	)
 
 	task3, _ := domain.NewTask(
@@ -129,8 +129,8 @@ func TestWorkerPool_PriorityQueue(t *testing.T) {
 		"测试目标",
 		"测试验收标准",
 		60*time.Second,
-		0,   // maxRetries
-		5,   // 优先级5
+		0, // maxRetries
+		5, // 优先级5
 	)
 
 	// 验证任务优先级是否正确设置

@@ -18,12 +18,12 @@ import (
 
 // mockSessionRepositoryForHandler - 用于测试的 Session 仓库模拟
 type mockSessionRepositoryForHandler struct {
-	sessions      map[domain.SessionID]*domain.Session
-	sessionKeys   map[string]*domain.Session
-	saveErr       error
-	findByKeyErr  error
-	findByIDErr   error
-	deleteErr     error
+	sessions     map[domain.SessionID]*domain.Session
+	sessionKeys  map[string]*domain.Session
+	saveErr      error
+	findByKeyErr error
+	findByIDErr  error
+	deleteErr    error
 }
 
 func newMockSessionRepositoryForHandler() *mockSessionRepositoryForHandler {

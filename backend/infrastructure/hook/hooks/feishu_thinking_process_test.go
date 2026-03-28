@@ -192,8 +192,8 @@ func TestFeishuThinkingProcessHook_PostToolCall_Error(t *testing.T) {
 	}
 
 	result := &domain.ToolExecutionResult{
-		Success: false,
-		Error:   assert.AnError,
+		Success:  false,
+		Error:    assert.AnError,
 		Duration: 50 * time.Millisecond,
 	}
 

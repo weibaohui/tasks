@@ -174,15 +174,15 @@ func TestSyncMap_ZeroMaxSize(t *testing.T) {
 
 func TestFactory_ConfigParsing(t *testing.T) {
 	config := map[string]interface{}{
-		"app_id":            "app-123",
-		"app_secret":        "secret-456",
-		"encrypt_key":       "encrypt-789",
+		"app_id":             "app-123",
+		"app_secret":         "secret-456",
+		"encrypt_key":        "encrypt-789",
 		"verification_token": "token-abc",
-		"channel_code":      "channel-def",
-		"channel_id":        "channel-ghi",
-		"agent_code":        "agent-jkl",
-		"user_code":         "user-mno",
-		"allow_from":        []interface{}{"ip1", "ip2"},
+		"channel_code":       "channel-def",
+		"channel_id":         "channel-ghi",
+		"agent_code":         "agent-jkl",
+		"user_code":          "user-mno",
+		"allow_from":         []interface{}{"ip1", "ip2"},
 	}
 
 	// Factory is hard to test without mocking, but we can test getString
@@ -214,10 +214,10 @@ func TestFactory_ConfigParsing(t *testing.T) {
 func TestMessageEvent(t *testing.T) {
 	event := &MessageEvent{
 		MessageID: "msg-001",
-		ChatID:   "chat-001",
-		MsgType:  "text",
-		Content:  "hello",
-		SenderID: "user-001",
+		ChatID:    "chat-001",
+		MsgType:   "text",
+		Content:   "hello",
+		SenderID:  "user-001",
 	}
 
 	if event.MessageID != "msg-001" {

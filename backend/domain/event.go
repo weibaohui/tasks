@@ -135,10 +135,15 @@ func (e *TaskCancelledEvent) Timestamp() int64 {
 // TaskPendingSummaryEvent 任务等待总结事件
 type TaskPendingSummaryEvent struct {
 	task *Task
+	Done chan struct{}
 }
 
 func NewTaskPendingSummaryEvent(task *Task) *TaskPendingSummaryEvent {
 	return &TaskPendingSummaryEvent{task: task}
+}
+
+func NewTaskPendingSummaryEventWithDone(task *Task, done chan struct{}) *TaskPendingSummaryEvent {
+	return &TaskPendingSummaryEvent{task: task, Done: done}
 }
 
 func (e *TaskPendingSummaryEvent) EventType() string {

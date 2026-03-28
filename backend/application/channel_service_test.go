@@ -105,10 +105,10 @@ func TestChannelService_CreateChannel(t *testing.T) {
 	ctx := context.Background()
 
 	channel, err := svc.CreateChannel(ctx, CreateChannelCommand{
-		UserCode: "usr_001",
-		Name:     "测试渠道",
-		Type:     domain.ChannelTypeFeishu,
-		Config:   map[string]interface{}{"app_id": "test_app"},
+		UserCode:  "usr_001",
+		Name:      "测试渠道",
+		Type:      domain.ChannelTypeFeishu,
+		Config:    map[string]interface{}{"app_id": "test_app"},
 		AllowFrom: []string{"*"},
 		AgentCode: "agt_001",
 	})
@@ -293,7 +293,7 @@ func TestChannelService_UpdateChannel_Config(t *testing.T) {
 	})
 
 	newConfig := map[string]interface{}{
-		"app_id":  "new_app_id",
+		"app_id":     "new_app_id",
 		"app_secret": "new_secret",
 	}
 	updated, err := svc.UpdateChannel(ctx, UpdateChannelCommand{

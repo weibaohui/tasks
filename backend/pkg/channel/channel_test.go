@@ -20,9 +20,9 @@ type mockChannel struct {
 }
 
 func (m *mockChannel) Name() string                    { return m.nameVal }
-func (m *mockChannel) Type() string                   { return m.typeVal }
+func (m *mockChannel) Type() string                    { return m.typeVal }
 func (m *mockChannel) Start(ctx context.Context) error { return m.startErr }
-func (m *mockChannel) Stop()                          { m.stopCalled = true }
+func (m *mockChannel) Stop()                           { m.stopCalled = true }
 
 // mockChannelFactory - 用于测试的 ChannelFactory 模拟
 type mockChannelFactory struct {

@@ -484,8 +484,8 @@ func TestPostLLMCall_UserCodeAndAgentCodeFromMetadata(t *testing.T) {
 		UserInput: "你好",
 		Metadata: map[string]string{
 			"session_key":  "session-post-meta",
-			"user_code":   "user-post-meta-001",
-			"agent_code":  "agent-post-meta-002",
+			"user_code":    "user-post-meta-001",
+			"agent_code":   "agent-post-meta-002",
 			"channel_code": "channel-post-meta",
 			"channel_type": "feishu",
 		},
@@ -561,8 +561,8 @@ func TestPreLLMCall_AllScopeFields(t *testing.T) {
 		UserInput: "测试所有字段",
 		Metadata: map[string]string{
 			"session_key":  "session-all-scope",
-			"user_code":   "user-all-scope-001",
-			"agent_code":  "agent-all-scope-002",
+			"user_code":    "user-all-scope-001",
+			"agent_code":   "agent-all-scope-002",
 			"channel_code": "channel-all-scope-003",
 			"channel_type": "feishu",
 		},

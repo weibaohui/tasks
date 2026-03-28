@@ -60,11 +60,11 @@ func (f *LLMProviderFactoryImpl) createOpenAIProvider(config *domain.LLMProvider
 
 	cfg := &Config{
 		ProviderType: config.ProviderKey(),
-		Model:       config.ModelName(),
-		APIKey:      config.GetAPIKey(),
-		BaseURL:     baseURL,
-		Temperature: config.GetTemperature(),
-		MaxTokens:   config.GetMaxTokens(),
+		Model:        config.ModelName(),
+		APIKey:       config.GetAPIKey(),
+		BaseURL:      baseURL,
+		Temperature:  config.GetTemperature(),
+		MaxTokens:    config.GetMaxTokens(),
 	}
 
 	return &EinoProvider{
@@ -101,11 +101,11 @@ func (f *LLMProviderFactoryImpl) createClaudeProvider(config *domain.LLMProvider
 
 	cfg := &Config{
 		ProviderType: config.ProviderKey(),
-		Model:       config.ModelName(),
-		APIKey:      config.GetAPIKey(),
-		BaseURL:     baseURL,
-		Temperature: config.GetTemperature(),
-		MaxTokens:   config.GetMaxTokens(),
+		Model:        config.ModelName(),
+		APIKey:       config.GetAPIKey(),
+		BaseURL:      baseURL,
+		Temperature:  config.GetTemperature(),
+		MaxTokens:    config.GetMaxTokens(),
 	}
 
 	return &EinoProvider{

@@ -61,14 +61,14 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	Name               string `json:"name"`
-	TaskRequirement    string `json:"task_requirement"`    // 任务目标（必填）
-	AcceptanceCriteria string `json:"acceptance_criteria"` // 验收标准（必填）
-	Description        string `json:"description"`
-	Type               string `json:"type"`
-	Timeout            int64  `json:"timeout"`
-	MaxRetries         int    `json:"max_retries"`
-	Priority           int    `json:"priority"`
+	Name               string  `json:"name"`
+	TaskRequirement    string  `json:"task_requirement"`    // 任务目标（必填）
+	AcceptanceCriteria string  `json:"acceptance_criteria"` // 验收标准（必填）
+	Description        string  `json:"description"`
+	Type               string  `json:"type"`
+	Timeout            int64   `json:"timeout"`
+	MaxRetries         int     `json:"max_retries"`
+	Priority           int     `json:"priority"`
 	ParentID           *string `json:"parent_id"`
 	TraceID            *string `json:"trace_id"`
 	SpanID             *string `json:"span_id"`

@@ -126,7 +126,7 @@ func TestAgentService_CreateAgent_WithFullConfig(t *testing.T) {
 		MaxTokens:             8000,
 		Temperature:           0.9,
 		MaxIterations:         20,
-		HistoryMessages:        20,
+		HistoryMessages:       20,
 		SkillsList:            []string{"skill1", "skill2"},
 		ToolsList:             []string{"tool1", "tool2"},
 		IsDefault:             true,
@@ -311,8 +311,8 @@ func TestAgentService_UpdateAgent(t *testing.T) {
 	ctx := context.Background()
 
 	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
-		UserCode: "usr_001",
-		Name:     "OriginalName",
+		UserCode:    "usr_001",
+		Name:        "OriginalName",
 		Description: "OriginalDesc",
 	})
 
@@ -370,7 +370,7 @@ func TestAgentService_UpdateAgent_Config(t *testing.T) {
 		MaxTokens:             6000,
 		Temperature:           0.5,
 		MaxIterations:         10,
-		HistoryMessages:        15,
+		HistoryMessages:       15,
 		EnableThinkingProcess: boolPtr(true),
 	})
 

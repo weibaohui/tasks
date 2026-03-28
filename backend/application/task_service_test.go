@@ -116,10 +116,10 @@ func TestTaskApplicationService_CreateTask(t *testing.T) {
 		TaskRequirement:    "测试目标",
 		AcceptanceCriteria: "测试验收标准",
 		Description:        "任务描述",
-		Type:              domain.TaskTypeCustom,
-		Timeout:           60000,
-		MaxRetries:        3,
-		Priority:          5,
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
+		MaxRetries:         3,
+		Priority:           5,
 	}
 
 	task, err := service.CreateTask(context.Background(), cmd)

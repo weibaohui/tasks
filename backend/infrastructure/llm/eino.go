@@ -18,13 +18,13 @@ import (
 
 // EinoProvider 使用 eino ChatModel 的 Provider
 type EinoProvider struct {
-	config        *Config
-	chatModel     model.ToolCallingChatModel
-	logger        *zap.Logger
-	lastUsage     Usage
-	toolHooks     []ToolHook        // 工具执行钩子
-	toolObserver  ToolExecutionObserver // 工具执行观察者
-	llmCallIndex  int               // 当前 LLM 调用索引
+	config       *Config
+	chatModel    model.ToolCallingChatModel
+	logger       *zap.Logger
+	lastUsage    Usage
+	toolHooks    []ToolHook            // 工具执行钩子
+	toolObserver ToolExecutionObserver // 工具执行观察者
+	llmCallIndex int                   // 当前 LLM 调用索引
 }
 
 // ToolHook 工具执行钩子接口
@@ -53,11 +53,11 @@ type ToolCallContext struct {
 
 // LLMCallContext LLM 调用上下文（传递给 observer）
 type LLMCallContext struct {
-	Content    string
-	Usage      Usage
-	ToolCalls  []string // tool names if any
-	TraceID    string
-	SpanID     string
+	Content   string
+	Usage     Usage
+	ToolCalls []string // tool names if any
+	TraceID   string
+	SpanID    string
 }
 
 // ToolExecutionObserver 工具执行观察者接口

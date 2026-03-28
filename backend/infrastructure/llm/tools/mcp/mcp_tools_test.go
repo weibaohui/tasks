@@ -13,17 +13,17 @@ import (
 
 // mockMCPService - 用于测试的 MCP 服务模拟
 type mockMCPService struct {
-	listServersFn  func(ctx context.Context) ([]*mockServer, error)
-	listToolsFn    func(ctx context.Context, id string) ([]*mockTool, error)
-	executeToolFn  func(ctx context.Context, id, name string, params map[string]interface{}) (string, error)
+	listServersFn func(ctx context.Context) ([]*mockServer, error)
+	listToolsFn   func(ctx context.Context, id string) ([]*mockTool, error)
+	executeToolFn func(ctx context.Context, id, name string, params map[string]interface{}) (string, error)
 }
 
 type mockServer struct {
-	id          string
-	code        string
-	name        string
-	description string
-	status      string
+	id           string
+	code         string
+	name         string
+	description  string
+	status       string
 	capabilities []*mockTool
 }
 

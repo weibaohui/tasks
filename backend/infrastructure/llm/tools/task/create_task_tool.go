@@ -115,10 +115,10 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		TaskRequirement    string `json:"task_requirement"`
 		AcceptanceCriteria string `json:"acceptance_criteria"`
 		Description        string `json:"description"`
-		TaskType          string `json:"task_type"`
-		TimeoutS          int64  `json:"timeout_s"`
-		Priority          int    `json:"priority"`
-		ParentID          string `json:"parent_id"`
+		TaskType           string `json:"task_type"`
+		TimeoutS           int64  `json:"timeout_s"`
+		Priority           int    `json:"priority"`
+		ParentID           string `json:"parent_id"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {

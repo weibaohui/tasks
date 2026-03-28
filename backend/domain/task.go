@@ -41,9 +41,9 @@ type Task struct {
 	maxRetries int
 	priority   int
 
-	status         TaskStatus
-	progress       Progress
-	execErr        error
+	status   TaskStatus
+	progress Progress
+	execErr  error
 
 	// 独立字段（不再存储在 metadata 中）
 	acceptanceCriteria string
@@ -54,12 +54,12 @@ type Task struct {
 	agentCode          string
 	channelCode        string
 	sessionKey         string
-	todoList           string                 // 待办列表
-	analysis           string                 // Agent 分析结果
+	todoList           string // 待办列表
+	analysis           string // Agent 分析结果
 
 	// 任务层级和追踪字段
-	depth       int    // 任务深度（从1开始）
-	parentSpan  string // 父任务的 span ID
+	depth      int    // 任务深度（从1开始）
+	parentSpan string // 父任务的 span ID
 
 	createdAt  time.Time
 	startedAt  *time.Time
@@ -73,12 +73,12 @@ type Task struct {
 // TaskResultPair 子任务成对文档
 // 包含任务要求、验收标准、任务名称和任务结论，用于父子任务结果汇总
 type TaskResultPair struct {
-	TaskName            string     `yaml:"task_name"`
-	TaskRequirement     string     `yaml:"task_requirement"`
-	AcceptanceCriteria  string     `yaml:"acceptance_criteria"`
-	TaskConclusion      string     `yaml:"task_conclusion"`
-	CompletedAt         *time.Time `yaml:"completed_at,omitempty"`
-	Status              TaskStatus `yaml:"status"`
+	TaskName           string     `yaml:"task_name"`
+	TaskRequirement    string     `yaml:"task_requirement"`
+	AcceptanceCriteria string     `yaml:"acceptance_criteria"`
+	TaskConclusion     string     `yaml:"task_conclusion"`
+	CompletedAt        *time.Time `yaml:"completed_at,omitempty"`
+	Status             TaskStatus `yaml:"status"`
 }
 
 // ToYAML 将 TaskResultPair 序列化为 YAML 格式
@@ -188,13 +188,13 @@ func NewTask(
 }
 
 // 标识访问方法
-func (t *Task) ID() TaskID        { return t.id }
-func (t *Task) TraceID() TraceID   { return t.traceID }
-func (t *Task) SpanID() SpanID     { return t.spanID }
-func (t *Task) ParentID() *TaskID  { return t.parentID }
-func (t *Task) Name() string       { return t.name }
+func (t *Task) ID() TaskID          { return t.id }
+func (t *Task) TraceID() TraceID    { return t.traceID }
+func (t *Task) SpanID() SpanID      { return t.spanID }
+func (t *Task) ParentID() *TaskID   { return t.parentID }
+func (t *Task) Name() string        { return t.name }
 func (t *Task) Description() string { return t.description }
-func (t *Task) Type() TaskType     { return t.taskType }
+func (t *Task) Type() TaskType      { return t.taskType }
 
 // 独立字段访问方法
 func (t *Task) AcceptanceCriteria() string {
@@ -330,9 +330,9 @@ func (t *Task) SetParentSpan(span string) {
 }
 
 func (t *Task) Timeout() time.Duration { return t.timeout }
-func (t *Task) MaxRetries() int                      { return t.maxRetries }
-func (t *Task) Priority() int                        { return t.priority }
-func (t *Task) CreatedAt() time.Time                 { return t.createdAt }
+func (t *Task) MaxRetries() int        { return t.maxRetries }
+func (t *Task) Priority() int          { return t.priority }
+func (t *Task) CreatedAt() time.Time   { return t.createdAt }
 
 func (t *Task) Status() TaskStatus {
 	t.mu.RLock()
@@ -521,7 +521,7 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		FinishedAt:         t.finishedAt,
 		AcceptanceCriteria: t.acceptanceCriteria,
 		TaskRequirement:    t.taskRequirement,
-		TaskConclusion:    t.taskConclusion,
+		TaskConclusion:     t.taskConclusion,
 		SubtaskRecords:     t.subtaskRecords,
 		UserCode:           t.userCode,
 		AgentCode:          t.agentCode,
