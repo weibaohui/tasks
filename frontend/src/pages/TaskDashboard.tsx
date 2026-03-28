@@ -240,7 +240,7 @@ export const TaskDashboard: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       {/* 任务状态统计 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>

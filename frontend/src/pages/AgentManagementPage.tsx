@@ -3,21 +3,24 @@
  * 支持 Agent 的新增、编辑、删除、启用/停用
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Divider, Drawer, Form, Grid, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Typography, message } from 'antd';
+import { Button, Card, Drawer, Form, Grid, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ApiOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined } from '@ant-design/icons';
-import { createAgent, deleteAgent, listAgents, updateAgent } from '../api/agentApi';
+import { createAgent, deleteAgent, listAgents, patchAgent, updateAgent } from '../api/agentApi';
 import { listProviders } from '../api/providerApi';
 import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCPServers, listMCPTools, updateBinding } from '../api/mcpApi';
 import { listBuiltInTools, type BuiltInTool } from '../api/taskApi';
 import { listSkillsSimple, type Skill } from '../api/skillApi';
 import { useAuthStore } from '../stores/authStore';
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
+import type { Agent, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
 import type { AgentMCPBinding, MCPServer, MCPTool } from '../types/mcp';
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
+
+/** Drawer 内卡片统一紧凑样式 */
+const compactCardBody = { padding: 8 };
 
 type AgentFormValues = {
   name: string;
@@ -243,6 +246,11 @@ export const AgentManagementPage: React.FC = () => {
   const [builtInTools, setBuiltInTools] = useState<BuiltInTool[]>([]);
   const [skillsOptions, setSkillsOptions] = useState<Skill[]>([]);
 
+  // 卡片编辑状态：记录每个 section 是否处于编辑模式
+  const [editingSections, setEditingSections] = useState<Record<string, boolean>>({});
+  // 卡片保存中状态
+  const [savingSections, setSavingSections] = useState<Record<string, boolean>>({});
+
   /**
    * 拉取 Agent 列表
    */
@@ -440,7 +448,57 @@ export const AgentManagementPage: React.FC = () => {
     setMcpBindings([]);
     setEditingBinding(null);
     setToolsDrawerOpen(false);
+    setEditingSections({});
   }, [form, mcpForm]);
+
+  /** 切换某个 section 的编辑状态 */
+  const toggleSectionEdit = useCallback((section: string) => {
+    setEditingSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  }, []);
+
+  /** 局部保存某个 section 的字段 */
+  const handlePatchSection = useCallback(
+    async (section: string, fields: PatchAgentRequest) => {
+      if (!editing) return;
+      setSavingSections((prev) => ({ ...prev, [section]: true }));
+      try {
+        await patchAgent(editing.id, fields);
+        message.success('保存成功');
+        setEditingSections((prev) => ({ ...prev, [section]: false }));
+        await fetchList();
+        // 更新本地 editing 数据以反映最新值
+        const updated = await listAgents(userCode);
+        const found = updated.find((a) => a.id === editing.id);
+        if (found) {
+          setEditing(found);
+          form.setFieldsValue({
+            name: found.name,
+            description: found.description,
+            identity_content: found.identity_content,
+            soul_content: found.soul_content,
+            agents_content: found.agents_content,
+            user_content: found.user_content,
+            tools_content: found.tools_content,
+            model: found.model,
+            max_tokens: found.max_tokens,
+            temperature: found.temperature,
+            max_iterations: found.max_iterations,
+            history_messages: found.history_messages,
+            skills_list: found.skills_list || [],
+            tools_list: found.tools_list || [],
+            is_default: found.is_default,
+            is_active: found.is_active,
+            enable_thinking_process: found.enable_thinking_process,
+          });
+        }
+      } catch (_e) {
+        message.error('保存失败');
+      } finally {
+        setSavingSections((prev) => ({ ...prev, [section]: false }));
+      }
+    },
+    [editing, fetchList, form, userCode],
+  );
 
   /**
    * 快捷设置默认 Agent
@@ -756,7 +814,7 @@ export const AgentManagementPage: React.FC = () => {
   }, [open, editing, mcpBindings]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={<Title level={screens.xs ? 4 : 3} style={{ margin: 0 }}>Agent 管理</Title>}
         extra={
@@ -793,79 +851,192 @@ export const AgentManagementPage: React.FC = () => {
         styles={{ body: { padding: 0 } }}
         destroyOnClose
         extra={
-          <Space>
-            <Button onClick={closeEditor}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()} loading={saving}>
-              {editing ? '更新' : '创建'}
-            </Button>
-          </Space>
+          !editing ? (
+            <Space>
+              <Button onClick={closeEditor}>取消</Button>
+              <Button type="primary" onClick={() => form.submit()} loading={saving}>
+                创建
+              </Button>
+            </Space>
+          ) : null
         }
       >
-        <Form layout="vertical" form={form} onFinish={handleSubmit} style={{ height: '100%' }}>
+        <Form layout="vertical" form={form} onFinish={handleSubmit} style={{ height: '100%' }} size="small">
           <Tabs
             activeKey={activeTab}
             onChange={(k) => setActiveTab(k as any)}
-            tabBarStyle={{ padding: '0 24px', margin: 0 }}
+            tabBarStyle={{ padding: '0 12px', margin: 0, marginBottom: 0 }}
             items={[
               {
                 key: 'basic',
                 label: '基础信息',
                 children: (
-                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
-                    <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
-                      <Input placeholder="Agent 名称" />
-                    </Form.Item>
-                    <Form.Item label="描述" name="description">
-                      <Input.TextArea rows={2} placeholder="Agent 描述" />
-                    </Form.Item>
+                  <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+                    {/* ===== Agent 基本信息卡片 ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span><EditOutlined /> 基本信息</span>}
+                      style={{ marginBottom: 8 }}
+                      extra={
+                        editing ? (
+                          editingSections.basicInfo ? (
+                            <Button
+                              type="link"
+                              size="small"
+                              loading={savingSections.basicInfo}
+                              onClick={() => {
+                                const values = form.getFieldsValue(['name', 'description']);
+                                if (!values.name) { message.error('名称不能为空'); return; }
+                                handlePatchSection('basicInfo', {
+                                  name: values.name,
+                                  description: values.description,
+                                });
+                              }}
+                            >
+                              保存
+                            </Button>
+                          ) : (
+                            <Button type="link" size="small" onClick={() => toggleSectionEdit('basicInfo')}>
+                              编辑
+                            </Button>
+                          )
+                        ) : null
+                      }
+                    >
+                      {!editing || !editingSections.basicInfo ? (
+                        <div>
+                          <div style={{ marginBottom: 8 }}>
+                            <span style={{ color: '#999', marginRight: 8 }}>名称：</span>
+                            <span style={{ fontWeight: 500 }}>{form.getFieldValue('name') || '-'}</span>
+                          </div>
+                          <div>
+                            <span style={{ color: '#999', marginRight: 8 }}>描述：</span>
+                            <span>{form.getFieldValue('description') || '-'}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]} style={{ marginBottom: 8 }}>
+                            <Input placeholder="Agent 名称" />
+                          </Form.Item>
+                          <Form.Item label="描述" name="description" style={{ marginBottom: 0 }}>
+                            <Input.TextArea rows={2} placeholder="Agent 描述" />
+                          </Form.Item>
+                        </div>
+                      )}
+                    </Card>
 
-                    <Divider style={{ margin: '12px 0' }}>
-                      <ThunderboltOutlined /> 模型配置
-                    </Divider>
+                    {/* ===== 模型配置卡片 ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span><ThunderboltOutlined /> 模型配置</span>}
+                      style={{ marginBottom: 8 }}
+                      extra={
+                        editing ? (
+                          editingSections.modelConfig ? (
+                            <Button
+                              type="link"
+                              size="small"
+                              loading={savingSections.modelConfig}
+                              onClick={() => {
+                                const values = form.getFieldsValue(['model', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+                                if (!values.model) { message.error('请选择模型'); return; }
+                                handlePatchSection('modelConfig', values);
+                              }}
+                            >
+                              保存
+                            </Button>
+                          ) : (
+                            <Button type="link" size="small" onClick={() => toggleSectionEdit('modelConfig')}>
+                              编辑
+                            </Button>
+                          )
+                        ) : null
+                      }
+                    >
+                      {!editing || !editingSections.modelConfig ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+                          <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('model') || '-'}</div>
+                          <div><span style={{ color: '#999' }}>Max Tokens：</span>{form.getFieldValue('max_tokens')}</div>
+                          <div><span style={{ color: '#999' }}>Temperature：</span>{form.getFieldValue('temperature')}</div>
+                          <div><span style={{ color: '#999' }}>最大迭代：</span>{form.getFieldValue('max_iterations')}</div>
+                          <div><span style={{ color: '#999' }}>历史消息数：</span>{form.getFieldValue('history_messages')}</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <Form.Item label="模型" name="model" rules={[{ required: true, message: '请选择模型' }]}>
+                            <Select
+                              showSearch
+                              allowClear
+                              loading={providersLoading}
+                              options={modelOptions}
+                              placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型'}
+                              notFoundContent={providersLoading ? '正在加载...' : '没有可选模型'}
+                              filterOption={(input, option) => {
+                                const q = input.toLowerCase();
+                                const v = String(option?.value || '').toLowerCase();
+                                const l = String(option?.label || '').toLowerCase();
+                                return v.includes(q) || l.includes(q);
+                              }}
+                            />
+                          </Form.Item>
+                          <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
+                            <Form.Item label="Max Tokens" name="max_tokens">
+                              <InputNumber min={0} style={{ width: '100%' }} />
+                            </Form.Item>
+                            <Form.Item label="Temperature" name="temperature">
+                              <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
+                            </Form.Item>
+                            <Form.Item label="最大迭代" name="max_iterations">
+                              <InputNumber min={1} style={{ width: '100%' }} />
+                            </Form.Item>
+                            <Form.Item label="历史消息数" name="history_messages">
+                              <InputNumber min={0} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
 
-                    <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
-                      <Select
-                        showSearch
-                        allowClear
-                        loading={providersLoading}
-                        options={modelOptions}
-                        placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型（来自 LLM 配置）'}
-                        notFoundContent={providersLoading ? '正在加载...' : '没有可选模型，请先在 LLM 配置中配置 Provider 与模型'}
-                        filterOption={(input, option) => {
-                          const q = input.toLowerCase();
-                          const v = String(option?.value || '').toLowerCase();
-                          const l = String(option?.label || '').toLowerCase();
-                          return v.includes(q) || l.includes(q);
-                        }}
-                      />
-                    </Form.Item>
-
-                    <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
-                      <Form.Item label="Max Tokens" name="max_tokens" style={{ width: screens.xs ? '100%' : 160 }}>
-                        <InputNumber min={0} style={{ width: '100%' }} />
-                      </Form.Item>
-                      <Form.Item label="Temperature" name="temperature" style={{ width: screens.xs ? '100%' : 160 }}>
-                        <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
-                      </Form.Item>
-                      <Form.Item label="最大迭代" name="max_iterations" style={{ width: screens.xs ? '100%' : 160 }}>
-                        <InputNumber min={1} style={{ width: '100%' }} />
-                      </Form.Item>
-                      <Form.Item label="历史消息数" name="history_messages" style={{ width: screens.xs ? '100%' : 160 }}>
-                        <InputNumber min={0} style={{ width: '100%' }} />
-                      </Form.Item>
-                    </Space>
-
-                    <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
-                      <Form.Item label="设为默认" name="is_default" valuePropName="checked">
-                        <Switch checkedChildren="默认" unCheckedChildren="非默认" />
-                      </Form.Item>
-                      <Form.Item label="启用" name="is_active" valuePropName="checked">
-                        <Switch checkedChildren="启用" unCheckedChildren="停用" disabled={!editing} />
-                      </Form.Item>
-                      <Form.Item label="展示思考过程" name="enable_thinking_process" valuePropName="checked">
-                        <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-                      </Form.Item>
-                    </Space>
+                    {/* ===== 开关配置卡片（即时保存） ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span>开关设置</span>}
+                    >
+                      <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
+                        <Form.Item label="设为默认" name="is_default" valuePropName="checked" style={{ marginBottom: 0 }}>
+                          <Switch
+                            checkedChildren="默认"
+                            unCheckedChildren="非默认"
+                            onChange={(checked) => {
+                              if (editing) handlePatchSection('_switch_default', { is_default: checked });
+                            }}
+                          />
+                        </Form.Item>
+                        <Form.Item label="启用" name="is_active" valuePropName="checked" style={{ marginBottom: 0 }}>
+                          <Switch
+                            checkedChildren="启用"
+                            unCheckedChildren="停用"
+                            disabled={!editing}
+                            onChange={(checked) => {
+                              if (editing) handlePatchSection('_switch_active', { is_active: checked });
+                            }}
+                          />
+                        </Form.Item>
+                        <Form.Item label="展示思考过程" name="enable_thinking_process" valuePropName="checked" style={{ marginBottom: 0 }}>
+                          <Switch
+                            checkedChildren="开启"
+                            unCheckedChildren="关闭"
+                            onChange={(checked) => {
+                              if (editing) handlePatchSection('_switch_thinking', { enable_thinking_process: checked });
+                            }}
+                          />
+                        </Form.Item>
+                      </Space>
+                    </Card>
                   </div>
                 ),
               },
@@ -873,241 +1044,307 @@ export const AgentManagementPage: React.FC = () => {
                 key: 'skills',
                 label: '技能工具',
                 children: (
-                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
-                    <Divider style={{ margin: '12px 0' }}>
-                      <ThunderboltOutlined /> 技能配置
-                    </Divider>
-                    <Form.Item label="Skills（可多选/自定义）" name="skills_list">
-                      <Select
-                        mode="tags"
-                        placeholder="从列表选择或输入添加"
-                        options={skillsOptions.map((s) => ({
-                          value: s.name,
-                          label: s.description ? `${s.name} - ${s.description}` : s.name,
-                        }))}
-                        onChange={() => {
-                          // 自动更新工具列表
-                          const currentTools = (form.getFieldValue('tools_list') as string[]) || [];
-                          const toolsSet = new Set(currentTools);
-                          const skills = (form.getFieldValue('skills_list') as string[]) || [];
-                          // Skills 为空时移除 use_skill
-                          if (skills.length > 0) {
-                            toolsSet.add('use_skill');
-                          } else {
-                            toolsSet.delete('use_skill');
-                          }
-                          // 同时检查 MCP 绑定
-                          if (mcpBindings.length > 0 && mcpBindings.some((b) => b.is_active)) {
-                            toolsSet.add('use_mcp');
-                            toolsSet.add('call_mcp_tool');
-                          }
-                          form.setFieldsValue({ tools_list: Array.from(toolsSet) });
-                        }}
-                      />
-                    </Form.Item>
-                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
-                      说明：留空则该 Agent 不启用任何 Skills 技能
-                    </div>
-
-                    <Divider style={{ margin: '12px 0' }}>
-                      <ApiOutlined /> MCP Server 绑定
-                    </Divider>
-                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
-                      说明：不绑定任何 MCP Server 则该 Agent 无法使用 MCP 工具
-                    </div>
-
-                    {!editing && <Tag>请先创建 Agent 后再绑定 MCP Server</Tag>}
-                    {editing && (
-                      <>
-                        <div style={{ marginBottom: 12 }}>
-                          <Space>
+                  <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+                    {/* ===== 技能配置卡片 ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span><ThunderboltOutlined /> 技能配置</span>}
+                      style={{ marginBottom: 8 }}
+                      extra={
+                        editing ? (
+                          editingSections.skillsConfig ? (
                             <Button
-                              onClick={async () => {
-                                if (!editing) return;
-                                await reloadMCP(editing.id);
+                              type="link"
+                              size="small"
+                              loading={savingSections.skillsConfig}
+                              onClick={() => {
+                                const skills = form.getFieldValue('skills_list') as string[] || [];
+                                handlePatchSection('skillsConfig', { skills_list: skills });
                               }}
-                              loading={mcpLoading}
                             >
-                              刷新
+                              保存
                             </Button>
-                          </Space>
+                          ) : (
+                            <Button type="link" size="small" onClick={() => toggleSectionEdit('skillsConfig')}>
+                              编辑
+                            </Button>
+                          )
+                        ) : null
+                      }
+                    >
+                      {!editing || !editingSections.skillsConfig ? (
+                        <div>
+                          {(form.getFieldValue('skills_list') as string[] || []).length === 0 ? (
+                            <span style={{ color: '#999' }}>未配置技能（不限）</span>
+                          ) : (
+                            <Space wrap>
+                              {(form.getFieldValue('skills_list') as string[] || []).map((s) => (
+                                <Tag key={s} color="blue">{s}</Tag>
+                              ))}
+                            </Space>
+                          )}
                         </div>
+                      ) : (
+                        <div>
+                          <Form.Item label="Skills（可多选/自定义）" name="skills_list" style={{ marginBottom: 0 }}>
+                            <Select
+                              mode="tags"
+                              placeholder="从列表选择或输入添加"
+                              options={skillsOptions.map((s) => ({
+                                value: s.name,
+                                label: s.description ? `${s.name} - ${s.description}` : s.name,
+                              }))}
+                            />
+                          </Form.Item>
+                        </div>
+                      )}
+                    </Card>
 
-                        <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                          <Select
-                            placeholder="选择 MCP Server"
-                            style={{ flex: 1, minWidth: 260 }}
-                            value={mcpForm.getFieldValue('mcp_server_id')}
-                            onChange={(value) => mcpForm.setFieldValue('mcp_server_id', value)}
-                            options={mcpServers
-                              .filter((s) => !mcpBindings.some((b) => b.mcp_server_id === s.id))
-                              .map((s) => ({ value: s.id, label: `${s.name}（${s.code}）` }))}
-                            showSearch
-                            optionFilterProp="label"
-                          />
+                    {/* ===== MCP Server 绑定卡片 ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span><ApiOutlined /> MCP Server 绑定</span>}
+                      style={{ marginBottom: 8 }}
+                      extra={
+                        editing ? (
                           <Button
-                            type="primary"
-                            loading={mcpLoading}
-                            onClick={() => {
-                              const mcpServerId = mcpForm.getFieldValue('mcp_server_id');
-                              if (!mcpServerId) {
-                                message.error('请选择 MCP Server');
-                                return;
-                              }
+                            size="small"
+                            onClick={async () => {
                               if (!editing) return;
-                              createBinding({
-                                agent_id: editing.id,
-                                mcp_server_id: mcpServerId,
-                                is_active: true,
-                                auto_load: false,
-                              })
-                                .then(() => {
-                                  message.success('绑定成功');
-                                  mcpForm.resetFields();
-                                  return reloadMCP(editing.id);
-                                })
-                                .catch((e) => {
-                                  message.error(getMCPErrorMessage(e) || '绑定失败');
-                                });
+                              await reloadMCP(editing.id);
                             }}
+                            loading={mcpLoading}
                           >
-                            绑定
+                            刷新
                           </Button>
-                        </div>
+                        ) : null
+                      }
+                    >
+                      <div style={{ color: '#999', fontSize: 12, marginBottom: 4 }}>
+                        说明：不绑定任何 MCP Server 则该 Agent 无法使用 MCP 工具
+                      </div>
+                      {!editing && <Tag>请先创建 Agent 后再绑定 MCP Server</Tag>}
+                      {editing && (
+                        <>
+                          <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                            <Select
+                              placeholder="选择 MCP Server"
+                              style={{ flex: 1, minWidth: 260 }}
+                              value={mcpForm.getFieldValue('mcp_server_id')}
+                              onChange={(value) => mcpForm.setFieldValue('mcp_server_id', value)}
+                              options={mcpServers
+                                .filter((s) => !mcpBindings.some((b) => b.mcp_server_id === s.id))
+                                .map((s) => ({ value: s.id, label: `${s.name}（${s.code}）` }))}
+                              showSearch
+                              optionFilterProp="label"
+                            />
+                            <Button
+                              type="primary"
+                              loading={mcpLoading}
+                              onClick={() => {
+                                const mcpServerId = mcpForm.getFieldValue('mcp_server_id');
+                                if (!mcpServerId) {
+                                  message.error('请选择 MCP Server');
+                                  return;
+                                }
+                                if (!editing) return;
+                                createBinding({
+                                  agent_id: editing.id,
+                                  mcp_server_id: mcpServerId,
+                                  is_active: true,
+                                  auto_load: false,
+                                })
+                                  .then(() => {
+                                    message.success('绑定成功');
+                                    mcpForm.resetFields();
+                                    return reloadMCP(editing.id);
+                                  })
+                                  .catch((e) => {
+                                    message.error(getMCPErrorMessage(e) || '绑定失败');
+                                  });
+                              }}
+                            >
+                              绑定
+                            </Button>
+                          </div>
 
-                        <Table<AgentMCPBinding>
-                          dataSource={mcpBindings}
-                          rowKey="id"
-                          loading={mcpLoading}
-                          size="small"
-                          pagination={false}
-                          scroll={{ x: 520 }}
-                          columns={[
-                            {
-                              title: 'MCP Server',
-                              render: (_: unknown, record: AgentMCPBinding) => {
-                                const s = mcpServers.find((x) => x.id === record.mcp_server_id);
-                                return <span>{s ? `${s.name}（${s.code}）` : record.mcp_server_id}</span>;
+                          <Table<AgentMCPBinding>
+                            dataSource={mcpBindings}
+                            rowKey="id"
+                            loading={mcpLoading}
+                            size="small"
+                            pagination={false}
+                            scroll={{ x: 520 }}
+                            columns={[
+                              {
+                                title: 'MCP Server',
+                                render: (_: unknown, record: AgentMCPBinding) => {
+                                  const s = mcpServers.find((x) => x.id === record.mcp_server_id);
+                                  return <span>{s ? `${s.name}（${s.code}）` : record.mcp_server_id}</span>;
+                                },
                               },
-                            },
-                            {
-                              title: '工具',
-                              render: (_: unknown, record: AgentMCPBinding) => {
-                                const v = record.enabled_tools;
-                                return v && v.length > 0 ? v.slice(0, 3).map((x) => <Tag key={x}>{x}</Tag>) : <Tag>全部</Tag>;
+                              {
+                                title: '工具',
+                                render: (_: unknown, record: AgentMCPBinding) => {
+                                  const v = record.enabled_tools;
+                                  return v && v.length > 0 ? v.slice(0, 3).map((x) => <Tag key={x}>{x}</Tag>) : <Tag>全部</Tag>;
+                                },
                               },
-                            },
-                            {
-                              title: '状态',
-                              width: 90,
-                              render: (_: unknown, record: AgentMCPBinding) => (
-                                <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '禁用'}</Tag>
-                              ),
-                            },
-                            {
-                              title: '自动加载',
-                              width: 90,
-                              render: (_: unknown, record: AgentMCPBinding) => (
-                                <Switch
-                                  size="small"
-                                  checked={record.auto_load}
-                                  checkedChildren="自"
-                                  unCheckedChildren="手"
-                                  onChange={async () => {
-                                    try {
-                                      await updateBinding(record.id, { auto_load: !record.auto_load });
-                                      message.success(!record.auto_load ? '已设置自动加载' : '已取消自动加载');
-                                      if (editing) await reloadMCP(editing.id);
-                                    } catch (e) {
-                                      message.error(getMCPErrorMessage(e) || '操作失败');
-                                    }
-                                  }}
-                                />
-                              ),
-                            },
-                            {
-                              title: '操作',
-                              width: 200,
-                              render: (_: unknown, record: AgentMCPBinding) => (
-                                <Space size="small">
+                              {
+                                title: '状态',
+                                width: 90,
+                                render: (_: unknown, record: AgentMCPBinding) => (
+                                  <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '禁用'}</Tag>
+                                ),
+                              },
+                              {
+                                title: '自动加载',
+                                width: 90,
+                                render: (_: unknown, record: AgentMCPBinding) => (
                                   <Switch
                                     size="small"
-                                    checked={record.is_active}
+                                    checked={record.auto_load}
+                                    checkedChildren="自"
+                                    unCheckedChildren="手"
                                     onChange={async () => {
                                       try {
-                                        await updateBinding(record.id, { is_active: !record.is_active });
-                                        message.success(record.is_active ? '已禁用' : '已启用');
+                                        await updateBinding(record.id, { auto_load: !record.auto_load });
+                                        message.success(!record.auto_load ? '已设置自动加载' : '已取消自动加载');
                                         if (editing) await reloadMCP(editing.id);
                                       } catch (e) {
                                         message.error(getMCPErrorMessage(e) || '操作失败');
                                       }
                                     }}
                                   />
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    onClick={async () => {
-                                      setEditingBinding(record);
-                                      setToolsDrawerOpen(true);
-                                      setToolsDrawerLoading(true);
-                                      try {
-                                        const tools = await listMCPTools(record.mcp_server_id);
-                                        setToolsForServer(tools);
-                                        const current = record.enabled_tools || [];
-                                        toolsForm.setFieldsValue({
-                                          all_tools: current.length === 0,
-                                          enabled_tools: current,
-                                        });
-                                      } catch (e) {
-                                        setToolsForServer([]);
-                                        message.error(getMCPErrorMessage(e) || '获取工具列表失败');
-                                      } finally {
-                                        setToolsDrawerLoading(false);
-                                      }
-                                    }}
-                                  >
-                                    配置工具
-                                  </Button>
-                                  <Popconfirm
-                                    title="确认解绑该 MCP Server？"
-                                    onConfirm={async () => {
-                                      try {
-                                        await deleteBinding(record.id);
-                                        message.success('解绑成功');
-                                        if (editing) await reloadMCP(editing.id);
-                                      } catch (e) {
-                                        message.error(getMCPErrorMessage(e) || '解绑失败');
-                                      }
-                                    }}
-                                  >
-                                    <Button type="text" danger size="small">
-                                      解绑
+                                ),
+                              },
+                              {
+                                title: '操作',
+                                width: 200,
+                                render: (_: unknown, record: AgentMCPBinding) => (
+                                  <Space size="small">
+                                    <Switch
+                                      size="small"
+                                      checked={record.is_active}
+                                      onChange={async () => {
+                                        try {
+                                          await updateBinding(record.id, { is_active: !record.is_active });
+                                          message.success(record.is_active ? '已禁用' : '已启用');
+                                          if (editing) await reloadMCP(editing.id);
+                                        } catch (e) {
+                                          message.error(getMCPErrorMessage(e) || '操作失败');
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      onClick={async () => {
+                                        setEditingBinding(record);
+                                        setToolsDrawerOpen(true);
+                                        setToolsDrawerLoading(true);
+                                        try {
+                                          const tools = await listMCPTools(record.mcp_server_id);
+                                          setToolsForServer(tools);
+                                          const current = record.enabled_tools || [];
+                                          toolsForm.setFieldsValue({
+                                            all_tools: current.length === 0,
+                                            enabled_tools: current,
+                                          });
+                                        } catch (e) {
+                                          setToolsForServer([]);
+                                          message.error(getMCPErrorMessage(e) || '获取工具列表失败');
+                                        } finally {
+                                          setToolsDrawerLoading(false);
+                                        }
+                                      }}
+                                    >
+                                      配置工具
                                     </Button>
-                                  </Popconfirm>
-                                </Space>
-                              ),
-                            },
-                          ]}
-                        />
-                      </>
-                    )}
+                                    <Popconfirm
+                                      title="确认解绑该 MCP Server？"
+                                      onConfirm={async () => {
+                                        try {
+                                          await deleteBinding(record.id);
+                                          message.success('解绑成功');
+                                          if (editing) await reloadMCP(editing.id);
+                                        } catch (e) {
+                                          message.error(getMCPErrorMessage(e) || '解绑失败');
+                                        }
+                                      }}
+                                    >
+                                      <Button type="text" danger size="small">
+                                        解绑
+                                      </Button>
+                                    </Popconfirm>
+                                  </Space>
+                                ),
+                              },
+                            ]}
+                          />
+                        </>
+                      )}
+                    </Card>
 
-                    <Divider style={{ margin: '12px 0' }}>
-                      <ToolOutlined /> 工具配置
-                    </Divider>
-                    <Form.Item label="Tools（可多选/自定义）" name="tools_list">
-                      <Select
-                        mode="tags"
-                        placeholder="输入后回车添加"
-                        options={builtInTools.map((t) => ({
-                          value: t.name,
-                          label: t.description ? `${t.name} - ${t.description}` : t.name,
-                        }))}
-                      />
-                    </Form.Item>
-                    <div style={{ color: '#999', fontSize: 12, marginBottom: 16 }}>
-                      说明：绑定 Skills 会自动添加 use_skill，绑定 MCP 会自动添加 use_mcp 和 call_mcp_tool
-                    </div>
+                    {/* ===== 工具配置卡片 ===== */}
+                    <Card
+                      size="small"
+                      styles={{ body: compactCardBody }}
+                      title={<span><ToolOutlined /> 工具配置</span>}
+                      extra={
+                        editing ? (
+                          editingSections.toolsConfig ? (
+                            <Button
+                              type="link"
+                              size="small"
+                              loading={savingSections.toolsConfig}
+                              onClick={() => {
+                                const tools = form.getFieldValue('tools_list') as string[] || [];
+                                handlePatchSection('toolsConfig', { tools_list: tools });
+                              }}
+                            >
+                              保存
+                            </Button>
+                          ) : (
+                            <Button type="link" size="small" onClick={() => toggleSectionEdit('toolsConfig')}>
+                              编辑
+                            </Button>
+                          )
+                        ) : null
+                      }
+                    >
+                      {!editing || !editingSections.toolsConfig ? (
+                        <div>
+                          {(form.getFieldValue('tools_list') as string[] || []).length === 0 ? (
+                            <span style={{ color: '#999' }}>未配置工具（不限）</span>
+                          ) : (
+                            <Space wrap>
+                              {(form.getFieldValue('tools_list') as string[] || []).map((t) => (
+                                <Tag key={t} color="cyan">{t}</Tag>
+                              ))}
+                            </Space>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <Form.Item label="Tools（可多选/自定义）" name="tools_list" style={{ marginBottom: 4 }}>
+                            <Select
+                              mode="tags"
+                              placeholder="输入后回车添加"
+                              options={builtInTools.map((t) => ({
+                                value: t.name,
+                                label: t.description ? `${t.name} - ${t.description}` : t.name,
+                              }))}
+                            />
+                          </Form.Item>
+                          <div style={{ color: '#999', fontSize: 12 }}>
+                            说明：绑定 Skills 会自动添加 use_skill，绑定 MCP 会自动添加 use_mcp 和 call_mcp_tool
+                          </div>
+                        </div>
+                      )}
+                    </Card>
                   </div>
                 ),
               },
@@ -1115,27 +1352,76 @@ export const AgentManagementPage: React.FC = () => {
                 key: 'personality',
                 label: '人格属性',
                 children: (
-                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
-                    <Divider style={{ margin: '12px 0' }}>
-                      <FileTextOutlined /> 配置文件编辑
-                    </Divider>
-                    <Form.Item label="IDENTITY.md" name="identity_content">
-                      <Input.TextArea rows={5} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-                    </Form.Item>
-                    <Form.Item label="SOUL.md" name="soul_content">
-                      <Input.TextArea rows={5} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-                    </Form.Item>
-                    <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
-                      <Form.Item label="AGENTS.md" name="agents_content">
-                        <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-                      </Form.Item>
-                      <Form.Item label="TOOLS.md" name="tools_content">
-                        <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-                      </Form.Item>
-                    </div>
-                    <Form.Item label="USER.md" name="user_content">
-                      <Input.TextArea rows={4} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-                    </Form.Item>
+                  <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+                    {/* ===== MD 配置文件卡片 ===== */}
+                    {([
+                      { key: 'identity_content', file: 'IDENTITY.md', desc: '智能伙伴的名字、性格和身份定义' },
+                      { key: 'soul_content', file: 'SOUL.md', desc: '智能伙伴的信念、风格和行为准则' },
+                      { key: 'agents_content', file: 'AGENTS.md', desc: '智能伙伴的工作流程和记忆规则' },
+                      { key: 'user_content', file: 'USER.md', desc: '关于用户的信息和偏好' },
+                      { key: 'tools_content', file: 'TOOLS.md', desc: '智能伙伴的本地笔记和速查表' },
+                    ] as const).map((item) => (
+                      <Card
+                        key={item.key}
+                        size="small"
+                        styles={{ body: compactCardBody }}
+                        style={{ marginBottom: 8 }}
+                        title={
+                          <span>
+                            <FileTextOutlined style={{ marginRight: 8 }} />
+                            {item.file}
+                          </span>
+                        }
+                        extra={
+                          editing ? (
+                            editingSections[item.key] ? (
+                              <Button
+                                type="link"
+                                size="small"
+                                loading={savingSections[item.key]}
+                                onClick={() => {
+                                  const content = form.getFieldValue(item.key) as string || '';
+                                  handlePatchSection(item.key, { [item.key]: content });
+                                }}
+                              >
+                                保存
+                              </Button>
+                            ) : (
+                              <Button type="link" size="small" onClick={() => toggleSectionEdit(item.key)}>
+                                编辑
+                              </Button>
+                            )
+                          ) : null
+                        }
+                      >
+                        <div style={{ color: '#999', fontSize: 12, marginBottom: editingSections[item.key] ? 8 : 0 }}>
+                          {item.desc}
+                        </div>
+                        {!editing || !editingSections[item.key] ? (
+                          <pre style={{
+                            margin: 0,
+                            padding: 4,
+                            background: '#fafafa',
+                            borderRadius: 4,
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            maxHeight: 150,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}>
+                            {(form.getFieldValue(item.key) as string) || '(空)'}
+                          </pre>
+                        ) : (
+                          <Form.Item name={item.key} style={{ marginBottom: 0 }}>
+                            <Input.TextArea
+                              rows={8}
+                              style={{ fontFamily: 'monospace', fontSize: 12 }}
+                            />
+                          </Form.Item>
+                        )}
+                      </Card>
+                    ))}
                   </div>
                 ),
               },

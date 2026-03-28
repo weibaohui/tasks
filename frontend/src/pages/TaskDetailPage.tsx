@@ -55,7 +55,7 @@ export const TaskDetailPage: React.FC = () => {
   })();
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Row gutter={16}>
         <Col span={16}>
           <TaskDetail

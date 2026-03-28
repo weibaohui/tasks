@@ -322,7 +322,7 @@ export const ChannelManagementPage: React.FC = () => {
   }, [fetchAgents, fetchChannels]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={`渠道管理 (${items.length})`}
         extra={

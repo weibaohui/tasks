@@ -109,7 +109,7 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level={3} style={{ margin: 0 }}>Dashboard</Title>
         <Space>

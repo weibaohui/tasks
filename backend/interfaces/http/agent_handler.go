@@ -176,6 +176,69 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(agentToMap(agent))
 }
 
+// PatchAgentRequest 局部更新请求，指针字段区分"未提供"与"零值"
+type PatchAgentRequest struct {
+	Name                  *string   `json:"name"`
+	Description           *string   `json:"description"`
+	IdentityContent       *string   `json:"identity_content"`
+	SoulContent           *string   `json:"soul_content"`
+	AgentsContent         *string   `json:"agents_content"`
+	UserContent           *string   `json:"user_content"`
+	ToolsContent          *string   `json:"tools_content"`
+	Model                 *string   `json:"model"`
+	MaxTokens             *int      `json:"max_tokens"`
+	Temperature           *float64  `json:"temperature"`
+	MaxIterations         *int      `json:"max_iterations"`
+	HistoryMessages       *int      `json:"history_messages"`
+	SkillsList            *[]string `json:"skills_list"`
+	ToolsList             *[]string `json:"tools_list"`
+	IsActive              *bool     `json:"is_active"`
+	IsDefault             *bool     `json:"is_default"`
+	EnableThinkingProcess *bool     `json:"enable_thinking_process"`
+}
+
+func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	var req PatchAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+
+	agent, err := h.agentService.PatchAgent(r.Context(), application.PatchAgentCommand{
+		ID:                    domain.NewAgentID(id),
+		Name:                  req.Name,
+		Description:           req.Description,
+		IdentityContent:       req.IdentityContent,
+		SoulContent:           req.SoulContent,
+		AgentsContent:         req.AgentsContent,
+		UserContent:           req.UserContent,
+		ToolsContent:          req.ToolsContent,
+		Model:                 req.Model,
+		MaxTokens:             req.MaxTokens,
+		Temperature:           req.Temperature,
+		MaxIterations:         req.MaxIterations,
+		HistoryMessages:       req.HistoryMessages,
+		SkillsList:            req.SkillsList,
+		ToolsList:             req.ToolsList,
+		IsActive:              req.IsActive,
+		IsDefault:             req.IsDefault,
+		EnableThinkingProcess: req.EnableThinkingProcess,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+}
+
 func (h *AgentHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {

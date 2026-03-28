@@ -231,6 +231,8 @@ func SetupRoutesWithManagement(
 				agentHandler.ListAgents(w, r)
 			case http.MethodPut:
 				agentHandler.UpdateAgent(w, r)
+			case http.MethodPatch:
+				agentHandler.PatchAgent(w, r)
 			case http.MethodDelete:
 				agentHandler.DeleteAgent(w, r)
 			default:
