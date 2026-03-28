@@ -301,6 +301,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateDropResultColumn(db); err != nil {
 		return err
 	}
+	if err := migrateTasksTimeoutToSeconds(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -371,6 +374,24 @@ func migrateDropResultColumn(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateTasksTimeoutToSeconds 将 tasks 表中 timeout 从毫秒转换为秒
+// 通过检测 timeout > 1000 来判断是否为毫秒值（旧数据），并进行转换
+func migrateTasksTimeoutToSeconds(db *sql.DB) error {
+	// 检查是否已执行过迁移（通过检测是否有 timeout > 1000 且 < 1e10 的记录）
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE timeout > 1000 AND timeout < 10000000000`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		// 没有需要转换的数据，可能是新数据或已转换
+		return nil
+	}
+	// 转换：毫秒值 / 1000 = 秒值
+	_, err = db.Exec(`UPDATE tasks SET timeout = timeout / 1000 WHERE timeout > 1000 AND timeout < 10000000000`)
+	return err
 }
 
 func migrateAgentMCPBindingColumn(db *sql.DB) error {
