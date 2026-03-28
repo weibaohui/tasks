@@ -498,7 +498,7 @@ export const ConversationRecordsPage: React.FC = () => {
   }, [fetchList]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={
           <Space>

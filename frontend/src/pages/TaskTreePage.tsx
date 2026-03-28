@@ -26,7 +26,7 @@ export const TaskTreePage: React.FC = () => {
   }, [traceId]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
         返回
       </Button>

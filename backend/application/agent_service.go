@@ -253,6 +253,140 @@ func (s *AgentApplicationService) DeleteAgent(ctx context.Context, id domain.Age
 	return s.agentRepo.Delete(ctx, id)
 }
 
+// PatchAgentCommand 局部更新 Agent 的命令，仅非 nil 字段会被应用
+type PatchAgentCommand struct {
+	ID                    domain.AgentID
+	Name                  *string
+	Description           *string
+	IdentityContent       *string
+	SoulContent           *string
+	AgentsContent         *string
+	UserContent           *string
+	ToolsContent          *string
+	Model                 *string
+	MaxTokens             *int
+	Temperature           *float64
+	MaxIterations         *int
+	HistoryMessages       *int
+	SkillsList            *[]string
+	ToolsList             *[]string
+	IsActive              *bool
+	IsDefault             *bool
+	EnableThinkingProcess *bool
+}
+
+func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgentCommand) (*domain.Agent, error) {
+	agent, err := s.agentRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return nil, err
+	}
+	if agent == nil {
+		return nil, ErrAgentNotFound
+	}
+
+	// 按需更新 profile 字段
+	if cmd.Name != nil && strings.TrimSpace(*cmd.Name) != "" {
+		desc := cmd.Description
+		if desc == nil {
+			d := agent.Description()
+			desc = &d
+		}
+		if err := agent.UpdateProfile(*cmd.Name, *desc); err != nil {
+			return nil, err
+		}
+	} else if cmd.Description != nil {
+		if err := agent.UpdateProfile(agent.Name(), *cmd.Description); err != nil {
+			return nil, err
+		}
+	}
+
+	// 按需更新 config 字段：只要任意一个 config 字段被提供，就构建完整参数调用 UpdateConfig
+	configFields := []*bool{
+		func() *bool { b := true; return &b }(), // 占位，表示有 config 字段
+	}
+	hasConfigField := cmd.IdentityContent != nil || cmd.SoulContent != nil ||
+		cmd.AgentsContent != nil || cmd.UserContent != nil || cmd.ToolsContent != nil ||
+		cmd.Model != nil || cmd.MaxTokens != nil || cmd.Temperature != nil ||
+		cmd.MaxIterations != nil || cmd.HistoryMessages != nil ||
+		cmd.SkillsList != nil || cmd.ToolsList != nil ||
+		cmd.EnableThinkingProcess != nil
+	_ = configFields // 避免 unused 警告
+
+	if hasConfigField {
+		identityContent := agent.IdentityContent()
+		soulContent := agent.SoulContent()
+		agentsContent := agent.AgentsContent()
+		userContent := agent.UserContent()
+		toolsContent := agent.ToolsContent()
+		model := agent.Model()
+		maxTokens := agent.MaxTokens()
+		temperature := agent.Temperature()
+		maxIterations := agent.MaxIterations()
+		historyMessages := agent.HistoryMessages()
+		skillsList := agent.SkillsList()
+		toolsList := agent.ToolsList()
+		enableThinkingProcess := agent.EnableThinkingProcess()
+
+		if cmd.IdentityContent != nil {
+			identityContent = *cmd.IdentityContent
+		}
+		if cmd.SoulContent != nil {
+			soulContent = *cmd.SoulContent
+		}
+		if cmd.AgentsContent != nil {
+			agentsContent = *cmd.AgentsContent
+		}
+		if cmd.UserContent != nil {
+			userContent = *cmd.UserContent
+		}
+		if cmd.ToolsContent != nil {
+			toolsContent = *cmd.ToolsContent
+		}
+		if cmd.Model != nil {
+			model = *cmd.Model
+		}
+		if cmd.MaxTokens != nil {
+			maxTokens = *cmd.MaxTokens
+		}
+		if cmd.Temperature != nil {
+			temperature = *cmd.Temperature
+		}
+		if cmd.MaxIterations != nil {
+			maxIterations = *cmd.MaxIterations
+		}
+		if cmd.HistoryMessages != nil {
+			historyMessages = *cmd.HistoryMessages
+		}
+		if cmd.SkillsList != nil {
+			skillsList = *cmd.SkillsList
+		}
+		if cmd.ToolsList != nil {
+			toolsList = *cmd.ToolsList
+		}
+		if cmd.EnableThinkingProcess != nil {
+			enableThinkingProcess = *cmd.EnableThinkingProcess
+		}
+
+		agent.UpdateConfig(
+			identityContent, soulContent, agentsContent, userContent, toolsContent,
+			model, maxTokens, temperature, maxIterations, historyMessages,
+			skillsList, toolsList, enableThinkingProcess,
+		)
+	}
+
+	if cmd.IsActive != nil {
+		agent.SetActive(*cmd.IsActive)
+	}
+	if cmd.IsDefault != nil {
+		agent.SetDefault(*cmd.IsDefault)
+	}
+
+	if err := s.agentRepo.Save(ctx, agent); err != nil {
+		return nil, fmt.Errorf("failed to save agent: %w", err)
+	}
+	return agent, nil
+}
+
 func boolValue(ptr *bool, fallback bool) bool {
 	if ptr == nil {
 		return fallback

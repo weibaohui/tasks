@@ -118,7 +118,7 @@ export const SkillsManagementPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={<Title level={screens.xs ? 4 : 3} style={{ margin: 0 }}>技能管理</Title>}
         extra={

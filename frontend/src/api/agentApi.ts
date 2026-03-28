@@ -2,7 +2,7 @@
  * Agent API 调用模块
  */
 import apiClient from './taskApi';
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '../types/agent';
+import type { Agent, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../types/agent';
 
 /**
  * 获取 Agent 列表
@@ -21,10 +21,18 @@ export async function createAgent(request: CreateAgentRequest): Promise<Agent> {
 }
 
 /**
- * 更新 Agent
+ * 更新 Agent（全量）
  */
 export async function updateAgent(id: string, request: UpdateAgentRequest): Promise<Agent> {
   const response = await apiClient.put<Agent>('/agents', request, { params: { id } });
+  return response.data;
+}
+
+/**
+ * 局部更新 Agent（只更新提供的字段）
+ */
+export async function patchAgent(id: string, request: PatchAgentRequest): Promise<Agent> {
+  const response = await apiClient.patch<Agent>('/agents', request, { params: { id } });
   return response.data;
 }
 

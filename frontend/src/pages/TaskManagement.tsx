@@ -158,7 +158,7 @@ export const TaskManagement: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       {/* 页面标题 */}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0 }}>任务管理</h2>

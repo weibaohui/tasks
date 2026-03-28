@@ -200,7 +200,7 @@ export const MCPManagementPage: React.FC = () => {
   useEffect(() => { fetchList(); }, [fetchList]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={`MCP 服务器管理（${items.length}）`}
         extra={

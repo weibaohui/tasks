@@ -287,7 +287,7 @@ export const ProviderManagementPage: React.FC = () => {
   }, [fetchList]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 0 }}>
       <Card
         title={`LLM Provider 配置 (${items.length})`}
         extra={
