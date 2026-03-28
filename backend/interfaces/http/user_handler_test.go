@@ -18,9 +18,9 @@ import (
 
 // mockUserRepository - 用于测试的 User 仓库模拟
 type mockUserRepository struct {
-	users      map[domain.UserID]*domain.User
-	usernames  map[string]*domain.User
-	userCodes  map[domain.UserCode]*domain.User
+	users     map[domain.UserID]*domain.User
+	usernames map[string]*domain.User
+	userCodes map[domain.UserCode]*domain.User
 }
 
 func newMockUserRepository() *mockUserRepository {

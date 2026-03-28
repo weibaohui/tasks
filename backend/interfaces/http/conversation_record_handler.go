@@ -216,10 +216,10 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 	dailyTrends := make([]map[string]interface{}, 0, len(stats.DailyTrends))
 	for _, dt := range stats.DailyTrends {
 		dailyTrends = append(dailyTrends, map[string]interface{}{
-			"date":             dt.Date,
-			"prompt_tokens":    dt.PromptTokens,
-			"complete_tokens":  dt.CompletionTokens,
-			"total_tokens":     dt.TotalTokens,
+			"date":            dt.Date,
+			"prompt_tokens":   dt.PromptTokens,
+			"complete_tokens": dt.CompletionTokens,
+			"total_tokens":    dt.TotalTokens,
 		})
 	}
 

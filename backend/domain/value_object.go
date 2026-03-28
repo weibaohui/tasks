@@ -64,11 +64,12 @@ func (id SpanID) Equals(other SpanID) bool {
 type TaskStatus int
 
 const (
-	TaskStatusPending   TaskStatus = 0
-	TaskStatusRunning   TaskStatus = 1
-	TaskStatusCompleted TaskStatus = 2
-	TaskStatusFailed    TaskStatus = 3
-	TaskStatusCancelled TaskStatus = 4
+	TaskStatusPending        TaskStatus = 0
+	TaskStatusRunning        TaskStatus = 1
+	TaskStatusCompleted      TaskStatus = 2
+	TaskStatusFailed         TaskStatus = 3
+	TaskStatusCancelled      TaskStatus = 4
+	TaskStatusPendingSummary TaskStatus = 5 // 等待总结（所有子任务完成，等待生成总结）
 )
 
 func (s TaskStatus) String() string {
@@ -83,6 +84,8 @@ func (s TaskStatus) String() string {
 		return "failed"
 	case TaskStatusCancelled:
 		return "cancelled"
+	case TaskStatusPendingSummary:
+		return "pending_summary"
 	default:
 		return "unknown"
 	}
@@ -101,6 +104,8 @@ func ParseTaskStatus(s string) (TaskStatus, error) {
 		return TaskStatusFailed, nil
 	case "cancelled":
 		return TaskStatusCancelled, nil
+	case "pending_summary":
+		return TaskStatusPendingSummary, nil
 	default:
 		return TaskStatusPending, fmt.Errorf("unknown status: %s", s)
 	}
@@ -204,14 +209,15 @@ type TaskSnapshot struct {
 	AcceptanceCriteria string
 	TaskRequirement    string
 	TaskConclusion     string
+	SubtaskRecords     string // YAML: 子任务成对文档汇总
 	UserCode           string
 	AgentCode          string
 	ChannelCode        string
 	SessionKey         string
-	TodoList           string                 // 待办列表
-	Analysis           string                 // Agent 分析结果
-	Depth              int                    // 任务深度
-	ParentSpan         string                 // 父任务的 span ID
+	TodoList           string // 待办列表
+	Analysis           string // Agent 分析结果
+	Depth              int    // 任务深度
+	ParentSpan         string // 父任务的 span ID
 	Timeout            time.Duration
 	MaxRetries         int
 	Priority           int

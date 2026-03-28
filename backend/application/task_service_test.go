@@ -78,15 +78,31 @@ func (m *mockTaskRepository) FindByTraceID(ctx context.Context, traceID domain.T
 }
 
 func (m *mockTaskRepository) FindByParentID(ctx context.Context, parentID domain.TaskID) ([]*domain.Task, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []*domain.Task
+	for _, task := range m.tasks {
+		if task.ParentID() != nil && task.ParentID().String() == parentID.String() {
+			result = append(result, task)
+		}
+	}
+	return result, nil
 }
 
 func (m *mockTaskRepository) FindByStatus(ctx context.Context, status domain.TaskStatus) ([]*domain.Task, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []*domain.Task
+	for _, task := range m.tasks {
+		if task.Status() == status {
+			result = append(result, task)
+		}
+	}
+	return result, nil
 }
 
 func (m *mockTaskRepository) FindRunningTasks(ctx context.Context) ([]*domain.Task, error) {
-	return nil, nil
+	return m.FindByStatus(ctx, domain.TaskStatusRunning)
 }
 
 func (m *mockTaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
@@ -116,10 +132,10 @@ func TestTaskApplicationService_CreateTask(t *testing.T) {
 		TaskRequirement:    "测试目标",
 		AcceptanceCriteria: "测试验收标准",
 		Description:        "任务描述",
-		Type:              domain.TaskTypeCustom,
-		Timeout:           60000,
-		MaxRetries:        3,
-		Priority:          5,
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
+		MaxRetries:         3,
+		Priority:           5,
 	}
 
 	task, err := service.CreateTask(context.Background(), cmd)
@@ -333,5 +349,98 @@ func TestTaskApplicationService_FailTask(t *testing.T) {
 	updatedTask, _ := repo.FindByID(context.Background(), task.ID())
 	if updatedTask.Status() != domain.TaskStatusFailed {
 		t.Errorf("期望状态为 Failed, 实际为 %v", updatedTask.Status())
+	}
+}
+
+func TestTaskApplicationService_CreateTask_SubTaskDepthLimit(t *testing.T) {
+	repo := newMockTaskRepository()
+	idGen := &mockIDGenerator{}
+	eventBus := bus.NewEventBus()
+	logger, _ := zap.NewDevelopment()
+
+	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
+
+	// 创建根任务
+	root, _ := service.CreateTask(context.Background(), CreateTaskCommand{
+		Name:               "根任务",
+		TaskRequirement:    "根任务目标",
+		AcceptanceCriteria: "根任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
+	})
+	rootID := root.ID()
+
+	// 创建第一层子任务（应该成功）
+	child, err := service.CreateTask(context.Background(), CreateTaskCommand{
+		Name:               "第一层子任务",
+		TaskRequirement:    "子任务目标",
+		AcceptanceCriteria: "子任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            30000,
+		ParentID:           &rootID,
+	})
+	if err != nil {
+		t.Fatalf("创建第一层子任务应该成功: %v", err)
+	}
+
+	// 尝试创建第二层子任务（应该失败）
+	childID := child.ID()
+	_, err = service.CreateTask(context.Background(), CreateTaskCommand{
+		Name:               "第二层子任务",
+		TaskRequirement:    "第二层目标",
+		AcceptanceCriteria: "第二层验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            30000,
+		ParentID:           &childID,
+	})
+	if !errors.Is(err, ErrSubTaskDepthExceed) {
+		t.Errorf("期望返回 ErrSubTaskDepthExceed, 实际返回 %v", err)
+	}
+}
+
+func TestTaskApplicationService_CreateTask_SubTaskCountLimit(t *testing.T) {
+	repo := newMockTaskRepository()
+	idGen := &mockIDGenerator{}
+	eventBus := bus.NewEventBus()
+	logger, _ := zap.NewDevelopment()
+
+	service := NewTaskApplicationService(repo, idGen, eventBus, logger)
+
+	// 创建根任务
+	root, _ := service.CreateTask(context.Background(), CreateTaskCommand{
+		Name:               "根任务",
+		TaskRequirement:    "根任务目标",
+		AcceptanceCriteria: "根任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            60000,
+	})
+	rootID := root.ID()
+
+	// 创建3个子任务（应该全部成功）
+	for i := 0; i < MaxSubTaskCount; i++ {
+		_, err := service.CreateTask(context.Background(), CreateTaskCommand{
+			Name:               "子任务" + strconv.Itoa(i+1),
+			TaskRequirement:    "子任务目标",
+			AcceptanceCriteria: "子任务验收标准",
+			Type:               domain.TaskTypeCustom,
+			Timeout:            30000,
+			ParentID:           &rootID,
+		})
+		if err != nil {
+			t.Fatalf("创建第 %d 个子任务应该成功: %v", i+1, err)
+		}
+	}
+
+	// 尝试创建第4个子任务（应该失败）
+	_, err := service.CreateTask(context.Background(), CreateTaskCommand{
+		Name:               "子任务4",
+		TaskRequirement:    "子任务目标",
+		AcceptanceCriteria: "子任务验收标准",
+		Type:               domain.TaskTypeCustom,
+		Timeout:            30000,
+		ParentID:           &rootID,
+	})
+	if !errors.Is(err, ErrSubTaskCountExceed) {
+		t.Errorf("期望返回 ErrSubTaskCountExceed, 实际返回 %v", err)
 	}
 }

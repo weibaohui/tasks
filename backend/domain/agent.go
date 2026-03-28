@@ -78,10 +78,10 @@ _(待填充)_`
 
 添加任何能帮助你完成工作的东西。这是你的速查表。`
 
-	DefaultModel         = "gpt-4"
-	DefaultMaxTokens     = 4096
-	DefaultTemperature   = 0.7
-	DefaultMaxIterations = 15
+	DefaultModel           = "gpt-4"
+	DefaultMaxTokens       = 4096
+	DefaultTemperature     = 0.7
+	DefaultMaxIterations   = 15
 	DefaultHistoryMessages = 10
 )
 

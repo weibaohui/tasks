@@ -5,6 +5,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -515,6 +516,79 @@ func TestTaskType_Agent_AllTransitions(t *testing.T) {
 	}
 	if task.Status() != TaskStatusCompleted {
 		t.Errorf("期望 Completed, 实际 %v", task.Status())
+	}
+}
+
+func TestParseTaskResultPairs_WithConclusionContainingDocSeparator(t *testing.T) {
+	pair1 := TaskResultPair{
+		TaskID:             "task-1",
+		TaskName:           "子任务1",
+		TaskRequirement:    "分析用户数据",
+		AcceptanceCriteria: "产出结论",
+		TaskConclusion:     "结论第一行\n---\n结论第三行",
+		Status:             TaskStatusCompleted,
+	}
+	pair2 := TaskResultPair{
+		TaskID:             "task-2",
+		TaskName:           "子任务2",
+		TaskRequirement:    "分析交易数据",
+		AcceptanceCriteria: "产出结论",
+		TaskConclusion:     "正常结论",
+		Status:             TaskStatusCompleted,
+	}
+
+	records, err := AppendTaskResultPair("", pair1)
+	if err != nil {
+		t.Fatalf("追加第一条结果失败: %v", err)
+	}
+	records, err = AppendTaskResultPair(records, pair2)
+	if err != nil {
+		t.Fatalf("追加第二条结果失败: %v", err)
+	}
+
+	pairs, err := ParseTaskResultPairs(records)
+	if err != nil {
+		t.Fatalf("解析结果失败: %v", err)
+	}
+	if len(pairs) != 2 {
+		t.Fatalf("期望解析出 2 条结果，实际为 %d", len(pairs))
+	}
+	if pairs[0].TaskConclusion != pair1.TaskConclusion {
+		t.Fatalf("第一条结论不匹配，期望 %q，实际 %q", pair1.TaskConclusion, pairs[0].TaskConclusion)
+	}
+	if pairs[1].TaskID != "task-2" {
+		t.Fatalf("第二条任务 ID 不匹配，期望 task-2，实际 %s", pairs[1].TaskID)
+	}
+}
+
+func TestParseTaskResultPairs_WithCommentedYamlDocuments(t *testing.T) {
+	records := strings.Join([]string{
+		"# === 子任务 1 ===",
+		"task_id: task-1",
+		"task_name: 子任务1",
+		"task_requirement: 任务1要求",
+		"acceptance_criteria: 任务1验收",
+		"task_conclusion: 任务1完成",
+		"status: 2",
+		"---",
+		"# === 子任务 2 ===",
+		"task_id: task-2",
+		"task_name: 子任务2",
+		"task_requirement: 任务2要求",
+		"acceptance_criteria: 任务2验收",
+		"task_conclusion: 任务2完成",
+		"status: 2",
+	}, "\n")
+
+	pairs, err := ParseTaskResultPairs(records)
+	if err != nil {
+		t.Fatalf("解析带注释 YAML 文档失败: %v", err)
+	}
+	if len(pairs) != 2 {
+		t.Fatalf("期望解析出 2 条结果，实际为 %d", len(pairs))
+	}
+	if pairs[0].TaskID != "task-1" || pairs[1].TaskID != "task-2" {
+		t.Fatalf("解析结果任务 ID 不匹配: %+v", pairs)
 	}
 }
 

@@ -20,8 +20,8 @@ import (
 // 协调 domain service 和 infrastructure factory
 type taskLLMProvider struct {
 	selectionService *domain.LLMProviderSelectionService
-	factory         domain.LLMProviderFactory
-	hookManager     *hook.Manager
+	factory          domain.LLMProviderFactory
+	hookManager      *hook.Manager
 }
 
 // newTaskLLMProvider 创建 LLM Provider 查找器

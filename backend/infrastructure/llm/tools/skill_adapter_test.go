@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/weibh/taskmanager/infrastructure/llm"
-	"github.com/weibh/taskmanager/infrastructure/skill"
 	skilltool "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
+	"github.com/weibh/taskmanager/infrastructure/skill"
 )
 
 func TestNewSkillToolAdapter(t *testing.T) {

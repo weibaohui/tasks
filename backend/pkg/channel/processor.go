@@ -13,8 +13,8 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
-	tasktools "github.com/weibh/taskmanager/infrastructure/llm/tools/task"
 	skilltools "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
+	tasktools "github.com/weibh/taskmanager/infrastructure/llm/tools/task"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
@@ -342,11 +342,11 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	if agent != nil {
 		// 构建上下文参数
 		contextParams := map[string]string{
-			"agentCode":   agent.AgentCode().String(),
-			"userCode":    agent.UserCode(),
-			"sessionKey":  msg.SessionKey(),
-			"traceID":     traceID,
-			"spanID":      llmSpanID,
+			"agentCode":  agent.AgentCode().String(),
+			"userCode":   agent.UserCode(),
+			"sessionKey": msg.SessionKey(),
+			"traceID":    traceID,
+			"spanID":     llmSpanID,
 		}
 		if msg.Metadata != nil {
 			if v, ok := msg.Metadata["channel_code"].(string); ok {
@@ -378,7 +378,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			Usage: domain.Usage{
 				PromptTokens:     usage.PromptTokens,
 				CompletionTokens: usage.CompletionTokens,
-				TotalTokens:     usage.TotalTokens,
+				TotalTokens:      usage.TotalTokens,
 			},
 		}
 		// 构造 RawResponse 包含工具调用信息，供 hook 分析
@@ -387,7 +387,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			for _, tc := range toolCalls {
 				argsStr := string(tc.Input)
 				toolCallsInfo = append(toolCallsInfo, map[string]interface{}{
-					"id":   tc.ID,
+					"id": tc.ID,
 					"function": map[string]interface{}{
 						"name":      tc.Name,
 						"arguments": argsStr,
@@ -703,11 +703,11 @@ type toolHookAdapter struct {
 	spanID       string
 	parentSpanID string
 	// scope 信息
-	sessionKey   string
-	userCode     string
-	agentCode    string
-	channelCode  string
-	channelType  string
+	sessionKey  string
+	userCode    string
+	agentCode   string
+	channelCode string
+	channelType string
 	// 当前工具执行的 context（包含 span 信息）
 	currentCtx context.Context
 }

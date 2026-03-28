@@ -84,7 +84,7 @@ func TestCreateUser(t *testing.T) {
 
 	user, err := svc.CreateUser(ctx, CreateUserCommand{
 		Username:    "testuser",
-		Email:      "test@example.com",
+		Email:       "test@example.com",
 		DisplayName: "Test User",
 		Password:    "password123",
 	})
@@ -122,8 +122,8 @@ func TestCreateUser_WithPasswordHash(t *testing.T) {
 	passwordHash := "sha256$" + "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" // password
 	user, err := svc.CreateUser(ctx, CreateUserCommand{
 		Username:     "hashuser",
-		Email:       "hash@example.com",
-		DisplayName: "Hash User",
+		Email:        "hash@example.com",
+		DisplayName:  "Hash User",
 		PasswordHash: passwordHash,
 	})
 
@@ -244,8 +244,8 @@ func TestUpdateUser_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := svc.UpdateUser(ctx, UpdateUserCommand{
-		ID:       domain.NewUserID("non-existent"),
-		Email:    "new@example.com",
+		ID:    domain.NewUserID("non-existent"),
+		Email: "new@example.com",
 	})
 	if err != ErrUserNotFound {
 		t.Errorf("期望 ErrUserNotFound, 实际为 %v", err)
@@ -350,9 +350,9 @@ func TestAuthenticate_InactiveUser(t *testing.T) {
 
 func TestBuildStoredPasswordValue(t *testing.T) {
 	tests := []struct {
-		name         string
-		password     string
-		passwordHash string
+		name            string
+		password        string
+		passwordHash    string
 		expectHasPrefix bool
 	}{
 		{"plain password", "mypassword", "", true},

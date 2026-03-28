@@ -28,10 +28,10 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 
 	query := `
 		INSERT INTO tasks (id, trace_id, span_id, parent_id, name, description, type,
-			acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+			acceptance_criteria, task_requirement, task_conclusion, subtask_records, user_code, agent_code, channel_code, session_key,
 			todo_list, analysis, depth, parent_span, timeout, max_retries, priority, status, progress,
 			error_msg, created_at, started_at, finished_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -42,6 +42,7 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 			acceptance_criteria=excluded.acceptance_criteria,
 			task_requirement=excluded.task_requirement,
 			task_conclusion=excluded.task_conclusion,
+			subtask_records=excluded.subtask_records,
 			user_code=excluded.user_code,
 			agent_code=excluded.agent_code,
 			channel_code=excluded.channel_code,
@@ -73,7 +74,7 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 	_, err := r.db.ExecContext(ctx, query,
 		snap.ID.String(), snap.TraceID.String(), snap.SpanID.String(), parentID,
 		snap.Name, snap.Description, snap.Type.String(),
-		snap.AcceptanceCriteria, snap.TaskRequirement, snap.TaskConclusion,
+		snap.AcceptanceCriteria, snap.TaskRequirement, snap.TaskConclusion, snap.SubtaskRecords,
 		snap.UserCode, snap.AgentCode, snap.ChannelCode, snap.SessionKey,
 		snap.TodoList, snap.Analysis, snap.Depth, snap.ParentSpan,
 		int64(snap.Timeout.Seconds()), snap.MaxRetries, snap.Priority, int(snap.Status),
@@ -85,7 +86,7 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 }
 
 const taskColumns = `id, trace_id, span_id, parent_id, name, description, type,
-	acceptance_criteria, task_requirement, task_conclusion, user_code, agent_code, channel_code, session_key,
+	acceptance_criteria, task_requirement, task_conclusion, subtask_records, user_code, agent_code, channel_code, session_key,
 	todo_list, analysis, depth, parent_span, timeout, max_retries, priority, status, progress,
 	error_msg, created_at, started_at, finished_at`
 
@@ -185,7 +186,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var createdAtUnix int64
 	var startedAtUnix, finishedAtUnix *int64
 	var timeoutSec int64
-	var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
+	var acceptanceCriteria, taskRequirement, taskConclusion, subtaskRecords, userCode, agentCode, channelCode, sessionKey sql.NullString
 	var todoList, analysis, parentSpan sql.NullString
 	var depth int
 	var progress int
@@ -193,7 +194,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	err := row.Scan(
 		&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
 		&snap.Name, &snap.Description, &typeStr,
-		&acceptanceCriteria, &taskRequirement, &taskConclusion,
+		&acceptanceCriteria, &taskRequirement, &taskConclusion, &subtaskRecords,
 		&userCode, &agentCode, &channelCode, &sessionKey,
 		&todoList, &analysis, &depth, &parentSpan,
 		&timeoutSec, &snap.MaxRetries, &snap.Priority, &statusInt,
@@ -210,6 +211,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	snap.AcceptanceCriteria = acceptanceCriteria.String
 	snap.TaskRequirement = taskRequirement.String
 	snap.TaskConclusion = taskConclusion.String
+	snap.SubtaskRecords = subtaskRecords.String
 	snap.UserCode = userCode.String
 	snap.AgentCode = agentCode.String
 	snap.ChannelCode = channelCode.String
@@ -258,7 +260,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		var createdAtUnix int64
 		var startedAtUnix, finishedAtUnix *int64
 		var timeoutSec int64
-		var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
+		var acceptanceCriteria, taskRequirement, taskConclusion, subtaskRecords, userCode, agentCode, channelCode, sessionKey sql.NullString
 		var todoList, analysis, parentSpan sql.NullString
 		var depth int
 		var progress int
@@ -266,7 +268,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		err := rows.Scan(
 			&idStr, &traceIDStr, &spanIDStr, &parentIDStr,
 			&snap.Name, &snap.Description, &typeStr,
-			&acceptanceCriteria, &taskRequirement, &taskConclusion,
+			&acceptanceCriteria, &taskRequirement, &taskConclusion, &subtaskRecords,
 			&userCode, &agentCode, &channelCode, &sessionKey,
 			&todoList, &analysis, &depth, &parentSpan,
 			&timeoutSec, &snap.MaxRetries, &snap.Priority, &statusInt,
@@ -283,6 +285,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		snap.AcceptanceCriteria = acceptanceCriteria.String
 		snap.TaskRequirement = taskRequirement.String
 		snap.TaskConclusion = taskConclusion.String
+		snap.SubtaskRecords = subtaskRecords.String
 		snap.UserCode = userCode.String
 		snap.AgentCode = agentCode.String
 		snap.ChannelCode = channelCode.String

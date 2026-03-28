@@ -19,10 +19,10 @@ import (
 // FeishuThinkingProcessHook 飞书思考过程 Hook
 type FeishuThinkingProcessHook struct {
 	*domain.BaseHook
-	messageBus    *bus.MessageBus
-	logger        *zap.Logger
-	sessionCache  map[string]*sessionInfo
-	mu            sync.RWMutex
+	messageBus   *bus.MessageBus
+	logger       *zap.Logger
+	sessionCache map[string]*sessionInfo
+	mu           sync.RWMutex
 }
 
 // sessionInfo 会话信息缓存
@@ -318,12 +318,12 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 		ChatID:  chatID,
 		Content: cardContent,
 		Metadata: map[string]any{
-			"type":            "thinking_process",
-			"msg_type":        "interactive", // 标记为卡片消息
-			"agent_code":      info.AgentCode,
-			"user_code":       info.UserCode,
-			"channel_code":    info.ChannelCode,
-			"timestamp":       time.Now().Unix(),
+			"type":         "thinking_process",
+			"msg_type":     "interactive", // 标记为卡片消息
+			"agent_code":   info.AgentCode,
+			"user_code":    info.UserCode,
+			"channel_code": info.ChannelCode,
+			"timestamp":    time.Now().Unix(),
 		},
 	}
 

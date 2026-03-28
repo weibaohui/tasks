@@ -186,11 +186,11 @@ func (t *UseSkillTool) handleInfo(skillName string) (*llm.ToolResult, error) {
 	}
 
 	result := map[string]interface{}{
-		"success":    true,
-		"skill_name": skillInfo.Name,
+		"success":     true,
+		"skill_name":  skillInfo.Name,
 		"description": skillInfo.Description,
-		"available":  skillInfo.Available,
-		"requires":   skillInfo.Requires,
+		"available":   skillInfo.Available,
+		"requires":    skillInfo.Requires,
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")

@@ -80,12 +80,12 @@ type ScopeInfo struct {
 
 // deferredLLMResponse 存储延迟的 LLM 响应信息
 type deferredLLMResponse struct {
-	TraceID    string
-	SpanID     string
+	TraceID      string
+	SpanID       string
 	ParentSpanID string
-	Content    string
-	Usage      domain.Usage
-	Scope      ScopeInfo
+	Content      string
+	Usage        domain.Usage
+	Scope        ScopeInfo
 }
 
 // PreLLMCall 记录 LLM 调用前的用户输入

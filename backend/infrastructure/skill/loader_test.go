@@ -379,8 +379,8 @@ requires_env: NONEXISTENT_ENV_VAR
 
 func TestValidateSkillName(t *testing.T) {
 	testCases := []struct {
-		name    string
-		valid   bool
+		name  string
+		valid bool
 	}{
 		{"github", true},
 		{"skill-creator", true},

@@ -54,6 +54,10 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 		return http.StatusConflict, "task is not running"
 	case errors.Is(err, domain.ErrTaskAlreadyFinished):
 		return http.StatusConflict, "task already finished"
+	case errors.Is(err, application.ErrSubTaskDepthExceed):
+		return http.StatusBadRequest, "subtask depth exceeds maximum limit (1 level)"
+	case errors.Is(err, application.ErrSubTaskCountExceed):
+		return http.StatusBadRequest, "subtask count exceeds maximum limit (3 per parent)"
 	default:
 		return http.StatusInternalServerError, "internal server error"
 	}
@@ -61,14 +65,14 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	Name               string `json:"name"`
-	TaskRequirement    string `json:"task_requirement"`    // 任务目标（必填）
-	AcceptanceCriteria string `json:"acceptance_criteria"` // 验收标准（必填）
-	Description        string `json:"description"`
-	Type               string `json:"type"`
-	Timeout            int64  `json:"timeout"`
-	MaxRetries         int    `json:"max_retries"`
-	Priority           int    `json:"priority"`
+	Name               string  `json:"name"`
+	TaskRequirement    string  `json:"task_requirement"`    // 任务目标（必填）
+	AcceptanceCriteria string  `json:"acceptance_criteria"` // 验收标准（必填）
+	Description        string  `json:"description"`
+	Type               string  `json:"type"`
+	Timeout            int64   `json:"timeout"`
+	MaxRetries         int     `json:"max_retries"`
+	Priority           int     `json:"priority"`
 	ParentID           *string `json:"parent_id"`
 	TraceID            *string `json:"trace_id"`
 	SpanID             *string `json:"span_id"`

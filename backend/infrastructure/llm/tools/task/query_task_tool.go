@@ -128,9 +128,9 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		subTasks := make([]map[string]interface{}, 0, len(children))
 		for _, child := range children {
 			subTasks = append(subTasks, map[string]interface{}{
-				"task_id": child.ID().String(),
-				"name":    child.Name(),
-				"status":  child.Status().String(),
+				"task_id":  child.ID().String(),
+				"name":     child.Name(),
+				"status":   child.Status().String(),
 				"progress": child.Progress().Value(),
 			})
 		}

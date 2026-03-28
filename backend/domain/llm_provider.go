@@ -97,7 +97,7 @@ func (p *LLMProvider) ProviderKey() string             { return p.providerKey }
 func (p *LLMProvider) ProviderName() string            { return p.providerName }
 func (p *LLMProvider) APIKey() string                  { return p.apiKey }
 func (p *LLMProvider) APIBase() string                 { return p.apiBase }
-func (p *LLMProvider) ProviderType() string { return p.providerType }
+func (p *LLMProvider) ProviderType() string            { return p.providerType }
 func (p *LLMProvider) ExtraHeaders() map[string]string { return cloneHeaders(p.extraHeaders) }
 func (p *LLMProvider) SupportedModels() []ModelInfo    { return cloneModels(p.supportedModels) }
 func (p *LLMProvider) DefaultModel() string            { return p.defaultModel }
@@ -304,10 +304,10 @@ func (c *LLMProviderConfig) SetProviderType(providerType string) *LLMProviderCon
 	return c
 }
 
-func (c *LLMProviderConfig) ProviderKey() string { return c.providerKey }
-func (c *LLMProviderConfig) APIFormat() string   { return c.ProviderType }
+func (c *LLMProviderConfig) ProviderKey() string     { return c.providerKey }
+func (c *LLMProviderConfig) APIFormat() string       { return c.ProviderType }
 func (c *LLMProviderConfig) ModelName() string       { return c.Model }
-func (c *LLMProviderConfig) GetAPIKey() string      { return c.APIKey }
-func (c *LLMProviderConfig) GetBaseURL() string     { return c.BaseURL }
+func (c *LLMProviderConfig) GetAPIKey() string       { return c.APIKey }
+func (c *LLMProviderConfig) GetBaseURL() string      { return c.BaseURL }
 func (c *LLMProviderConfig) GetTemperature() float64 { return c.Temperature }
 func (c *LLMProviderConfig) GetMaxTokens() int       { return c.MaxTokens }

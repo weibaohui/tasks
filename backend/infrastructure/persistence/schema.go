@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     session_key TEXT,
     todo_list TEXT,
     analysis TEXT,
+    subtask_records TEXT,
     depth INTEGER NOT NULL DEFAULT 0,
     parent_span TEXT,
     timeout INTEGER NOT NULL,
@@ -310,9 +311,9 @@ func InitSchema(db *sql.DB) error {
 // migrateTasksNewColumns 迁移 tasks 表新增字段
 func migrateTasksNewColumns(db *sql.DB) error {
 	newColumns := []struct {
-		name     string
-		sqlType  string
-		oldName  string // 如果旧列存在，数据迁移到新列
+		name       string
+		sqlType    string
+		oldName    string // 如果旧列存在，数据迁移到新列
 		defaultVal string // 默认值
 	}{
 		{"acceptance_criteria", "TEXT", "", ""},
@@ -326,6 +327,7 @@ func migrateTasksNewColumns(db *sql.DB) error {
 		{"analysis", "TEXT", "", ""},
 		{"depth", "INTEGER", "", "0"},
 		{"parent_span", "TEXT", "", ""},
+		{"subtask_records", "TEXT", "", ""},
 	}
 
 	for _, col := range newColumns {

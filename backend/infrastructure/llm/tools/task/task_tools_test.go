@@ -27,26 +27,26 @@ func (m *mockIDGenerator) Generate() string {
 
 // mockTask - 用于测试的 Task 模拟
 type mockTask struct {
-	id        domain.TaskID
-	name      string
-	status    domain.TaskStatus
-	taskType  domain.TaskType
-	progress  domain.Progress
-	execErr   error
-	createdAt time.Time
-	startedAt *time.Time
+	id         domain.TaskID
+	name       string
+	status     domain.TaskStatus
+	taskType   domain.TaskType
+	progress   domain.Progress
+	execErr    error
+	createdAt  time.Time
+	startedAt  *time.Time
 	finishedAt *time.Time
 }
 
-func (m *mockTask) ID() domain.TaskID { return m.id }
-func (m *mockTask) Name() string { return m.name }
+func (m *mockTask) ID() domain.TaskID         { return m.id }
+func (m *mockTask) Name() string              { return m.name }
 func (m *mockTask) Status() domain.TaskStatus { return m.status }
-func (m *mockTask) Type() domain.TaskType { return m.taskType }
+func (m *mockTask) Type() domain.TaskType     { return m.taskType }
 func (m *mockTask) Progress() domain.Progress { return m.progress }
-func (m *mockTask) Error() error { return m.execErr }
-func (m *mockTask) StartedAt() *time.Time { return m.startedAt }
-func (m *mockTask) FinishedAt() *time.Time { return m.finishedAt }
-func (m *mockTask) CreatedAt() time.Time { return m.createdAt }
+func (m *mockTask) Error() error              { return m.execErr }
+func (m *mockTask) StartedAt() *time.Time     { return m.startedAt }
+func (m *mockTask) FinishedAt() *time.Time    { return m.finishedAt }
+func (m *mockTask) CreatedAt() time.Time      { return m.createdAt }
 
 // CreateTaskTool tests
 

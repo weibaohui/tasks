@@ -15,9 +15,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// 任务限制常量
+const (
+	MaxSubTaskDepth = 1 // 最大子任务层级（仅允许1层子任务）
+	MaxSubTaskCount = 3 // 每个父任务最多子任务数
+)
+
 // 错误定义
 var (
-	ErrTaskNotFound = errors.New("task not found")
+	ErrTaskNotFound        = errors.New("task not found")
+	ErrSubTaskDepthExceed  = errors.New("subtask depth exceeds maximum limit (1 level)")
+	ErrSubTaskCountExceed  = errors.New("subtask count exceeds maximum limit (3 per parent)")
 )
 
 // CreateTaskCommand 创建任务命令
@@ -95,7 +103,7 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 		spanID = domain.NewSpanID(s.idGenerator.Generate())
 	}
 
-	// 2. 确定TraceID
+	// 2. 确定TraceID 并校验子任务限制
 	var traceID domain.TraceID
 	if cmd.ParentID != nil {
 		parent, err := s.taskRepo.FindByID(ctx, *cmd.ParentID)
@@ -103,6 +111,20 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 			return nil, fmt.Errorf("parent task not found: %w", err)
 		}
 		traceID = parent.TraceID()
+
+		// 校验子任务层级限制：父任务已有父任务，则不允许再创建子任务
+		if parent.ParentID() != nil {
+			return nil, ErrSubTaskDepthExceed
+		}
+
+		// 校验子任务数量限制
+		existingChildren, err := s.taskRepo.FindByParentID(ctx, *cmd.ParentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check existing subtasks: %w", err)
+		}
+		if len(existingChildren) >= MaxSubTaskCount {
+			return nil, ErrSubTaskCountExceed
+		}
 	} else if cmd.TraceID != nil {
 		traceID = *cmd.TraceID
 	} else {

@@ -226,7 +226,7 @@ func TestSession_FromSnapshot(t *testing.T) {
 		UserCode:    "user-002",
 		AgentCode:   "agent-002",
 		ChannelCode: "channel-002",
-		SessionKey: "key-002",
+		SessionKey:  "key-002",
 		ExternalID:  "ext-002",
 		Metadata:    map[string]interface{}{"k": "v"},
 	}

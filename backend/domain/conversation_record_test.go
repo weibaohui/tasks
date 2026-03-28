@@ -153,21 +153,21 @@ func TestConversationRecord_ToSnapshot(t *testing.T) {
 
 func TestConversationRecord_FromSnapshot(t *testing.T) {
 	snap := ConversationRecordSnapshot{
-		ID:            NewConversationRecordID("id-1"),
-		TraceID:       "trace-1",
-		SpanID:        "span-1",
-		ParentSpanID:  "parent-1",
-		EventType:     "llm_call",
-		Timestamp:     time.Now(),
-		SessionKey:    "session-1",
-		Role:          "user",
-		Content:       "hello",
-		PromptTokens:  10,
-		TotalTokens:   30,
-		UserCode:      "user-1",
-		AgentCode:     "agent-1",
-		ChannelCode:   "channel-1",
-		ChannelType:   "feishu",
+		ID:           NewConversationRecordID("id-1"),
+		TraceID:      "trace-1",
+		SpanID:       "span-1",
+		ParentSpanID: "parent-1",
+		EventType:    "llm_call",
+		Timestamp:    time.Now(),
+		SessionKey:   "session-1",
+		Role:         "user",
+		Content:      "hello",
+		PromptTokens: 10,
+		TotalTokens:  30,
+		UserCode:     "user-1",
+		AgentCode:    "agent-1",
+		ChannelCode:  "channel-1",
+		ChannelType:  "feishu",
 	}
 
 	record := &ConversationRecord{}

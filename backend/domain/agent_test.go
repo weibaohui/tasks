@@ -272,10 +272,10 @@ func TestAgent_UpdateConfig_PreservesDefaultValues(t *testing.T) {
 		"", // 空，保持原值
 		"", // 空，保持原值
 		"claude-3",
-		0,   // 0 不应被设置
-		0,   // 0 不应被设置
-		0,   // 0 不应被设置
-		-1,  // 负数不应被设置
+		0,  // 0 不应被设置
+		0,  // 0 不应被设置
+		0,  // 0 不应被设置
+		-1, // 负数不应被设置
 		nil,
 		nil,
 		false,

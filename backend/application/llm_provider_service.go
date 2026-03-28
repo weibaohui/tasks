@@ -20,7 +20,7 @@ type CreateProviderCommand struct {
 	ProviderName    string
 	APIKey          string
 	APIBase         string
-	ProviderType         string // API 格式：openai, anthropic
+	ProviderType    string // API 格式：openai, anthropic
 	ExtraHeaders    map[string]string
 	SupportedModels []domain.ModelInfo
 	DefaultModel    string
@@ -35,7 +35,7 @@ type UpdateProviderCommand struct {
 	ProviderName          *string
 	APIKey                *string
 	APIBase               *string
-	ProviderType               *string
+	ProviderType          *string
 	ExtraHeaders          *map[string]string
 	SupportedModels       *[]domain.ModelInfo
 	DefaultModel          *string

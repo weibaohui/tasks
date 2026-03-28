@@ -18,13 +18,13 @@ import (
 
 // mockChannelRepository - 用于测试的 Channel 仓库模拟
 type mockChannelRepository struct {
-	channels   map[domain.ChannelID]*domain.Channel
+	channels     map[domain.ChannelID]*domain.Channel
 	channelCodes map[string]*domain.Channel
 }
 
 func newMockChannelRepository() *mockChannelRepository {
 	return &mockChannelRepository{
-		channels:    make(map[domain.ChannelID]*domain.Channel),
+		channels:     make(map[domain.ChannelID]*domain.Channel),
 		channelCodes: make(map[string]*domain.Channel),
 	}
 }

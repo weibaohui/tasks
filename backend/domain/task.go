@@ -5,9 +5,15 @@
 package domain
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // 领域错误定义
@@ -37,24 +43,25 @@ type Task struct {
 	maxRetries int
 	priority   int
 
-	status         TaskStatus
-	progress       Progress
-	execErr        error
+	status   TaskStatus
+	progress Progress
+	execErr  error
 
 	// 独立字段（不再存储在 metadata 中）
 	acceptanceCriteria string
 	taskRequirement    string
 	taskConclusion     string
+	subtaskRecords     string // YAML: 子任务成对文档汇总（仅父任务使用）
 	userCode           string
 	agentCode          string
 	channelCode        string
 	sessionKey         string
-	todoList           string                 // 待办列表
-	analysis           string                 // Agent 分析结果
+	todoList           string // 待办列表
+	analysis           string // Agent 分析结果
 
 	// 任务层级和追踪字段
-	depth       int    // 任务深度（从1开始）
-	parentSpan  string // 父任务的 span ID
+	depth      int    // 任务深度（从1开始）
+	parentSpan string // 父任务的 span ID
 
 	createdAt  time.Time
 	startedAt  *time.Time
@@ -63,6 +70,70 @@ type Task struct {
 	domainEvents []DomainEvent
 
 	mu sync.RWMutex
+}
+
+// TaskResultPair 子任务成对文档
+// 包含任务要求、验收标准、任务名称和任务结论，用于父子任务结果汇总
+type TaskResultPair struct {
+	TaskID             string     `yaml:"task_id,omitempty"`
+	TaskName           string     `yaml:"task_name"`
+	TaskRequirement    string     `yaml:"task_requirement"`
+	AcceptanceCriteria string     `yaml:"acceptance_criteria"`
+	TaskConclusion     string     `yaml:"task_conclusion"`
+	CompletedAt        *time.Time `yaml:"completed_at,omitempty"`
+	Status             TaskStatus `yaml:"status"`
+}
+
+// ToYAML 将 TaskResultPair 序列化为 YAML 格式
+func (p *TaskResultPair) ToYAML() string {
+	data, err := yaml.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ParseTaskResultPairs 解析 YAML 格式的子任务成对文档
+// records 是 YAML 格式的字符串，多个文档用 --- 分隔
+func ParseTaskResultPairs(records string) ([]TaskResultPair, error) {
+	if records == "" {
+		return nil, nil
+	}
+
+	var pairs []TaskResultPair
+	decoder := yaml.NewDecoder(bytes.NewBufferString(records))
+	for {
+		var pair TaskResultPair
+		if err := decoder.Decode(&pair); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("解析 TaskResultPair 失败: %w", err)
+		}
+		if pair.TaskID == "" && pair.TaskName == "" && pair.TaskRequirement == "" && pair.AcceptanceCriteria == "" && pair.TaskConclusion == "" {
+			continue
+		}
+		pairs = append(pairs, pair)
+	}
+	return pairs, nil
+}
+
+// AppendTaskResultPair 将 TaskResultPair 添加到现有的 YAML 记录中
+func AppendTaskResultPair(existingRecords string, pair TaskResultPair) (string, error) {
+	pairYAML := pair.ToYAML()
+	if pairYAML == "" {
+		return existingRecords, nil
+	}
+
+	if existingRecords == "" {
+		return pairYAML, nil
+	}
+
+	// 确保结尾有换行符
+	existingRecords = strings.TrimRight(existingRecords, "\n")
+
+	// 添加分隔符和新文档
+	return existingRecords + "\n---\n" + pairYAML, nil
 }
 
 // NewTask 工厂方法：创建任务
@@ -120,13 +191,13 @@ func NewTask(
 }
 
 // 标识访问方法
-func (t *Task) ID() TaskID        { return t.id }
-func (t *Task) TraceID() TraceID   { return t.traceID }
-func (t *Task) SpanID() SpanID     { return t.spanID }
-func (t *Task) ParentID() *TaskID  { return t.parentID }
-func (t *Task) Name() string       { return t.name }
+func (t *Task) ID() TaskID          { return t.id }
+func (t *Task) TraceID() TraceID    { return t.traceID }
+func (t *Task) SpanID() SpanID      { return t.spanID }
+func (t *Task) ParentID() *TaskID   { return t.parentID }
+func (t *Task) Name() string        { return t.name }
 func (t *Task) Description() string { return t.description }
-func (t *Task) Type() TaskType     { return t.taskType }
+func (t *Task) Type() TaskType      { return t.taskType }
 
 // 独立字段访问方法
 func (t *Task) AcceptanceCriteria() string {
@@ -160,6 +231,17 @@ func (t *Task) SetTaskConclusion(conclusion string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.taskConclusion = conclusion
+}
+
+func (t *Task) SubtaskRecords() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.subtaskRecords
+}
+func (t *Task) SetSubtaskRecords(records string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.subtaskRecords = records
 }
 
 func (t *Task) UserCode() string {
@@ -251,9 +333,9 @@ func (t *Task) SetParentSpan(span string) {
 }
 
 func (t *Task) Timeout() time.Duration { return t.timeout }
-func (t *Task) MaxRetries() int                      { return t.maxRetries }
-func (t *Task) Priority() int                        { return t.priority }
-func (t *Task) CreatedAt() time.Time                 { return t.createdAt }
+func (t *Task) MaxRetries() int        { return t.maxRetries }
+func (t *Task) Priority() int          { return t.priority }
+func (t *Task) CreatedAt() time.Time   { return t.createdAt }
 
 func (t *Task) Status() TaskStatus {
 	t.mu.RLock()
@@ -291,6 +373,8 @@ func (t *Task) canTransitionTo(target TaskStatus) bool {
 	case TaskStatusPending:
 		return target == TaskStatusRunning || target == TaskStatusCancelled
 	case TaskStatusRunning:
+		return target == TaskStatusCompleted || target == TaskStatusFailed || target == TaskStatusCancelled || target == TaskStatusPendingSummary
+	case TaskStatusPendingSummary:
 		return target == TaskStatusCompleted || target == TaskStatusFailed || target == TaskStatusCancelled
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return false
@@ -377,6 +461,21 @@ func (t *Task) Cancel() error {
 	return nil
 }
 
+// PendingSummary 进入等待总结状态（所有子任务完成，等待生成总结）
+func (t *Task) PendingSummary() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.canTransitionTo(TaskStatusPendingSummary) {
+		return ErrInvalidStatusTransition
+	}
+
+	t.status = TaskStatusPendingSummary
+	t.recordEvent(NewTaskPendingSummaryEvent(t))
+
+	return nil
+}
+
 // UpdateProgress 更新进度
 func (t *Task) UpdateProgress(progress int) {
 	t.mu.Lock()
@@ -425,7 +524,8 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		FinishedAt:         t.finishedAt,
 		AcceptanceCriteria: t.acceptanceCriteria,
 		TaskRequirement:    t.taskRequirement,
-		TaskConclusion:    t.taskConclusion,
+		TaskConclusion:     t.taskConclusion,
+		SubtaskRecords:     t.subtaskRecords,
 		UserCode:           t.userCode,
 		AgentCode:          t.agentCode,
 		ChannelCode:        t.channelCode,
@@ -463,6 +563,7 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.acceptanceCriteria = snap.AcceptanceCriteria
 	t.taskRequirement = snap.TaskRequirement
 	t.taskConclusion = snap.TaskConclusion
+	t.subtaskRecords = snap.SubtaskRecords
 	t.userCode = snap.UserCode
 	t.agentCode = snap.AgentCode
 	t.channelCode = snap.ChannelCode
