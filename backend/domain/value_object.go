@@ -157,10 +157,21 @@ func NewProgress() Progress {
 	}
 }
 
-// Update 更新进度
-func (p *Progress) Update(value int) {
+// Update 更新进度（自动 clamping 到 0-100 范围）
+// 返回是否发生了 clamp（值为超出范围被调整）
+func (p *Progress) Update(value int) bool {
+	clamped := false
+	if value < 0 {
+		value = 0
+		clamped = true
+	}
+	if value > 100 {
+		value = 100
+		clamped = true
+	}
 	p.value = value
 	p.updatedAt = time.Now()
+	return clamped
 }
 
 // Value 获取进度值

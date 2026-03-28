@@ -419,7 +419,7 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		Priority:           t.priority,
 		Status:             t.status,
 		Progress:           t.progress,
-		ErrorMsg:           "",
+		ErrorMsg:           t.getErrorMsg(),
 		CreatedAt:          t.createdAt,
 		StartedAt:          t.startedAt,
 		FinishedAt:         t.finishedAt,
@@ -454,7 +454,7 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.priority = snap.Priority
 	t.status = snap.Status
 	t.progress = snap.Progress
-	t.execErr = nil
+	t.execErr = t.errorFromMsg(snap.ErrorMsg)
 	t.createdAt = snap.CreatedAt
 	t.startedAt = snap.StartedAt
 	t.finishedAt = snap.FinishedAt
@@ -471,4 +471,20 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.analysis = snap.Analysis
 	t.depth = snap.Depth
 	t.parentSpan = snap.ParentSpan
+}
+
+// getErrorMsg 获取错误信息字符串
+func (t *Task) getErrorMsg() string {
+	if t.execErr != nil {
+		return t.execErr.Error()
+	}
+	return ""
+}
+
+// errorFromMsg 从错误字符串恢复 error
+func (t *Task) errorFromMsg(msg string) error {
+	if msg == "" {
+		return nil
+	}
+	return errors.New(msg)
 }
