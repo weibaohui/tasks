@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -14,10 +15,25 @@ import (
 type fakeSummaryProvider struct {
 	summary string
 	prompt  string
+	calls   int
+}
+
+type flakySaveTaskRepository struct {
+	*mockTaskRepository
+	remainingLockedFailures int
+}
+
+func (r *flakySaveTaskRepository) Save(ctx context.Context, task *domain.Task) error {
+	if r.remainingLockedFailures > 0 {
+		r.remainingLockedFailures--
+		return errors.New("database is locked")
+	}
+	return r.mockTaskRepository.Save(ctx, task)
 }
 
 func (f *fakeSummaryProvider) Generate(ctx context.Context, prompt string) (string, error) {
 	f.prompt = prompt
+	f.calls++
 	return f.summary, nil
 }
 
@@ -192,6 +208,96 @@ func TestTaskSummarizer_Start_RecoversPendingSummaryTasks(t *testing.T) {
 			t.Fatalf("超时未完成恢复，当前状态=%s", updatedParent.Status())
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestTaskSummarizer_SaveTaskWithRetry_OnDatabaseLocked(t *testing.T) {
+	ctx := context.Background()
+	baseRepo := newMockTaskRepository()
+	repo := &flakySaveTaskRepository{
+		mockTaskRepository:     baseRepo,
+		remainingLockedFailures: 2,
+	}
+	eventBus := bus.NewEventBus()
+
+	task := mustCreateRunningTask(t, "task-save-retry", nil, "保存重试任务", "验收")
+	summarizer := NewTaskSummarizer(repo, nil, eventBus)
+
+	if err := summarizer.saveTaskWithRetry(ctx, task); err != nil {
+		t.Fatalf("期望保存重试成功，实际失败: %v", err)
+	}
+	if repo.remainingLockedFailures != 0 {
+		t.Fatalf("期望锁冲突重试次数被消耗完，实际剩余=%d", repo.remainingLockedFailures)
+	}
+}
+
+func TestTaskSummarizer_DispatchByTraceId_DeduplicateEvent(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockTaskRepository()
+	eventBus := bus.NewEventBus()
+
+	parent := mustCreateRunningTask(t, "task-parent-dedup", nil, "父任务去重", "整体验收")
+	childA := mustCreateCompletedTask(t, "task-child-dedup-a", parent.ID(), "子任务A", "A结论")
+	childB := mustCreateCompletedTask(t, "task-child-dedup-b", parent.ID(), "子任务B", "B结论")
+
+	todo := NewTodoList(parent.ID().String())
+	todo.AddItem(childA.ID().String(), childA.Name(), childA.Type().String(), "span-a", TodoStatusCompleted)
+	todo.AddItem(childB.ID().String(), childB.Name(), childB.Type().String(), "span-b", TodoStatusCompleted)
+	parent.SetTodoList(todo.ToJSON())
+	if err := parent.PendingSummary(); err != nil {
+		t.Fatalf("父任务进入 PendingSummary 失败: %v", err)
+	}
+
+	if err := repo.Save(ctx, parent); err != nil {
+		t.Fatalf("保存父任务失败: %v", err)
+	}
+	if err := repo.Save(ctx, childA); err != nil {
+		t.Fatalf("保存子任务 A 失败: %v", err)
+	}
+	if err := repo.Save(ctx, childB); err != nil {
+		t.Fatalf("保存子任务 B 失败: %v", err)
+	}
+
+	provider := &fakeSummaryProvider{summary: "去重后的父任务总结"}
+	summarizer := NewTaskSummarizer(repo, nil, eventBus)
+	summarizer.providerResolver = func(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
+		return provider, nil
+	}
+
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+	summarizer.dispatchByTraceId(domain.NewTaskPendingSummaryEventWithDone(parent, done1))
+	summarizer.dispatchByTraceId(domain.NewTaskPendingSummaryEventWithDone(parent, done2))
+
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("首个总结事件超时未完成")
+	}
+
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("重复总结事件未被及时关闭")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		updatedParent, err := repo.FindByID(ctx, parent.ID())
+		if err != nil {
+			t.Fatalf("重新读取父任务失败: %v", err)
+		}
+		if updatedParent.Status() == domain.TaskStatusCompleted {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("超时未完成总结，当前状态=%s", updatedParent.Status())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if provider.calls != 1 {
+		t.Fatalf("期望总结只调用 1 次，实际调用 %d 次", provider.calls)
 	}
 }
 

@@ -25,6 +25,8 @@ type TaskSummarizer struct {
 	executor         *AutoTaskExecutor
 	eventBus         *bus.EventBus
 	providerResolver func(context.Context, *domain.Task) (llm.LLMProvider, error)
+	recoverInterval  time.Duration
+	inflightTasks    map[string]struct{}
 
 	// 按 traceId 分组的事件 channel
 	traceChannels map[string]chan *domain.TaskPendingSummaryEvent
@@ -40,9 +42,11 @@ func NewTaskSummarizer(
 	eventBus *bus.EventBus,
 ) *TaskSummarizer {
 	return &TaskSummarizer{
-		repo:     repo,
-		executor: executor,
-		eventBus: eventBus,
+		repo:            repo,
+		executor:        executor,
+		eventBus:        eventBus,
+		recoverInterval: 30 * time.Second,
+		inflightTasks:   make(map[string]struct{}),
 		providerResolver: func(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
 			if executor == nil || executor.llmLookup == nil {
 				return nil, fmt.Errorf("LLM provider resolver 未初始化")
@@ -62,9 +66,18 @@ func (s *TaskSummarizer) Start() {
 			s.dispatchByTraceId(pendingEvent)
 		}
 	})
-	go s.recoverPendingSummaryTasks()
+	go s.recoverPendingSummaryLoop()
 
 	log.Println("[TaskSummarizer] 已启动，按 traceId 分组串行处理事件")
+}
+
+func (s *TaskSummarizer) recoverPendingSummaryLoop() {
+	s.recoverPendingSummaryTasks()
+	ticker := time.NewTicker(s.recoverInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.recoverPendingSummaryTasks()
+	}
 }
 
 func (s *TaskSummarizer) recoverPendingSummaryTasks() {
@@ -92,6 +105,15 @@ func (s *TaskSummarizer) recoverPendingSummaryTasks() {
 func (s *TaskSummarizer) dispatchByTraceId(event *domain.TaskPendingSummaryEvent) {
 	task := event.Task()
 	traceId := task.TraceID().String()
+	taskID := task.ID().String()
+
+	if !s.tryMarkTaskInflight(taskID) {
+		log.Printf("[TaskSummarizer] 检测到重复总结事件，已忽略: taskID=%s, traceID=%s", taskID, traceId)
+		if event.Done != nil {
+			close(event.Done)
+		}
+		return
+	}
 
 	s.mu.Lock()
 	ch, exists := s.traceChannels[traceId]
@@ -125,7 +147,9 @@ func (s *TaskSummarizer) processTraceEvents(traceId string, ch chan *domain.Task
 // handlePendingSummary 处理待总结事件
 func (s *TaskSummarizer) handlePendingSummary(pendingEvent *domain.TaskPendingSummaryEvent) {
 	task := pendingEvent.Task()
+	taskID := task.ID().String()
 	ctx := context.Background()
+	defer s.markTaskNotInflight(taskID)
 
 	// 使用 sync.Once 确保 Done channel 只被关闭一次
 	var once sync.Once
@@ -147,7 +171,7 @@ func (s *TaskSummarizer) handlePendingSummary(pendingEvent *domain.TaskPendingSu
 
 	// 再次检查状态，确保是 PendingSummary
 	if task.Status() != domain.TaskStatusPendingSummary {
-		log.Printf("[TaskSummarizer] 任务状态不是 PendingSummary，跳过: taskID=%s, status=%s", task.ID(), task.Status())
+		log.Printf("[TaskSummarizer] 收到重复或过期总结事件，已跳过: taskID=%s, status=%s", task.ID(), task.Status())
 		closeDone()
 		return
 	}
@@ -207,10 +231,31 @@ func (s *TaskSummarizer) handlePendingSummary(pendingEvent *domain.TaskPendingSu
 	}
 
 	// 完成总结
-	s.completeTaskAndNotifyParent(ctx, task, summary)
+	if err := s.completeTaskAndNotifyParent(ctx, task, summary); err != nil {
+		log.Printf("[TaskSummarizer] 完成任务保存失败: %v", err)
+		s.failTask(task, fmt.Errorf("完成任务保存失败: %w", err))
+		closeDone()
+		return
+	}
 
 	// 处理完成，关闭 Done channel
 	closeDone()
+}
+
+func (s *TaskSummarizer) tryMarkTaskInflight(taskID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.inflightTasks[taskID]; exists {
+		return false
+	}
+	s.inflightTasks[taskID] = struct{}{}
+	return true
+}
+
+func (s *TaskSummarizer) markTaskNotInflight(taskID string) {
+	s.mu.Lock()
+	delete(s.inflightTasks, taskID)
+	s.mu.Unlock()
 }
 
 // collectChildResults 收集所有子任务的成对文档到当前任务的 subtask_records
@@ -266,7 +311,7 @@ func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.T
 	}
 
 	task.SetSubtaskRecords(records)
-	if err := s.repo.Save(ctx, task); err != nil {
+	if err := s.saveTaskWithRetry(ctx, task); err != nil {
 		return fmt.Errorf("保存子任务成对文档失败: %w", err)
 	}
 
@@ -276,16 +321,18 @@ func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.T
 }
 
 // completeTaskAndNotifyParent 完成总结并通知父任务
-func (s *TaskSummarizer) completeTaskAndNotifyParent(ctx context.Context, task *domain.Task, summary string) {
+func (s *TaskSummarizer) completeTaskAndNotifyParent(ctx context.Context, task *domain.Task, summary string) error {
 	// 设置总结
 	task.SetTaskConclusion(summary)
 
 	// 完成当前任务
 	if err := task.Complete(); err != nil {
 		log.Printf("[TaskSummarizer] 完成任务失败: %v", err)
-		return
+		return err
 	}
-	s.repo.Save(ctx, task)
+	if err := s.saveTaskWithRetry(ctx, task); err != nil {
+		return err
+	}
 	log.Printf("[TaskSummarizer] 任务完成: taskID=%s", task.ID())
 
 	// 通知父任务收集子任务结果
@@ -293,6 +340,7 @@ func (s *TaskSummarizer) completeTaskAndNotifyParent(ctx context.Context, task *
 	if parentID != nil {
 		s.notifyParentToCollect(ctx, task, parentID)
 	}
+	return nil
 }
 
 // notifyParentToCollect 通知父任务收集子任务结果
@@ -327,7 +375,10 @@ func (s *TaskSummarizer) notifyParentToCollect(ctx context.Context, child *domai
 	}
 
 	parent.SetSubtaskRecords(newRecords)
-	s.repo.Save(ctx, parent)
+	if err := s.saveTaskWithRetry(ctx, parent); err != nil {
+		log.Printf("[TaskSummarizer] 保存父任务失败: parentID=%s, err=%v", parent.ID(), err)
+		return
+	}
 
 	log.Printf("[TaskSummarizer] 子任务结果已添加到父任务: childID=%s, parentID=%s, subtaskRecords len=%d",
 		child.ID(), parent.ID(), len(newRecords))
@@ -370,7 +421,10 @@ func (s *TaskSummarizer) checkAndTriggerParentSummary(ctx context.Context, paren
 			log.Printf("[TaskSummarizer] 父任务进入 PendingSummary 失败: %v", err)
 			return
 		}
-		s.repo.Save(ctx, parent)
+		if err := s.saveTaskWithRetry(ctx, parent); err != nil {
+			log.Printf("[TaskSummarizer] 保存父任务 PendingSummary 状态失败: parentID=%s, err=%v", parent.ID(), err)
+			return
+		}
 
 		// 发布事件触发总结（发送到同一 traceId 的 channel，串行处理）
 		evt := domain.NewTaskPendingSummaryEvent(parent)
@@ -378,6 +432,23 @@ func (s *TaskSummarizer) checkAndTriggerParentSummary(ctx context.Context, paren
 
 		log.Printf("[TaskSummarizer] 父任务进入 PendingSummary: parentID=%s", parent.ID())
 	}
+}
+
+func (s *TaskSummarizer) saveTaskWithRetry(ctx context.Context, task *domain.Task) error {
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		if err := s.repo.Save(ctx, task); err != nil {
+			lastErr = err
+			errText := strings.ToLower(err.Error())
+			if strings.Contains(errText, "database is locked") || strings.Contains(errText, "database is busy") {
+				time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return lastErr
 }
 
 func upsertTaskResultPair(existingRecords string, pair domain.TaskResultPair) (string, error) {
@@ -472,7 +543,7 @@ func (s *TaskSummarizer) failTask(task *domain.Task, taskErr error) {
 
 	task.Fail(taskErr)
 
-	if err := s.repo.Save(ctx, task); err != nil {
+	if err := s.saveTaskWithRetry(ctx, task); err != nil {
 		log.Printf("[TaskSummarizer] 保存失败任务失败: %v", err)
 		return
 	}
