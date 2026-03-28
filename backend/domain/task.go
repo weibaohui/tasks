@@ -370,6 +370,8 @@ func (t *Task) canTransitionTo(target TaskStatus) bool {
 	case TaskStatusPending:
 		return target == TaskStatusRunning || target == TaskStatusCancelled
 	case TaskStatusRunning:
+		return target == TaskStatusCompleted || target == TaskStatusFailed || target == TaskStatusCancelled || target == TaskStatusPendingSummary
+	case TaskStatusPendingSummary:
 		return target == TaskStatusCompleted || target == TaskStatusFailed || target == TaskStatusCancelled
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
 		return false
@@ -452,6 +454,21 @@ func (t *Task) Cancel() error {
 	t.finishedAt = &now
 
 	t.recordEvent(NewTaskCancelledEvent(t))
+
+	return nil
+}
+
+// PendingSummary 进入等待总结状态（所有子任务完成，等待生成总结）
+func (t *Task) PendingSummary() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.canTransitionTo(TaskStatusPendingSummary) {
+		return ErrInvalidStatusTransition
+	}
+
+	t.status = TaskStatusPendingSummary
+	t.recordEvent(NewTaskPendingSummaryEvent(t))
 
 	return nil
 }

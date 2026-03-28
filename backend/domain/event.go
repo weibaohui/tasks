@@ -132,6 +132,27 @@ func (e *TaskCancelledEvent) Timestamp() int64 {
 	return 0
 }
 
+// TaskPendingSummaryEvent 任务等待总结事件
+type TaskPendingSummaryEvent struct {
+	task *Task
+}
+
+func NewTaskPendingSummaryEvent(task *Task) *TaskPendingSummaryEvent {
+	return &TaskPendingSummaryEvent{task: task}
+}
+
+func (e *TaskPendingSummaryEvent) EventType() string {
+	return "TaskPendingSummary"
+}
+
+func (e *TaskPendingSummaryEvent) TraceID() TraceID {
+	return e.task.TraceID()
+}
+
+func (e *TaskPendingSummaryEvent) Timestamp() int64 {
+	return time.Now().Unix()
+}
+
 // TaskProgressUpdatedEvent 任务进度更新事件
 type TaskProgressUpdatedEvent struct {
 	task     *Task

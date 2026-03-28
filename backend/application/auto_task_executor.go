@@ -469,7 +469,8 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	}
 
 	// 如果是父任务且有 subtask_records，从成对文档生成总结
-	if task.ParentID() == nil && task.SubtaskRecords() != "" {
+	isParentWithSubtasks := task.ParentID() == nil && todoListStr != ""
+	if isParentWithSubtasks && task.SubtaskRecords() != "" {
 		pairs, err := domain.ParseTaskResultPairs(task.SubtaskRecords())
 		if err == nil && len(pairs) > 0 && taskConclusion == "" {
 			// 生成总结：基于子任务成对文档和父任务要求生成总结
@@ -483,6 +484,23 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	}
 	// 必须先设置结论，Complete 会使用 taskConclusion 作为 result 的值
 	task.SetTaskConclusion(taskConclusion)
+
+	// 如果是父任务（有子任务的），先进入 PendingSummary 状态
+	if isParentWithSubtasks {
+		if err := task.PendingSummary(); err != nil {
+			return err
+		}
+		e.saveTaskPreservingMetadata(task)
+
+		// 发布 PendingSummary 事件
+		if e.eventBus != nil {
+			evt := domain.NewTaskPendingSummaryEvent(task)
+			e.eventBus.Publish(evt)
+		}
+
+		// 短暂延迟确保事件被处理
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	task.Complete()
 	e.updateProgress(task, 100, "完成", "任务执行完成")
