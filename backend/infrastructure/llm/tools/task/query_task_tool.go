@@ -115,24 +115,8 @@ func (t *QueryTaskTool) Execute(ctx context.Context, input json.RawMessage) (*ll
 		taskInfo["finished_at"] = end.Format(time.RFC3339)
 	}
 
-	// 添加结果或错误
-	if task.Status() == domain.TaskStatusCompleted {
-		if res := task.Result(); res != nil {
-			// 安全地序列化 data，避免指针等无法 JSON 序列化的问题
-			var dataJSON interface{}
-			if res.Data() != nil {
-				if dataBytes, err := json.Marshal(res.Data()); err == nil {
-					json.Unmarshal(dataBytes, &dataJSON)
-				} else {
-					dataJSON = fmt.Sprintf("%v", res.Data())
-				}
-			}
-			taskInfo["result"] = map[string]interface{}{
-				"message": res.Message(),
-				"data":    dataJSON,
-			}
-		}
-	} else if task.Status() == domain.TaskStatusFailed {
+	// 添加错误
+	if task.Status() == domain.TaskStatusFailed {
 		if err := task.Error(); err != nil {
 			taskInfo["error"] = err.Error()
 		}

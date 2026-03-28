@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority INTEGER NOT NULL,
     status INTEGER NOT NULL,
     progress INTEGER,
-    result TEXT,
     error_msg TEXT,
     created_at INTEGER NOT NULL,
     started_at INTEGER,
@@ -299,6 +298,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateLLMProviderTypeColumn(db); err != nil {
 		return err
 	}
+	if err := migrateDropResultColumn(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -354,6 +356,20 @@ func migrateTasksNewColumns(db *sql.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// migrateDropResultColumn 删除 tasks 表的 result 列
+func migrateDropResultColumn(db *sql.DB) error {
+	has, err := tableHasColumn(db, "tasks", "result")
+	if err != nil {
+		return err
+	}
+	if has {
+		if _, err := db.Exec("ALTER TABLE tasks DROP COLUMN result"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

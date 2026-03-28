@@ -113,12 +113,6 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
         </Card>
       )}
 
-      {task.result && (
-        <Card title="执行结果" style={{ marginTop: 16 }}>
-          <pre>{JSON.stringify(task.result, null, 2)}</pre>
-        </Card>
-      )}
-
       {task.status === 'running' && onCancel && (
         <Card style={{ marginTop: 16 }}>
           <Space>

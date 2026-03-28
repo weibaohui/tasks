@@ -21,7 +21,6 @@ export interface Task {
   type: TaskType;
   status: TaskStatus;
   progress: Progress;
-  result?: Result;
   error?: string;
   depth: number;
   parent_span: string;
@@ -49,15 +48,6 @@ export interface Task {
 export interface Progress {
   value: number;
   updated_at: number;
-}
-
-/**
- * 结果接口
- */
-export interface Result {
-  data: unknown;
-  message: string;
-  task_conclusion?: string;
 }
 
 /**

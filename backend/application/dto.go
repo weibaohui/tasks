@@ -14,7 +14,6 @@ type GetTaskDTO struct {
 	Type                 string      `json:"type"`
 	Status               string      `json:"status"`
 	Progress             ProgressDTO `json:"progress"`
-	Result               *ResultDTO  `json:"result,omitempty"`
 	Error                string      `json:"error,omitempty"`
 	Depth                int         `json:"depth"`
 	ParentSpan           string      `json:"parent_span"`
@@ -39,13 +38,6 @@ type GetTaskDTO struct {
 type ProgressDTO struct {
 	Value     int   `json:"value"`
 	UpdatedAt int64 `json:"updated_at"`
-}
-
-// ResultDTO 结果 DTO
-type ResultDTO struct {
-	Data           interface{} `json:"data"`
-	Message        string      `json:"message"`
-	TaskConclusion string     `json:"task_conclusion,omitempty"`
 }
 
 // ListTasksDTO 任务列表 DTO

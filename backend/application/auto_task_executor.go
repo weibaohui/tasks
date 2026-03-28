@@ -459,13 +459,6 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 						"status":    string(item.Status),
 						"progress":  item.Progress,
 					}
-					// 添加子任务的结果（如果有）
-					if res := subTask.Result(); res != nil {
-						subResult["result_message"] = res.Message()
-						if res.Data() != nil {
-							subResult["result_data"] = res.Data()
-						}
-					}
 					// 从子任务获取 task_conclusion
 					if childConclusion := subTask.TaskConclusion(); childConclusion != "" {
 						subResult["task_conclusion"] = childConclusion
@@ -499,8 +492,7 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	// 必须先设置结论，Complete 会使用 taskConclusion 作为 result 的值
 	task.SetTaskConclusion(taskConclusion)
 
-	result := domain.NewResult(nil, taskConclusion)
-	task.Complete(result)
+	task.Complete()
 	e.updateProgress(task, 100, "完成", "任务执行完成")
 	e.saveTaskPreservingMetadata(task)
 
@@ -530,31 +522,8 @@ func (e *AutoTaskExecutor) updateParentWithChildResult(task *domain.Task) {
 		return
 	}
 
-	// 更新父任务的 result，在 sub_tasks_results 中找到当前任务并追加 task_conclusion
-	parentRes := parent.Result()
-	if parentRes == nil || parentRes.Data() == nil {
-		return
-	}
-
-	if dataMap, ok := parentRes.Data().(map[string]interface{}); ok {
-		if subTasks, ok := dataMap["sub_tasks_results"].([]map[string]interface{}); ok {
-			taskID := task.ID().String()
-			for i := range subTasks {
-				if subTasks[i]["task_id"] == taskID {
-					subTasks[i]["task_conclusion"] = taskConclusion
-					break
-				}
-			}
-			// 重新保存父任务（只更新 result，不改变其他字段）
-			parentResultData := make(map[string]interface{})
-			for k, v := range dataMap {
-				parentResultData[k] = v
-			}
-			newParentResult := domain.NewResult(parentResultData, parentRes.Message())
-			parent.UpdateResult(newParentResult)
-			e.repo.Save(context.Background(), parent)
-		}
-	}
+	// 更新父任务的保存
+	e.repo.Save(context.Background(), parent)
 }
 
 func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {

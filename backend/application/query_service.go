@@ -164,14 +164,6 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		UpdatedAt: progress.UpdatedAt().UnixMilli(),
 	}
 
-	if task.Result() != nil {
-		dto.Result = &ResultDTO{
-			Data:           task.Result().Data(),
-			Message:        task.Result().Message(),
-			TaskConclusion: task.TaskConclusion(),
-		}
-	}
-
 	if task.Error() != nil {
 		dto.Error = task.Error().Error()
 	}

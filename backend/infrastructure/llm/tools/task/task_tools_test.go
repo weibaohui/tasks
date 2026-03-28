@@ -32,7 +32,6 @@ type mockTask struct {
 	status    domain.TaskStatus
 	taskType  domain.TaskType
 	progress  domain.Progress
-	result    *domain.Result
 	execErr   error
 	createdAt time.Time
 	startedAt *time.Time
@@ -44,7 +43,6 @@ func (m *mockTask) Name() string { return m.name }
 func (m *mockTask) Status() domain.TaskStatus { return m.status }
 func (m *mockTask) Type() domain.TaskType { return m.taskType }
 func (m *mockTask) Progress() domain.Progress { return m.progress }
-func (m *mockTask) Result() *domain.Result { return m.result }
 func (m *mockTask) Error() error { return m.execErr }
 func (m *mockTask) StartedAt() *time.Time { return m.startedAt }
 func (m *mockTask) FinishedAt() *time.Time { return m.finishedAt }
