@@ -12,14 +12,20 @@ import (
 
 // HookManagerInterface Hook 管理器接口
 type HookManagerInterface interface {
-	PreLLMCall(ctx context.Context, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error)
-	PostLLMCall(ctx context.Context, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error)
+	PreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error)
+	PostLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext, resp *domain.LLMResponse) (*domain.LLMResponse, error)
 }
 
 // HookableProvider 包装普通 Provider，添加 Hook 支持
 type HookableProvider struct {
 	wrapped LLMProvider
 	hookMgr HookManagerInterface
+	// 用于 GenerateSubTasks 的上下文信息
+	sessionID   string
+	agentCode   string
+	userCode    string
+	channelCode string
+	traceID     string
 }
 
 // NewHookableProvider 创建 Hookable Provider
@@ -32,15 +38,26 @@ func (p *HookableProvider) SetHookManager(manager HookManagerInterface) {
 	p.hookMgr = manager
 }
 
+// SetContextInfo 设置上下文信息（session_key, agent_code 等）
+// 这些信息会在 PreLLMCall 时传递给 hook
+func (p *HookableProvider) SetContextInfo(sessionID, agentCode, userCode, channelCode, traceID string) {
+	p.sessionID = sessionID
+	p.agentCode = agentCode
+	p.userCode = userCode
+	p.channelCode = channelCode
+	p.traceID = traceID
+}
+
 // Generate 生成文本（带 Hook 支持）
 func (p *HookableProvider) Generate(ctx context.Context, prompt string) (string, error) {
 	// 1. Pre Hook
 	if p.hookMgr != nil {
+		hookCtx := domain.NewHookContext(ctx)
 		callCtx := &domain.LLMCallContext{
 			Prompt: prompt,
 			Model:  p.wrapped.Name(),
 		}
-		modifiedCtx, err := p.hookMgr.PreLLMCall(ctx, callCtx)
+		modifiedCtx, err := p.hookMgr.PreLLMCall(hookCtx, callCtx)
 		if err != nil {
 			return "", fmt.Errorf("PreLLMCall hook failed: %w", err)
 		}
@@ -55,12 +72,13 @@ func (p *HookableProvider) Generate(ctx context.Context, prompt string) (string,
 
 	// 3. Post Hook
 	if p.hookMgr != nil {
+		hookCtx := domain.NewHookContext(ctx)
 		resp := &domain.LLMResponse{
 			Content: response,
 			Model:   p.wrapped.Name(),
 			Usage:   p.getUsage(),
 		}
-		modifiedResp, err := p.hookMgr.PostLLMCall(ctx, &domain.LLMCallContext{Prompt: prompt}, resp)
+		modifiedResp, err := p.hookMgr.PostLLMCall(hookCtx, &domain.LLMCallContext{Prompt: prompt}, resp)
 		if err != nil {
 			return "", fmt.Errorf("PostLLMCall hook failed: %w", err)
 		}
@@ -89,14 +107,31 @@ func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string
 	// 1. Pre Hook - 生成一个特殊的 prompt
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
+	// 构建 call metadata
+	callMetadata := make(map[string]string)
+	if p.sessionID != "" {
+		callMetadata["session_key"] = p.sessionID
+	}
+	if p.agentCode != "" {
+		callMetadata["agent_code"] = p.agentCode
+	}
+	if p.userCode != "" {
+		callMetadata["user_code"] = p.userCode
+	}
+	if p.channelCode != "" {
+		callMetadata["channel_code"] = p.channelCode
+	}
+
 	if p.hookMgr != nil {
+		hookCtx := domain.NewHookContext(ctx)
 		callCtx := &domain.LLMCallContext{
 			Prompt:    prompt,
 			Model:     p.wrapped.Name(),
-			SessionID: "",
-			TraceID:   "",
+			SessionID: p.sessionID,
+			TraceID:   p.traceID,
+			Metadata:  callMetadata,
 		}
-		modifiedCtx, err := p.hookMgr.PreLLMCall(ctx, callCtx)
+		modifiedCtx, err := p.hookMgr.PreLLMCall(hookCtx, callCtx)
 		if err != nil {
 			return nil, fmt.Errorf("PreLLMCall hook failed: %w", err)
 		}
@@ -111,12 +146,19 @@ func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string
 
 	// 3. Post Hook
 	if p.hookMgr != nil {
+		hookCtx := domain.NewHookContext(ctx)
 		resp := &domain.LLMResponse{
 			Content: response,
 			Model:   p.wrapped.Name(),
 			Usage:   p.getUsage(),
 		}
-		modifiedResp, err := p.hookMgr.PostLLMCall(ctx, &domain.LLMCallContext{Prompt: prompt}, resp)
+		callCtx := &domain.LLMCallContext{
+			Prompt:    prompt,
+			SessionID: p.sessionID,
+			TraceID:   p.traceID,
+			Metadata:  callMetadata,
+		}
+		modifiedResp, err := p.hookMgr.PostLLMCall(hookCtx, callCtx, resp)
 		if err != nil {
 			return nil, fmt.Errorf("PostLLMCall hook failed: %w", err)
 		}
@@ -136,4 +178,14 @@ func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string
 // Name 返回 provider 名称
 func (p *HookableProvider) Name() string {
 	return p.wrapped.Name()
+}
+
+// GetLastUsage 返回上次调用的 token 使用量
+func (p *HookableProvider) GetLastUsage() Usage {
+	return p.wrapped.GetLastUsage()
+}
+
+// GenerateWithTools 生成文本，支持工具调用（直接委托给 wrapped provider，暂不添加 hook 支持）
+func (p *HookableProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+	return p.wrapped.GenerateWithTools(ctx, prompt, tools, maxIterations)
 }

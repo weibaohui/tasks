@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
@@ -20,6 +21,7 @@ import (
 type taskLLMProvider struct {
 	selectionService *domain.LLMProviderSelectionService
 	factory         domain.LLMProviderFactory
+	hookManager     *hook.Manager
 }
 
 // newTaskLLMProvider 创建 LLM Provider 查找器
@@ -28,6 +30,7 @@ func newTaskLLMProvider(
 	providerRepo domain.LLMProviderRepository,
 	channelRepo domain.ChannelRepository,
 	factory domain.LLMProviderFactory,
+	hookManager *hook.Manager,
 ) *taskLLMProvider {
 	return &taskLLMProvider{
 		selectionService: domain.NewLLMProviderSelectionService(
@@ -35,13 +38,15 @@ func newTaskLLMProvider(
 			providerRepo,
 			channelRepo,
 		),
-		factory: factory,
+		factory:     factory,
+		hookManager: hookManager,
 	}
 }
 
 // getProviderForTask 根据任务元数据获取 LLM Provider
 // 1. 调用 domain service 选择合适的 provider 配置
 // 2. 调用 infrastructure factory 创建实际的 provider
+// 3. 用 HookableProvider 包装，添加 hook 支持
 func (t *taskLLMProvider) getProviderForTask(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
 	// 1. 调用 domain service 获取 provider 配置
 	config, err := t.selectionService.SelectProviderForTask(ctx, task)
@@ -61,8 +66,24 @@ func (t *taskLLMProvider) getProviderForTask(ctx context.Context, task *domain.T
 	}
 
 	// 4. 类型断言为 llm.LLMProvider
-	if p, ok := provider.(llm.LLMProvider); ok {
-		return p, nil
+	baseProvider, ok := provider.(llm.LLMProvider)
+	if !ok {
+		return nil, fmt.Errorf("provider type assertion failed")
 	}
-	return nil, fmt.Errorf("provider type assertion failed")
+
+	// 5. 用 HookableProvider 包装，添加 hook 支持
+	hookableProvider := llm.NewHookableProvider(baseProvider)
+	if t.hookManager != nil {
+		hookableProvider.SetHookManager(t.hookManager)
+		// 设置上下文信息（session_key, agent_code 等）供 PreLLMCall 使用
+		hookableProvider.SetContextInfo(
+			task.SessionKey(),
+			task.AgentCode(),
+			task.UserCode(),
+			task.ChannelCode(),
+			task.TraceID().String(),
+		)
+	}
+
+	return hookableProvider, nil
 }
