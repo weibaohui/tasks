@@ -427,19 +427,27 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 }
 
 func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
+	ctx := context.Background()
+
 	// 如果是子任务，先将成对文档写入父任务的 subtask_records
 	if task.ParentID() != nil {
 		e.updateParentWithChildResult(task)
 	}
 
+	// 重新加载任务确保拿到最新状态（特别是 subtask_records 可能已被 updateParentWithChildResult 更新）
+	latestTask, err := e.repo.FindByID(ctx, task.ID())
+	if err != nil || latestTask == nil {
+		latestTask = task
+	}
+
 	// 收集子任务结果，提取每个子任务的成对文档到父任务的 subtask_records
-	todoListStr := task.TodoList()
+	todoListStr := latestTask.TodoList()
 	if todoListStr != "" {
 		var todoList TodoList
 		if err := json.Unmarshal([]byte(todoListStr), &todoList); err == nil {
 			for _, item := range todoList.Items {
 				// 获取子任务
-				subTask, err := e.repo.FindByID(context.Background(), domain.NewTaskID(item.SubTaskID))
+				subTask, err := e.repo.FindByID(ctx, domain.NewTaskID(item.SubTaskID))
 				if err == nil && subTask != nil {
 					// 从子任务获取 task_conclusion
 					if childConclusion := subTask.TaskConclusion(); childConclusion != "" {
@@ -453,10 +461,10 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 							CompletedAt:         &completedAt,
 							Status:             subTask.Status(),
 						}
-						existingRecords := task.SubtaskRecords()
+						existingRecords := latestTask.SubtaskRecords()
 						newRecords, err := domain.AppendTaskResultPair(existingRecords, pair)
 						if err == nil {
-							task.SetSubtaskRecords(newRecords)
+							latestTask.SetSubtaskRecords(newRecords)
 						}
 					}
 				}
@@ -464,21 +472,25 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 		}
 	}
 
-	isParentWithSubtasks := task.ParentID() == nil && todoListStr != ""
+	isParentWithSubtasks := latestTask.ParentID() == nil && todoListStr != ""
+
+	log.Printf("[finishTask] taskID=%s, isParent=%v, todoListStr len=%d, subtaskRecords len=%d",
+		latestTask.ID(), latestTask.ParentID() == nil, len(todoListStr), len(latestTask.SubtaskRecords()))
 
 	// 如果是父任务（有子任务的），进入 PendingSummary 状态，等待 TaskSummarizer 生成总结
 	if isParentWithSubtasks {
+		log.Printf("[finishTask] 进入 PendingSummary: taskID=%s", latestTask.ID())
 		// 确保 subtask_records 已保存
-		e.saveTaskPreservingMetadata(task)
+		e.saveTaskPreservingMetadata(latestTask)
 
-		if err := task.PendingSummary(); err != nil {
+		if err := latestTask.PendingSummary(); err != nil {
 			return err
 		}
-		e.saveTaskPreservingMetadata(task)
+		e.saveTaskPreservingMetadata(latestTask)
 
 		// 发布 PendingSummary 事件，TaskSummarizer 会异步处理
 		if e.eventBus != nil {
-			evt := domain.NewTaskPendingSummaryEvent(task)
+			evt := domain.NewTaskPendingSummaryEvent(latestTask)
 			e.eventBus.Publish(evt)
 		}
 
@@ -486,18 +498,20 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	}
 
 	// 非父任务（子任务或无子任务的任务）：直接完成
-	taskConclusion := task.TaskConclusion()
+	log.Printf("[finishTask] 非父任务直接完成: taskID=%s, hasConclusion=%v",
+		latestTask.ID(), latestTask.TaskConclusion() != "")
+	taskConclusion := latestTask.TaskConclusion()
 	if taskConclusion == "" {
 		taskConclusion = "任务完成"
 	}
-	task.SetTaskConclusion(taskConclusion)
+	latestTask.SetTaskConclusion(taskConclusion)
 
-	task.Complete()
-	e.updateProgress(task, 100, "完成", "任务执行完成")
-	e.saveTaskPreservingMetadata(task)
+	latestTask.Complete()
+	e.updateProgress(latestTask, 100, "完成", "任务执行完成")
+	e.saveTaskPreservingMetadata(latestTask)
 
 	if e.eventBus != nil {
-		evt := domain.NewTaskCompletedEvent(task)
+		evt := domain.NewTaskCompletedEvent(latestTask)
 		e.eventBus.Publish(evt)
 	}
 	return nil
