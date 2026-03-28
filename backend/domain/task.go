@@ -39,7 +39,6 @@ type Task struct {
 
 	status         TaskStatus
 	progress       Progress
-	result         *Result
 	execErr        error
 
 	// 独立字段（不再存储在 metadata 中）
@@ -268,12 +267,6 @@ func (t *Task) Progress() Progress {
 	return t.progress
 }
 
-func (t *Task) Result() *Result {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.result
-}
-
 func (t *Task) Error() error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -325,8 +318,7 @@ func (t *Task) Start() error {
 }
 
 // Complete 完成任务（需要先设置任务结论）
-// result 参数被忽略，result 字段直接使用 taskConclusion 的值
-func (t *Task) Complete(result Result) error {
+func (t *Task) Complete() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -342,27 +334,10 @@ func (t *Task) Complete(result Result) error {
 	now := time.Now()
 	t.status = TaskStatusCompleted
 	t.finishedAt = &now
-	// result 字段直接使用 taskConclusion 的值，不存储复杂结构
-	t.result = &Result{
-		data:    t.taskConclusion,
-		message: t.taskConclusion,
-	}
 
 	t.recordEvent(NewTaskCompletedEvent(t))
 
 	return nil
-}
-
-// UpdateResult 更新任务结果（用于聚合子任务结果后更新父任务）
-// result 参数被忽略，result 字段直接使用 taskConclusion 的值
-func (t *Task) UpdateResult(result Result) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	// result 字段直接使用 taskConclusion 的值，不存储复杂结构
-	t.result = &Result{
-		data:    t.taskConclusion,
-		message: t.taskConclusion,
-	}
 }
 
 // Fail 任务失败
@@ -444,7 +419,6 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		Priority:           t.priority,
 		Status:             t.status,
 		Progress:           t.progress,
-		Result:             t.result,
 		ErrorMsg:           "",
 		CreatedAt:          t.createdAt,
 		StartedAt:          t.startedAt,
@@ -480,7 +454,6 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.priority = snap.Priority
 	t.status = snap.Status
 	t.progress = snap.Progress
-	t.result = snap.Result
 	t.execErr = nil
 	t.createdAt = snap.CreatedAt
 	t.startedAt = snap.StartedAt

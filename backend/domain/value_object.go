@@ -181,38 +181,6 @@ func (p Progress) ToMap() map[string]interface{} {
 	}
 }
 
-// Result 结果值对象
-type Result struct {
-	data    interface{}
-	message string
-}
-
-// NewResult 创建结果对象
-func NewResult(data interface{}, message string) Result {
-	return Result{
-		data:    data,
-		message: message,
-	}
-}
-
-// Data 数据
-func (r Result) Data() interface{} {
-	return r.data
-}
-
-// Message 消息
-func (r Result) Message() string {
-	return r.message
-}
-
-// ToMap 转换为map
-func (r Result) ToMap() map[string]interface{} {
-	return map[string]interface{}{
-		"data":    r.data,
-		"message": r.message,
-	}
-}
-
 // TaskSnapshot 任务快照，用于持久化
 type TaskSnapshot struct {
 	ID                 TaskID
@@ -238,7 +206,6 @@ type TaskSnapshot struct {
 	Priority           int
 	Status             TaskStatus
 	Progress           Progress
-	Result             *Result
 	ErrorMsg           string
 	CreatedAt          time.Time
 	StartedAt          *time.Time

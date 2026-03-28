@@ -73,11 +73,10 @@ func finishAgentTask(task *domain.Task, repo domain.TaskRepository) error {
 	if taskConclusion == "" {
 		taskConclusion = "Agent 任务完成"
 	}
-	// 必须先设置结论，Complete 会使用 taskConclusion 作为 result 的值
+	// 必须先设置结论，Complete 会使用 taskConclusion
 	task.SetTaskConclusion(taskConclusion)
 
-	result := domain.NewResult(nil, taskConclusion)
-	task.Complete(result)
+	task.Complete()
 	updateAgentProgress(task, repo, 100, "完成", "Agent 任务执行完成")
 	return nil
 }

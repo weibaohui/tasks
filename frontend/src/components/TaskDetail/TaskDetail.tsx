@@ -39,28 +39,15 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
         )}
       >
         <Descriptions column={2} bordered>
-          <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
-          <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
+          <Descriptions.Item label="任务名称" span={2}>{task.name}</Descriptions.Item>
           <Descriptions.Item label="状态">
             <StatusBadge status={task.status} />
           </Descriptions.Item>
           <Descriptions.Item label="类型">
             <Tag color="blue">{task.type}</Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="TraceID">
-            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.trace_id}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="SpanID">
-            <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{task.span_id}</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="父任务">
-            {task.parent_id ? <Tag color="orange">{task.parent_id}</Tag> : <span style={{ color: '#999' }}>顶级任务</span>}
-          </Descriptions.Item>
-          <Descriptions.Item label="深度">{task.depth}</Descriptions.Item>
-          <Descriptions.Item label="父Span">{task.parent_span || '-'}</Descriptions.Item>
           <Descriptions.Item label="优先级">{task.priority}</Descriptions.Item>
-          <Descriptions.Item label="超时时间">{task.timeout}ms</Descriptions.Item>
-          <Descriptions.Item label="最大重试">{task.max_retries}</Descriptions.Item>
+          <Descriptions.Item label="超时时间">{Math.round(task.timeout / 1e9)}s</Descriptions.Item>
           <Descriptions.Item label="创建时间">
             {new Date(task.created_at).toLocaleString()}
           </Descriptions.Item>
@@ -69,6 +56,9 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
           </Descriptions.Item>
           <Descriptions.Item label="完成时间">
             {task.finished_at ? new Date(task.finished_at).toLocaleString() : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="父任务">
+            {task.parent_id ? <Tag color="orange">{task.parent_id}</Tag> : <span style={{ color: '#999' }}>顶级任务</span>}
           </Descriptions.Item>
         </Descriptions>
 
@@ -110,12 +100,6 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ task, loading, onCancel,
       {task.analysis && (
         <Card title="分析" style={{ marginTop: 16 }}>
           <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#666' }}>{task.analysis}</div>
-        </Card>
-      )}
-
-      {task.result && (
-        <Card title="执行结果" style={{ marginTop: 16 }}>
-          <pre>{JSON.stringify(task.result, null, 2)}</pre>
         </Card>
       )}
 

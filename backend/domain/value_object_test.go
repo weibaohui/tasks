@@ -183,34 +183,6 @@ func TestProgress_ToMap(t *testing.T) {
 	}
 }
 
-func TestResult(t *testing.T) {
-	data := map[string]interface{}{"key": "value"}
-	r := NewResult(data, "操作成功")
-
-	if r.Data() == nil {
-		t.Error("期望 Data 不为 nil")
-	}
-
-	if r.Message() != "操作成功" {
-		t.Errorf("期望消息为 '操作成功', 实际为 '%s'", r.Message())
-	}
-}
-
-func TestResult_ToMap(t *testing.T) {
-	data := map[string]interface{}{"status": "ok"}
-	r := NewResult(data, "成功")
-
-	m := r.ToMap()
-
-	if m["data"].(map[string]interface{})["status"] != "ok" {
-		t.Error("ToMap data 不正确")
-	}
-
-	if m["message"].(string) != "成功" {
-		t.Errorf("ToMap message 期望 '成功', 实际 %v", m["message"])
-	}
-}
-
 func TestProgress_UpdatedAt(t *testing.T) {
 	p := NewProgress()
 	before := time.Now()

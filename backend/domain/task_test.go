@@ -144,8 +144,8 @@ func TestTask_Start_FromCompleted(t *testing.T) {
 	task := createTestTask()
 
 	task.Start()
-	result := NewResult("result", "成功")
-	task.Complete(result)
+	task.SetTaskConclusion("成功")
+	task.Complete()
 
 	err := task.Start()
 	if err != ErrInvalidStatusTransition {
@@ -158,8 +158,7 @@ func TestTask_Complete(t *testing.T) {
 	task.Start()
 	task.SetTaskConclusion("测试结论")
 
-	result := NewResult(map[string]interface{}{"data": "test"}, "处理完成")
-	err := task.Complete(result)
+	err := task.Complete()
 
 	if err != nil {
 		t.Fatalf("完成任务失败: %v", err)
@@ -169,17 +168,8 @@ func TestTask_Complete(t *testing.T) {
 		t.Errorf("期望状态为 Completed, 实际为 %v", task.Status())
 	}
 
-	if task.Result() == nil {
-		t.Fatal("期望 Result 不为 nil")
-	}
-
-	// result 现在直接使用 taskConclusion 的值
-	if task.Result().Message() != "测试结论" {
-		t.Errorf("期望结果消息为 '测试结论', 实际为 '%s'", task.Result().Message())
-	}
-
-	if task.Result().Data() != "测试结论" {
-		t.Errorf("期望结果数据为 '测试结论', 实际为 '%v'", task.Result().Data())
+	if task.TaskConclusion() != "测试结论" {
+		t.Errorf("期望任务结论为 '测试结论', 实际为 '%s'", task.TaskConclusion())
 	}
 
 	if task.FinishedAt() == nil {
@@ -191,8 +181,7 @@ func TestTask_Complete_InvalidTransition(t *testing.T) {
 	task := createTestTask()
 	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
 
-	result := NewResult(nil, "")
-	err := task.Complete(result)
+	err := task.Complete()
 	if err != ErrInvalidStatusTransition {
 		t.Errorf("期望返回 ErrInvalidStatusTransition, 实际返回 %v", err)
 	}
@@ -258,9 +247,8 @@ func TestTask_Cancel_FromPending(t *testing.T) {
 func TestTask_Cancel_InvalidTransition(t *testing.T) {
 	task := createTestTask()
 	task.Start()
-	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
-	result := NewResult(nil, "")
-	task.Complete(result)
+	task.SetTaskConclusion("测试结论")
+	task.Complete()
 
 	err := task.Cancel()
 	if err != ErrInvalidStatusTransition {
@@ -419,12 +407,7 @@ func TestTask_AgentType_Lifecycle(t *testing.T) {
 
 	task.SetTaskConclusion("分析完成，发现3个关键洞察")
 
-	result := NewResult(map[string]interface{}{
-		"response": "分析完成，发现3个关键洞察",
-		"insights": []string{"趋势1", "趋势2", "趋势3"},
-	}, "Agent任务执行成功")
-
-	err = task.Complete(result)
+	err = task.Complete()
 	if err != nil {
 		t.Fatalf("完成Agent任务失败: %v", err)
 	}
@@ -433,9 +416,8 @@ func TestTask_AgentType_Lifecycle(t *testing.T) {
 		t.Errorf("期望状态为 Completed, 实际为 %v", task.Status())
 	}
 
-	// result 现在直接使用 taskConclusion 的值
-	if task.Result().Data() != "分析完成，发现3个关键洞察" {
-		t.Errorf("期望结果数据为 '分析完成，发现3个关键洞察', 实际为 '%v'", task.Result().Data())
+	if task.TaskConclusion() != "分析完成，发现3个关键洞察" {
+		t.Errorf("期望任务结论为 '分析完成，发现3个关键洞察', 实际为 '%s'", task.TaskConclusion())
 	}
 }
 
@@ -527,8 +509,7 @@ func TestTaskType_Agent_AllTransitions(t *testing.T) {
 
 	// Running -> Completed
 	task.SetTaskConclusion("Agent任务完成")
-	result := NewResult("success", "完成")
-	err = task.Complete(result)
+	err = task.Complete()
 	if err != nil {
 		t.Fatalf("完成任务失败: %v", err)
 	}

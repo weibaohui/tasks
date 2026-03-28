@@ -265,8 +265,7 @@ func TestTaskApplicationService_CompleteTask(t *testing.T) {
 	service.StartTask(context.Background(), task.ID())
 	task.SetTaskConclusion("测试结论") // 需要设置结论才能完成任务
 
-	result := domain.NewResult(map[string]interface{}{"status": "ok"}, "完成")
-	err := service.CompleteTask(context.Background(), task.ID(), result)
+	err := service.CompleteTask(context.Background(), task.ID())
 	if err != nil {
 		t.Fatalf("完成任务失败: %v", err)
 	}

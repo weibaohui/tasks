@@ -110,7 +110,7 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 	}
 
 	// 3. 创建领域实体
-	timeout := time.Duration(cmd.Timeout) * time.Millisecond
+	timeout := time.Duration(cmd.Timeout) * time.Second
 	task, err := domain.NewTask(
 		taskID,
 		traceID,
@@ -258,7 +258,7 @@ func (s *TaskApplicationService) DeleteAllTasks(ctx context.Context) (int, error
 }
 
 // CompleteTask 完成任务
-func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain.TaskID, result domain.Result) error {
+func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain.TaskID) error {
 	// 1. 获取任务
 	task, err := s.taskRepo.FindByID(ctx, taskID)
 	if err != nil {
@@ -266,7 +266,7 @@ func (s *TaskApplicationService) CompleteTask(ctx context.Context, taskID domain
 	}
 
 	// 2. 完成任务
-	if err := task.Complete(result); err != nil {
+	if err := task.Complete(); err != nil {
 		return err
 	}
 
