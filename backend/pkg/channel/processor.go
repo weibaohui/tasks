@@ -28,20 +28,21 @@ const spanKey contextKey = "conversation_span"
 
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
-	bus              *bus.MessageBus
-	logger           *zap.Logger
-	sessionManager   *SessionManager
-	agentConfigCache *AgentConfigCache
-	agentRepo        domain.AgentRepository
-	providerRepo     domain.LLMProviderRepository
-	taskService      *application.TaskApplicationService
-	workerPool       *application.WorkerPool
-	idGenerator      domain.IDGenerator
-	toolRegistry     *llm.ToolRegistry
-	hookManager      *hook.Manager
-	factory          domain.LLMProviderFactory
-	mcpService       *application.MCPApplicationService
-	skillsLoader     *skill.SkillsLoader
+	bus                 *bus.MessageBus
+	logger              *zap.Logger
+	sessionManager      *SessionManager
+	agentConfigCache    *AgentConfigCache
+	agentRepo           domain.AgentRepository
+	providerRepo        domain.LLMProviderRepository
+	taskService         *application.TaskApplicationService
+	workerPool          *application.WorkerPool
+	idGenerator         domain.IDGenerator
+	toolRegistry        *llm.ToolRegistry
+	hookManager         *hook.Manager
+	factory             domain.LLMProviderFactory
+	mcpService          *application.MCPApplicationService
+	skillsLoader        *skill.SkillsLoader
+	claudeCodeProcessor *ClaudeCodeProcessor
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -63,20 +64,21 @@ func NewMessageProcessor(
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
 
 	return &MessageProcessor{
-		bus:              messageBus,
-		logger:           logger,
-		sessionManager:   sessionManager,
-		agentConfigCache: NewAgentConfigCache(),
-		agentRepo:        agentRepo,
-		providerRepo:     providerRepo,
-		taskService:      taskService,
-		workerPool:       workerPool,
-		idGenerator:      idGenerator,
-		toolRegistry:     registry,
-		hookManager:      hookManager,
-		factory:          factory,
-		mcpService:       mcpService,
-		skillsLoader:     skillsLoader,
+		bus:                 messageBus,
+		logger:              logger,
+		sessionManager:      sessionManager,
+		agentConfigCache:    NewAgentConfigCache(),
+		agentRepo:           agentRepo,
+		providerRepo:        providerRepo,
+		taskService:         taskService,
+		workerPool:          workerPool,
+		idGenerator:         idGenerator,
+		toolRegistry:        registry,
+		hookManager:         hookManager,
+		factory:             factory,
+		mcpService:          mcpService,
+		skillsLoader:        skillsLoader,
+		claudeCodeProcessor: NewClaudeCodeProcessor(logger, sessionManager, hookManager, providerRepo, idGenerator),
 	}
 }
 
@@ -189,6 +191,20 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	// 如果没有 Provider，返回默认响应
 	if provider == nil {
 		return fmt.Sprintf("收到消息: %s\n(LLM Provider 未配置)", content)
+	}
+
+	// 检查 Agent 类型，如果是 CodingAgent，使用 ClaudeCodeProcessor
+	if agent != nil && agent.AgentType().String() == "CodingAgent" {
+		p.logger.Info("使用 ClaudeCodeProcessor 处理 CodingAgent",
+			zap.String("agent_code", agent.AgentCode().String()),
+			zap.String("session_key", msg.SessionKey()),
+		)
+		response, err := p.claudeCodeProcessor.Process(ctx, msg, agent.AgentCode().String(), agent.UserCode())
+		if err != nil {
+			p.logger.Error("ClaudeCodeProcessor 处理失败", zap.Error(err))
+			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
+		}
+		return response
 	}
 
 	// 构建 LLM 配置
