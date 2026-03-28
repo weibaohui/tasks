@@ -1,4 +1,4 @@
-package channel
+package claudecode
 
 import (
 	"context"
@@ -16,34 +16,42 @@ import (
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger         *zap.Logger
-	sessionManager *SessionManager
-	hookManager    *hook.Manager
-	providerRepo   domain.LLMProviderRepository
-	idGenerator    domain.IDGenerator
-	traceID        string
-	spanID         string
+	logger       *zap.Logger
+	hookManager  *hook.Manager
+	providerRepo domain.LLMProviderRepository
+	idGenerator  domain.IDGenerator
+	traceID      string
+	spanID       string
+}
+
+// ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
+type ClaudeCodeProcessorInterface interface {
+	Process(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agentCode, userCode string) (string, error)
+}
+
+// ClaudeCodeSession 会话上下文（包含 CLI Session ID）
+type ClaudeCodeSession struct {
+	SessionKey   string
+	CliSessionID string
 }
 
 // NewClaudeCodeProcessor 创建 ClaudeCodeProcessor
 func NewClaudeCodeProcessor(
 	logger *zap.Logger,
-	sessionManager *SessionManager,
 	hookManager *hook.Manager,
 	providerRepo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:         logger,
-		sessionManager: sessionManager,
-		hookManager:    hookManager,
-		providerRepo:   providerRepo,
-		idGenerator:    idGenerator,
+		logger:       logger,
+		hookManager:  hookManager,
+		providerRepo: providerRepo,
+		idGenerator:  idGenerator,
 	}
 }
 
 // Process 处理 CodingAgent 消息
-func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessage, agentCode, userCode string) (string, error) {
+func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agentCode, userCode string) (string, error) {
 	// 生成 trace 信息
 	ctx, traceID, spanID := trace.StartTrace(ctx)
 	p.traceID = traceID
@@ -61,20 +69,11 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		zap.String("内容", preview),
 	)
 
-	// 保存用户消息到会话历史
-	session := p.sessionManager.GetOrCreate(msg.SessionKey())
-	session.AddMessage(Message{
-		Role:    "user",
-		Content: msg.Content,
-		TraceID: traceID,
-		SpanID:  spanID,
-	})
-
 	// 获取 Provider 配置（用于日志和配置）
 	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
 	if err != nil {
 		p.logger.Warn("获取 LLM Provider 失败，使用默认配置", zap.Error(err))
-		provider = nil // 允许 nil，在 queryClaudeCode 中处理
+		provider = nil
 	}
 
 	// 调用 Claude Code（使用独立的 context，避免被取消）
@@ -82,7 +81,10 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	defer cancel()
 
 	// 从会话获取 CLI Session UUID，用于会话恢复
-	cliSessionID := session.GetCliSessionID()
+	cliSessionID := ""
+	if session != nil {
+		cliSessionID = session.CliSessionID
+	}
 
 	// 调用 Claude Code
 	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg.SessionKey(), msg.Content, cliSessionID, provider)
@@ -91,9 +93,9 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		return "", fmt.Errorf("Claude Code 调用失败: %w", err)
 	}
 
-	// 如果返回了新的 CLI Session ID，保存到会话
-	if newCliSessionID != "" {
-		session.SetCliSessionID(newCliSessionID)
+	// 如果返回了新的 CLI Session ID，更新会话
+	if newCliSessionID != "" && session != nil {
+		session.CliSessionID = newCliSessionID
 		p.logger.Info("Claude Code 会话已保存",
 			zap.String("session_key", msg.SessionKey()),
 			zap.String("cli_session_id", newCliSessionID),
@@ -110,14 +112,6 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 			return response
 		}()),
 	)
-
-	// 保存助手响应到会话历史
-	session.AddMessage(Message{
-		Role:    "assistant",
-		Content: response,
-		TraceID: traceID,
-		SpanID:  spanID,
-	})
 
 	return response, nil
 }

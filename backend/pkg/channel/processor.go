@@ -8,6 +8,7 @@ import (
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/claudecode"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -42,7 +43,7 @@ type MessageProcessor struct {
 	factory             domain.LLMProviderFactory
 	mcpService          *application.MCPApplicationService
 	skillsLoader        *skill.SkillsLoader
-	claudeCodeProcessor *ClaudeCodeProcessor
+	claudeCodeProcessor claudecode.ClaudeCodeProcessorInterface
 	commandProcessor    *CommandProcessor
 }
 
@@ -83,7 +84,7 @@ func NewMessageProcessor(
 		factory:             factory,
 		mcpService:          mcpService,
 		skillsLoader:        skillsLoader,
-		claudeCodeProcessor: NewClaudeCodeProcessor(logger, sessionManager, hookManager, providerRepo, idGenerator),
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator),
 		commandProcessor:    commandProcessor,
 	}
 }
@@ -205,10 +206,19 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			zap.String("agent_code", agent.AgentCode().String()),
 			zap.String("session_key", msg.SessionKey()),
 		)
-		response, err := p.claudeCodeProcessor.Process(ctx, msg, agent.AgentCode().String(), agent.UserCode())
+		// 创建 ClaudeCodeSession
+		ccSession := &claudecode.ClaudeCodeSession{
+			SessionKey:   msg.SessionKey(),
+			CliSessionID: session.GetCliSessionID(),
+		}
+		response, err := p.claudeCodeProcessor.Process(ctx, msg, ccSession, agent.AgentCode().String(), agent.UserCode())
 		if err != nil {
 			p.logger.Error("ClaudeCodeProcessor 处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
+		}
+		// 更新 session 的 CLI Session ID
+		if ccSession.CliSessionID != "" {
+			session.SetCliSessionID(ccSession.CliSessionID)
 		}
 		return response
 	}
