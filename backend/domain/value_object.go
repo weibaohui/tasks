@@ -157,8 +157,14 @@ func NewProgress() Progress {
 	}
 }
 
-// Update 更新进度
+// Update 更新进度（自动 clamping 到 0-100 范围）
 func (p *Progress) Update(value int) {
+	if value < 0 {
+		value = 0
+	}
+	if value > 100 {
+		value = 100
+	}
 	p.value = value
 	p.updatedAt = time.Now()
 }

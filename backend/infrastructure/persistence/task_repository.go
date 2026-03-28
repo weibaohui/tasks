@@ -33,6 +33,12 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 			error_msg, created_at, started_at, finished_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
+			name=excluded.name,
+			description=excluded.description,
+			type=excluded.type,
+			timeout=excluded.timeout,
+			max_retries=excluded.max_retries,
+			priority=excluded.priority,
 			acceptance_criteria=excluded.acceptance_criteria,
 			task_requirement=excluded.task_requirement,
 			task_conclusion=excluded.task_conclusion,
@@ -314,15 +320,4 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 	}
 
 	return tasks, rows.Err()
-}
-
-// mapToProgress 将 map 转换为 Progress
-func mapToProgress(m map[string]interface{}) domain.Progress {
-	p := domain.NewProgress()
-
-	if value, ok := m["value"].(float64); ok {
-		p.Update(int(value))
-	}
-
-	return p
 }
