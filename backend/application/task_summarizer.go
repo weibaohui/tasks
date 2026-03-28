@@ -21,9 +21,10 @@ import (
 
 // TaskSummarizer 任务总结器
 type TaskSummarizer struct {
-	repo     domain.TaskRepository
-	executor *AutoTaskExecutor
-	eventBus *bus.EventBus
+	repo             domain.TaskRepository
+	executor         *AutoTaskExecutor
+	eventBus         *bus.EventBus
+	providerResolver func(context.Context, *domain.Task) (llm.LLMProvider, error)
 
 	// 按 traceId 分组的事件 channel
 	traceChannels map[string]chan *domain.TaskPendingSummaryEvent
@@ -39,9 +40,15 @@ func NewTaskSummarizer(
 	eventBus *bus.EventBus,
 ) *TaskSummarizer {
 	return &TaskSummarizer{
-		repo:          repo,
-		executor:      executor,
-		eventBus:      eventBus,
+		repo:      repo,
+		executor:  executor,
+		eventBus:  eventBus,
+		providerResolver: func(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
+			if executor == nil || executor.llmLookup == nil {
+				return nil, fmt.Errorf("LLM provider resolver 未初始化")
+			}
+			return executor.llmLookup.getProviderForTask(ctx, task)
+		},
 		traceChannels: make(map[string]chan *domain.TaskPendingSummaryEvent),
 		traceStopCh:   make(chan string, 10),
 	}
@@ -126,39 +133,51 @@ func (s *TaskSummarizer) handlePendingSummary(pendingEvent *domain.TaskPendingSu
 	log.Printf("[TaskSummarizer] 开始处理任务总结: taskID=%s, traceID=%s",
 		task.ID(), task.TraceID())
 
-	// 获取 LLM provider
-	provider, err := s.executor.llmLookup.getProviderForTask(ctx, task)
-	if err != nil {
-		log.Printf("[TaskSummarizer] 获取 LLM Provider 失败: %v", err)
-		s.failTask(task, fmt.Errorf("获取 LLM Provider 失败: %w", err))
-		closeDone()
-		return
+	hasSubTasks := task.TodoList() != ""
+	if hasSubTasks {
+		if err := s.collectChildResults(ctx, task); err != nil {
+			log.Printf("[TaskSummarizer] 收集子任务成对文档失败: %v", err)
+			s.failTask(task, fmt.Errorf("收集子任务成对文档失败: %w", err))
+			closeDone()
+			return
+		}
 	}
 
-	// 如果有 subtask_records，说明是非叶子节点，需要先汇总子任务成对文档
-	if task.SubtaskRecords() != "" {
-		s.collectChildResults(ctx, task)
-	}
-
-	// 重新加载任务（collectChildResults 可能更新了状态）
+	// 重新加载任务（collectChildResults 可能更新了内容）
 	task, _ = s.repo.FindByID(ctx, task.ID())
 
 	// 生成总结
 	var summary string
-	if task.SubtaskRecords() != "" {
-		// 非叶子节点：从 subtask_records 生成总结
-		pairs, _ := domain.ParseTaskResultPairs(task.SubtaskRecords())
-		if len(pairs) > 0 {
-			summary, err = s.generateSummary(ctx, task, pairs, provider)
-			if err != nil {
-				log.Printf("[TaskSummarizer] 生成总结失败: %v", err)
-				s.failTask(task, fmt.Errorf("生成总结失败: %w", err))
-				closeDone()
-				return
-			}
+	if hasSubTasks {
+		pairs, err := domain.ParseTaskResultPairs(task.SubtaskRecords())
+		if err != nil {
+			log.Printf("[TaskSummarizer] 解析子任务成对文档失败: %v", err)
+			s.failTask(task, fmt.Errorf("解析子任务成对文档失败: %w", err))
+			closeDone()
+			return
+		}
+		if len(pairs) == 0 {
+			s.failTask(task, fmt.Errorf("存在子任务但未收集到可总结结果"))
+			closeDone()
+			return
+		}
+
+		provider, err := s.providerResolver(ctx, task)
+		if err != nil {
+			log.Printf("[TaskSummarizer] 获取 LLM Provider 失败: %v", err)
+			s.failTask(task, fmt.Errorf("获取 LLM Provider 失败: %w", err))
+			closeDone()
+			return
+		}
+
+		summary, err = s.generateSummary(ctx, task, pairs, provider)
+		if err != nil {
+			log.Printf("[TaskSummarizer] 生成总结失败: %v", err)
+			s.failTask(task, fmt.Errorf("生成总结失败: %w", err))
+			closeDone()
+			return
 		}
 	} else {
-		// 叶子节点：直接生成结论
 		summary = task.TaskConclusion()
 		if summary == "" {
 			summary = "任务完成"
@@ -173,20 +192,20 @@ func (s *TaskSummarizer) handlePendingSummary(pendingEvent *domain.TaskPendingSu
 }
 
 // collectChildResults 收集所有子任务的成对文档到当前任务的 subtask_records
-func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.Task) {
+func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.Task) error {
 	todoListStr := task.TodoList()
 	if todoListStr == "" {
-		return
+		return nil
 	}
 
 	var todoList TodoList
 	if err := json.Unmarshal([]byte(todoListStr), &todoList); err != nil {
-		log.Printf("[TaskSummarizer] 解析 todoList 失败: %v", err)
-		return
+		return fmt.Errorf("解析 todoList 失败: %w", err)
 	}
 
 	log.Printf("[TaskSummarizer] 收集子任务成对文档: taskID=%s, 子任务数=%d", task.ID(), len(todoList.Items))
 
+	pairs := make([]domain.TaskResultPair, 0, len(todoList.Items))
 	for _, item := range todoList.Items {
 		subTask, err := s.repo.FindByID(ctx, domain.NewTaskID(item.SubTaskID))
 		if err != nil || subTask == nil {
@@ -200,33 +219,38 @@ func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.T
 			continue
 		}
 
-		// 构建成对文档
-		completedAt := time.Now()
+		completedAt := subTask.FinishedAt()
+		if completedAt == nil {
+			now := time.Now()
+			completedAt = &now
+		}
 		pair := domain.TaskResultPair{
+			TaskID:             subTask.ID().String(),
 			TaskName:           subTask.Name(),
 			TaskRequirement:    subTask.TaskRequirement(),
 			AcceptanceCriteria: subTask.AcceptanceCriteria(),
 			TaskConclusion:     subTask.TaskConclusion(),
-			CompletedAt:        &completedAt,
+			CompletedAt:        completedAt,
 			Status:             subTask.Status(),
 		}
-
-		existingRecords := task.SubtaskRecords()
-		newRecords, err := domain.AppendTaskResultPair(existingRecords, pair)
-		if err != nil {
-			log.Printf("[TaskSummarizer] 追加成对文档失败: %v", err)
-			continue
-		}
-
-		task.SetSubtaskRecords(newRecords)
+		pairs = append(pairs, pair)
 		log.Printf("[TaskSummarizer] 收集子任务成对文档: subTaskID=%s, conclusion='%.50s'",
 			item.SubTaskID, subTask.TaskConclusion())
 	}
 
-	// 保存更新后的 subtask_records
-	s.repo.Save(ctx, task)
+	records, err := buildTaskResultRecords(pairs)
+	if err != nil {
+		return fmt.Errorf("构建子任务成对文档失败: %w", err)
+	}
+
+	task.SetSubtaskRecords(records)
+	if err := s.repo.Save(ctx, task); err != nil {
+		return fmt.Errorf("保存子任务成对文档失败: %w", err)
+	}
+
 	log.Printf("[TaskSummarizer] subtask_records 更新完成: taskID=%s, len=%d",
 		task.ID(), len(task.SubtaskRecords()))
+	return nil
 }
 
 // completeTaskAndNotifyParent 完成总结并通知父任务
@@ -265,6 +289,7 @@ func (s *TaskSummarizer) notifyParentToCollect(ctx context.Context, child *domai
 
 	completedAt := time.Now()
 	pair := domain.TaskResultPair{
+		TaskID:             child.ID().String(),
 		TaskName:           child.Name(),
 		TaskRequirement:    child.TaskRequirement(),
 		AcceptanceCriteria: child.AcceptanceCriteria(),
@@ -273,8 +298,7 @@ func (s *TaskSummarizer) notifyParentToCollect(ctx context.Context, child *domai
 		Status:             child.Status(),
 	}
 
-	existingRecords := parent.SubtaskRecords()
-	newRecords, err := domain.AppendTaskResultPair(existingRecords, pair)
+	newRecords, err := upsertTaskResultPair(parent.SubtaskRecords(), pair)
 	if err != nil {
 		log.Printf("[TaskSummarizer] 追加到父任务 subtask_records 失败: %v", err)
 		return
@@ -332,6 +356,48 @@ func (s *TaskSummarizer) checkAndTriggerParentSummary(ctx context.Context, paren
 
 		log.Printf("[TaskSummarizer] 父任务进入 PendingSummary: parentID=%s", parent.ID())
 	}
+}
+
+func upsertTaskResultPair(existingRecords string, pair domain.TaskResultPair) (string, error) {
+	pairs, err := domain.ParseTaskResultPairs(existingRecords)
+	if err != nil {
+		return "", err
+	}
+
+	replaced := false
+	for i := range pairs {
+		if isSameTaskPair(pairs[i], pair) {
+			pairs[i] = pair
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		pairs = append(pairs, pair)
+	}
+
+	return buildTaskResultRecords(pairs)
+}
+
+func isSameTaskPair(left domain.TaskResultPair, right domain.TaskResultPair) bool {
+	if left.TaskID != "" && right.TaskID != "" {
+		return left.TaskID == right.TaskID
+	}
+	return left.TaskName == right.TaskName &&
+		left.TaskRequirement == right.TaskRequirement &&
+		left.AcceptanceCriteria == right.AcceptanceCriteria
+}
+
+func buildTaskResultRecords(pairs []domain.TaskResultPair) (string, error) {
+	records := ""
+	for _, pair := range pairs {
+		var err error
+		records, err = domain.AppendTaskResultPair(records, pair)
+		if err != nil {
+			return "", err
+		}
+	}
+	return records, nil
 }
 
 // generateSummary 调用 LLM 生成总结

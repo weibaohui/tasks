@@ -5,8 +5,10 @@
 package domain
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +75,7 @@ type Task struct {
 // TaskResultPair 子任务成对文档
 // 包含任务要求、验收标准、任务名称和任务结论，用于父子任务结果汇总
 type TaskResultPair struct {
+	TaskID             string     `yaml:"task_id,omitempty"`
 	TaskName           string     `yaml:"task_name"`
 	TaskRequirement    string     `yaml:"task_requirement"`
 	AcceptanceCriteria string     `yaml:"acceptance_criteria"`
@@ -97,18 +100,18 @@ func ParseTaskResultPairs(records string) ([]TaskResultPair, error) {
 		return nil, nil
 	}
 
-	// 按 --- 分隔 YAML 文档
-	docs := strings.Split(records, "---")
 	var pairs []TaskResultPair
-
-	for _, doc := range docs {
-		doc = strings.TrimSpace(doc)
-		if doc == "" || strings.HasPrefix(doc, "#") {
-			continue
-		}
+	decoder := yaml.NewDecoder(bytes.NewBufferString(records))
+	for {
 		var pair TaskResultPair
-		if err := yaml.Unmarshal([]byte(doc), &pair); err != nil {
+		if err := decoder.Decode(&pair); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
 			return nil, fmt.Errorf("解析 TaskResultPair 失败: %w", err)
+		}
+		if pair.TaskID == "" && pair.TaskName == "" && pair.TaskRequirement == "" && pair.AcceptanceCriteria == "" && pair.TaskConclusion == "" {
+			continue
 		}
 		pairs = append(pairs, pair)
 	}
