@@ -138,6 +138,34 @@ type LLMWithToolsHook interface {
 	OnToolExecutionComplete(ctx *HookContext)
 }
 
+// ClaudeCodeCallContext Claude Code 调用上下文
+type ClaudeCodeCallContext struct {
+	Prompt    string
+	UserInput string
+	Model     string
+	SessionID string
+	TraceID   string
+	Metadata  map[string]string
+}
+
+// ClaudeCodeResponse Claude Code 响应
+type ClaudeCodeResponse struct {
+	Content string
+	Model   string
+	Usage   Usage
+}
+
+// ClaudeCodeHook Claude Code 钩子接口
+type ClaudeCodeHook interface {
+	Hook
+	// PreClaudeCodeCall Claude Code 调用前
+	PreClaudeCodeCall(ctx *HookContext, callCtx *ClaudeCodeCallContext) (*ClaudeCodeCallContext, error)
+	// PostClaudeCodeCall Claude Code 调用后
+	PostClaudeCodeCall(ctx *HookContext, callCtx *ClaudeCodeCallContext, resp *ClaudeCodeResponse) (*ClaudeCodeResponse, error)
+	// OnClaudeCodeError Claude Code 错误时
+	OnClaudeCodeError(ctx *HookContext, callCtx *ClaudeCodeCallContext, resp *ClaudeCodeResponse)
+}
+
 // ============================================================================
 // 原有 TaskHook 接口 (保持向后兼容)
 // ============================================================================

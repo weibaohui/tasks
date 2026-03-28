@@ -19,14 +19,15 @@ type Message struct {
 
 // Session 会话
 type Session struct {
-	key       string
-	messages  []Message
-	context   context.Context
-	cancel    context.CancelFunc
-	createdAt time.Time
-	updatedAt time.Time
-	mu        sync.RWMutex
-	logger    *zap.Logger
+	key          string
+	messages     []Message
+	cliSessionID string // Claude Code CLI Session UUID
+	context      context.Context
+	cancel       context.CancelFunc
+	createdAt    time.Time
+	updatedAt    time.Time
+	mu           sync.RWMutex
+	logger       *zap.Logger
 }
 
 // NewSession 创建新会话
@@ -97,6 +98,20 @@ func (s *Session) UpdatedAt() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.updatedAt
+}
+
+// GetCliSessionID 返回 Claude Code CLI Session UUID
+func (s *Session) GetCliSessionID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cliSessionID
+}
+
+// SetCliSessionID 设置 Claude Code CLI Session UUID
+func (s *Session) SetCliSessionID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cliSessionID = id
 }
 
 // SessionManager 会话管理器

@@ -155,6 +155,126 @@ func (h *FeishuThinkingProcessHook) PostToolCall(ctx *domain.HookContext, callCt
 	return result, nil
 }
 
+// PreClaudeCodeCall Claude Code 调用前
+func (h *FeishuThinkingProcessHook) PreClaudeCodeCall(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext) (*domain.ClaudeCodeCallContext, error) {
+	// 更新会话缓存
+	h.updateClaudeCodeSessionCache(ctx, callCtx)
+	return callCtx, nil
+}
+
+// PostClaudeCodeCall Claude Code 调用后
+func (h *FeishuThinkingProcessHook) PostClaudeCodeCall(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext, resp *domain.ClaudeCodeResponse) (*domain.ClaudeCodeResponse, error) {
+	// 检查是否开启思考过程
+	if !h.isClaudeCodeThinkingProcessEnabled(ctx, callCtx) {
+		return resp, nil
+	}
+
+	// 发送 Claude Code 响应
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", resp.Content)},
+	}
+	h.sendThinkingMessage(ctx, "🤖 Claude Code 响应", elements)
+
+	return resp, nil
+}
+
+// OnClaudeCodeError Claude Code 错误
+func (h *FeishuThinkingProcessHook) OnClaudeCodeError(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext, resp *domain.ClaudeCodeResponse) {
+	// 检查是否开启思考过程
+	if !h.isClaudeCodeThinkingProcessEnabled(ctx, callCtx) {
+		return
+	}
+
+	content := "Claude Code error"
+	if resp != nil && resp.Content != "" {
+		content = resp.Content
+	}
+
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": "**错误信息**:"},
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", content)},
+	}
+	h.sendThinkingMessage(ctx, "❌ Claude Code 错误", elements)
+}
+
+// updateClaudeCodeSessionCache 更新 Claude Code 会话缓存
+func (h *FeishuThinkingProcessHook) updateClaudeCodeSessionCache(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext) {
+	if callCtx == nil {
+		return
+	}
+
+	sessionKey := callCtx.SessionID
+	if sessionKey == "" && callCtx.Metadata != nil {
+		sessionKey = callCtx.Metadata["session_key"]
+	}
+	if sessionKey == "" {
+		return
+	}
+
+	// 从 metadata 中提取会话信息
+	info := &sessionInfo{
+		SessionKey: sessionKey,
+		UserCode:   callCtx.Metadata["user_code"],
+		AgentCode:  callCtx.Metadata["agent_code"],
+		ChannelCode: callCtx.Metadata["channel_code"],
+		UpdatedAt:  time.Now(),
+	}
+
+	// 解析 enable_thinking_process
+	if callCtx.Metadata != nil {
+		if v := callCtx.Metadata["enable_thinking_process"]; v == "true" {
+			info.EnableThinkingProcess = true
+		}
+		if v := callCtx.Metadata["channel_type"]; v != "" {
+			info.Channel = v
+		}
+		if v := callCtx.Metadata["chat_id"]; v != "" {
+			info.ChatID = v
+		}
+	}
+
+	h.mu.Lock()
+	h.sessionCache[sessionKey] = info
+	h.mu.Unlock()
+}
+
+// isClaudeCodeThinkingProcessEnabled 检查 Claude Code 是否开启思考过程
+func (h *FeishuThinkingProcessHook) isClaudeCodeThinkingProcessEnabled(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext) bool {
+	// 优先从 callCtx.Metadata 检查
+	if callCtx != nil && callCtx.Metadata != nil {
+		v := callCtx.Metadata["enable_thinking_process"]
+		if v == "true" {
+			return true
+		}
+		if v == "false" {
+			return false
+		}
+	}
+
+	// 其次从 sessionCache 检查
+	var sessionKey string
+	if callCtx != nil {
+		sessionKey = callCtx.SessionID
+		if sessionKey == "" && callCtx.Metadata != nil {
+			sessionKey = callCtx.Metadata["session_key"]
+		}
+	}
+	if sessionKey == "" && ctx != nil {
+		sessionKey = ctx.GetMetadata("session_key")
+	}
+
+	if sessionKey != "" {
+		h.mu.RLock()
+		info, exists := h.sessionCache[sessionKey]
+		h.mu.RUnlock()
+		if exists && info.EnableThinkingProcess {
+			return true
+		}
+	}
+
+	return false
+}
+
 // OnToolError 记录工具执行错误
 func (h *FeishuThinkingProcessHook) OnToolError(ctx *domain.HookContext, callCtx *domain.ToolCallContext, err error) (*domain.ToolExecutionResult, error) {
 	// 检查是否开启思考过程

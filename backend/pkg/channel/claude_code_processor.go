@@ -2,8 +2,9 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"time"
 
 	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
@@ -73,14 +74,42 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
 	if err != nil {
 		p.logger.Warn("获取 LLM Provider 失败，使用默认配置", zap.Error(err))
+		provider = nil // 允许 nil，在 queryClaudeCode 中处理
 	}
 
+	// 调用 Claude Code（使用独立的 context，避免被取消）
+	queryCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// 从会话获取 CLI Session UUID，用于会话恢复
+	cliSessionID := session.GetCliSessionID()
+
 	// 调用 Claude Code
-	response, err := p.queryClaudeCode(ctx, msg.SessionKey(), msg.Content, provider)
+	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg.SessionKey(), msg.Content, cliSessionID, provider)
 	if err != nil {
 		p.logger.Error("Claude Code 调用失败", zap.Error(err))
 		return "", fmt.Errorf("Claude Code 调用失败: %w", err)
 	}
+
+	// 如果返回了新的 CLI Session ID，保存到会话
+	if newCliSessionID != "" {
+		session.SetCliSessionID(newCliSessionID)
+		p.logger.Info("Claude Code 会话已保存",
+			zap.String("session_key", msg.SessionKey()),
+			zap.String("cli_session_id", newCliSessionID),
+		)
+	}
+
+	p.logger.Info("Claude Code 返回响应",
+		zap.String("session_key", msg.SessionKey()),
+		zap.String("response_length", fmt.Sprintf("%d", len(response))),
+		zap.String("response_preview", func() string {
+			if len(response) > 100 {
+				return response[:100] + "..."
+			}
+			return response
+		}()),
+	)
 
 	// 保存助手响应到会话历史
 	session.AddMessage(Message{
@@ -94,111 +123,119 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 }
 
 // queryClaudeCode 调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput string, provider *domain.LLMProvider) (string, error) {
-	var result string
-	var queryErr error
-
+func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID string, provider *domain.LLMProvider) (string, string, error) {
 	// 构建 claudecode 选项
-	opts := p.buildOptions(provider)
+	opts := p.buildOptions(provider, cliSessionID)
 
 	p.logger.Info("开始 Claude Code 查询",
 		zap.String("session_key", sessionKey),
-		zap.String("provider", provider.ProviderKey()),
+		zap.String("cli_session_id", cliSessionID),
+		zap.String("provider", func() string {
+			if provider != nil {
+				return provider.ProviderKey()
+			}
+			return "default"
+		}()),
 	)
 
-	// 使用 QueryWithSession 创建或恢复会话
-	err := claudecode.WithClient(ctx, func(client claudecode.Client) error {
-		// 使用 sessionKey 作为 Context Session ID
-		if err := client.QueryWithSession(ctx, userInput, sessionKey); err != nil {
-			queryErr = err
-			return err
+	startTime := time.Now()
+
+	// 使用 Query 创建查询 iterator（类似 quickstart 例子）
+	iterator, err := claudecode.Query(ctx, userInput, opts...)
+	if err != nil {
+		p.logger.Error("Claude Code Query 失败",
+			zap.String("session_key", sessionKey),
+			zap.Duration("duration", time.Since(startTime)),
+			zap.Error(err),
+		)
+		return "", "", fmt.Errorf("Claude Code Query 失败: %w", err)
+	}
+	defer iterator.Close()
+
+	p.logger.Info("Claude Code Query 执行成功，开始接收消息",
+		zap.String("session_key", sessionKey),
+		zap.Duration("duration", time.Since(startTime)),
+	)
+
+	// 使用 iterator 接收消息
+	var result string
+	var cliSessionIDResult string
+
+	for {
+		msg, err := iterator.Next(ctx)
+		if err != nil {
+			if errors.Is(err, claudecode.ErrNoMoreMessages) {
+				p.logger.Info("Claude Code 消息接收完成",
+					zap.String("session_key", sessionKey),
+					zap.Duration("duration", time.Since(startTime)),
+				)
+				break
+			}
+			p.logger.Error("Claude Code 接收消息失败",
+				zap.String("session_key", sessionKey),
+				zap.Error(err),
+			)
+			return "", "", fmt.Errorf("接收消息失败: %w", err)
 		}
 
-		// 流式接收响应
-		result = p.streamResponse(ctx, client)
-		return nil
-	}, opts...)
+		if msg == nil {
+			p.logger.Info("Claude Code 收到 nil 消息，结束",
+				zap.String("session_key", sessionKey),
+			)
+			break
+		}
 
-	if err != nil {
-		return "", err
-	}
-	if queryErr != nil {
-		return "", queryErr
+		switch m := msg.(type) {
+		case *claudecode.AssistantMessage:
+			for _, block := range m.Content {
+				if textBlock, ok := block.(*claudecode.TextBlock); ok {
+					result += textBlock.Text
+				}
+			}
+		case *claudecode.ResultMessage:
+			if m.SessionID != "" {
+				cliSessionIDResult = m.SessionID
+			}
+			if m.IsError && m.Result != nil {
+				result += fmt.Sprintf("\n[错误: %s]", *m.Result)
+			}
+			p.logger.Info("Claude Code ResultMessage",
+				zap.String("session_key", sessionKey),
+				zap.String("cli_session_id", cliSessionIDResult),
+				zap.Bool("is_error", m.IsError),
+			)
+		}
 	}
 
-	return result, nil
+	return result, cliSessionIDResult, nil
 }
 
 // buildOptions 根据 Provider 类型构建 claudecode 选项
-func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider) []claudecode.Option {
+func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSessionID string) []claudecode.Option {
 	opts := []claudecode.Option{}
 
+	// 使用 MiniMax API（与 quickstart 示例相同）
+	opts = append(opts, claudecode.WithEnv(map[string]string{
+		"ANTHROPIC_API_KEY":  "sk-4e7ehiWvl3EDNcwsZ4ul8mR9AjLGH1DNBqInGlBHyD2ZkIwB",
+		"ANTHROPIC_BASE_URL": "https://minimax.a7m.com.cn",
+	}))
+	opts = append(opts, claudecode.WithModel("MiniMax-M2.7-highspeed"))
+
+	// 如果有 CLI Session ID，使用 WithResume 恢复会话
+	if cliSessionID != "" {
+		opts = append(opts, claudecode.WithResume(cliSessionID))
+	}
+
 	p.logger.Info("Claude Code 选项配置",
-		zap.String("provider", provider.ProviderKey()),
-		zap.String("model", provider.DefaultModel()),
+		zap.String("provider", func() string {
+			if provider != nil {
+				return provider.ProviderKey()
+			}
+			return "default"
+		}()),
+		zap.String("cli_session_id", cliSessionID),
 		zap.Int("options_count", len(opts)),
 	)
-	if provider != nil && provider.ProviderType() == domain.ProviderTypeAnthropic {
-
-		// 设置 API Key 环境变量
-		if provider.APIKey() != "" {
-			opts = append(opts, claudecode.WithEnv(map[string]string{
-				"ANTHROPIC_API_KEY":  provider.APIKey(),
-				"ANTHROPIC_BASE_URL": provider.APIBase(),
-			}))
-		}
-
-		// 设置模型
-		if provider.DefaultModel() != "" {
-			opts = append(opts, claudecode.WithModel(provider.DefaultModel()))
-		}
-
-	}
 
 	return opts
-}
-
-// streamResponse 流式接收 Claude Code 响应
-func (p *ClaudeCodeProcessor) streamResponse(ctx context.Context, client claudecode.Client) string {
-	var response strings.Builder
-	msgChan := client.ReceiveMessages(ctx)
-
-	for {
-		select {
-		case message := <-msgChan:
-			if message == nil {
-				return response.String()
-			}
-
-			switch msg := message.(type) {
-			case *claudecode.AssistantMessage:
-				for _, block := range msg.Content {
-					if textBlock, ok := block.(*claudecode.TextBlock); ok {
-						response.WriteString(textBlock.Text)
-					}
-				}
-			case *claudecode.ResultMessage:
-				if msg.IsError {
-					p.logger.Error("Claude Code 返回错误",
-						zap.String("trace_id", p.traceID),
-						zap.String("span_id", p.spanID),
-					)
-					if msg.Result != nil {
-						response.WriteString(fmt.Sprintf("\n[错误: %s]", *msg.Result))
-					}
-				}
-				p.logger.Info("Claude Code 查询完成",
-					zap.String("trace_id", p.traceID),
-					zap.String("span_id", p.spanID),
-				)
-				return response.String()
-			}
-		case <-ctx.Done():
-			p.logger.Info("Claude Code 查询上下文取消",
-				zap.String("trace_id", p.traceID),
-				zap.String("span_id", p.spanID),
-			)
-			return response.String()
-		}
-	}
 }

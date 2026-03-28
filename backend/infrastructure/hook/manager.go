@@ -122,3 +122,18 @@ func (m *Manager) OnLLMCalledWithTools(ctx *domain.HookContext, callCtx *domain.
 func (m *Manager) OnToolExecutionComplete(ctx *domain.HookContext) {
 	m.executor.ExecuteOnToolExecutionComplete(ctx)
 }
+
+// PreClaudeCodeCall 执行 PreClaudeCodeCall 钩子
+func (m *Manager) PreClaudeCodeCall(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext) (*domain.ClaudeCodeCallContext, error) {
+	return m.executor.ExecutePreClaudeCodeCall(ctx, callCtx)
+}
+
+// PostClaudeCodeCall 执行 PostClaudeCodeCall 钩子
+func (m *Manager) PostClaudeCodeCall(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext, resp *domain.ClaudeCodeResponse) (*domain.ClaudeCodeResponse, error) {
+	return m.executor.ExecutePostClaudeCodeCall(ctx, callCtx, resp)
+}
+
+// OnClaudeCodeError 执行 OnClaudeCodeError 钩子
+func (m *Manager) OnClaudeCodeError(ctx *domain.HookContext, callCtx *domain.ClaudeCodeCallContext, resp *domain.ClaudeCodeResponse) {
+	m.executor.ExecuteOnClaudeCodeError(ctx, callCtx, resp)
+}

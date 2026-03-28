@@ -57,6 +57,12 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 	content := msg.Content
 	chatID := msg.ChatID
 
+	// 跳过空消息
+	if strings.TrimSpace(content) == "" {
+		c.logger.Debug("Skipping empty/whitespace message")
+		return nil
+	}
+
 	// Determine receive_id type based on chat_type
 	// For p2p (person-to-person) chats, use open_id; for group chats, use chat_id
 	receiveIDType := "chat_id"
