@@ -15,6 +15,10 @@
 
 ## 红线（禁止）
 
+### 代码编写要求
+1. AI 严禁在main分支直接写代码，必须先创建合适的分支
+2. AI 严禁在没有文档的情况下写代码，必须先编写需求、设计、测试文档。
+
 ### DDD 原则
 - ❌ `infrastructure` 引用 `interfaces`
 - ❌ `domain` 引用其他层
@@ -38,6 +42,10 @@
 发现问题 → 复现确认 → 定位根因 → 修复代码 → 测试验证 → 提交代码
 ```
 
+
+# 调试命令
+
+ 
 ## 常用命令
 
 ```bash
@@ -47,14 +55,12 @@ make dev
 # 停止开发环境
 make stop
 
-# 后端单独热重载开发
-make dev-backend
-
 # 后端编译和测试
 cd backend && go build ./cmd/server && go test ./...
 
 # 前端开发
-cd frontend && bun run dev
+# 使用pnpm 代替 npm
+cd frontend && pnpm run dev
 
 # E2E（必须会话隔离）
 PW_SESSION="${PILOT_SESSION_ID:-default}"
