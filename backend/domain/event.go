@@ -145,6 +145,11 @@ func (e *TaskPendingSummaryEvent) EventType() string {
 	return "TaskPendingSummary"
 }
 
+// Task 返回事件关联的任务
+func (e *TaskPendingSummaryEvent) Task() *Task {
+	return e.task
+}
+
 func (e *TaskPendingSummaryEvent) TraceID() TraceID {
 	return e.task.TraceID()
 }
