@@ -43,6 +43,7 @@ type MessageProcessor struct {
 	mcpService          *application.MCPApplicationService
 	skillsLoader        *skill.SkillsLoader
 	claudeCodeProcessor *ClaudeCodeProcessor
+	commandProcessor    *CommandProcessor
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -63,6 +64,10 @@ func NewMessageProcessor(
 	registry := llm.NewToolRegistry()
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
 
+	// 创建命令处理器并设置 sessionManager 引用
+	commandProcessor := NewCommandProcessor(logger)
+	SetSessionManager(sessionManager)
+
 	return &MessageProcessor{
 		bus:                 messageBus,
 		logger:              logger,
@@ -79,6 +84,7 @@ func NewMessageProcessor(
 		mcpService:          mcpService,
 		skillsLoader:        skillsLoader,
 		claudeCodeProcessor: NewClaudeCodeProcessor(logger, sessionManager, hookManager, providerRepo, idGenerator),
+		commandProcessor:    commandProcessor,
 	}
 }
 
@@ -172,13 +178,13 @@ func (p *MessageProcessor) Process(ctx context.Context, msg *bus.InboundMessage)
 func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.InboundMessage, session *Session, traceID, parentSpanID string) string {
 	content := strings.TrimSpace(msg.Content)
 
-	// 简单的命令处理
-	if strings.HasPrefix(content, "/help") {
-		return "可用命令:\n/help - 显示帮助信息\n/status - 显示状态"
-	}
-
-	if strings.HasPrefix(content, "/status") {
-		return fmt.Sprintf("状态正常\n会话: %s\n渠道: %s", msg.SessionKey(), msg.Channel)
+	// 检查是否是命令，优先处理命令
+	if p.commandProcessor != nil && p.commandProcessor.IsCommand(content) {
+		p.logger.Info("执行命令",
+			zap.String("session_key", msg.SessionKey()),
+			zap.String("content", content),
+		)
+		return p.commandProcessor.Process(ctx, msg)
 	}
 
 	// 获取 Agent 和 LLM 配置
