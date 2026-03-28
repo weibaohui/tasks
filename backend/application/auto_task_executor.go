@@ -429,26 +429,39 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	ctx := context.Background()
 
+	log.Printf("[finishTask] START taskID=%s, parentID=%v, status=%s",
+		task.ID(), task.ParentID(), task.Status())
+
 	// 如果是子任务，先将成对文档写入父任务的 subtask_records
 	if task.ParentID() != nil {
+		log.Printf("[finishTask] 子任务，写入父任务 subtask_records")
 		e.updateParentWithChildResult(task)
 	}
 
 	// 重新加载任务确保拿到最新状态（特别是 subtask_records 可能已被 updateParentWithChildResult 更新）
 	latestTask, err := e.repo.FindByID(ctx, task.ID())
 	if err != nil || latestTask == nil {
+		log.Printf("[finishTask] 重新加载失败，使用原始 task")
 		latestTask = task
+	} else {
+		log.Printf("[finishTask] 重新加载成功 taskID=%s, parentID=%v, subtaskRecords='%.100s'",
+			latestTask.ID(), latestTask.ParentID(), latestTask.SubtaskRecords())
 	}
 
 	// 收集子任务结果，提取每个子任务的成对文档到父任务的 subtask_records
 	todoListStr := latestTask.TodoList()
+	log.Printf("[finishTask] todoListStr len=%d", len(todoListStr))
+
 	if todoListStr != "" {
 		var todoList TodoList
 		if err := json.Unmarshal([]byte(todoListStr), &todoList); err == nil {
+			log.Printf("[finishTask] todoList items count=%d", len(todoList.Items))
 			for _, item := range todoList.Items {
 				// 获取子任务
 				subTask, err := e.repo.FindByID(ctx, domain.NewTaskID(item.SubTaskID))
 				if err == nil && subTask != nil {
+					log.Printf("[finishTask] 处理子任务 %s, conclusion='%.50s'",
+						item.SubTaskID, subTask.TaskConclusion())
 					// 从子任务获取 task_conclusion
 					if childConclusion := subTask.TaskConclusion(); childConclusion != "" {
 						// 构建成对文档并追加到 subtask_records
@@ -474,8 +487,8 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 
 	isParentWithSubtasks := latestTask.ParentID() == nil && todoListStr != ""
 
-	log.Printf("[finishTask] taskID=%s, isParent=%v, todoListStr len=%d, subtaskRecords len=%d",
-		latestTask.ID(), latestTask.ParentID() == nil, len(todoListStr), len(latestTask.SubtaskRecords()))
+	log.Printf("[finishTask] END decision: isParentWithSubtasks=%v, latestTask.ParentID()=%v, todoListStr!='' is %v",
+		isParentWithSubtasks, latestTask.ParentID() == nil, todoListStr != "")
 
 	// 如果是父任务（有子任务的），进入 PendingSummary 状态，等待 TaskSummarizer 生成总结
 	if isParentWithSubtasks {

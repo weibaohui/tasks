@@ -65,7 +65,8 @@ func (s *TaskSummarizer) HandlePendingSummary(event domain.DomainEvent) {
 		return
 	}
 
-	log.Printf("[TaskSummarizer] 开始处理任务总结: taskID=%s", task.ID())
+	log.Printf("[TaskSummarizer] 开始处理任务总结: taskID=%s, subtaskRecords='%.100s'",
+		task.ID(), task.SubtaskRecords())
 
 	// 解析 subtask_records
 	pairs, err := domain.ParseTaskResultPairs(task.SubtaskRecords())
@@ -139,12 +140,17 @@ func (s *TaskSummarizer) generateSummary(ctx context.Context, task *domain.Task,
 		return "", fmt.Errorf("LLM 调用失败: %w", err)
 	}
 
+	log.Printf("[TaskSummarizer] generateSummary result len=%d, content='%.200s'",
+		len(summary), summary)
+
 	return summary, nil
 }
 
 // completeTask 完成总结，设置结论并调用 Complete
 func (s *TaskSummarizer) completeTask(task *domain.Task, conclusion string) {
 	ctx := context.Background()
+
+	log.Printf("[TaskSummarizer] completeTask: taskID=%s, conclusion='%.200s'", task.ID(), conclusion)
 
 	task.SetTaskConclusion(conclusion)
 
