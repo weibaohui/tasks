@@ -155,20 +155,56 @@ func TestProgress(t *testing.T) {
 func TestProgress_Update(t *testing.T) {
 	p := NewProgress()
 
-	p.Update(50)
+	clamped := p.Update(50)
 
 	if p.Value() != 50 {
 		t.Errorf("期望进度为 50, 实际为 %d", p.Value())
+	}
+	if clamped {
+		t.Error("期望未发生 clamp")
 	}
 }
 
 func TestProgress_Update_ZeroTotal(t *testing.T) {
 	p := NewProgress()
 
-	p.Update(0)
+	clamped := p.Update(0)
 
 	if p.Value() != 0 {
 		t.Errorf("期望进度为 0, 实际为 %d", p.Value())
+	}
+	if clamped {
+		t.Error("期望未发生 clamp")
+	}
+}
+
+func TestProgress_Update_ClampBoundary(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    int
+		expected int
+		clamped  bool
+	}{
+		{"负数 clamp 到 0", -1, 0, true},
+		{"零值不变", 0, 0, false},
+		{"正常值 1 不变", 1, 1, false},
+		{"正常值 99 不变", 99, 99, false},
+		{"正常值 100 不变", 100, 100, false},
+		{"超过 100 clamp 到 100", 101, 100, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewProgress()
+			clamped := p.Update(tt.input)
+
+			if p.Value() != tt.expected {
+				t.Errorf("期望进度为 %d, 实际为 %d", tt.expected, p.Value())
+			}
+			if clamped != tt.clamped {
+				t.Errorf("期望 clamp=%v, 实际为 %v", tt.clamped, clamped)
+			}
+		})
 	}
 }
 
