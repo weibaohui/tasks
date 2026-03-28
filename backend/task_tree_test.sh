@@ -18,7 +18,7 @@ create_task() {
     local parent_id="$3"
     local trace_id="$4"
 
-    local data="{\"name\":\"$name\",\"type\":\"$task_type\",\"timeout\":60000}"
+    local data="{\"name\":\"$name\",\"type\":\"$task_type\",\"timeout\":60}"
     if [ -n "$parent_id" ]; then
         data=$(echo "$data" | jq --arg p "$parent_id" '. + {parent_id: $p}')
     fi

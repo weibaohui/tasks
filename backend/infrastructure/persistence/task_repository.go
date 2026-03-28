@@ -70,7 +70,7 @@ func (r *SQLiteTaskRepository) Save(ctx context.Context, task *domain.Task) erro
 		snap.AcceptanceCriteria, snap.TaskRequirement, snap.TaskConclusion,
 		snap.UserCode, snap.AgentCode, snap.ChannelCode, snap.SessionKey,
 		snap.TodoList, snap.Analysis, snap.Depth, snap.ParentSpan,
-		snap.Timeout.Milliseconds(), snap.MaxRetries, snap.Priority, int(snap.Status),
+		int64(snap.Timeout.Seconds()), snap.MaxRetries, snap.Priority, int(snap.Status),
 		snap.Progress.Value(), snap.ErrorMsg, snap.CreatedAt.Unix(),
 		startedAt, finishedAt,
 	)
@@ -178,7 +178,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 	var statusInt int
 	var createdAtUnix int64
 	var startedAtUnix, finishedAtUnix *int64
-	var timeoutMs int64
+	var timeoutSec int64
 	var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
 	var todoList, analysis, parentSpan sql.NullString
 	var depth int
@@ -190,7 +190,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 		&acceptanceCriteria, &taskRequirement, &taskConclusion,
 		&userCode, &agentCode, &channelCode, &sessionKey,
 		&todoList, &analysis, &depth, &parentSpan,
-		&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
+		&timeoutSec, &snap.MaxRetries, &snap.Priority, &statusInt,
 		&progress, &snap.ErrorMsg, &createdAtUnix,
 		&startedAtUnix, &finishedAtUnix,
 	)
@@ -217,7 +217,7 @@ func (r *SQLiteTaskRepository) scanToTask(row *sql.Row) (*domain.Task, error) {
 
 	snap.Type, _ = domain.ParseTaskType(typeStr)
 	snap.Status = domain.TaskStatus(statusInt)
-	snap.Timeout = time.Duration(timeoutMs) * time.Millisecond
+	snap.Timeout = time.Duration(timeoutSec) * time.Second
 	snap.CreatedAt = time.Unix(createdAtUnix, 0)
 
 	if parentIDStr != nil {
@@ -251,7 +251,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 		var statusInt int
 		var createdAtUnix int64
 		var startedAtUnix, finishedAtUnix *int64
-		var timeoutMs int64
+		var timeoutSec int64
 		var acceptanceCriteria, taskRequirement, taskConclusion, userCode, agentCode, channelCode, sessionKey sql.NullString
 		var todoList, analysis, parentSpan sql.NullString
 		var depth int
@@ -263,7 +263,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 			&acceptanceCriteria, &taskRequirement, &taskConclusion,
 			&userCode, &agentCode, &channelCode, &sessionKey,
 			&todoList, &analysis, &depth, &parentSpan,
-			&timeoutMs, &snap.MaxRetries, &snap.Priority, &statusInt,
+			&timeoutSec, &snap.MaxRetries, &snap.Priority, &statusInt,
 			&progress, &snap.ErrorMsg, &createdAtUnix,
 			&startedAtUnix, &finishedAtUnix,
 		)
@@ -290,7 +290,7 @@ func (r *SQLiteTaskRepository) scanToTasks(rows *sql.Rows) ([]*domain.Task, erro
 
 		snap.Type, _ = domain.ParseTaskType(typeStr)
 		snap.Status = domain.TaskStatus(statusInt)
-		snap.Timeout = time.Duration(timeoutMs) * time.Millisecond
+		snap.Timeout = time.Duration(timeoutSec) * time.Second
 		snap.CreatedAt = time.Unix(createdAtUnix, 0)
 
 		if parentIDStr != nil {

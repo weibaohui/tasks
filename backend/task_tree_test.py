@@ -12,7 +12,7 @@ def create_task(name, task_type, parent_id=None, trace_id=None):
     data = {
         "name": name,
         "type": task_type,
-        "timeout": 60000
+        "timeout": 60
     }
     if parent_id:
         data["parent_id"] = parent_id

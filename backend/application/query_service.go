@@ -137,7 +137,7 @@ func toGetTaskDTO(task *domain.Task) *GetTaskDTO {
 		Status:      task.Status().String(),
 		Depth:       task.Depth(),
 		ParentSpan:  task.ParentSpan(),
-		Timeout:     int64(task.Timeout()),
+		Timeout:     int64(task.Timeout().Seconds()),
 		MaxRetries:  task.MaxRetries(),
 		Priority:    task.Priority(),
 		CreatedAt:   task.CreatedAt().UnixMilli(),

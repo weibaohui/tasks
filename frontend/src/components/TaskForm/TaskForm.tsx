@@ -68,7 +68,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
     onSubmit({
       ...values,
       type: 'agent',
-      timeout: (values.timeout || 600) * 1e9,
+      timeout: values.timeout || 600,
       max_retries: values.max_retries || 0,
       priority: values.priority || 0,
       metadata: {

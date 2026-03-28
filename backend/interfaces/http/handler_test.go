@@ -114,7 +114,7 @@ func TestCreateTask(t *testing.T) {
 		"acceptance_criteria": "验收标准：所有功能正常运行",
 		"description": "任务描述",
 		"type": "agent",
-		"timeout": 60000,
+		"timeout": 60,
 		"max_retries": 3,
 		"priority": 5
 	}`

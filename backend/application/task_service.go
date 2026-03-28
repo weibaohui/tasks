@@ -110,7 +110,7 @@ func (s *TaskApplicationService) CreateTask(ctx context.Context, cmd CreateTaskC
 	}
 
 	// 3. 创建领域实体
-	timeout := time.Duration(cmd.Timeout) * time.Millisecond
+	timeout := time.Duration(cmd.Timeout) * time.Second
 	task, err := domain.NewTask(
 		taskID,
 		traceID,

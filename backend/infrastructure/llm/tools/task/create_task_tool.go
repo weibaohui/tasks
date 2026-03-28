@@ -59,7 +59,7 @@ func (t *CreateTaskTool) Description() string {
 参数 acceptance_criteria: 验收标准（必填）- 描述如何判断任务完成
 参数 description: 任务描述（可选）
 参数 task_type: 任务类型（可选），可选值: agent(智能体), coding(编码), custom(自定义)，默认 agent
-参数 timeout_ms: 超时时间毫秒数（可选），默认 60000
+参数 timeout_s: 超时时间秒数（可选），默认 60
 参数 priority: 优先级（可选），默认 0
 参数 parent_id: 父任务 ID（可选），用于创建子任务
 
@@ -91,9 +91,9 @@ func (t *CreateTaskTool) Parameters() json.RawMessage {
 				"type": "string",
 				"description": "任务类型（可选），可选值: agent(智能体), coding(编码), custom(自定义)，默认 agent"
 			},
-			"timeout_ms": {
+			"timeout_s": {
 				"type": "integer",
-				"description": "超时时间毫秒数（可选），默认 60000"
+				"description": "超时时间秒数（可选），默认 60"
 			},
 			"priority": {
 				"type": "integer",
@@ -116,7 +116,7 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 		AcceptanceCriteria string `json:"acceptance_criteria"`
 		Description        string `json:"description"`
 		TaskType          string `json:"task_type"`
-		TimeoutMs         int64  `json:"timeout_ms"`
+		TimeoutS          int64  `json:"timeout_s"`
 		Priority          int    `json:"priority"`
 		ParentID          string `json:"parent_id"`
 	}
@@ -171,9 +171,9 @@ func (t *CreateTaskTool) Execute(ctx context.Context, input json.RawMessage) (*l
 	}
 
 	// 确定超时时间
-	timeout := int64(60000) // 默认 60 秒
-	if args.TimeoutMs > 0 {
-		timeout = args.TimeoutMs
+	timeout := int64(60) // 默认 60 秒
+	if args.TimeoutS > 0 {
+		timeout = args.TimeoutS
 	}
 
 	// 确定优先级
