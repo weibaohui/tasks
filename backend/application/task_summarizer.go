@@ -324,6 +324,7 @@ func (s *TaskSummarizer) collectChildResults(ctx context.Context, task *domain.T
 func (s *TaskSummarizer) completeTaskAndNotifyParent(ctx context.Context, task *domain.Task, summary string) error {
 	// 设置总结
 	task.SetTaskConclusion(summary)
+	task.UpdateProgress(100)
 
 	// 完成当前任务
 	if err := task.Complete(); err != nil {

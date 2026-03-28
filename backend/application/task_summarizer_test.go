@@ -96,6 +96,9 @@ func TestTaskSummarizer_HandlePendingSummary_WithChildrenAndEmptyRecords(t *test
 	if updatedParent.Status() != domain.TaskStatusCompleted {
 		t.Fatalf("期望父任务为 Completed，实际为 %s", updatedParent.Status())
 	}
+	if updatedParent.Progress().Value() != 100 {
+		t.Fatalf("期望父任务进度为 100，实际为 %d", updatedParent.Progress().Value())
+	}
 	if updatedParent.TaskConclusion() != "父任务综合总结" {
 		t.Fatalf("期望父任务总结为 LLM 输出，实际为 %s", updatedParent.TaskConclusion())
 	}
