@@ -90,16 +90,12 @@ func (p *HookableProvider) Generate(ctx context.Context, prompt string) (string,
 
 // getUsage 获取底层 Provider 的 Usage
 func (p *HookableProvider) getUsage() domain.Usage {
-	if openAIProvider, ok := p.wrapped.(*OpenAIProvider); ok {
-		usage := openAIProvider.GetLastUsage()
-		return domain.Usage{
-			PromptTokens:     usage.PromptTokens,
-			CompletionTokens: usage.CompletionTokens,
-			TotalTokens:      usage.TotalTokens,
-		}
+	usage := p.wrapped.GetLastUsage()
+	return domain.Usage{
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		TotalTokens:      usage.TotalTokens,
 	}
-	// 其他 Provider 暂时返回空 Usage
-	return domain.Usage{}
 }
 
 // GenerateSubTasks 生成子任务计划（带 Hook 支持）
