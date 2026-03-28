@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/infrastructure/utils"
@@ -42,11 +43,12 @@ func inheritContextFromTask(parent *domain.Task, childTask *domain.Task) {
 }
 
 type AutoTaskExecutor struct {
-	repo       domain.TaskRepository
-	eventBus   interface{ Publish(domain.DomainEvent) }
-	registry   *TaskRegistry
-	workerPool interface{ Submit(*domain.Task) bool }
-	llmLookup *taskLLMProvider
+	repo        domain.TaskRepository
+	eventBus    interface{ Publish(domain.DomainEvent) }
+	registry    *TaskRegistry
+	workerPool  interface{ Submit(*domain.Task) bool }
+	llmLookup   *taskLLMProvider
+	hookManager *hook.Manager
 }
 
 func NewAutoTaskExecutor(
@@ -54,12 +56,14 @@ func NewAutoTaskExecutor(
 	eventBus interface{ Publish(domain.DomainEvent) },
 	registry *TaskRegistry,
 	workerPool interface{ Submit(*domain.Task) bool },
+	hookManager *hook.Manager,
 ) *AutoTaskExecutor {
 	return &AutoTaskExecutor{
-		repo:       repo,
-		eventBus:   eventBus,
-		registry:   registry,
-		workerPool: workerPool,
+		repo:        repo,
+		eventBus:    eventBus,
+		registry:    registry,
+		workerPool:  workerPool,
+		hookManager: hookManager,
 	}
 }
 
@@ -115,13 +119,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 		// 达到最大深度时，仍然需要调用 LLM 获取最终结论
 		if llmProvider != nil {
 			e.updateProgress(task, 95, "获取最终结论", "达到最大深度，调用 LLM 获取结论")
-			plan, llmErr := llmProvider.GenerateSubTasks(
-				ctx,
-				task.Name(),
-				task.Description(),
-				currentDepth,
-				MaxTaskDepth,
-			)
+			plan, llmErr := e.callLLMWithHook(ctx, task, llmProvider, currentDepth)
 			if llmErr == nil && plan != nil && plan.Reason != "" {
 				task.SetTaskConclusion(plan.Reason)
 			}
@@ -139,13 +137,7 @@ func (e *AutoTaskExecutor) ExecuteAutoTask(ctx context.Context, task *domain.Tas
 	} else if llmProvider != nil {
 		e.updateProgress(task, 5, "LLM 规划中", "正在调用 LLM 生成子任务...")
 
-		plan, err := llmProvider.GenerateSubTasks(
-			ctx,
-			task.Name(),
-			task.Description(),
-			currentDepth,
-			MaxTaskDepth,
-		)
+		plan, err := e.callLLMWithHook(ctx, task, llmProvider, currentDepth)
 		if err != nil {
 			log.Printf("[AutoExecutor] LLM 生成子任务失败: %v", err)
 			if isAgentTask {
@@ -539,6 +531,91 @@ func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {
 
 func (e *AutoTaskExecutor) saveTaskPreservingMetadata(task *domain.Task) {
 	e.repo.Save(context.Background(), task)
+}
+
+// callLLMWithHook 调用 LLM 生成子任务（带 Hook 支持）
+func (e *AutoTaskExecutor) callLLMWithHook(ctx context.Context, task *domain.Task, llmProvider llm.LLMProvider, depth int) (*llm.SubTaskPlan, error) {
+	prompt := llm.SubTaskPrompt(task.Name(), task.Description(), depth, MaxTaskDepth)
+
+	// 从 context 获取 traceID
+	taskTraceID := trace.GetTraceID(ctx)
+	if taskTraceID == "" {
+		taskTraceID = task.TraceID().String()
+	}
+
+	// 构建 call metadata（从任务继承的上下文）
+	callMetadata := make(map[string]string)
+	if sessionKey := task.SessionKey(); sessionKey != "" {
+		callMetadata["session_key"] = sessionKey
+	}
+	if agentCode := task.AgentCode(); agentCode != "" {
+		callMetadata["agent_code"] = agentCode
+	}
+	if userCode := task.UserCode(); userCode != "" {
+		callMetadata["user_code"] = userCode
+	}
+	if channelCode := task.ChannelCode(); channelCode != "" {
+		callMetadata["channel_code"] = channelCode
+	}
+
+	// PreLLMCall hook
+	if e.hookManager != nil {
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("trace_id", taskTraceID)
+		hookCtx.SetMetadata("session_key", task.SessionKey())
+
+		callCtx := &domain.LLMCallContext{
+			Prompt:    prompt,
+			UserInput: task.Description(),
+			Model:     llmProvider.Name(),
+			SessionID: task.SessionKey(),
+			TraceID:   taskTraceID,
+			Metadata:  callMetadata,
+		}
+		modifiedCtx, err := e.hookManager.PreLLMCall(hookCtx, callCtx)
+		if err != nil {
+			log.Printf("[AutoExecutor] PreLLMCall hook failed: %v", err)
+		} else if modifiedCtx != nil {
+			prompt = modifiedCtx.Prompt
+		}
+	}
+
+	// 调用 LLM
+	plan, err := llmProvider.GenerateSubTasks(ctx, task.Name(), task.Description(), depth, MaxTaskDepth)
+
+	// PostLLMCall hook
+	if e.hookManager != nil {
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("trace_id", taskTraceID)
+		hookCtx.SetMetadata("session_key", task.SessionKey())
+
+		var respContent string
+		var usage domain.Usage
+		if plan != nil {
+			// 使用 plan 的 reason 作为响应内容
+			respContent = plan.Reason
+			for _, st := range plan.SubTasks {
+				respContent += "\n- " + st.Goal
+			}
+		}
+
+		resp := &domain.LLMResponse{
+			Content: respContent,
+			Model:   llmProvider.Name(),
+			Usage:   usage,
+		}
+		_, err := e.hookManager.PostLLMCall(hookCtx, &domain.LLMCallContext{
+			Prompt:    prompt,
+			SessionID: task.SessionKey(),
+			TraceID:   taskTraceID,
+			Metadata:  callMetadata,
+		}, resp)
+		if err != nil {
+			log.Printf("[AutoExecutor] PostLLMCall hook failed: %v", err)
+		}
+	}
+
+	return plan, err
 }
 
 func (e *AutoTaskExecutor) executeSubTaskAsync(ctx context.Context, task *domain.Task) {

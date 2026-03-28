@@ -119,7 +119,7 @@ func main() {
 	workerPool := application.NewWorkerPool(3, logger)
 
 	// 6.1 初始化自动任务执行器
-	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool)
+	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool, hookManager)
 	// 设置仓库用于动态 LLM 查找
 	llmFactory := llm.NewLLMProviderFactory()
 	autoExecutor.SetRepositories(agentRepo, providerRepo, channelRepo, llmFactory)
