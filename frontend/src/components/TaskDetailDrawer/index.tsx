@@ -3,7 +3,7 @@
  * 展示任务详情和子任务列表
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Drawer, Descriptions, Tag, Button, Space, Spin, Row, Col, Divider, Tree } from 'antd';
+import { Drawer, Tag, Button, Space, Spin, Row, Col, Divider, Tree, Card } from 'antd';
 import { TeamOutlined, ReloadOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../StatusBadge';
 import { ProgressBar } from '../ProgressBar';
@@ -173,7 +173,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
         </div>
       ) : activeTask ? (
         <Row gutter={16}>
-          <Col span={8}>
+          <Col style={{ width: 300, flexShrink: 0 }}>
             <CardTreeContainer>
               <div style={{ fontWeight: 600, marginBottom: 12 }}>任务树</div>
               <Tree
@@ -194,80 +194,79 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
             </CardTreeContainer>
           </Col>
 
-          <Col span={16}>
-            <Descriptions column={2} bordered size="small" title="基本信息">
-              <Descriptions.Item label="任务ID">
-                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{activeTask.id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <StatusBadge status={activeTask.status as TaskStatus} />
-              </Descriptions.Item>
-              <Descriptions.Item label="任务名称">{activeTask.name}</Descriptions.Item>
-              <Descriptions.Item label="类型">
-                <Tag color="blue">{activeTask.type}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="TraceID">
-                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{activeTask.trace_id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="SpanID">
-                <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{activeTask.span_id}</span>
-              </Descriptions.Item>
-              <Descriptions.Item label="深度">{activeTask.depth}</Descriptions.Item>
-              <Descriptions.Item label="父Span">{activeTask.parent_span || '-'}</Descriptions.Item>
-              <Descriptions.Item label="优先级">{activeTask.priority}</Descriptions.Item>
-              <Descriptions.Item label="超时">{activeTask.timeout}ms</Descriptions.Item>
-              <Descriptions.Item label="创建时间">
-                {new Date(activeTask.created_at).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="开始时间">
-                {activeTask.started_at ? new Date(activeTask.started_at).toLocaleString() : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="完成时间">
-                {activeTask.finished_at ? new Date(activeTask.finished_at).toLocaleString() : '-'}
-              </Descriptions.Item>
-            </Descriptions>
+          <Col flex="1">
+            <Card size="small" title="基本信息" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
+                <div><span style={{ color: '#999' }}>状态：</span><StatusBadge status={activeTask.status as TaskStatus} /></div>
+                <div><span style={{ color: '#999' }}>类型：</span><Tag color="blue">{activeTask.type}</Tag></div>
+                <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#999' }}>任务名称：</span>{activeTask.name}</div>
+                <div><span style={{ color: '#999' }}>优先级：</span>{activeTask.priority}</div>
+                <div><span style={{ color: '#999' }}>超时：</span>{Math.round(activeTask.timeout / 1e9)}s</div>
+                <div><span style={{ color: '#999' }}>创建时间：</span>{new Date(activeTask.created_at).toLocaleString()}</div>
+                <div><span style={{ color: '#999' }}>开始时间：</span>{activeTask.started_at ? new Date(activeTask.started_at).toLocaleString() : '-'}</div>
+                <div><span style={{ color: '#999' }}>完成时间：</span>{activeTask.finished_at ? new Date(activeTask.finished_at).toLocaleString() : '-'}</div>
+              </div>
+            </Card>
             <Divider />
 
-            {activeTask.description && (
-              <Descriptions column={1} bordered size="small" title="描述">
-                <Descriptions.Item>{activeTask.description}</Descriptions.Item>
-              </Descriptions>
-            )}
+            <Card size="small" title="任务详情" style={{ marginBottom: 16 }}>
+              {activeTask.description && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>描述</div>
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{activeTask.description}</div>
+                </div>
+              )}
 
-            {activeTask.task_requirement && (
-              <Descriptions column={1} bordered size="small" title="任务要求">
-                <Descriptions.Item>{activeTask.task_requirement}</Descriptions.Item>
-              </Descriptions>
-            )}
+              {activeTask.task_requirement && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>任务要求</div>
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{activeTask.task_requirement}</div>
+                </div>
+              )}
 
-            {activeTask.acceptance_criteria && (
-              <Descriptions column={1} bordered size="small" title="验收标准">
-                <Descriptions.Item>{activeTask.acceptance_criteria}</Descriptions.Item>
-              </Descriptions>
-            )}
+              {activeTask.acceptance_criteria && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>验收标准</div>
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{activeTask.acceptance_criteria}</div>
+                </div>
+              )}
 
-            <Descriptions column={1} bordered size="small" title="执行进度">
-              <Descriptions.Item>
+              <div>
+                <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>执行进度</div>
                 <ProgressBar progress={activeTask.progress} />
-              </Descriptions.Item>
-            </Descriptions>
-            <Divider />
+              </div>
+            </Card>
 
             {activeTask.error && (
-              <Descriptions column={1} bordered size="small" title="错误信息">
-                <Descriptions.Item>
-                  <pre style={{ color: 'red', margin: 0 }}>{activeTask.error}</pre>
-                </Descriptions.Item>
-              </Descriptions>
+              <Card size="small" title="错误信息" style={{ marginBottom: 16, borderColor: '#ffccc7' }}>
+                <pre style={{ color: 'red', margin: 0, whiteSpace: 'pre-wrap' }}>{activeTask.error}</pre>
+              </Card>
+            )}
+
+            {(activeTask.task_conclusion || activeTask.analysis) && (
+              <Card size="small" title="执行结论" style={{ marginBottom: 16 }}>
+                {activeTask.task_conclusion && (
+                  <div style={{ marginBottom: activeTask.analysis ? 16 : 0 }}>
+                    <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>任务结论</div>
+                    <ExpandableContent text={activeTask.task_conclusion} maxLen={400} />
+                  </div>
+                )}
+                {activeTask.analysis && (
+                  <div>
+                    <div style={{ fontWeight: 500, marginBottom: 4, color: '#666' }}>分析</div>
+                    <ExpandableContent text={activeTask.analysis} maxLen={400} style={{ color: '#666' }} />
+                  </div>
+                )}
+              </Card>
             )}
 
             <Divider />
 
-            <ExecutionSummaryPanel task={activeTask} traceTasks={traceTasks} />
-
-            <Divider />
-
-            <TodoList todoList={todoList} loading={loading} />
+            <TodoList
+              todoList={todoList}
+              childTasks={traceTasks.filter((t) => t.parent_id === activeTask.id)}
+              loading={loading}
+            />
           </Col>
         </Row>
       ) : (
@@ -281,32 +280,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({ taskId, open
 
 export default TaskDetailDrawer;
 
-const ExpandableText: React.FC<{ text: string; maxLen?: number }> = ({ text, maxLen = 60 }) => {
-  const [expanded, setExpanded] = useState(false);
-  if (text.length <= maxLen) {
-    return <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>;
-  }
-  return expanded ? (
-    <span>
-      <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>
-      <a onClick={() => setExpanded(false)} style={{ marginLeft: 4, fontSize: 12 }}>收起</a>
-    </span>
-  ) : (
-    <span>
-      {text.slice(0, maxLen)}...
-      <a onClick={() => setExpanded(true)} style={{ marginLeft: 4, fontSize: 12 }}>展开</a>
-    </span>
-  );
-};
-
 const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
     style={{
       border: '1px solid #f0f0f0',
       borderRadius: 8,
       padding: 12,
-      minHeight: 680,
-      maxHeight: 680,
+      height: 'calc(100vh - 120px)',
       overflow: 'auto',
       background: '#fafafa',
     }}
@@ -315,68 +295,26 @@ const CardTreeContainer: React.FC<{ children: React.ReactNode }> = ({ children }
   </div>
 );
 
-/**
- * 任务执行结果面板
- */
-const ExecutionSummaryPanel: React.FC<{ task: Task; traceTasks: Task[] }> = ({ task, traceTasks }) => {
-  const childTasks = traceTasks.filter((t) => t.parent_id === task.id);
+const ExpandableContent: React.FC<{ text: string; maxLen?: number; style?: React.CSSProperties }> = ({
+  text,
+  maxLen = 400,
+  style,
+}) => {
+  const [expanded, setExpanded] = useState(false);
 
-  // 如果没有任何结果信息，则不显示
-  if (!task.task_conclusion && !task.analysis && childTasks.length === 0) {
-    return null;
+  if (text.length <= maxLen) {
+    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, ...style }}>{text}</div>;
   }
 
   return (
-    <Descriptions column={1} bordered size="small" title="执行结果">
-      <Descriptions.Item>
-        {task.task_conclusion && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>任务结论：</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{task.task_conclusion}</div>
-          </div>
-        )}
-
-        {task.analysis && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>分析：</div>
-            <div style={{ whiteSpace: 'pre-wrap', color: '#666' }}>{task.analysis}</div>
-          </div>
-        )}
-
-        {childTasks.length > 0 && (
-          <div>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>子任务：</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>任务ID</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>名称</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>状态</th>
-                  <th style={{ padding: '6px 8px', border: '1px solid #f0f0f0', textAlign: 'left' }}>结论</th>
-                </tr>
-              </thead>
-              <tbody>
-                {childTasks.map((child) => (
-                  <tr key={child.id}>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', fontFamily: 'monospace' }}>
-                      {child.id.slice(0, 8)}...
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>{child.name}</td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0' }}>
-                      <StatusBadge status={child.status as TaskStatus} />
-                    </td>
-                    <td style={{ padding: '6px 8px', border: '1px solid #f0f0f0', color: '#52c41a' }}>
-                      {child.task_conclusion
-                        ? <ExpandableText text={child.task_conclusion} />
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Descriptions.Item>
-    </Descriptions>
+    <div style={{ ...style }}>
+      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+        {expanded ? text : text.slice(0, maxLen) + '...'}
+      </div>
+      <a onClick={() => setExpanded(!expanded)} style={{ fontSize: 13 }}>
+        {expanded ? '收起' : '更多'}
+      </a>
+    </div>
   );
 };
+

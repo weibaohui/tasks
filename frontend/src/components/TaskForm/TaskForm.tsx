@@ -68,7 +68,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
     onSubmit({
       ...values,
       type: 'agent',
-      timeout: values.timeout || 60000,
+      timeout: (values.timeout || 600) * 1e9,
       max_retries: values.max_retries || 0,
       priority: values.priority || 0,
       metadata: {
@@ -150,8 +150,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, loading 
         </Select>
       </Form.Item>
 
-      <Form.Item name="timeout" label="超时时间 (ms)">
-        <InputNumber min={1000} step={1000} defaultValue={60000} style={{ width: '100%' }} />
+      <Form.Item name="timeout" label="超时时间 (秒)">
+        <InputNumber min={1} step={10} defaultValue={600} style={{ width: '100%' }} />
       </Form.Item>
 
       <Form.Item name="max_retries" label="最大重试次数">
