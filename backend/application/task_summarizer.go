@@ -28,7 +28,7 @@ type TaskSummarizer struct {
 
 	// 按 traceId 分组的事件 channel
 	traceChannels map[string]chan *domain.TaskPendingSummaryEvent
-	traceStopCh  chan string // 停止某个 traceId 的处理
+	traceStopCh   chan string // 停止某个 traceId 的处理
 
 	mu sync.RWMutex
 }
@@ -40,9 +40,9 @@ func NewTaskSummarizer(
 	eventBus *bus.EventBus,
 ) *TaskSummarizer {
 	return &TaskSummarizer{
-		repo:      repo,
-		executor:  executor,
-		eventBus:  eventBus,
+		repo:     repo,
+		executor: executor,
+		eventBus: eventBus,
 		providerResolver: func(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
 			if executor == nil || executor.llmLookup == nil {
 				return nil, fmt.Errorf("LLM provider resolver 未初始化")
@@ -62,8 +62,30 @@ func (s *TaskSummarizer) Start() {
 			s.dispatchByTraceId(pendingEvent)
 		}
 	})
+	go s.recoverPendingSummaryTasks()
 
 	log.Println("[TaskSummarizer] 已启动，按 traceId 分组串行处理事件")
+}
+
+func (s *TaskSummarizer) recoverPendingSummaryTasks() {
+	ctx := context.Background()
+	tasks, err := s.repo.FindByStatus(ctx, domain.TaskStatusPendingSummary)
+	if err != nil {
+		log.Printf("[TaskSummarizer] 恢复 PendingSummary 任务失败: %v", err)
+		return
+	}
+	if len(tasks) == 0 {
+		return
+	}
+
+	log.Printf("[TaskSummarizer] 发现待恢复总结任务: %d", len(tasks))
+	for _, task := range tasks {
+		if task == nil {
+			continue
+		}
+		log.Printf("[TaskSummarizer] 重新派发 PendingSummary 任务: taskID=%s, traceID=%s", task.ID(), task.TraceID())
+		s.dispatchByTraceId(domain.NewTaskPendingSummaryEvent(task))
+	}
 }
 
 // dispatchByTraceId 根据 traceId 分发事件到对应 channel

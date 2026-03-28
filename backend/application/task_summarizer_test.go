@@ -141,6 +141,60 @@ func TestTaskSummarizer_NotifyParentToCollect_UpsertWithoutDuplicate(t *testing.
 	}
 }
 
+func TestTaskSummarizer_Start_RecoversPendingSummaryTasks(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockTaskRepository()
+	eventBus := bus.NewEventBus()
+
+	parent := mustCreateRunningTask(t, "task-parent-recover", nil, "父任务恢复", "整体验收")
+	childA := mustCreateCompletedTask(t, "task-child-recover-a", parent.ID(), "子任务A", "A结论")
+	childB := mustCreateCompletedTask(t, "task-child-recover-b", parent.ID(), "子任务B", "B结论")
+
+	todo := NewTodoList(parent.ID().String())
+	todo.AddItem(childA.ID().String(), childA.Name(), childA.Type().String(), "span-a", TodoStatusCompleted)
+	todo.AddItem(childB.ID().String(), childB.Name(), childB.Type().String(), "span-b", TodoStatusCompleted)
+	parent.SetTodoList(todo.ToJSON())
+	if err := parent.PendingSummary(); err != nil {
+		t.Fatalf("父任务进入 PendingSummary 失败: %v", err)
+	}
+
+	if err := repo.Save(ctx, parent); err != nil {
+		t.Fatalf("保存父任务失败: %v", err)
+	}
+	if err := repo.Save(ctx, childA); err != nil {
+		t.Fatalf("保存子任务 A 失败: %v", err)
+	}
+	if err := repo.Save(ctx, childB); err != nil {
+		t.Fatalf("保存子任务 B 失败: %v", err)
+	}
+
+	provider := &fakeSummaryProvider{summary: "恢复后的父任务总结"}
+	summarizer := NewTaskSummarizer(repo, nil, eventBus)
+	summarizer.providerResolver = func(ctx context.Context, task *domain.Task) (llm.LLMProvider, error) {
+		return provider, nil
+	}
+
+	summarizer.Start()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		updatedParent, err := repo.FindByID(ctx, parent.ID())
+		if err != nil {
+			t.Fatalf("重新读取父任务失败: %v", err)
+		}
+		if updatedParent.Status() == domain.TaskStatusCompleted {
+			if updatedParent.TaskConclusion() != "恢复后的父任务总结" {
+				t.Fatalf("期望恢复后的总结内容匹配，实际为 %s", updatedParent.TaskConclusion())
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("超时未完成恢复，当前状态=%s", updatedParent.Status())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func mustCreateRunningTask(t *testing.T, id string, parentID *domain.TaskID, name string, acceptance string) *domain.Task {
 	t.Helper()
 	task, err := domain.NewTask(

@@ -78,15 +78,31 @@ func (m *mockTaskRepository) FindByTraceID(ctx context.Context, traceID domain.T
 }
 
 func (m *mockTaskRepository) FindByParentID(ctx context.Context, parentID domain.TaskID) ([]*domain.Task, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []*domain.Task
+	for _, task := range m.tasks {
+		if task.ParentID() != nil && task.ParentID().String() == parentID.String() {
+			result = append(result, task)
+		}
+	}
+	return result, nil
 }
 
 func (m *mockTaskRepository) FindByStatus(ctx context.Context, status domain.TaskStatus) ([]*domain.Task, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []*domain.Task
+	for _, task := range m.tasks {
+		if task.Status() == status {
+			result = append(result, task)
+		}
+	}
+	return result, nil
 }
 
 func (m *mockTaskRepository) FindRunningTasks(ctx context.Context) ([]*domain.Task, error) {
-	return nil, nil
+	return m.FindByStatus(ctx, domain.TaskStatusRunning)
 }
 
 func (m *mockTaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
