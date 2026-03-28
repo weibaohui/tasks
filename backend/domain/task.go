@@ -6,8 +6,12 @@ package domain
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // 领域错误定义
@@ -45,6 +49,7 @@ type Task struct {
 	acceptanceCriteria string
 	taskRequirement    string
 	taskConclusion     string
+	subtaskRecords     string // YAML: 子任务成对文档汇总（仅父任务使用）
 	userCode           string
 	agentCode          string
 	channelCode        string
@@ -63,6 +68,69 @@ type Task struct {
 	domainEvents []DomainEvent
 
 	mu sync.RWMutex
+}
+
+// TaskResultPair 子任务成对文档
+// 包含任务要求、验收标准、任务名称和任务结论，用于父子任务结果汇总
+type TaskResultPair struct {
+	TaskName            string     `yaml:"task_name"`
+	TaskRequirement     string     `yaml:"task_requirement"`
+	AcceptanceCriteria  string     `yaml:"acceptance_criteria"`
+	TaskConclusion      string     `yaml:"task_conclusion"`
+	CompletedAt         *time.Time `yaml:"completed_at,omitempty"`
+	Status              TaskStatus `yaml:"status"`
+}
+
+// ToYAML 将 TaskResultPair 序列化为 YAML 格式
+func (p *TaskResultPair) ToYAML() string {
+	data, err := yaml.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ParseTaskResultPairs 解析 YAML 格式的子任务成对文档
+// records 是 YAML 格式的字符串，多个文档用 --- 分隔
+func ParseTaskResultPairs(records string) ([]TaskResultPair, error) {
+	if records == "" {
+		return nil, nil
+	}
+
+	// 按 --- 分隔 YAML 文档
+	docs := strings.Split(records, "---")
+	var pairs []TaskResultPair
+
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" || strings.HasPrefix(doc, "#") {
+			continue
+		}
+		var pair TaskResultPair
+		if err := yaml.Unmarshal([]byte(doc), &pair); err != nil {
+			return nil, fmt.Errorf("解析 TaskResultPair 失败: %w", err)
+		}
+		pairs = append(pairs, pair)
+	}
+	return pairs, nil
+}
+
+// AppendTaskResultPair 将 TaskResultPair 添加到现有的 YAML 记录中
+func AppendTaskResultPair(existingRecords string, pair TaskResultPair) (string, error) {
+	pairYAML := pair.ToYAML()
+	if pairYAML == "" {
+		return existingRecords, nil
+	}
+
+	if existingRecords == "" {
+		return pairYAML, nil
+	}
+
+	// 确保结尾有换行符
+	existingRecords = strings.TrimRight(existingRecords, "\n")
+
+	// 添加分隔符和新文档
+	return existingRecords + "\n---\n" + pairYAML, nil
 }
 
 // NewTask 工厂方法：创建任务
@@ -160,6 +228,17 @@ func (t *Task) SetTaskConclusion(conclusion string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.taskConclusion = conclusion
+}
+
+func (t *Task) SubtaskRecords() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.subtaskRecords
+}
+func (t *Task) SetSubtaskRecords(records string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.subtaskRecords = records
 }
 
 func (t *Task) UserCode() string {
@@ -426,6 +505,7 @@ func (t *Task) ToSnapshot() TaskSnapshot {
 		AcceptanceCriteria: t.acceptanceCriteria,
 		TaskRequirement:    t.taskRequirement,
 		TaskConclusion:    t.taskConclusion,
+		SubtaskRecords:     t.subtaskRecords,
 		UserCode:           t.userCode,
 		AgentCode:          t.agentCode,
 		ChannelCode:        t.channelCode,
@@ -463,6 +543,7 @@ func (t *Task) FromSnapshot(snap *TaskSnapshot) {
 	t.acceptanceCriteria = snap.AcceptanceCriteria
 	t.taskRequirement = snap.TaskRequirement
 	t.taskConclusion = snap.TaskConclusion
+	t.subtaskRecords = snap.SubtaskRecords
 	t.userCode = snap.UserCode
 	t.agentCode = snap.AgentCode
 	t.channelCode = snap.ChannelCode

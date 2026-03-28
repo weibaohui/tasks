@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     session_key TEXT,
     todo_list TEXT,
     analysis TEXT,
+    subtask_records TEXT,
     depth INTEGER NOT NULL DEFAULT 0,
     parent_span TEXT,
     timeout INTEGER NOT NULL,
@@ -326,6 +327,7 @@ func migrateTasksNewColumns(db *sql.DB) error {
 		{"analysis", "TEXT", "", ""},
 		{"depth", "INTEGER", "", "0"},
 		{"parent_span", "TEXT", "", ""},
+		{"subtask_records", "TEXT", "", ""},
 	}
 
 	for _, col := range newColumns {

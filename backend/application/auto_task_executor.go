@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -427,54 +428,53 @@ func (e *AutoTaskExecutor) waitChildrenDone(ctx context.Context, task *domain.Ta
 }
 
 func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
-	resultData := map[string]interface{}{
-		"completed_at": time.Now().UnixMilli(),
-	}
-
 	// 获取任务自身的结论
 	taskConclusion := task.TaskConclusion()
 
-	// 收集子任务结果，提取每个子任务的 task_conclusion
-	var allChildConclusions []string
+	// 如果是子任务，先将成对文档写入父任务的 subtask_records
+	if task.ParentID() != nil {
+		e.updateParentWithChildResult(task)
+	}
+
+	// 收集子任务结果，提取每个子任务的成对文档
 	todoListStr := task.TodoList()
 	if todoListStr != "" {
 		var todoList TodoList
 		if err := json.Unmarshal([]byte(todoListStr), &todoList); err == nil {
-			subTaskResults := make([]map[string]interface{}, 0, len(todoList.Items))
 			for _, item := range todoList.Items {
 				// 获取子任务
 				subTask, err := e.repo.FindByID(context.Background(), domain.NewTaskID(item.SubTaskID))
 				if err == nil && subTask != nil {
-					subResult := map[string]interface{}{
-						"task_id":   item.SubTaskID,
-						"goal":      item.Goal,
-						"status":    string(item.Status),
-						"progress":  item.Progress,
-					}
 					// 从子任务获取 task_conclusion
 					if childConclusion := subTask.TaskConclusion(); childConclusion != "" {
-						subResult["task_conclusion"] = childConclusion
-						allChildConclusions = append(allChildConclusions, childConclusion)
+						// 构建成对文档并追加到 subtask_records
+						completedAt := time.Now()
+						pair := domain.TaskResultPair{
+							TaskName:           subTask.Name(),
+							TaskRequirement:    subTask.TaskRequirement(),
+							AcceptanceCriteria: subTask.AcceptanceCriteria(),
+							TaskConclusion:     childConclusion,
+							CompletedAt:         &completedAt,
+							Status:             subTask.Status(),
+						}
+						existingRecords := task.SubtaskRecords()
+						newRecords, err := domain.AppendTaskResultPair(existingRecords, pair)
+						if err == nil {
+							task.SetSubtaskRecords(newRecords)
+						}
 					}
-					subTaskResults = append(subTaskResults, subResult)
 				}
-			}
-			if len(subTaskResults) > 0 {
-				resultData["sub_tasks_results"] = subTaskResults
 			}
 		}
 	}
 
-	// 如果任务没有自己的结论，聚合子任务的结论
-	if taskConclusion == "" && len(allChildConclusions) > 0 {
-		combinedConclusion := ""
-		for i, r := range allChildConclusions {
-			if i > 0 {
-				combinedConclusion += "\n\n"
-			}
-			combinedConclusion += r
+	// 如果是父任务且有 subtask_records，从成对文档生成总结
+	if task.ParentID() == nil && task.SubtaskRecords() != "" {
+		pairs, err := domain.ParseTaskResultPairs(task.SubtaskRecords())
+		if err == nil && len(pairs) > 0 && taskConclusion == "" {
+			// 生成总结：基于子任务成对文档和父任务要求生成总结
+			taskConclusion = e.generateSummary(task, pairs)
 		}
-		taskConclusion = combinedConclusion
 	}
 
 	// 确保 task_conclusion 一定有值
@@ -495,17 +495,28 @@ func (e *AutoTaskExecutor) finishTask(task *domain.Task) error {
 	return nil
 }
 
-// updateParentWithChildResult 更新父任务的 result，将当前任务的 task_conclusion 追加到父任务的 sub_tasks_results 中
+// updateParentWithChildResult 更新父任务的 subtask_records，将子任务的成对文档追加到其中
 func (e *AutoTaskExecutor) updateParentWithChildResult(task *domain.Task) {
 	parentID := task.ParentID()
 	if parentID == nil {
 		return
 	}
 
-	// 获取当前任务的 task_conclusion
+	// 获取子任务的信息
 	taskConclusion := task.TaskConclusion()
 	if taskConclusion == "" {
 		return
+	}
+
+	// 构建子任务成对文档
+	completedAt := time.Now()
+	pair := domain.TaskResultPair{
+		TaskName:           task.Name(),
+		TaskRequirement:    task.TaskRequirement(),
+		AcceptanceCriteria: task.AcceptanceCriteria(),
+		TaskConclusion:     taskConclusion,
+		CompletedAt:         &completedAt,
+		Status:             task.Status(),
 	}
 
 	// 获取父任务
@@ -514,8 +525,48 @@ func (e *AutoTaskExecutor) updateParentWithChildResult(task *domain.Task) {
 		return
 	}
 
+	// 将成对文档追加到父任务的 subtask_records
+	existingRecords := parent.SubtaskRecords()
+	newRecords, err := domain.AppendTaskResultPair(existingRecords, pair)
+	if err != nil {
+		log.Printf("追加子任务成对文档失败: %v", err)
+		return
+	}
+
+	parent.SetSubtaskRecords(newRecords)
+
 	// 更新父任务的保存
 	e.repo.Save(context.Background(), parent)
+}
+
+// generateSummary 根据子任务成对文档生成父任务总结
+func (e *AutoTaskExecutor) generateSummary(parent *domain.Task, pairs []domain.TaskResultPair) string {
+	var sb strings.Builder
+
+	sb.WriteString("## 任务总结\n\n")
+	sb.WriteString("### 任务要求\n")
+	sb.WriteString(parent.TaskRequirement())
+	sb.WriteString("\n\n")
+
+	if parent.AcceptanceCriteria() != "" {
+		sb.WriteString("### 验收标准\n")
+		sb.WriteString(parent.AcceptanceCriteria())
+		sb.WriteString("\n\n")
+	}
+
+	sb.WriteString("### 子任务完成情况\n")
+	for i, pair := range pairs {
+		sb.WriteString(fmt.Sprintf("#### %d. %s\n", i+1, pair.TaskName))
+		sb.WriteString(fmt.Sprintf("- 要求: %s\n", pair.TaskRequirement))
+		if pair.AcceptanceCriteria != "" {
+			sb.WriteString(fmt.Sprintf("- 验收标准: %s\n", pair.AcceptanceCriteria))
+		}
+		sb.WriteString(fmt.Sprintf("- 结论: %s\n", pair.TaskConclusion))
+		sb.WriteString(fmt.Sprintf("- 状态: %s\n", pair.Status))
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
 
 func (e *AutoTaskExecutor) failTask(task *domain.Task, taskErr error) error {

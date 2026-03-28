@@ -204,6 +204,7 @@ type TaskSnapshot struct {
 	AcceptanceCriteria string
 	TaskRequirement    string
 	TaskConclusion     string
+	SubtaskRecords     string                 // YAML: 子任务成对文档汇总
 	UserCode           string
 	AgentCode          string
 	ChannelCode        string
