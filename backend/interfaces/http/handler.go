@@ -54,6 +54,10 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 		return http.StatusConflict, "task is not running"
 	case errors.Is(err, domain.ErrTaskAlreadyFinished):
 		return http.StatusConflict, "task already finished"
+	case errors.Is(err, application.ErrSubTaskDepthExceed):
+		return http.StatusBadRequest, "subtask depth exceeds maximum limit (1 level)"
+	case errors.Is(err, application.ErrSubTaskCountExceed):
+		return http.StatusBadRequest, "subtask count exceeds maximum limit (3 per parent)"
 	default:
 		return http.StatusInternalServerError, "internal server error"
 	}

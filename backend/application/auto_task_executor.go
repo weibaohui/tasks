@@ -19,7 +19,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
-const MaxTaskDepth = 4
+const MaxTaskDepth = MaxSubTaskDepth
 
 // inheritContextFromTask 从父任务继承上下文信息（agent_code, user_code, channel_code, session_key）
 func inheritContextFromTask(parent *domain.Task, childTask *domain.Task) {
