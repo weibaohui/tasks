@@ -5,6 +5,7 @@
 export interface Agent {
   id: string;
   agent_code: string;
+  agent_type: string;
   user_code: string;
   name: string;
   description: string;
@@ -30,6 +31,7 @@ export interface Agent {
 export interface CreateAgentRequest {
   user_code: string;
   name: string;
+  agent_type: string;
   description: string;
   identity_content: string;
   soul_content: string;
@@ -49,6 +51,7 @@ export interface CreateAgentRequest {
 
 export interface UpdateAgentRequest {
   name: string;
+  agent_type: string;
   description: string;
   identity_content: string;
   soul_content: string;
@@ -69,6 +72,7 @@ export interface UpdateAgentRequest {
 
 export interface PatchAgentRequest {
   name?: string;
+  agent_type?: string;
   description?: string;
   identity_content?: string;
   soul_content?: string;

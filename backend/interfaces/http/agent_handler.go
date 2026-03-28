@@ -19,6 +19,7 @@ func NewAgentHandler(agentService *application.AgentApplicationService) *AgentHa
 type CreateAgentRequest struct {
 	UserCode              string   `json:"user_code"`
 	Name                  string   `json:"name"`
+	AgentType             string   `json:"agent_type"`
 	Description           string   `json:"description"`
 	IdentityContent       string   `json:"identity_content"`
 	SoulContent           string   `json:"soul_content"`
@@ -38,6 +39,7 @@ type CreateAgentRequest struct {
 
 type UpdateAgentRequest struct {
 	Name                  string   `json:"name"`
+	AgentType             string   `json:"agent_type"`
 	Description           string   `json:"description"`
 	IdentityContent       string   `json:"identity_content"`
 	SoulContent           string   `json:"soul_content"`
@@ -67,6 +69,7 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	agent, err := h.agentService.CreateAgent(r.Context(), application.CreateAgentCommand{
 		UserCode:              req.UserCode,
 		Name:                  req.Name,
+		AgentType:             req.AgentType,
 		Description:           req.Description,
 		IdentityContent:       req.IdentityContent,
 		SoulContent:           req.SoulContent,
@@ -151,6 +154,7 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	agent, err := h.agentService.UpdateAgent(r.Context(), application.UpdateAgentCommand{
 		ID:                    domain.NewAgentID(id),
 		Name:                  req.Name,
+		AgentType:             &req.AgentType,
 		Description:           req.Description,
 		IdentityContent:       req.IdentityContent,
 		SoulContent:           req.SoulContent,
@@ -179,6 +183,7 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 // PatchAgentRequest 局部更新请求，指针字段区分"未提供"与"零值"
 type PatchAgentRequest struct {
 	Name                  *string   `json:"name"`
+	AgentType             *string   `json:"agent_type"`
 	Description           *string   `json:"description"`
 	IdentityContent       *string   `json:"identity_content"`
 	SoulContent           *string   `json:"soul_content"`
@@ -214,6 +219,7 @@ func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
 	agent, err := h.agentService.PatchAgent(r.Context(), application.PatchAgentCommand{
 		ID:                    domain.NewAgentID(id),
 		Name:                  req.Name,
+		AgentType:             req.AgentType,
 		Description:           req.Description,
 		IdentityContent:       req.IdentityContent,
 		SoulContent:           req.SoulContent,
@@ -258,6 +264,7 @@ func agentToMap(agent *domain.Agent) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                      agent.ID().String(),
 		"agent_code":              agent.AgentCode().String(),
+		"agent_type":              agent.AgentType().String(),
 		"user_code":               agent.UserCode(),
 		"name":                    agent.Name(),
 		"description":             agent.Description(),

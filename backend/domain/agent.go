@@ -11,7 +11,28 @@ var (
 	ErrAgentCodeRequired     = errors.New("agent code is required")
 	ErrAgentNameRequired     = errors.New("agent name is required")
 	ErrAgentUserCodeRequired = errors.New("agent user code is required")
+	ErrAgentTypeInvalid      = errors.New("agent type is invalid")
 )
+
+// AgentType 定义 Agent 的执行类型
+type AgentType string
+
+const (
+	// AgentTypeBareLLM 裸 LLM 调用，不携带工具
+	AgentTypeBareLLM AgentType = "BareLLM"
+	// AgentTypeCoding 携带代码执行工具的 Agent
+	AgentTypeCoding AgentType = "CodingAgent"
+)
+
+// ValidAgentTypes 所有合法的 AgentType
+var ValidAgentTypes = map[AgentType]bool{
+	AgentTypeBareLLM: true,
+	AgentTypeCoding:  true,
+}
+
+func (t AgentType) String() string { return string(t) }
+
+func (t AgentType) IsValid() bool { return ValidAgentTypes[t] }
 
 // Default Agent prompt templates
 const (
@@ -112,6 +133,7 @@ func (c AgentCode) String() string {
 type Agent struct {
 	id                    AgentID
 	agentCode             AgentCode
+	agentType             AgentType
 	userCode              string
 	name                  string
 	description           string
@@ -140,6 +162,7 @@ func NewAgent(
 	userCode string,
 	name string,
 	description string,
+	agentType AgentType,
 ) (*Agent, error) {
 	if id.String() == "" {
 		return nil, ErrAgentIDRequired
@@ -153,11 +176,18 @@ func NewAgent(
 	if strings.TrimSpace(name) == "" {
 		return nil, ErrAgentNameRequired
 	}
+	if agentType != "" && !agentType.IsValid() {
+		return nil, ErrAgentTypeInvalid
+	}
+	if agentType == "" {
+		agentType = AgentTypeBareLLM
+	}
 
 	now := time.Now()
 	return &Agent{
 		id:              id,
 		agentCode:       agentCode,
+		agentType:       agentType,
 		userCode:        userCode,
 		name:            name,
 		description:     description,
@@ -173,6 +203,7 @@ func NewAgent(
 
 func (a *Agent) ID() AgentID                 { return a.id }
 func (a *Agent) AgentCode() AgentCode        { return a.agentCode }
+func (a *Agent) AgentType() AgentType        { return a.agentType }
 func (a *Agent) UserCode() string            { return a.userCode }
 func (a *Agent) Name() string                { return a.name }
 func (a *Agent) Description() string         { return a.description }
@@ -253,9 +284,22 @@ func (a *Agent) SetDefault(isDefault bool) {
 	a.updatedAt = time.Now()
 }
 
+func (a *Agent) SetAgentType(agentType AgentType) error {
+	if agentType != "" && !agentType.IsValid() {
+		return ErrAgentTypeInvalid
+	}
+	if agentType == "" {
+		agentType = AgentTypeBareLLM
+	}
+	a.agentType = agentType
+	a.updatedAt = time.Now()
+	return nil
+}
+
 type AgentSnapshot struct {
 	ID                    AgentID
 	AgentCode             AgentCode
+	AgentType             AgentType
 	UserCode              string
 	Name                  string
 	Description           string
@@ -282,6 +326,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 	return AgentSnapshot{
 		ID:                    a.id,
 		AgentCode:             a.agentCode,
+		AgentType:             a.agentType,
 		UserCode:              a.userCode,
 		Name:                  a.name,
 		Description:           a.description,
@@ -308,6 +353,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.id = snap.ID
 	a.agentCode = snap.AgentCode
+	a.agentType = snap.AgentType
 	a.userCode = snap.UserCode
 	a.name = snap.Name
 	a.description = snap.Description

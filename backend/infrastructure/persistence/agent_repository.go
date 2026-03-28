@@ -26,9 +26,9 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
 			user_content, tools_content, model, max_tokens, temperature, max_iterations, history_messages,
-			skills_list, tools_list, is_active, is_default, enable_thinking_process, created_at, updated_at
+			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -47,6 +47,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 			is_active=excluded.is_active,
 			is_default=excluded.is_default,
 			enable_thinking_process=excluded.enable_thinking_process,
+			agent_type=excluded.agent_type,
 			updated_at=excluded.updated_at
 	`
 
@@ -73,6 +74,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		boolToInt(snap.IsActive),
 		boolToInt(snap.IsDefault),
 		boolToInt(snap.EnableThinkingProcess),
+		snap.AgentType.String(),
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
 	)
@@ -91,7 +93,7 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
 		FROM agents WHERE id = ?`, id.String())
 	return scanAgent(row)
 }
@@ -108,7 +110,7 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
 		FROM agents WHERE agent_code = ?`, code.String())
 	return scanAgent(row)
 }
@@ -125,7 +127,7 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
 		FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
 	if err != nil {
 		return nil, err
@@ -146,7 +148,7 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
 		FROM agents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -196,6 +198,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		isActiveInt       int
 		isDefaultInt      int
 		enableThinkingInt int
+		agentTypeStr      string
 		createdAtUnix     int64
 		updatedAtUnix     int64
 	)
@@ -221,6 +224,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&isActiveInt,
 		&isDefaultInt,
 		&enableThinkingInt,
+		&agentTypeStr,
 		&createdAtUnix,
 		&updatedAtUnix,
 	)
@@ -240,6 +244,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 	agent.FromSnapshot(domain.AgentSnapshot{
 		ID:                    domain.NewAgentID(idStr),
 		AgentCode:             domain.NewAgentCode(agentCodeStr),
+		AgentType:             domain.AgentType(agentTypeStr),
 		UserCode:              userCode,
 		Name:                  name,
 		Description:           description,

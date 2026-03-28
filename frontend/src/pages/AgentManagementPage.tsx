@@ -24,6 +24,7 @@ const compactCardBody = { padding: 8 };
 
 type AgentFormValues = {
   name: string;
+  agent_type: string;
   description: string;
   identity_content: string;
   soul_content: string;
@@ -48,6 +49,7 @@ type AgentFormValues = {
 function getDefaultAgentFormValues(defaultModel?: string): AgentFormValues {
   return {
     name: '',
+    agent_type: 'BareLLM',
     description: '默认 Agent',
     identity_content: `# IDENTITY.md - 我是谁？
 
@@ -352,6 +354,7 @@ export const AgentManagementPage: React.FC = () => {
   const buildUpdateRequestFromAgent = useCallback((agent: Agent, overrides: Partial<UpdateAgentRequest>): UpdateAgentRequest => {
     return {
       name: agent.name,
+      agent_type: agent.agent_type,
       description: agent.description,
       identity_content: agent.identity_content,
       soul_content: agent.soul_content,
@@ -405,6 +408,7 @@ export const AgentManagementPage: React.FC = () => {
     if (agent) {
       form.setFieldsValue({
         name: agent.name,
+        agent_type: agent.agent_type || 'BareLLM',
         description: agent.description,
         identity_content: agent.identity_content,
         soul_content: agent.soul_content,
@@ -473,6 +477,7 @@ export const AgentManagementPage: React.FC = () => {
           setEditing(found);
           form.setFieldsValue({
             name: found.name,
+            agent_type: found.agent_type || 'BareLLM',
             description: found.description,
             identity_content: found.identity_content,
             soul_content: found.soul_content,
@@ -554,6 +559,7 @@ export const AgentManagementPage: React.FC = () => {
       if (editing) {
         const req: UpdateAgentRequest = {
           name: values.name,
+          agent_type: values.agent_type,
           description: values.description,
           identity_content: values.identity_content || '',
           soul_content: values.soul_content || '',
@@ -577,6 +583,7 @@ export const AgentManagementPage: React.FC = () => {
         const req: CreateAgentRequest = {
           user_code: userCode,
           name: values.name,
+          agent_type: values.agent_type,
           description: values.description,
           identity_content: values.identity_content,
           soul_content: values.soul_content,
@@ -640,6 +647,19 @@ export const AgentManagementPage: React.FC = () => {
         key: 'model',
         width: screens.xs ? 120 : 180,
         ellipsis: true,
+      },
+      {
+        title: '类型',
+        dataIndex: 'agent_type',
+        key: 'agent_type',
+        width: 100,
+        render: (_: unknown, record: Agent) => {
+          const typeMap: Record<string, string> = {
+            BareLLM: '裸 LLM',
+            CodingAgent: '编程',
+          };
+          return <Tag>{typeMap[record.agent_type] || record.agent_type || 'BareLLM'}</Tag>;
+        },
       },
       {
         title: '思考',
@@ -886,10 +906,11 @@ export const AgentManagementPage: React.FC = () => {
                               size="small"
                               loading={savingSections.basicInfo}
                               onClick={() => {
-                                const values = form.getFieldsValue(['name', 'description']);
+                                const values = form.getFieldsValue(['name', 'agent_type', 'description']);
                                 if (!values.name) { message.error('名称不能为空'); return; }
                                 handlePatchSection('basicInfo', {
                                   name: values.name,
+                                  agent_type: values.agent_type,
                                   description: values.description,
                                 });
                               }}
@@ -910,6 +931,10 @@ export const AgentManagementPage: React.FC = () => {
                             <span style={{ color: '#999', marginRight: 8 }}>名称：</span>
                             <span style={{ fontWeight: 500 }}>{form.getFieldValue('name') || '-'}</span>
                           </div>
+                          <div style={{ marginBottom: 8 }}>
+                            <span style={{ color: '#999', marginRight: 8 }}>类型：</span>
+                            <span>{form.getFieldValue('agent_type') || 'BareLLM'}</span>
+                          </div>
                           <div>
                             <span style={{ color: '#999', marginRight: 8 }}>描述：</span>
                             <span>{form.getFieldValue('description') || '-'}</span>
@@ -919,6 +944,15 @@ export const AgentManagementPage: React.FC = () => {
                         <div>
                           <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]} style={{ marginBottom: 8 }}>
                             <Input placeholder="Agent 名称" />
+                          </Form.Item>
+                          <Form.Item label="类型" name="agent_type" style={{ marginBottom: 8 }}>
+                            <Select
+                              placeholder="选择 Agent 类型"
+                              options={[
+                                { value: 'BareLLM', label: 'BareLLM - 裸 LLM 调用' },
+                                { value: 'CodingAgent', label: 'CodingAgent - 编程 Agent' },
+                              ]}
+                            />
                           </Form.Item>
                           <Form.Item label="描述" name="description" style={{ marginBottom: 0 }}>
                             <Input.TextArea rows={2} placeholder="Agent 描述" />

@@ -15,6 +15,7 @@ func TestNewAgent(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"这是一个测试Agent",
+		AgentTypeBareLLM,
 	)
 
 	if err != nil {
@@ -78,6 +79,7 @@ func TestNewAgent_EmptyID(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if err != ErrAgentIDRequired {
@@ -92,6 +94,7 @@ func TestNewAgent_EmptyAgentCode(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if err != ErrAgentCodeRequired {
@@ -106,6 +109,7 @@ func TestNewAgent_EmptyUserCode(t *testing.T) {
 		"   ", // 空白字符串
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if err != ErrAgentUserCodeRequired {
@@ -120,6 +124,7 @@ func TestNewAgent_EmptyName(t *testing.T) {
 		"user-001",
 		"   ", // 空白字符串
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if err != ErrAgentNameRequired {
@@ -134,6 +139,7 @@ func TestAgent_UpdateProfile(t *testing.T) {
 		"user-001",
 		"原名称",
 		"原描述",
+		AgentTypeBareLLM,
 	)
 
 	originalUpdatedAt := agent.UpdatedAt()
@@ -164,6 +170,7 @@ func TestAgent_UpdateProfile_EmptyName(t *testing.T) {
 		"user-001",
 		"原名称",
 		"原描述",
+		AgentTypeBareLLM,
 	)
 
 	err := agent.UpdateProfile("", "新描述")
@@ -184,6 +191,7 @@ func TestAgent_UpdateConfig(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	agent.UpdateConfig(
@@ -262,6 +270,7 @@ func TestAgent_UpdateConfig_PreservesDefaultValues(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	// 只更新部分配置，其他保持不变
@@ -324,6 +333,7 @@ func TestAgent_SetActive(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if agent.IsActive() != true {
@@ -348,6 +358,7 @@ func TestAgent_SetDefault(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	if agent.IsDefault() {
@@ -372,6 +383,7 @@ func TestAgent_ToSnapshot(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"测试描述",
+		AgentTypeBareLLM,
 	)
 
 	agent.SetActive(false)
@@ -472,6 +484,7 @@ func TestAgent_FromSnapshot(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"测试描述",
+		AgentTypeBareLLM,
 	)
 
 	originalAgent.SetActive(false)
@@ -582,6 +595,7 @@ func TestAgent_SkillsList_ReturnsCopy(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, []string{"skill1", "skill2"}, nil, false)
@@ -602,6 +616,7 @@ func TestAgent_ToolsList_ReturnsCopy(t *testing.T) {
 		"user-001",
 		"测试Agent",
 		"",
+		AgentTypeBareLLM,
 	)
 
 	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, nil, []string{"tool1", "tool2"}, false)

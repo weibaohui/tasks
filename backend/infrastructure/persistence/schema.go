@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS agents (
     is_active INTEGER NOT NULL,
     is_default INTEGER NOT NULL,
     enable_thinking_process INTEGER NOT NULL,
+    agent_type TEXT NOT NULL DEFAULT 'BareLLM',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -302,6 +303,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateDropResultColumn(db); err != nil {
 		return err
 	}
+	if err := migrateAgentTypeColumn(db); err != nil {
+		return err
+	}
 	if err := migrateTasksTimeoutToSeconds(db); err != nil {
 		return err
 	}
@@ -361,6 +365,20 @@ func migrateTasksNewColumns(db *sql.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// migrateAgentTypeColumn 迁移 agents 表新增 agent_type 字段
+func migrateAgentTypeColumn(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "agent_type")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'BareLLM'"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

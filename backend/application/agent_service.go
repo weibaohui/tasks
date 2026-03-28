@@ -18,6 +18,7 @@ var (
 type CreateAgentCommand struct {
 	UserCode              string
 	Name                  string
+	AgentType             string
 	Description           string
 	IdentityContent       string
 	SoulContent           string
@@ -54,6 +55,7 @@ type UpdateAgentCommand struct {
 	IsActive              *bool
 	IsDefault             *bool
 	EnableThinkingProcess *bool
+	AgentType             *string
 }
 
 type AgentApplicationService struct {
@@ -143,6 +145,7 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		cmd.UserCode,
 		cmd.Name,
 		cmd.Description,
+		domain.AgentType(cmd.AgentType),
 	)
 	if err != nil {
 		return nil, err
@@ -235,6 +238,11 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 	if cmd.IsDefault != nil {
 		agent.SetDefault(*cmd.IsDefault)
 	}
+	if cmd.AgentType != nil {
+		if err := agent.SetAgentType(domain.AgentType(*cmd.AgentType)); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)
@@ -273,6 +281,7 @@ type PatchAgentCommand struct {
 	IsActive              *bool
 	IsDefault             *bool
 	EnableThinkingProcess *bool
+	AgentType             *string
 }
 
 func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgentCommand) (*domain.Agent, error) {
@@ -379,6 +388,11 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 	}
 	if cmd.IsDefault != nil {
 		agent.SetDefault(*cmd.IsDefault)
+	}
+	if cmd.AgentType != nil {
+		if err := agent.SetAgentType(domain.AgentType(*cmd.AgentType)); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
