@@ -287,8 +287,13 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 
 	// 创建工具钩子适配器
 	var ccToolHookAdapter *toolHookAdapter
+	var hookCtx *domain.HookContext
+	var result string
+	var llmCallCtx *domain.LLMCallContext
+	var llmUsage = &domain.Usage{}
+
 	if p.hookManager != nil {
-		hookCtx := domain.NewHookContext(ctx)
+		hookCtx = domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("session_key", sessionKey)
 		hookCtx.SetMetadata("trace_id", p.traceID)
 		// 启用思考过程，让 FeishuThinkingProcessHook 发送中间过程卡片
@@ -313,6 +318,41 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			agentCode:   agentCode,
 			traceID:     p.traceID,
 		}
+
+		// 构建 LLMCallContext 并调用 PreLLMCall hooks
+		llmCallCtx = &domain.LLMCallContext{
+			Prompt:    userInput,
+			UserInput: userInput,
+			Model:     "claude_code",
+			SessionID: sessionKey,
+			TraceID:   p.traceID,
+			Metadata: map[string]string{
+				"session_key":  sessionKey,
+				"trace_id":     p.traceID,
+				"user_code":    userCode,
+				"agent_code":   agentCode,
+				"channel_type": msg.Channel,
+				"chat_id":      msg.ChatID,
+			},
+		}
+
+		// 调用 PreLLMCall hooks
+		modifiedCtx, err := p.hookManager.PreLLMCall(hookCtx, llmCallCtx)
+		if err != nil {
+			p.logger.Error("PreLLMCall failed", zap.Error(err))
+		}
+		if modifiedCtx != nil {
+			llmCallCtx = modifiedCtx
+		}
+
+		// 确保 PostLLMCall 被调用
+		defer func() {
+			resp := &domain.LLMResponse{Content: result, Usage: domain.Usage{}}
+			if llmUsage != nil {
+				resp.Usage = *llmUsage
+			}
+			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
+		}()
 	}
 
 	// 构建选项
@@ -358,7 +398,6 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 	}
 
 	// 流式接收消息
-	var result string
 	var cliSessionIDResult string
 	var mu sync.Mutex
 
@@ -409,11 +448,38 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			if m.IsError && m.Result != nil {
 				result += fmt.Sprintf("\n[错误: %s]", *m.Result)
 			}
-			p.logger.Info("Claude Code ResultMessage",
-				zap.String("session_key", sessionKey),
-				zap.String("cli_session_id", cliSessionIDResult),
-				zap.Bool("is_error", m.IsError),
-			)
+			// 捕获 token usage（Claude CLI 在流式模式下 output_tokens 始终为 0）
+			// 使用所有可用 token 字段求和作为兜底方案
+			if m.Usage != nil && llmUsage != nil {
+				var totalInput, totalOutput, cacheRead, cacheCreate int
+
+				if v, ok := (*m.Usage)["input_tokens"]; ok {
+					if f, ok := toFloat64(v); ok {
+						totalInput = int(f)
+						llmUsage.PromptTokens = totalInput
+					}
+				}
+				if v, ok := (*m.Usage)["output_tokens"]; ok {
+					if f, ok := toFloat64(v); ok {
+						totalOutput = int(f)
+						llmUsage.CompletionTokens = totalOutput
+					}
+				}
+				if v, ok := (*m.Usage)["cache_read_input_tokens"]; ok {
+					if f, ok := toFloat64(v); ok {
+						cacheRead = int(f)
+					}
+				}
+				if v, ok := (*m.Usage)["cache_creation_input_tokens"]; ok {
+					if f, ok := toFloat64(v); ok {
+						cacheCreate = int(f)
+					}
+				}
+
+				// 兜底：累加所有可用 token 作为 total
+				// output_tokens 为 0 是 CLI 限制，此时 total 应包含 input + cache
+				llmUsage.TotalTokens = totalInput + totalOutput + cacheRead + cacheCreate
+			}
 			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
 			callback.OnComplete(result)
 			return cliSessionIDResult, nil
@@ -790,4 +856,20 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	)
 
 	return opts
+}
+
+// toFloat64 converts an interface{} to float64
+func toFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	default:
+		return 0, false
+	}
 }
