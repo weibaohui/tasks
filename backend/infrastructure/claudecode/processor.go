@@ -181,8 +181,14 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		provider = nil
 	}
 
+	// 获取超时配置
+	timeout := 120
+	if agent != nil && agent.ClaudeCodeConfig() != nil && agent.ClaudeCodeConfig().Timeout > 0 {
+		timeout = agent.ClaudeCodeConfig().Timeout
+	}
+
 	// 调用 Claude Code（使用独立的 context，避免被取消）
-	queryCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	queryCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	// 从会话获取 CLI Session UUID，用于会话恢复
@@ -253,8 +259,14 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		provider = nil
 	}
 
+	// 获取超时配置
+	timeout := 120
+	if agent != nil && agent.ClaudeCodeConfig() != nil && agent.ClaudeCodeConfig().Timeout > 0 {
+		timeout = agent.ClaudeCodeConfig().Timeout
+	}
+
 	// 调用 Claude Code（使用独立的 context）
-	queryCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	queryCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	cliSessionID := ""
@@ -346,12 +358,18 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 		}
 
 		// 确保 PostLLMCall 被调用
+		// 注意：流式查询可能需要较长时间，使用 background context 避免 context 超时
 		defer func() {
 			resp := &domain.LLMResponse{Content: result, Usage: domain.Usage{}}
 			if llmUsage != nil {
 				resp.Usage = *llmUsage
 			}
-			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
+			// 使用 background context 创建新的 hook context
+			bgHookCtx := domain.NewHookContext(context.Background())
+			// 设置必要的 metadata
+			bgHookCtx.SetMetadata("session_key", sessionKey)
+			bgHookCtx.SetMetadata("trace_id", p.traceID)
+			p.hookManager.PostLLMCall(bgHookCtx, llmCallCtx, resp)
 		}()
 	}
 
@@ -456,6 +474,19 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 				cacheRead := getUsageInt(*m.Usage, "cache_read_input_tokens")
 				cacheCreate := getUsageInt(*m.Usage, "cache_creation_input_tokens")
 				llmUsage.TotalTokens = llmUsage.PromptTokens + llmUsage.CompletionTokens + cacheRead + cacheCreate
+				p.logger.Info("Token usage captured",
+					zap.Any("usage", m.Usage),
+					zap.Int("prompt", llmUsage.PromptTokens),
+					zap.Int("completion", llmUsage.CompletionTokens),
+					zap.Int("cache_read", cacheRead),
+					zap.Int("cache_create", cacheCreate),
+					zap.Int("total", llmUsage.TotalTokens),
+				)
+			} else {
+				p.logger.Warn("Token usage not available",
+					zap.Any("m.Usage", m.Usage),
+					zap.Any("llmUsage", llmUsage),
+				)
 			}
 			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
 			callback.OnComplete(result)

@@ -59,6 +59,8 @@ type ClaudeCodeConfig struct {
 	Cwd string `json:"cwd,omitempty"`
 	// Resume 是否恢复会话
 	Resume bool `json:"resume,omitempty"`
+	// Timeout 超时时间（秒），默认 120 秒
+	Timeout int `json:"timeout,omitempty"`
 
 	// === Tab 2: 高级设置 ===
 
@@ -108,6 +110,7 @@ func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 		MaxThinkingTokens: 8000,
 		PermissionMode:   PermissionModeDefault,
 		Resume:           true,
+		Timeout:          120,
 	}
 }
 
@@ -163,6 +166,9 @@ func (c *ClaudeCodeConfig) MergeWith(other *ClaudeCodeConfig) {
 		c.Cwd = other.Cwd
 	}
 	c.Resume = other.Resume
+	if other.Timeout > 0 {
+		c.Timeout = other.Timeout
+	}
 
 	// 高级设置
 	if other.FallbackModel != "" {
