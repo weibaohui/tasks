@@ -58,7 +58,7 @@ type ClaudeCodeConfig struct {
 	// Cwd 工作目录
 	Cwd string `json:"cwd,omitempty"`
 	// Resume 是否恢复会话
-	Resume bool `json:"resume,omitempty"`
+	Resume *bool `json:"resume,omitempty"`
 	// Timeout 超时时间（秒），默认 120 秒
 	Timeout int `json:"timeout,omitempty"`
 
@@ -69,15 +69,15 @@ type ClaudeCodeConfig struct {
 	// AppendSystemPrompt 追加系统提示词
 	AppendSystemPrompt string `json:"append_system_prompt,omitempty"`
 	// FileCheckpointing 启用文件检查点
-	FileCheckpointing bool `json:"file_checkpointing,omitempty"`
+	FileCheckpointing *bool `json:"file_checkpointing,omitempty"`
 	// ContinueConversation 继续会话
-	ContinueConversation bool `json:"continue_conversation,omitempty"`
+	ContinueConversation *bool `json:"continue_conversation,omitempty"`
 	// ForkSession Fork 会话
-	ForkSession bool `json:"fork_session,omitempty"`
+	ForkSession *bool `json:"fork_session,omitempty"`
 
 	// 沙箱安全
-	SandboxEnabled           bool                  `json:"sandbox_enabled,omitempty"`
-	AutoAllowBashIfSandboxed bool                  `json:"auto_allow_bash_if_sandboxed,omitempty"`
+	SandboxEnabled           *bool                 `json:"sandbox_enabled,omitempty"`
+	AutoAllowBashIfSandboxed *bool                `json:"auto_allow_bash_if_sandboxed,omitempty"`
 	ExcludedCommands         []string              `json:"excluded_commands,omitempty"`
 	SandboxNetwork           *SandboxNetworkConfig `json:"sandbox_network,omitempty"`
 	IgnoreViolations         *SandboxIgnoreViolations `json:"ignore_violations,omitempty"`
@@ -89,7 +89,7 @@ type ClaudeCodeConfig struct {
 
 	// 输出 & 调试
 	JSONSchema              map[string]any `json:"json_schema,omitempty"`
-	IncludePartialMessages  bool            `json:"include_partial_messages,omitempty"`
+	IncludePartialMessages  *bool           `json:"include_partial_messages,omitempty"`
 	MaxBudgetUSD           float64         `json:"max_budget_usd,omitempty"`
 	DebugWriter            string          `json:"debug_writer,omitempty"`
 	StderrCallback         string          `json:"stderr_callback,omitempty"`
@@ -103,14 +103,25 @@ type ClaudeCodeConfig struct {
 	SettingSources []string        `json:"setting_sources,omitempty"`
 }
 
+// boolPtr 返回布尔值的指针
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // DefaultClaudeCodeConfig 返回默认配置
 func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 	return &ClaudeCodeConfig{
-		Model:             "MiniMax-M2.7-highspeed",
-		MaxThinkingTokens: 8000,
-		PermissionMode:   PermissionModeDefault,
-		Resume:           true,
-		Timeout:          120,
+		Model:                "MiniMax-M2.7-highspeed",
+		MaxThinkingTokens:    8000,
+		PermissionMode:      PermissionModeDefault,
+		Resume:              boolPtr(true),
+		Timeout:             120,
+		FileCheckpointing:   boolPtr(false),
+		ContinueConversation: boolPtr(false),
+		ForkSession:         boolPtr(false),
+		SandboxEnabled:      boolPtr(false),
+		AutoAllowBashIfSandboxed: boolPtr(false),
+		IncludePartialMessages: boolPtr(false),
 	}
 }
 
@@ -165,7 +176,9 @@ func (c *ClaudeCodeConfig) MergeWith(other *ClaudeCodeConfig) {
 	if other.Cwd != "" {
 		c.Cwd = other.Cwd
 	}
-	c.Resume = other.Resume
+	if other.Resume != nil {
+		c.Resume = other.Resume
+	}
 	if other.Timeout > 0 {
 		c.Timeout = other.Timeout
 	}
@@ -177,13 +190,23 @@ func (c *ClaudeCodeConfig) MergeWith(other *ClaudeCodeConfig) {
 	if other.AppendSystemPrompt != "" {
 		c.AppendSystemPrompt = other.AppendSystemPrompt
 	}
-	c.FileCheckpointing = other.FileCheckpointing
-	c.ContinueConversation = other.ContinueConversation
-	c.ForkSession = other.ForkSession
+	if other.FileCheckpointing != nil {
+		c.FileCheckpointing = other.FileCheckpointing
+	}
+	if other.ContinueConversation != nil {
+		c.ContinueConversation = other.ContinueConversation
+	}
+	if other.ForkSession != nil {
+		c.ForkSession = other.ForkSession
+	}
 
 	// 沙箱
-	c.SandboxEnabled = other.SandboxEnabled
-	c.AutoAllowBashIfSandboxed = other.AutoAllowBashIfSandboxed
+	if other.SandboxEnabled != nil {
+		c.SandboxEnabled = other.SandboxEnabled
+	}
+	if other.AutoAllowBashIfSandboxed != nil {
+		c.AutoAllowBashIfSandboxed = other.AutoAllowBashIfSandboxed
+	}
 	if len(other.ExcludedCommands) > 0 {
 		c.ExcludedCommands = other.ExcludedCommands
 	}
@@ -209,7 +232,9 @@ func (c *ClaudeCodeConfig) MergeWith(other *ClaudeCodeConfig) {
 	if len(other.JSONSchema) > 0 {
 		c.JSONSchema = other.JSONSchema
 	}
-	c.IncludePartialMessages = other.IncludePartialMessages
+	if other.IncludePartialMessages != nil {
+		c.IncludePartialMessages = other.IncludePartialMessages
+	}
 	if other.MaxBudgetUSD > 0 {
 		c.MaxBudgetUSD = other.MaxBudgetUSD
 	}

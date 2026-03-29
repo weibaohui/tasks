@@ -228,7 +228,7 @@ func (a *Agent) CreatedAt() time.Time        { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time        { return a.updatedAt }
 func (a *Agent) ClaudeCodeConfig() *ClaudeCodeConfig {
 	if a.claudeCodeConfig == nil {
-		a.claudeCodeConfig = DefaultClaudeCodeConfig()
+		return DefaultClaudeCodeConfig()
 	}
 	return a.claudeCodeConfig
 }

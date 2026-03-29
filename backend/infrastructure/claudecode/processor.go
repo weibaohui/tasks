@@ -750,17 +750,17 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	}
 
 	// 设置会话恢复
-	if config.Resume && cliSessionID != "" {
+	if config.Resume != nil && *config.Resume && cliSessionID != "" {
 		opts = append(opts, claudecode.WithResume(cliSessionID))
 	}
 
 	// 设置继续会话
-	if config.ContinueConversation {
+	if config.ContinueConversation != nil && *config.ContinueConversation {
 		opts = append(opts, claudecode.WithContinueConversation(true))
 	}
 
 	// 设置文件检查点
-	if config.FileCheckpointing {
+	if config.FileCheckpointing != nil && *config.FileCheckpointing {
 		opts = append(opts, claudecode.WithFileCheckpointing())
 	}
 
@@ -775,9 +775,9 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	}
 
 	// 设置沙箱
-	if config.SandboxEnabled {
+	if config.SandboxEnabled != nil && *config.SandboxEnabled {
 		opts = append(opts, claudecode.WithSandboxEnabled(true))
-		if config.AutoAllowBashIfSandboxed {
+		if config.AutoAllowBashIfSandboxed != nil && *config.AutoAllowBashIfSandboxed {
 			opts = append(opts, claudecode.WithAutoAllowBashIfSandboxed(true))
 		}
 		if len(config.ExcludedCommands) > 0 {
@@ -816,7 +816,7 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	}
 
 	// 设置部分消息
-	if config.IncludePartialMessages {
+	if config.IncludePartialMessages != nil && *config.IncludePartialMessages {
 		opts = append(opts, claudecode.WithIncludePartialMessages(true))
 	}
 
