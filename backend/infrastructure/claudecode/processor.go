@@ -47,10 +47,12 @@ func (a *toolHookAdapter) preToolUseAdapter(ctx context.Context, input any, tool
 
 	// Convert to domain.ToolCallContext
 	callCtx := &domain.ToolCallContext{
-		ToolName:  preInput.ToolName,
-		ToolInput: preInput.ToolInput,
-		SessionID: a.sessionKey,
-		TraceID:   a.traceID,
+		ToolName:     preInput.ToolName,
+		ToolInput:    preInput.ToolInput,
+		SessionID:    a.sessionKey,
+		TraceID:      a.traceID,
+		SpanID:       "",
+		ParentSpanID: "",
 	}
 
 	// Execute PreToolCall hooks
@@ -75,10 +77,12 @@ func (a *toolHookAdapter) postToolUseAdapter(ctx context.Context, input any, too
 
 	// Convert to domain.ToolCallContext
 	callCtx := &domain.ToolCallContext{
-		ToolName:  postInput.ToolName,
-		ToolInput: postInput.ToolInput,
-		SessionID: a.sessionKey,
-		TraceID:   a.traceID,
+		ToolName:     postInput.ToolName,
+		ToolInput:    postInput.ToolInput,
+		SessionID:    a.sessionKey,
+		TraceID:      a.traceID,
+		SpanID:       "",
+		ParentSpanID: "",
 	}
 
 	// Convert tool response to ToolExecutionResult
@@ -118,8 +122,6 @@ type ClaudeCodeProcessor struct {
 	hookManager  *hook.Manager
 	providerRepo domain.LLMProviderRepository
 	idGenerator  domain.IDGenerator
-	traceID      string
-	spanID       string
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -153,8 +155,7 @@ func NewClaudeCodeProcessor(
 func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent) (string, error) {
 	// 生成 trace 信息
 	ctx, traceID, spanID := trace.StartTrace(ctx)
-	p.traceID = traceID
-	p.spanID = spanID
+	_ = spanID // 未使用
 
 	preview := msg.Content
 	if len(preview) > 80 {
@@ -198,7 +199,7 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	}
 
 	// 调用 Claude Code
-	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg.SessionKey(), msg.Content, cliSessionID, provider, agent)
+	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg.SessionKey(), msg.Content, cliSessionID, traceID, provider, agent)
 	if err != nil {
 		p.logger.Error("Claude Code 调用失败", zap.Error(err))
 		return "", fmt.Errorf("Claude Code 调用失败: %w", err)
@@ -231,8 +232,7 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent, callback StreamingCallback) error {
 	// 生成 trace 信息
 	ctx, traceID, spanID := trace.StartTrace(ctx)
-	p.traceID = traceID
-	p.spanID = spanID
+	_ = spanID // 未使用
 
 	preview := msg.Content
 	if len(preview) > 80 {
@@ -275,7 +275,7 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	}
 
 	// 流式调用 Claude Code
-	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, provider, agent, callback)
+	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
 	if err != nil {
 		p.logger.Error("Claude Code 流式调用失败", zap.Error(err))
 		return fmt.Errorf("Claude Code 调用失败: %w", err)
@@ -294,7 +294,7 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 }
 
 // queryClaudeCodeStreaming 流式调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, error) {
+func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, error) {
 	sessionKey := msg.SessionKey()
 
 	// 创建工具钩子适配器
@@ -307,7 +307,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 	if p.hookManager != nil {
 		hookCtx = domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("session_key", sessionKey)
-		hookCtx.SetMetadata("trace_id", p.traceID)
+		hookCtx.SetMetadata("trace_id", traceID)
 		// 启用思考过程，让 FeishuThinkingProcessHook 发送中间过程卡片
 		hookCtx.SetMetadata("enable_thinking_process", "true")
 		// 设置渠道信息，供 sendThinkingMessage 使用
@@ -328,7 +328,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			sessionKey:  sessionKey,
 			userCode:    userCode,
 			agentCode:   agentCode,
-			traceID:     p.traceID,
+			traceID:     traceID,
 		}
 
 		// 构建 LLMCallContext 并调用 PreLLMCall hooks
@@ -337,10 +337,10 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			UserInput: userInput,
 			Model:     "claude_code",
 			SessionID: sessionKey,
-			TraceID:   p.traceID,
+			TraceID:   traceID,
 			Metadata: map[string]string{
 				"session_key":  sessionKey,
-				"trace_id":     p.traceID,
+				"trace_id":     traceID,
 				"user_code":    userCode,
 				"agent_code":   agentCode,
 				"channel_type": msg.Channel,
@@ -368,7 +368,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			bgHookCtx := domain.NewHookContext(context.Background())
 			// 设置必要的 metadata
 			bgHookCtx.SetMetadata("session_key", sessionKey)
-			bgHookCtx.SetMetadata("trace_id", p.traceID)
+			bgHookCtx.SetMetadata("trace_id", traceID)
 			p.hookManager.PostLLMCall(bgHookCtx, llmCallCtx, resp)
 		}()
 	}
@@ -507,13 +507,13 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 }
 
 // queryClaudeCode 调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
+func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
 	// 创建工具钩子适配器，用于将 Claude Code SDK 工具调用桥接到现有 hook 系统
 	var ccToolHookAdapter *toolHookAdapter
 	if p.hookManager != nil {
 		hookCtx := domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("session_key", sessionKey)
-		hookCtx.SetMetadata("trace_id", p.traceID)
+		hookCtx.SetMetadata("trace_id", traceID)
 
 		userCode := ""
 		agentCode := ""
@@ -529,7 +529,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, u
 			sessionKey:  sessionKey,
 			userCode:    userCode,
 			agentCode:   agentCode,
-			traceID:     p.traceID,
+			traceID:     traceID,
 		}
 	}
 
@@ -655,8 +655,6 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, u
 		cliSessionIDResult = <-sessionChan
 	case <-ctx.Done():
 		return "", "", fmt.Errorf("Claude Code 查询超时: %w", ctx.Err())
-	case <-time.After(300 * time.Second): // 5分钟超时
-		return "", "", fmt.Errorf("Claude Code 查询超时")
 	}
 
 	p.logger.Info("Claude Code 流式接收完成",
