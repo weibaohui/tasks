@@ -341,7 +341,18 @@ func (h *FeishuThinkingProcessHook) isThinkingProcessEnabled(ctx *domain.HookCon
 		}
 	}
 
-	// 其次从 sessionCache 检查
+	// 其次从 ctx (HookContext) 的 metadata 检查（Claude Code 使用这种方式）
+	if ctx != nil {
+		v := ctx.GetMetadata("enable_thinking_process")
+		if v == "true" {
+			return true
+		}
+		if v == "false" {
+			return false
+		}
+	}
+
+	// 最后从 sessionCache 检查
 	var sessionKey string
 	if callCtx != nil {
 		sessionKey = callCtx.SessionID
@@ -433,18 +444,30 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 		zap.String("title", title),
 	)
 
+	// 判断是 p2p 还是群聊（根据 chat_id 格式）
+	// ou_ 开头是 open_id (p2p)，oc_ 开头是 chat_id (群聊)
+	chatType := "p2p"
+	if strings.HasPrefix(chatID, "oc_") {
+		chatType = "group"
+	}
+
+	// 构建 metadata，设置 chat_type 和 sender_id 供 Send 方法使用
+	metadata := map[string]any{
+		"type":         "thinking_process",
+		"msg_type":     "interactive", // 标记为卡片消息
+		"agent_code":   info.AgentCode,
+		"user_code":    info.UserCode,
+		"channel_code": info.ChannelCode,
+		"timestamp":    time.Now().Unix(),
+		"chat_type":    chatType, // 设置 chat_type
+		"sender_id":    ctx.GetMetadata("sender_id"), // 设置 sender_id
+	}
+
 	msg := &bus.OutboundMessage{
-		Channel: info.Channel,
-		ChatID:  chatID,
-		Content: cardContent,
-		Metadata: map[string]any{
-			"type":         "thinking_process",
-			"msg_type":     "interactive", // 标记为卡片消息
-			"agent_code":   info.AgentCode,
-			"user_code":    info.UserCode,
-			"channel_code": info.ChannelCode,
-			"timestamp":    time.Now().Unix(),
-		},
+		Channel:  info.Channel,
+		ChatID:   chatID,
+		Content:  cardContent,
+		Metadata: metadata,
 	}
 
 	// 异步发送，避免阻塞主流程
@@ -454,6 +477,50 @@ func (h *FeishuThinkingProcessHook) sendThinkingMessage(ctx *domain.HookContext,
 				h.logger.Error("发送思考过程消息 panic",
 					zap.Any("recover", r),
 				)
+			}
+		}()
+		h.messageBus.PublishOutbound(msg)
+	}()
+}
+
+// SendClaudeCodeThinking 发送 Claude Code 思考内容（供外部调用）
+func (h *FeishuThinkingProcessHook) SendClaudeCodeThinking(ctx *domain.HookContext, thinking string) {
+	if h.messageBus == nil || ctx == nil {
+		return
+	}
+
+	// 判断是 p2p 还是群聊（根据 chat_id 格式）
+	chatID := ctx.GetMetadata("chat_id")
+	chatType := "p2p"
+	if strings.HasPrefix(chatID, "oc_") {
+		chatType = "group"
+	}
+
+	// 构建卡片内容
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", escapeJSON(thinking))},
+	}
+	cardContent := h.buildThinkingCard("🤔 思考过程", elements)
+
+	metadata := map[string]any{
+		"type":       "thinking_process",
+		"msg_type":   "interactive",
+		"chat_type":  chatType,
+		"sender_id":  ctx.GetMetadata("sender_id"),
+	}
+
+	msg := &bus.OutboundMessage{
+		Channel:  "feishu",
+		ChatID:   chatID,
+		Content:  cardContent,
+		Metadata: metadata,
+	}
+
+	// 异步发送
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				h.logger.Error("发送 Claude Code 思考消息 panic", zap.Any("recover", r))
 			}
 		}()
 		h.messageBus.PublishOutbound(msg)

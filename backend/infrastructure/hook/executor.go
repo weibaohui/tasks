@@ -42,6 +42,11 @@ func (e *Executor) SetErrorStrategy(strategy ErrorStrategy) {
 	e.errorStrategy = strategy
 }
 
+// Logger 获取日志器
+func (e *Executor) Logger() *zap.Logger {
+	return e.logger
+}
+
 // ExecutePreLLMCall 执行 PreLLMCall 钩子
 func (e *Executor) ExecutePreLLMCall(ctx *domain.HookContext, callCtx *domain.LLMCallContext) (*domain.LLMCallContext, error) {
 	hooks := e.getAllEnabledHooks() // 获取所有启用的 hooks

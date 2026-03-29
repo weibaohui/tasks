@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
@@ -26,6 +27,204 @@ import (
 type contextKey string
 
 const spanKey contextKey = "conversation_span"
+
+// feishuStreamingCallback 实现流式回调，将部分结果发送到飞书（使用卡片格式）
+type feishuStreamingCallback struct {
+	bus         *bus.MessageBus
+	logger      *zap.Logger
+	inbound     *bus.InboundMessage
+	traceID     string
+	spanID      string
+	hookManager *hook.Manager
+	mu          sync.Mutex
+}
+
+func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound *bus.InboundMessage, traceID, spanID string, hookManager *hook.Manager) *feishuStreamingCallback {
+	return &feishuStreamingCallback{
+		bus:         bus,
+		logger:      logger,
+		inbound:     inbound,
+		traceID:     traceID,
+		spanID:      spanID,
+		hookManager: hookManager,
+	}
+}
+
+// escapeJSON 转义 JSON 字符串中的特殊字符
+func escapeJSON(s string) string {
+	result, _ := json.Marshal(s)
+	return string(result)[1 : len(string(result))-1]
+}
+
+// buildThinkingCard 构建飞书思考过程卡片（复用 FeishuThinkingProcessHook 的格式）
+func buildThinkingCard(title string, elements []map[string]interface{}) string {
+	title = escapeJSON(title)
+
+	card := map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"template": "blue",
+			"title": map[string]interface{}{
+				"content": title,
+				"tag":     "plain_text",
+			},
+		},
+		"elements": elements,
+	}
+
+	cardJSON, _ := json.Marshal(card)
+	return string(cardJSON)
+}
+
+func (c *feishuStreamingCallback) sendCard(title string, elements []map[string]interface{}) {
+	if len(elements) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cardContent := buildThinkingCard(title, elements)
+
+	outMsg := &bus.OutboundMessage{
+		Channel:  c.inbound.Channel,
+		ChatID:   c.inbound.ChatID,
+		Content:  cardContent,
+		Metadata: c.buildMetadata(),
+	}
+	c.bus.PublishOutbound(outMsg)
+}
+
+func (c *feishuStreamingCallback) sendText(content string) {
+	if content == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	outMsg := &bus.OutboundMessage{
+		Channel:  c.inbound.Channel,
+		ChatID:   c.inbound.ChatID,
+		Content:  content,
+		Metadata: c.buildMetadata(),
+	}
+	c.bus.PublishOutbound(outMsg)
+}
+
+func (c *feishuStreamingCallback) buildMetadata() map[string]any {
+	m := make(map[string]any)
+	if c.inbound.Metadata != nil {
+		if msgID, ok := c.inbound.Metadata["message_id"].(string); ok {
+			m["reply_to_message_id"] = msgID
+		}
+		if appID, ok := c.inbound.Metadata["app_id"].(string); ok {
+			m["app_id"] = appID
+		}
+		if senderID, ok := c.inbound.Metadata["sender_id"].(string); ok {
+			m["sender_id"] = senderID
+		}
+		if chatType, ok := c.inbound.Metadata["chat_type"].(string); ok {
+			m["chat_type"] = chatType
+		}
+	}
+	m["trace_id"] = c.traceID
+	m["span_id"] = c.spanID
+	m["msg_type"] = "interactive" // 标记为卡片消息
+	return m
+}
+
+func (c *feishuStreamingCallback) OnThinking(thinking string) {
+	// 发送思考过程卡片
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// 判断是 p2p 还是群聊
+	chatID := c.inbound.ChatID
+	chatType := "p2p"
+	if strings.HasPrefix(chatID, "oc_") {
+		chatType = "group"
+	}
+
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", escapeJSON(thinking))},
+	}
+	cardContent := buildThinkingCard("🤔 思考过程", elements)
+
+	metadata := map[string]any{
+		"msg_type":  "interactive",
+		"chat_type": chatType,
+	}
+
+	msg := &bus.OutboundMessage{
+		Channel:  c.inbound.Channel,
+		ChatID:   chatID,
+		Content:  cardContent,
+		Metadata: metadata,
+	}
+	c.bus.PublishOutbound(msg)
+}
+
+func (c *feishuStreamingCallback) OnToolCall(toolName string, input map[string]any) {
+	// 忽略工具调用，不发送中间卡片（由 hook 系统处理）
+}
+
+func (c *feishuStreamingCallback) OnToolResult(toolName string, result string) {
+	// 忽略工具结果，不发送中间卡片（由 hook 系统处理）
+}
+
+func (c *feishuStreamingCallback) OnText(text string) {
+	// 忽略中间文本，不立即发送
+}
+
+func (c *feishuStreamingCallback) OnComplete(finalResult string) {
+	// 最终结果使用卡片格式发送
+	// 中间过程由 hook 系统（FeishuThinkingProcessHook）处理
+	if finalResult == "" {
+		return
+	}
+
+	// 移除思考内容（因为思考已经单独发送了卡片）
+	cleanResult := c.removeThinkingFromResult(finalResult)
+
+	if len(cleanResult) > 2000 {
+		cleanResult = cleanResult[:2000] + "..."
+	}
+
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": cleanResult},
+	}
+	c.sendCard("🤖 Claude Code 响应", elements)
+
+	c.logger.Info("Claude Code 流式处理完成",
+		zap.String("trace_id", c.traceID),
+		zap.Any("final_result_length", len(cleanResult)),
+	)
+}
+
+// removeThinkingFromResult 移除结果中的思考内容
+func (c *feishuStreamingCallback) removeThinkingFromResult(result string) string {
+	lines := strings.Split(result, "\n")
+	var cleanLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// 跳过思考标记行（以 [思考: 开头）
+		if strings.HasPrefix(trimmed, "[思考:") {
+			continue
+		}
+		// 跳过工具调用标记行
+		if strings.HasPrefix(trimmed, "[调用工具:") {
+			continue
+		}
+		// 跳过只有空白字符的行
+		if trimmed == "" {
+			continue
+		}
+		cleanLines = append(cleanLines, line)
+	}
+	return strings.TrimSpace(strings.Join(cleanLines, "\n"))
+}
 
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
@@ -200,9 +399,9 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		return fmt.Sprintf("收到消息: %s\n(LLM Provider 未配置)", content)
 	}
 
-	// 检查 Agent 类型，如果是 CodingAgent，使用 ClaudeCodeProcessor
+	// 检查 Agent 类型，如果是 CodingAgent，使用 ClaudeCodeProcessor 流式处理
 	if agent != nil && agent.AgentType().String() == "CodingAgent" {
-		p.logger.Info("使用 ClaudeCodeProcessor 处理 CodingAgent",
+		p.logger.Info("使用 ClaudeCodeProcessor 流式处理 CodingAgent",
 			zap.String("agent_code", agent.AgentCode().String()),
 			zap.String("session_key", msg.SessionKey()),
 		)
@@ -211,16 +410,20 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			SessionKey:   msg.SessionKey(),
 			CliSessionID: session.GetCliSessionID(),
 		}
-		response, err := p.claudeCodeProcessor.Process(ctx, msg, ccSession, agent)
+		// 创建流式回调
+		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
+		// 使用流式处理
+		err := p.claudeCodeProcessor.ProcessWithStreaming(ctx, msg, ccSession, agent, callback)
 		if err != nil {
-			p.logger.Error("ClaudeCodeProcessor 处理失败", zap.Error(err))
+			p.logger.Error("ClaudeCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
 		}
 		// 更新 session 的 CLI Session ID
 		if ccSession.CliSessionID != "" {
 			session.SetCliSessionID(ccSession.CliSessionID)
 		}
-		return response
+		// 流式处理的消息已通过回调发送，这里返回空字符串避免重复发送
+		return ""
 	}
 
 	// 构建 LLM 配置

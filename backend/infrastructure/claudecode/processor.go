@@ -2,8 +2,9 @@ package claudecode
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	claudecode "github.com/severity1/claude-agent-sdk-go"
@@ -13,6 +14,103 @@ import (
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
 )
+
+// StreamingCallback 回调接口用于流式输出
+type StreamingCallback interface {
+	OnThinking(thinking string)
+	OnToolCall(toolName string, input map[string]any)
+	OnToolResult(toolName string, result string)
+	OnText(text string)
+	OnComplete(finalResult string)
+}
+
+// toolHookAdapter bridges Claude Code SDK hooks to the domain hook system
+type toolHookAdapter struct {
+	hookManager *hook.Manager
+	logger      *zap.Logger
+	hookCtx     *domain.HookContext
+	sessionKey  string
+	userCode    string
+	agentCode   string
+	channelCode string
+	channelType string
+	traceID     string
+}
+
+// preToolUseAdapter converts Claude Code PreToolUse hook to domain.ToolHook
+func (a *toolHookAdapter) preToolUseAdapter(ctx context.Context, input any, toolUseID *string, hookCtx claudecode.HookContext) (claudecode.HookJSONOutput, error) {
+	preInput, ok := input.(*claudecode.PreToolUseHookInput)
+	if !ok {
+		a.logger.Warn("ClaudeCode PreToolUse: unexpected input type")
+		return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+	}
+
+	// Convert to domain.ToolCallContext
+	callCtx := &domain.ToolCallContext{
+		ToolName:  preInput.ToolName,
+		ToolInput: preInput.ToolInput,
+		SessionID: a.sessionKey,
+		TraceID:   a.traceID,
+	}
+
+	// Execute PreToolCall hooks
+	_, err := a.hookManager.PreToolCall(a.hookCtx, callCtx)
+	if err != nil {
+		a.logger.Error("ClaudeCode PreToolUse hook failed",
+			zap.String("tool", preInput.ToolName),
+			zap.Error(err))
+	}
+
+	// Return continue=true to allow tool execution
+	return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+}
+
+// postToolUseAdapter converts Claude Code PostToolUse hook to domain.ToolHook
+func (a *toolHookAdapter) postToolUseAdapter(ctx context.Context, input any, toolUseID *string, hookCtx claudecode.HookContext) (claudecode.HookJSONOutput, error) {
+	postInput, ok := input.(*claudecode.PostToolUseHookInput)
+	if !ok {
+		a.logger.Warn("ClaudeCode PostToolUse: unexpected input type")
+		return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+	}
+
+	// Convert to domain.ToolCallContext
+	callCtx := &domain.ToolCallContext{
+		ToolName:  postInput.ToolName,
+		ToolInput: postInput.ToolInput,
+		SessionID: a.sessionKey,
+		TraceID:   a.traceID,
+	}
+
+	// Convert tool response to ToolExecutionResult
+	execResult := &domain.ToolExecutionResult{
+		Success:  true,
+		Duration: 0,
+	}
+
+	// Handle tool response
+	if postInput.ToolResponse != nil {
+		if respBytes, err := json.Marshal(postInput.ToolResponse); err == nil {
+			execResult.Output = string(respBytes)
+		} else {
+			execResult.Output = fmt.Sprintf("%v", postInput.ToolResponse)
+		}
+	}
+
+	// Execute PostToolCall hooks
+	_, err := a.hookManager.PostToolCall(a.hookCtx, callCtx, execResult)
+	if err != nil {
+		a.logger.Error("ClaudeCode PostToolUse hook failed",
+			zap.String("tool", postInput.ToolName),
+			zap.Error(err))
+	}
+
+	// Return continue=true
+	return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
@@ -27,6 +125,7 @@ type ClaudeCodeProcessor struct {
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
 type ClaudeCodeProcessorInterface interface {
 	Process(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent) (string, error)
+	ProcessWithStreaming(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent, callback StreamingCallback) error
 }
 
 // ClaudeCodeSession 会话上下文（包含 CLI Session ID）
@@ -122,74 +221,187 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	return response, nil
 }
 
-// queryClaudeCode 调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
-	// 构建 claudecode 选项
-	opts := p.buildOptions(provider, cliSessionID, agent)
+// ProcessWithStreaming 处理 CodingAgent 消息，带流式回调
+func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent, callback StreamingCallback) error {
+	// 生成 trace 信息
+	ctx, traceID, spanID := trace.StartTrace(ctx)
+	p.traceID = traceID
+	p.spanID = spanID
 
-	p.logger.Info("开始 Claude Code 查询",
+	preview := msg.Content
+	if len(preview) > 80 {
+		preview = preview[:80] + "..."
+	}
+	agentCode := ""
+	userCode := ""
+	if agent != nil {
+		agentCode = agent.AgentCode().String()
+		userCode = agent.UserCode()
+	}
+	p.logger.Info("ClaudeCode 流式处理消息",
+		zap.String("trace_id", traceID),
+		zap.String("span_id", spanID),
+		zap.String("session_key", msg.SessionKey()),
+		zap.String("agent_code", agentCode),
+		zap.String("内容", preview),
+	)
+
+	// 获取 Provider 配置
+	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
+	if err != nil {
+		p.logger.Warn("获取 LLM Provider 失败，使用默认配置", zap.Error(err))
+		provider = nil
+	}
+
+	// 调用 Claude Code（使用独立的 context）
+	queryCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cliSessionID := ""
+	if session != nil {
+		cliSessionID = session.CliSessionID
+	}
+
+	// 流式调用 Claude Code
+	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, provider, agent, callback)
+	if err != nil {
+		p.logger.Error("Claude Code 流式调用失败", zap.Error(err))
+		return fmt.Errorf("Claude Code 调用失败: %w", err)
+	}
+
+	// 如果返回了新的 CLI Session ID，更新会话
+	if newCliSessionID != "" && session != nil {
+		session.CliSessionID = newCliSessionID
+		p.logger.Info("Claude Code 会话已保存",
+			zap.String("session_key", msg.SessionKey()),
+			zap.String("cli_session_id", newCliSessionID),
+		)
+	}
+
+	return nil
+}
+
+// queryClaudeCodeStreaming 流式调用 Claude Code SDK
+func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, error) {
+	sessionKey := msg.SessionKey()
+
+	// 创建工具钩子适配器
+	var ccToolHookAdapter *toolHookAdapter
+	if p.hookManager != nil {
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("session_key", sessionKey)
+		hookCtx.SetMetadata("trace_id", p.traceID)
+		// 启用思考过程，让 FeishuThinkingProcessHook 发送中间过程卡片
+		hookCtx.SetMetadata("enable_thinking_process", "true")
+		// 设置渠道信息，供 sendThinkingMessage 使用
+		hookCtx.SetMetadata("chat_id", msg.ChatID)
+		hookCtx.SetMetadata("channel_type", msg.Channel)
+
+		userCode := ""
+		agentCode := ""
+		if agent != nil {
+			agentCode = agent.AgentCode().String()
+			userCode = agent.UserCode()
+		}
+
+		ccToolHookAdapter = &toolHookAdapter{
+			hookManager: p.hookManager,
+			logger:      p.logger,
+			hookCtx:     hookCtx,
+			sessionKey:  sessionKey,
+			userCode:    userCode,
+			agentCode:   agentCode,
+			traceID:     p.traceID,
+		}
+	}
+
+	// 构建选项
+	opts := p.buildOptions(provider, cliSessionID, agent, ccToolHookAdapter)
+
+	p.logger.Info("开始 Claude Code 流式查询",
 		zap.String("session_key", sessionKey),
 		zap.String("cli_session_id", cliSessionID),
-		zap.String("provider", func() string {
-			if provider != nil {
-				return provider.ProviderKey()
-			}
-			return "default"
-		}()),
 	)
 
 	startTime := time.Now()
 
-	// 使用 Query 创建查询 iterator（类似 quickstart 例子）
-	iterator, err := claudecode.Query(ctx, userInput, opts...)
-	if err != nil {
-		p.logger.Error("Claude Code Query 失败",
+	// 使用 Client 接口进行流式处理
+	client := claudecode.NewClient(opts...)
+
+	if err := client.Connect(ctx); err != nil {
+		p.logger.Error("Claude Code Connect 失败",
 			zap.String("session_key", sessionKey),
 			zap.Duration("duration", time.Since(startTime)),
 			zap.Error(err),
 		)
-		return "", "", fmt.Errorf("Claude Code Query 失败: %w", err)
+		return "", fmt.Errorf("Claude Code Connect 失败: %w", err)
 	}
-	defer iterator.Close()
+	defer client.Disconnect()
 
-	p.logger.Info("Claude Code Query 执行成功，开始接收消息",
+	p.logger.Info("Claude Code 连接成功，开始流式查询",
 		zap.String("session_key", sessionKey),
 		zap.Duration("duration", time.Since(startTime)),
 	)
 
-	// 使用 iterator 接收消息
+	// 使用 QueryWithSession 发送查询
+	sessionID := cliSessionID
+	if sessionID == "" {
+		sessionID = "default"
+	}
+	if err := client.QueryWithSession(ctx, userInput, sessionID); err != nil {
+		p.logger.Error("Claude Code QueryWithSession 失败",
+			zap.String("session_key", sessionKey),
+			zap.Duration("duration", time.Since(startTime)),
+			zap.Error(err),
+		)
+		return "", fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
+	}
+
+	// 流式接收消息
 	var result string
 	var cliSessionIDResult string
+	var mu sync.Mutex
 
-	for {
-		msg, err := iterator.Next(ctx)
-		if err != nil {
-			if errors.Is(err, claudecode.ErrNoMoreMessages) {
-				p.logger.Info("Claude Code 消息接收完成",
-					zap.String("session_key", sessionKey),
-					zap.Duration("duration", time.Since(startTime)),
-				)
-				break
-			}
-			p.logger.Error("Claude Code 接收消息失败",
-				zap.String("session_key", sessionKey),
-				zap.Error(err),
-			)
-			return "", "", fmt.Errorf("接收消息失败: %w", err)
-		}
-
+	msgChan := client.ReceiveMessages(ctx)
+	for msg := range msgChan {
 		if msg == nil {
-			p.logger.Info("Claude Code 收到 nil 消息，结束",
-				zap.String("session_key", sessionKey),
-			)
-			break
+			continue
 		}
 
 		switch m := msg.(type) {
 		case *claudecode.AssistantMessage:
 			for _, block := range m.Content {
-				if textBlock, ok := block.(*claudecode.TextBlock); ok {
-					result += textBlock.Text
+				switch b := block.(type) {
+				case *claudecode.TextBlock:
+					mu.Lock()
+					result += b.Text
+					mu.Unlock()
+					callback.OnText(b.Text)
+				case *claudecode.ToolUseBlock:
+					p.logger.Info("Claude Code 工具调用",
+						zap.String("session_key", sessionKey),
+						zap.String("tool_name", b.Name),
+					)
+					toolInput := make(map[string]any)
+					if b.Input != nil {
+						toolInput = b.Input
+					}
+					callback.OnToolCall(b.Name, toolInput)
+				case *claudecode.ToolResultBlock:
+					p.logger.Info("Claude Code 工具结果",
+						zap.String("session_key", sessionKey),
+						zap.Any("content", b.Content),
+					)
+					content := fmt.Sprintf("%v", b.Content)
+					mu.Lock()
+					result += content
+					mu.Unlock()
+					callback.OnToolResult("", content)
+				case *claudecode.ThinkingBlock:
+					mu.Lock()
+					result += fmt.Sprintf("\n[思考: %s]\n", b.Thinking)
+					mu.Unlock()
+					callback.OnThinking(b.Thinking)
 				}
 			}
 		case *claudecode.ResultMessage:
@@ -204,14 +416,187 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, u
 				zap.String("cli_session_id", cliSessionIDResult),
 				zap.Bool("is_error", m.IsError),
 			)
+			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
+			callback.OnComplete(result)
+			return cliSessionIDResult, nil
+		case *claudecode.UserMessage:
+			// 用户消息，不处理
 		}
 	}
+
+	p.logger.Info("Claude Code 流式接收完成",
+		zap.String("session_key", sessionKey),
+		zap.Duration("duration", time.Since(startTime)),
+	)
+
+	// 如果循环正常结束（channel 关闭）但没有收到 ResultMessage，也调用 OnComplete
+	callback.OnComplete(result)
+	return cliSessionIDResult, nil
+}
+
+// queryClaudeCode 调用 Claude Code SDK
+func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
+	// 创建工具钩子适配器，用于将 Claude Code SDK 工具调用桥接到现有 hook 系统
+	var ccToolHookAdapter *toolHookAdapter
+	if p.hookManager != nil {
+		hookCtx := domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("session_key", sessionKey)
+		hookCtx.SetMetadata("trace_id", p.traceID)
+
+		userCode := ""
+		agentCode := ""
+		if agent != nil {
+			agentCode = agent.AgentCode().String()
+			userCode = agent.UserCode()
+		}
+
+		ccToolHookAdapter = &toolHookAdapter{
+			hookManager: p.hookManager,
+			logger:      p.logger,
+			hookCtx:     hookCtx,
+			sessionKey:  sessionKey,
+			userCode:    userCode,
+			agentCode:   agentCode,
+			traceID:     p.traceID,
+		}
+	}
+
+	// 构建 claudecode 选项
+	opts := p.buildOptions(provider, cliSessionID, agent, ccToolHookAdapter)
+
+	p.logger.Info("开始 Claude Code 查询",
+		zap.String("session_key", sessionKey),
+		zap.String("cli_session_id", cliSessionID),
+		zap.String("provider", func() string {
+			if provider != nil {
+				return provider.ProviderKey()
+			}
+			return "default"
+		}()),
+	)
+
+	startTime := time.Now()
+
+	// 使用 Client 接口进行流式处理
+	client := claudecode.NewClient(opts...)
+
+	// 使用 Connect 建立连接
+	if err := client.Connect(ctx); err != nil {
+		p.logger.Error("Claude Code Connect 失败",
+			zap.String("session_key", sessionKey),
+			zap.Duration("duration", time.Since(startTime)),
+			zap.Error(err),
+		)
+		return "", "", fmt.Errorf("Claude Code Connect 失败: %w", err)
+	}
+	defer client.Disconnect()
+
+	p.logger.Info("Claude Code 连接成功，开始查询",
+		zap.String("session_key", sessionKey),
+		zap.Duration("duration", time.Since(startTime)),
+	)
+
+	// 使用 QueryWithSession 发送查询
+	sessionID := cliSessionID
+	if sessionID == "" {
+		sessionID = "default"
+	}
+	if err := client.QueryWithSession(ctx, userInput, sessionID); err != nil {
+		p.logger.Error("Claude Code QueryWithSession 失败",
+			zap.String("session_key", sessionKey),
+			zap.Duration("duration", time.Since(startTime)),
+			zap.Error(err),
+		)
+		return "", "", fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
+	}
+
+	// 使用 ReceiveMessages 接收流式消息
+	var result string
+	var cliSessionIDResult string
+
+	msgChan := client.ReceiveMessages(ctx)
+	resultChan := make(chan string, 1)
+	sessionChan := make(chan string, 1)
+
+	// 启动 goroutine 处理消息
+	go func() {
+		var result string
+		var cliSessionIDResult string
+		for msg := range msgChan {
+			if msg == nil {
+				continue
+			}
+
+			switch m := msg.(type) {
+			case *claudecode.AssistantMessage:
+				for _, block := range m.Content {
+					switch b := block.(type) {
+					case *claudecode.TextBlock:
+						result += b.Text
+					case *claudecode.ToolUseBlock:
+						// 记录工具调用
+						p.logger.Info("Claude Code 工具调用",
+							zap.String("session_key", sessionKey),
+							zap.String("tool_name", b.Name),
+						)
+						result += fmt.Sprintf("\n[调用工具: %s]\n", b.Name)
+					case *claudecode.ToolResultBlock:
+						// 记录工具结果
+						p.logger.Info("Claude Code 工具结果",
+							zap.String("session_key", sessionKey),
+							zap.Any("content", b.Content),
+						)
+						result += fmt.Sprintf("%v\n", b.Content)
+					case *claudecode.ThinkingBlock:
+						// 思考过程
+						result += fmt.Sprintf("\n[思考: %s]\n", b.Thinking)
+					}
+				}
+			case *claudecode.ResultMessage:
+				if m.SessionID != "" {
+					cliSessionIDResult = m.SessionID
+				}
+				if m.IsError && m.Result != nil {
+					result += fmt.Sprintf("\n[错误: %s]", *m.Result)
+				}
+				p.logger.Info("Claude Code ResultMessage",
+					zap.String("session_key", sessionKey),
+					zap.String("cli_session_id", cliSessionIDResult),
+					zap.Bool("is_error", m.IsError),
+				)
+				// ResultMessage 表示会话结束，跳出循环
+				resultChan <- result
+				sessionChan <- cliSessionIDResult
+				return
+			case *claudecode.UserMessage:
+				// 用户消息，不处理
+			}
+		}
+		// 如果通道正常关闭但没有 ResultMessage，发送空结果
+		resultChan <- result
+		sessionChan <- cliSessionIDResult
+	}()
+
+	// 等待结果或超时
+	select {
+	case result = <-resultChan:
+		cliSessionIDResult = <-sessionChan
+	case <-ctx.Done():
+		return "", "", fmt.Errorf("Claude Code 查询超时: %w", ctx.Err())
+	case <-time.After(300 * time.Second): // 5分钟超时
+		return "", "", fmt.Errorf("Claude Code 查询超时")
+	}
+
+	p.logger.Info("Claude Code 流式接收完成",
+		zap.String("session_key", sessionKey),
+		zap.Duration("duration", time.Since(startTime)),
+	)
 
 	return result, cliSessionIDResult, nil
 }
 
 // buildOptions 根据 Provider 类型构建 claudecode 选项
-func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSessionID string, agent *domain.Agent) []claudecode.Option {
+func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSessionID string, agent *domain.Agent, toolHookAdapter *toolHookAdapter) []claudecode.Option {
 	opts := []claudecode.Option{}
 
 	// 获取配置
@@ -221,6 +606,12 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	}
 	if config == nil {
 		config = domain.DefaultClaudeCodeConfig()
+	}
+
+	// 注册工具钩子以记录对话
+	if toolHookAdapter != nil {
+		opts = append(opts, claudecode.WithPreToolUseHook("", toolHookAdapter.preToolUseAdapter))
+		opts = append(opts, claudecode.WithPostToolUseHook("", toolHookAdapter.postToolUseAdapter))
 	}
 
 	// 设置 Env（API Key 和 Base URL）
