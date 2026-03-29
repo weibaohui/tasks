@@ -629,3 +629,209 @@ func TestAgent_ToolsList_ReturnsCopy(t *testing.T) {
 		t.Error("ToolsList应该返回拷贝，不应受外部修改影响")
 	}
 }
+
+func TestAgent_UpdateClaudeCodeConfig(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	// 初始默认配置
+	initialConfig := agent.ClaudeCodeConfig()
+	if initialConfig.Timeout != 120 {
+		t.Errorf("期望初始 Timeout 为 120, 实际为 %d", initialConfig.Timeout)
+	}
+
+	// 更新配置
+	newConfig := &ClaudeCodeConfig{
+		Timeout:       600,
+		Model:         "claude-3-5-sonnet",
+		MaxThinkingTokens: 10000,
+	}
+	agent.UpdateClaudeCodeConfig(newConfig)
+
+	// 验证合并后的配置
+	updatedConfig := agent.ClaudeCodeConfig()
+	if updatedConfig.Timeout != 600 {
+		t.Errorf("期望 Timeout 为 600, 实际为 %d", updatedConfig.Timeout)
+	}
+	if updatedConfig.Model != "claude-3-5-sonnet" {
+		t.Errorf("期望 Model 为 claude-3-5-sonnet, 实际为 %s", updatedConfig.Model)
+	}
+	if updatedConfig.MaxThinkingTokens != 10000 {
+		t.Errorf("期望 MaxThinkingTokens 为 10000, 实际为 %d", updatedConfig.MaxThinkingTokens)
+	}
+}
+
+func TestAgent_UpdateClaudeCodeConfig_NilConfig(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	// 保存原始 Timeout
+	originalTimeout := agent.ClaudeCodeConfig().Timeout
+
+	// 传入 nil 不应修改配置
+	agent.UpdateClaudeCodeConfig(nil)
+
+	if agent.ClaudeCodeConfig().Timeout != originalTimeout {
+		t.Errorf("nil 配置不应修改 Timeout, 期望 %d, 实际 %d", originalTimeout, agent.ClaudeCodeConfig().Timeout)
+	}
+}
+
+func TestAgent_UpdateClaudeCodeConfig_MergeBehavior(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	// 设置初始配置
+	initialConfig := &ClaudeCodeConfig{
+		Model:             "claude-3",
+		Timeout:           120,
+		MaxThinkingTokens: 8000,
+		PermissionMode:    PermissionModeDefault,
+	}
+	agent.SetClaudeCodeConfig(initialConfig)
+
+	// 用新配置合并（只更新 Timeout）
+	updateConfig := &ClaudeCodeConfig{
+		Timeout: 600,
+	}
+	agent.UpdateClaudeCodeConfig(updateConfig)
+
+	// 验证：Timeout 被更新，其他字段保留
+	config := agent.ClaudeCodeConfig()
+	if config.Timeout != 600 {
+		t.Errorf("期望 Timeout 为 600, 实际为 %d", config.Timeout)
+	}
+	if config.Model != "claude-3" {
+		t.Errorf("期望 Model 为 claude-3, 实际为 %s", config.Model)
+	}
+	if config.MaxThinkingTokens != 8000 {
+		t.Errorf("期望 MaxThinkingTokens 为 8000, 实际为 %d", config.MaxThinkingTokens)
+	}
+	if config.PermissionMode != PermissionModeDefault {
+		t.Errorf("期望 PermissionMode 为 Default, 实际为 %s", config.PermissionMode)
+	}
+}
+
+func TestAgent_SetClaudeCodeConfig(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	config := &ClaudeCodeConfig{
+		Timeout:       300,
+		Model:         "claude-3-opus",
+		MaxThinkingTokens: 12000,
+	}
+	agent.SetClaudeCodeConfig(config)
+
+ retrieved := agent.ClaudeCodeConfig()
+	if retrieved.Timeout != 300 {
+		t.Errorf("期望 Timeout 为 300, 实际为 %d", retrieved.Timeout)
+	}
+	if retrieved.Model != "claude-3-opus" {
+		t.Errorf("期望 Model 为 claude-3-opus, 实际为 %s", retrieved.Model)
+	}
+}
+
+func TestAgent_ClaudeCodeConfig_ReturnsDefault(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	// 未设置配置时，应该返回默认配置
+	config := agent.ClaudeCodeConfig()
+	if config == nil {
+		t.Fatal("ClaudeCodeConfig 不应返回 nil")
+	}
+	if config.Timeout != 120 {
+		t.Errorf("期望默认 Timeout 为 120, 实际为 %d", config.Timeout)
+	}
+}
+
+func TestAgent_ToSnapshot_WithClaudeCodeConfig(t *testing.T) {
+	agent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	config := &ClaudeCodeConfig{
+		Timeout:           600,
+		Model:             "claude-3-5-sonnet",
+		MaxThinkingTokens: 10000,
+	}
+	agent.SetClaudeCodeConfig(config)
+
+	snap := agent.ToSnapshot()
+
+	if snap.ClaudeCodeConfig == nil {
+		t.Fatal("Snapshot 的 ClaudeCodeConfig 不应为 nil")
+	}
+	if snap.ClaudeCodeConfig.Timeout != 600 {
+		t.Errorf("期望 Snapshot Timeout 为 600, 实际为 %d", snap.ClaudeCodeConfig.Timeout)
+	}
+	if snap.ClaudeCodeConfig.Model != "claude-3-5-sonnet" {
+		t.Errorf("期望 Snapshot Model 为 claude-3-5-sonnet, 实际为 %s", snap.ClaudeCodeConfig.Model)
+	}
+}
+
+func TestAgent_FromSnapshot_WithClaudeCodeConfig(t *testing.T) {
+	originalAgent, _ := NewAgent(
+		NewAgentID("agent-001"),
+		NewAgentCode("my-agent"),
+		"user-001",
+		"测试Agent",
+		"",
+		AgentTypeBareLLM,
+	)
+
+	config := &ClaudeCodeConfig{
+		Timeout:           600,
+		Model:             "claude-3-5-sonnet",
+		MaxThinkingTokens: 10000,
+	}
+	originalAgent.SetClaudeCodeConfig(config)
+
+	snap := originalAgent.ToSnapshot()
+
+	restoredAgent := &Agent{}
+	restoredAgent.FromSnapshot(snap)
+
+	retrievedConfig := restoredAgent.ClaudeCodeConfig()
+	if retrievedConfig.Timeout != 600 {
+		t.Errorf("期望恢复的 Timeout 为 600, 实际为 %d", retrievedConfig.Timeout)
+	}
+	if retrievedConfig.Model != "claude-3-5-sonnet" {
+		t.Errorf("期望恢复的 Model 为 claude-3-5-sonnet, 实际为 %s", retrievedConfig.Model)
+	}
+}

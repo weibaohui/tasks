@@ -514,3 +514,135 @@ func TestBoolValue(t *testing.T) {
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+func TestAgentService_PatchAgent_WithClaudeCodeConfig(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "PatchTestAgent",
+		Model:    "gpt-4",
+	})
+
+	// 获取初始配置
+	initialTimeout := created.ClaudeCodeConfig().Timeout
+	if initialTimeout != 120 {
+		t.Errorf("期望初始 Timeout 为 120, 实际为 %d", initialTimeout)
+	}
+
+	// 初始 Model 是从环境或默认获取的
+	initialModel := created.Model()
+
+	// Patch 更新 Timeout
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID: created.ID(),
+		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
+			Timeout: 600,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.ClaudeCodeConfig().Timeout != 600 {
+		t.Errorf("期望 Patch 后 Timeout 为 600, 实际为 %d", patched.ClaudeCodeConfig().Timeout)
+	}
+
+	// 验证 Agent Model 保持不变
+	if patched.Model() != initialModel {
+		t.Errorf("期望 Model 保持为 %s, 实际为 %s", initialModel, patched.Model())
+	}
+}
+
+func TestAgentService_PatchAgent_ClaudeCodeConfigMerge(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "MergeTestAgent",
+	})
+
+	// 先 Patch 一个完整配置
+	svc.PatchAgent(ctx, PatchAgentCommand{
+		ID: created.ID(),
+		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
+			Timeout:       600,
+			Model:         "claude-3-5-sonnet",
+			MaxThinkingTokens: 8000,
+		},
+	})
+
+	// 再 Patch 只更新 Timeout
+	patched, _ := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID: created.ID(),
+		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
+			Timeout: 300,
+		},
+	})
+
+	config := patched.ClaudeCodeConfig()
+	// Timeout 应该被更新
+	if config.Timeout != 300 {
+		t.Errorf("期望 Timeout 为 300, 实际为 %d", config.Timeout)
+	}
+	// Model 应该保持之前的值
+	if config.Model != "claude-3-5-sonnet" {
+		t.Errorf("期望 Model 为 claude-3-5-sonnet, 实际为 %s", config.Model)
+	}
+	// MaxThinkingTokens 应该保持之前的值
+	if config.MaxThinkingTokens != 8000 {
+		t.Errorf("期望 MaxThinkingTokens 为 8000, 实际为 %d", config.MaxThinkingTokens)
+	}
+}
+
+func TestAgentService_PatchAgent_NotFound(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	_, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID: domain.NewAgentID("non-existent"),
+		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
+			Timeout: 600,
+		},
+	})
+
+	if err != ErrAgentNotFound {
+		t.Errorf("期望 ErrAgentNotFound, 实际为 %v", err)
+	}
+}
+
+func TestAgentService_PatchAgent_OtherFieldsStillWork(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "OriginalName",
+		Model:    "gpt-4",
+	})
+
+	// Patch 更新名称和 ClaudeCodeConfig
+	newName := "PatchedName"
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:   created.ID(),
+		Name: &newName,
+		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
+			Timeout: 600,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.Name() != "PatchedName" {
+		t.Errorf("期望 Name 为 PatchedName, 实际为 %s", patched.Name())
+	}
+
+	if patched.ClaudeCodeConfig().Timeout != 600 {
+		t.Errorf("期望 Timeout 为 600, 实际为 %d", patched.ClaudeCodeConfig().Timeout)
+	}
+}
