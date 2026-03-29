@@ -45,6 +45,14 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 	if agentCode != "" && s.agentRepo != nil && s.providerRepo != nil {
 		agent, err := s.agentRepo.FindByAgentCode(ctx, NewAgentCode(agentCode))
 		if err == nil && agent != nil {
+			// 优先使用 agent 的 providerKey 进行动态查找
+			if agent.ProviderKey() != "" {
+				provider, err := s.providerRepo.FindByProviderKey(ctx, agent.ProviderKey())
+				if err == nil && provider != nil {
+					return s.buildConfigFromProvider(provider, agent.Model()), nil
+				}
+			}
+			// 兜底：使用默认 provider
 			provider, err := s.providerRepo.FindDefaultActive(ctx, agent.UserCode())
 			if err == nil && provider != nil {
 				return s.buildConfigFromProvider(provider, agent.Model()), nil
@@ -63,6 +71,14 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 			if agentCode != "" {
 				agent, err := s.agentRepo.FindByAgentCode(ctx, NewAgentCode(agentCode))
 				if err == nil && agent != nil {
+					// 优先使用 agent 的 providerKey 进行动态查找
+					if agent.ProviderKey() != "" {
+						provider, err := s.providerRepo.FindByProviderKey(ctx, agent.ProviderKey())
+						if err == nil && provider != nil {
+							return s.buildConfigFromProvider(provider, agent.Model()), nil
+						}
+					}
+					// 兜底：使用默认 provider
 					provider, err := s.providerRepo.FindDefaultActive(ctx, agent.UserCode())
 					if err == nil && provider != nil {
 						return s.buildConfigFromProvider(provider, agent.Model()), nil
