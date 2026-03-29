@@ -2,7 +2,7 @@
  * ToolsConfigCard - 工具配置卡片
  */
 import React from 'react';
-import { Card, Form, Select, Space, Switch, Tag } from 'antd';
+import { Button, Card, Form, Select, Space, Tag } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
@@ -22,6 +22,11 @@ export const ToolsConfigCard: React.FC<ToolsConfigCardProps> = ({
 }) => {
   const isEditing = editingSections.toolsConfig;
 
+  const handleSave = () => {
+    const tools = form.getFieldValue('tools_list') as string[] || [];
+    handlePatchSection('toolsConfig', { tools_list: tools });
+  };
+
   return (
     <Card
       size="small"
@@ -31,17 +36,11 @@ export const ToolsConfigCard: React.FC<ToolsConfigCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const tools = form.getFieldValue('tools_list') as string[] || [];
-                  handlePatchSection('toolsConfig', { tools_list: tools });
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('toolsConfig')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('toolsConfig')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('toolsConfig')} />
+            <Button size="small" onClick={() => toggleSectionEdit('toolsConfig')}>编辑</Button>
           )
         ) : null
       }

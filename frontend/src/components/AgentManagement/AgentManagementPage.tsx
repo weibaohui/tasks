@@ -22,7 +22,7 @@ export const AgentManagementPage: React.FC = () => {
     modelOptions, activeTab, mcpLoading, mcpServers, mcpBindings,
     builtInTools, skillsOptions, editingSections, savingSections,
     fetchList, openEditor, closeEditor, handleDelete, handlePatchSection,
-    handleSetDefault, handleToggleThinking, handleUpdateMaxIterations,
+    handleSetDefault, handleToggleThinking, handleUpdateAgent, handleSubmit,
     setActiveTab, toggleSectionEdit, reloadMCP, handleCreateBinding,
     handleUpdateBinding, handleDeleteBinding, handleOpenToolsDrawer,
     mcpForm: mcpFormInstance,
@@ -61,7 +61,7 @@ export const AgentManagementPage: React.FC = () => {
           onDelete={handleDelete}
           onSetDefault={handleSetDefault}
           onToggleThinking={handleToggleThinking}
-          onUpdateMaxIterations={handleUpdateMaxIterations}
+          onUpdateAgent={handleUpdateAgent}
         />
       </Card>
 
@@ -76,7 +76,7 @@ export const AgentManagementPage: React.FC = () => {
         editingSections={editingSections}
         agentType={currentAgentType}
         onClose={closeEditor}
-        onSubmit={() => form.submit()}
+        onSubmit={handleSubmit}
         onTabChange={handleTabChange}
         onToggleSectionEdit={toggleSectionEdit}
         onPatchSection={handlePatchSection}
@@ -101,7 +101,7 @@ export const AgentManagementPage: React.FC = () => {
         mcpLoading={mcpLoading}
         mcpForm={mcpFormInstance}
         onClose={closeEditor}
-        onSubmit={() => form.submit()}
+        onSubmit={handleSubmit}
         onTabChange={handleTabChange}
         onToggleSectionEdit={toggleSectionEdit}
         onPatchSection={handlePatchSection}

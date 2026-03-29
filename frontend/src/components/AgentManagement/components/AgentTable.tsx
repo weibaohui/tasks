@@ -1,11 +1,12 @@
 /**
- * AgentTable - Agent 表格组件
+ * AgentTable - Agent 卡片组件
  */
-import React, { useMemo } from 'react';
-import { Button, InputNumber, Popconfirm, Space, Switch, Table, Tag } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Button, Card, Flex, Input, Switch, Tag, Typography } from 'antd';
+import { CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import type { Agent } from '../../../types/agent';
+
+const { Text } = Typography;
 
 interface AgentTableProps {
   items: Agent[];
@@ -15,105 +16,188 @@ interface AgentTableProps {
   onDelete: (id: string) => void;
   onSetDefault: (agent: Agent) => void;
   onToggleThinking: (agent: Agent, enabled: boolean) => void;
-  onUpdateMaxIterations: (agent: Agent, value: number) => void;
+  onUpdateAgent: (id: string, fields: { name?: string; description?: string }) => Promise<void>;
 }
 
 export const AgentTable: React.FC<AgentTableProps> = ({
   items,
   loading,
-  screens,
   onEdit,
   onDelete,
   onSetDefault,
   onToggleThinking,
-  onUpdateMaxIterations,
+  onUpdateAgent,
 }) => {
-  const columns: ColumnsType<Agent> = useMemo(() => [
-    ...(screens.xs ? [] : [{ title: 'ID', dataIndex: 'id', key: 'id', width: 120, ellipsis: true }]),
-    { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    ...(screens.xs ? [] : [{ title: '描述', dataIndex: 'description', key: 'description', ellipsis: true }]),
-    { title: screens.xs ? '模型' : '模型', dataIndex: 'model', key: 'model', width: screens.xs ? 120 : 180, ellipsis: true },
-    {
-      title: '类型', dataIndex: 'agent_type', key: 'agent_type', width: 100,
-      render: (_: unknown, record: Agent) => {
-        const typeMap: Record<string, string> = { BareLLM: '裸 LLM', CodingAgent: '编程' };
-        return <Tag>{typeMap[record.agent_type] || record.agent_type || 'BareLLM'}</Tag>;
-      },
-    },
-    {
-      title: '思考', key: 'thinking', width: 80, align: 'center',
-      render: (_: unknown, record: Agent) => (
-        <Switch size="small" checked={record.enable_thinking_process} checkedChildren="开" unCheckedChildren="关"
-          onChange={(checked) => onToggleThinking(record, checked)} />
-      ),
-    },
-    {
-      title: '轮数', key: 'max_iterations', width: 90, align: 'center',
-      render: (_: unknown, record: Agent) => (
-        <InputNumber size="small" min={1} max={50} defaultValue={record.max_iterations}
-          onPressEnter={(e) => {
-            const v = Number((e.target as HTMLInputElement).value);
-            if (!Number.isNaN(v) && v !== record.max_iterations) onUpdateMaxIterations(record, v);
-          }}
-          onBlur={(e) => {
-            const v = Number((e.target as HTMLInputElement).value);
-            if (!Number.isNaN(v) && v !== record.max_iterations) onUpdateMaxIterations(record, v);
-          }}
-          style={{ width: 70 }} />
-      ),
-    },
-    {
-      title: '技能', key: 'skills', width: 70, align: 'center',
-      render: (_: unknown, record: Agent) => {
-        const count = (record.skills_list || []).length;
-        return <Tag color={count === 0 ? 'default' : 'blue'}>{count === 0 ? '不限' : count}</Tag>;
-      },
-    },
-    {
-      title: '工具', key: 'tools', width: 70, align: 'center',
-      render: (_: unknown, record: Agent) => {
-        const count = (record.tools_list || []).length;
-        return <Tag color={count === 0 ? 'default' : 'cyan'}>{count === 0 ? '不限' : count}</Tag>;
-      },
-    },
-    {
-      title: '状态', key: 'status', width: 120,
-      render: (_: unknown, record: Agent) => (
-        <Space size="small">
-          {record.is_default && <Tag color="gold">默认</Tag>}
-          <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '停用'}</Tag>
-        </Space>
-      ),
-    },
-    {
-      title: '操作', key: 'action', width: screens.xs ? 140 : 280,
-      render: (_: unknown, record: Agent) => (
-        <Space size={[4, 4]} wrap>
-          <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)}>
-            {screens.xs ? '' : '编辑'}
-          </Button>
-          {!record.is_default && !screens.xs && (
-            <Button type="text" onClick={() => onSetDefault(record)}>默认</Button>
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = (record: Agent) => {
+    setEditingId(record.id);
+    setEditName(record.name || '');
+    setEditDesc(record.description || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+    setEditDesc('');
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await onUpdateAgent(editingId, { name: editName, description: editDesc });
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const typeMap: Record<string, { label: string; color: string }> = {
+    BareLLM: { label: '个人助理', color: 'default' },
+    CodingAgent: { label: '编程', color: 'blue' },
+  };
+
+  const cardStyle: React.CSSProperties = {
+    width: 340,
+    borderRadius: 12,
+    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    transition: 'all 0.2s ease',
+  };
+
+  const renderAgentCard = (agent: Agent) => {
+    const isEditing = editingId === agent.id;
+    const typeInfo = typeMap[agent.agent_type] || { label: agent.agent_type || 'BareLLM', color: 'default' };
+
+    return (
+      <Card
+        key={agent.id}
+        style={cardStyle}
+        styles={{ body: { padding: 20 } }}
+        hoverable
+      >
+        <Flex vertical gap={12}>
+          {/* 名称和类型 */}
+          <Flex align="center" justify="space-between">
+            {isEditing ? (
+              <Input
+                style={{ flex: 1 }}
+                size="small"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="名称"
+              />
+            ) : (
+              <Flex align="center" gap={8}>
+                <Text strong style={{ fontSize: 17 }}>{agent.name}</Text>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => startEdit(agent)}
+                  style={{ color: '#999' }}
+                />
+              </Flex>
+            )}
+            <Tag color={typeInfo.color} style={{ marginLeft: 8 }}>{typeInfo.label}</Tag>
+          </Flex>
+
+          {/* 描述 */}
+          {isEditing ? (
+            <Input.TextArea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="描述（可选）"
+              rows={2}
+              style={{ width: '100%' }}
+            />
+          ) : (
+            <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.6 }}>
+              {agent.description || '暂无描述'}
+            </Text>
           )}
-          <Popconfirm title="确认删除该 Agent？" onConfirm={() => onDelete(record.id)}>
-            <Button type="text" danger icon={<DeleteOutlined />}>
-              {screens.xs ? '' : '删除'}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ], [screens.xs, onEdit, onDelete, onSetDefault, onToggleThinking, onUpdateMaxIterations]);
+
+          {/* 状态标签 */}
+          <Flex gap={8} align="center">
+            <Text type="secondary" style={{ fontSize: 12 }}>思考</Text>
+            <Switch
+              size="small"
+              checked={agent.enable_thinking_process}
+              onChange={(checked) => onToggleThinking(agent, checked)}
+            />
+            {agent.is_default && <Tag color="gold">默认</Tag>}
+            <Tag color={agent.is_active ? 'success' : 'default'}>
+              {agent.is_active ? '启用' : '停用'}
+            </Tag>
+          </Flex>
+
+          {/* 编辑操作按钮 */}
+          {isEditing && (
+            <Flex gap={8}>
+              <Button
+                type="primary"
+                size="small"
+                icon={<CheckOutlined />}
+                onClick={saveEdit}
+                loading={saving}
+              >
+                保存
+              </Button>
+              <Button size="small" icon={<CloseOutlined />} onClick={cancelEdit}>
+                取消
+              </Button>
+            </Flex>
+          )}
+
+          {/* 底部操作栏 */}
+          {!isEditing && (
+            <Flex gap={4} justify="flex-end" style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+              <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(agent)}>
+                编辑
+              </Button>
+              {!agent.is_default && (
+                <Button size="small" onClick={() => onSetDefault(agent)}>
+                  设为默认
+                </Button>
+              )}
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => onDelete(agent.id)}
+              >
+                删除
+              </Button>
+            </Flex>
+          )}
+        </Flex>
+      </Card>
+    );
+  };
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" style={{ minHeight: 200 }}>
+        <Text type="secondary">加载中...</Text>
+      </Flex>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <Flex justify="center" align="center" style={{ minHeight: 200 }}>
+        <Text type="secondary">暂无 Agent，点击右上角新建</Text>
+      </Flex>
+    );
+  }
 
   return (
-    <Table<Agent>
-      rowKey="id"
-      loading={loading}
-      dataSource={items}
-      columns={columns}
-      size={screens.xs ? 'small' : 'middle'}
-      scroll={{ x: screens.xs ? 760 : 'max-content' }}
-    />
+    <Flex gap="large" wrap style={{ padding: '8px 0' }}>
+      {items.map(renderAgentCard)}
+    </Flex>
   );
 };
 

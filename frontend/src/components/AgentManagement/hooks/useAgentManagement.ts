@@ -108,7 +108,7 @@ export interface UseAgentManagementReturn {
   handlePatchSection: (section: string, fields: PatchAgentRequest) => Promise<void>;
   handleSetDefault: (agent: Agent) => Promise<void>;
   handleToggleThinking: (agent: Agent, enabled: boolean) => Promise<void>;
-  handleUpdateMaxIterations: (agent: Agent, value: number) => Promise<void>;
+  handleUpdateAgent: (id: string, fields: { name?: string; description?: string }) => Promise<void>;
   handleSubmit: () => Promise<void>;
   setActiveTab: (tab: 'basic' | 'skills' | 'personality' | 'claudecode') => void;
   toggleSectionEdit: (section: string) => void;
@@ -228,11 +228,12 @@ export function useAgentManagement({
     ...overrides,
   }), []);
 
-  const reloadMCP = useCallback(async () => {
-    if (!editing) return;
+  const reloadMCP = useCallback(async (agentId?: string) => {
+    const id = agentId || editing?.id;
+    if (!id) return;
     setMcpLoading(true);
     try {
-      const [servers, bindings] = await Promise.all([listMCPServers(), listBindings(editing.id)]);
+      const [servers, bindings] = await Promise.all([listMCPServers(), listBindings(id)]);
       setMcpServers(servers);
       setMcpBindings(bindings);
     } catch (e) { message.error(getMCPErrorMessage(e) || '获取 MCP 绑定信息失败'); }
@@ -243,13 +244,12 @@ export function useAgentManagement({
     setEditing(agent);
     const isCoding = agent?.agent_type === 'CodingAgent';
     setActiveTab(isCoding ? 'claudecode' : 'basic');
-    setOpen(true);
     setEditingBinding(null);
     setToolsDrawerOpen(false);
     setToolsForServer([]);
-    mcpForm.setFieldsValue({ is_active: true, auto_load: false });
 
     if (agent) {
+      // Set form values BEFORE opening drawer so values are ready when form mounts
       form.setFieldsValue({
         name: agent.name, agent_type: agent.agent_type || 'BareLLM',
         description: agent.description, identity_content: agent.identity_content,
@@ -262,14 +262,17 @@ export function useAgentManagement({
         enable_thinking_process: agent.enable_thinking_process,
         claude_code_config: agent.claude_code_config,
       });
-      await reloadMCP();
+      // Pass agent.id explicitly to avoid stale closure issue
+      await reloadMCP(agent.id);
     } else {
-      form.setFieldsValue(getDefaultAgentFormValues(defaultModelFromProviders));
       try { setMcpServers(await listMCPServers()); }
       catch (e) { message.error(getMCPErrorMessage(e) || '获取 MCP 服务器列表失败'); }
       setMcpBindings([]);
     }
-  }, [form, mcpForm, reloadMCP, defaultModelFromProviders]);
+
+    // Open drawer AFTER setting form values
+    setOpen(true);
+  }, [form, reloadMCP]);
 
   const closeEditor = useCallback(() => {
     setOpen(false); setEditing(null); setActiveTab('basic');
@@ -326,13 +329,13 @@ export function useAgentManagement({
     } catch { message.error('更新失败'); }
   }, [buildUpdateRequestFromAgent, fetchList]);
 
-  const handleUpdateMaxIterations = useCallback(async (agent: Agent, value: number) => {
+  const handleUpdateAgent = useCallback(async (id: string, fields: { name?: string; description?: string }) => {
     try {
-      await updateAgent(agent.id, buildUpdateRequestFromAgent(agent, { max_iterations: value }));
-      message.success('已更新最大迭代轮数');
+      await patchAgent(id, { name: fields.name, description: fields.description });
+      message.success('更新成功');
       await fetchList();
     } catch { message.error('更新失败'); }
-  }, [buildUpdateRequestFromAgent, fetchList]);
+  }, [fetchList]);
 
   const handleDelete = useCallback(async (id: string) => {
     try { await deleteAgent(id); message.success('删除成功'); await fetchList(); }
@@ -468,7 +471,7 @@ export function useAgentManagement({
     builtInTools, skillsOptions, editingSections, savingSections,
     defaultModelFromProviders,
     fetchList, openEditor, closeEditor, handleDelete, handlePatchSection,
-    handleSetDefault, handleToggleThinking, handleUpdateMaxIterations, handleSubmit,
+    handleSetDefault, handleToggleThinking, handleUpdateAgent, handleSubmit,
     setActiveTab, toggleSectionEdit, reloadMCP, handleCreateBinding,
     handleUpdateBinding, handleDeleteBinding, handleOpenToolsDrawer,
     handleCloseToolsDrawer, handleSaveTools, setEditingSections,

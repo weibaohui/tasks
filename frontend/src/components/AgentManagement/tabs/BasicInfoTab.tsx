@@ -1,13 +1,10 @@
 /**
- * BasicInfoTab - 基础信息 Tab
+ * BasicInfoTab - 模型配置 Tab
  */
 import React from 'react';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../types/agent';
-
-import { BasicInfoCard } from '../components/form/BasicInfoSection';
 import { ModelConfigCard } from '../components/form/ModelConfigSection';
-import { SwitchSection } from '../components/form/SwitchSection';
 
 interface BasicInfoTabProps {
   form: FormInstance;
@@ -26,16 +23,11 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 }) => {
   return (
     <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
-      <BasicInfoCard
-        form={form} editing={editing} editingSections={editingSections}
-        toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
-      />
       <ModelConfigCard
         form={form} editing={editing} editingSections={editingSections}
         toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
         screens={screens} modelOptions={modelOptions} providersLoading={providersLoading}
       />
-      <SwitchSection editing={editing} screens={screens} handlePatchSection={handlePatchSection} />
     </div>
   );
 };

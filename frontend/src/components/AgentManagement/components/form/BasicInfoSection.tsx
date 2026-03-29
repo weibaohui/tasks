@@ -73,7 +73,7 @@ export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
           <Form.Item label="类型" name="agent_type" style={{ marginBottom: 8 }}>
             <Select placeholder="选择 Agent 类型"
               options={[
-                { value: 'BareLLM', label: 'BareLLM - 裸 LLM 调用' },
+                { value: 'BareLLM', label: '个人助理' },
                 { value: 'CodingAgent', label: 'CodingAgent - 编程 Agent' },
               ]} />
           </Form.Item>

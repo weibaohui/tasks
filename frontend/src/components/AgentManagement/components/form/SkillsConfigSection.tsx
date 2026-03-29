@@ -2,7 +2,7 @@
  * SkillsConfigCard - 技能配置卡片
  */
 import React from 'react';
-import { Card, Form, Select, Space, Switch, Tag } from 'antd';
+import { Button, Card, Form, Select, Space, Tag } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
@@ -22,6 +22,11 @@ export const SkillsConfigCard: React.FC<SkillsConfigCardProps> = ({
 }) => {
   const isEditing = editingSections.skillsConfig;
 
+  const handleSave = () => {
+    const skills = form.getFieldValue('skills_list') as string[] || [];
+    handlePatchSection('skillsConfig', { skills_list: skills });
+  };
+
   return (
     <Card
       size="small"
@@ -32,17 +37,11 @@ export const SkillsConfigCard: React.FC<SkillsConfigCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const skills = form.getFieldValue('skills_list') as string[] || [];
-                  handlePatchSection('skillsConfig', { skills_list: skills });
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('skillsConfig')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('skillsConfig')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('skillsConfig')} />
+            <Button size="small" onClick={() => toggleSectionEdit('skillsConfig')}>编辑</Button>
           )
         ) : null
       }

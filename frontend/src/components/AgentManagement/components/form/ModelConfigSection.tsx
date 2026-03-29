@@ -2,7 +2,7 @@
  * ModelConfigCard - 模型配置卡片
  */
 import React from 'react';
-import { Card, Form, InputNumber, Select, Space, Switch } from 'antd';
+import { Button, Card, Form, InputNumber, Select, Space } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
@@ -19,10 +19,15 @@ interface ModelConfigCardProps {
 }
 
 export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
-  form, editing, editingSections, toggleSectionEdit, handlePatchSection,
-  screens, modelOptions, providersLoading,
+  form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions, providersLoading,
 }) => {
   const isEditing = editingSections.modelConfig;
+
+  const handleSave = () => {
+    const values = form.getFieldsValue(['model', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+    if (!values.model) return;
+    handlePatchSection('modelConfig', values);
+  };
 
   return (
     <Card
@@ -34,18 +39,11 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const values = form.getFieldsValue(['model', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
-                  if (!values.model) return;
-                  handlePatchSection('modelConfig', values);
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('modelConfig')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('modelConfig')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('modelConfig')} />
+            <Button size="small" onClick={() => toggleSectionEdit('modelConfig')}>编辑</Button>
           )
         ) : null
       }
