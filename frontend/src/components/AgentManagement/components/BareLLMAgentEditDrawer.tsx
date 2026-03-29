@@ -21,6 +21,7 @@ interface BareLLMAgentEditDrawerProps {
   savingSections: Record<string, boolean>;
   providersLoading: boolean;
   modelOptions: Array<{ value: string; label: string }>;
+  providerOptions: Array<{ value: string; label: string }>;
   skillsOptions: any[];
   builtInTools: any[];
   mcpServers: any[];
@@ -50,6 +51,7 @@ export const BareLLMAgentEditDrawer: React.FC<BareLLMAgentEditDrawerProps> = ({
   savingSections,
   providersLoading,
   modelOptions,
+  providerOptions,
   skillsOptions,
   builtInTools,
   mcpServers,
@@ -152,6 +154,7 @@ export const BareLLMAgentEditDrawer: React.FC<BareLLMAgentEditDrawerProps> = ({
                     toggleSectionEdit={onToggleSectionEdit}
                     handlePatchSection={onPatchSection}
                     modelOptions={modelOptions}
+                    providerOptions={providerOptions}
                     providersLoading={providersLoading}
                   />
                 ),

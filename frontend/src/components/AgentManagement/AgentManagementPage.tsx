@@ -19,7 +19,7 @@ export const AgentManagementPage: React.FC = () => {
 
   const {
     items, loading, saving, open, editing, providersLoading,
-    modelOptions, claudeCodeModelOptions, activeTab, mcpLoading, mcpServers, mcpBindings,
+    modelOptions, claudeCodeModelOptions, providerOptions, activeTab, mcpLoading, mcpServers, mcpBindings,
     builtInTools, skillsOptions, editingSections, savingSections,
     fetchList, openEditor, closeEditor, handleDelete, handlePatchSection,
     handleSetDefault, handleToggleThinking, handleUpdateAgent, handleSubmit,
@@ -95,6 +95,7 @@ export const AgentManagementPage: React.FC = () => {
         savingSections={savingSections}
         providersLoading={providersLoading}
         modelOptions={modelOptions}
+        providerOptions={providerOptions}
         skillsOptions={skillsOptions}
         builtInTools={builtInTools}
         mcpServers={mcpServers}

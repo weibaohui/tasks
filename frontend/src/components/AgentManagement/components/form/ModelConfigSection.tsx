@@ -15,16 +15,17 @@ interface ModelConfigCardProps {
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
   screens: Record<string, boolean>;
   modelOptions: Array<{ value: string; label: string }>;
+  providerOptions: Array<{ value: string; label: string }>;
   providersLoading: boolean;
 }
 
 export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
-  form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions, providersLoading,
+  form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions, providerOptions, providersLoading,
 }) => {
   const isEditing = editingSections.modelConfig;
 
   const handleSave = () => {
-    const values = form.getFieldsValue(['model', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+    const values = form.getFieldsValue(['model', 'provider_key', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
     if (!values.model) return;
     handlePatchSection('modelConfig', values);
   };
@@ -50,6 +51,7 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
     >
       {!isEditing ? (
         <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+          <div><span style={{ color: '#999' }}>Provider：</span>{providerOptions.find(p => p.value === form.getFieldValue('provider_key'))?.label || '-'}</div>
           <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('model') || '-'}</div>
           <div><span style={{ color: '#999' }}>Max Tokens：</span>{form.getFieldValue('max_tokens')}</div>
           <div><span style={{ color: '#999' }}>Temperature：</span>{form.getFieldValue('temperature')}</div>
@@ -58,6 +60,11 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
         </div>
       ) : (
         <div>
+          <Form.Item label="Provider" name="provider_key">
+            <Select showSearch allowClear loading={providersLoading} options={providerOptions}
+              placeholder={providersLoading ? '正在加载 Provider 列表...' : '请选择 Provider（可选）'}
+              notFoundContent={providersLoading ? '正在加载...' : '没有可选 Provider'} />
+          </Form.Item>
           <Form.Item label="模型" name="model" rules={[{ required: true, message: '请选择模型' }]}>
             <Select showSearch allowClear loading={providersLoading} options={modelOptions}
               placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型'}

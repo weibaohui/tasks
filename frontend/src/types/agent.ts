@@ -31,6 +31,7 @@ export interface McpServerConfig {
 export interface ClaudeCodeConfig {
   // === Tab 1: 基本设置 ===
   model?: string;
+  provider_key?: string;
   system_prompt?: string;
   max_thinking_tokens?: number;
   permission_mode?: PermissionMode;
