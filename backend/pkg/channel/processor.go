@@ -179,51 +179,24 @@ func (c *feishuStreamingCallback) OnText(text string) {
 
 func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 	// 最终结果使用卡片格式发送
-	// 中间过程由 hook 系统（FeishuThinkingProcessHook）处理
+	// 思考内容已在 OnThinking 中单独发送，不需要过滤
 	if finalResult == "" {
 		return
 	}
 
-	// 移除思考内容（因为思考已经单独发送了卡片）
-	cleanResult := c.removeThinkingFromResult(finalResult)
-
-	if len(cleanResult) > 2000 {
-		cleanResult = cleanResult[:2000] + "..."
+	if len(finalResult) > 2000 {
+		finalResult = finalResult[:2000] + "..."
 	}
 
 	elements := []map[string]interface{}{
-		{"tag": "markdown", "content": cleanResult},
+		{"tag": "markdown", "content": finalResult},
 	}
 	c.sendCard("🤖 Claude Code 响应", elements)
 
 	c.logger.Info("Claude Code 流式处理完成",
 		zap.String("trace_id", c.traceID),
-		zap.Any("final_result_length", len(cleanResult)),
+		zap.Any("final_result_length", len(finalResult)),
 	)
-}
-
-// removeThinkingFromResult 移除结果中的思考内容
-func (c *feishuStreamingCallback) removeThinkingFromResult(result string) string {
-	lines := strings.Split(result, "\n")
-	var cleanLines []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// 跳过思考标记行（以 [思考: 开头）
-		if strings.HasPrefix(trimmed, "[思考:") {
-			continue
-		}
-		// 跳过工具调用标记行
-		if strings.HasPrefix(trimmed, "[调用工具:") {
-			continue
-		}
-		// 跳过只有空白字符的行
-		if trimmed == "" {
-			continue
-		}
-		cleanLines = append(cleanLines, line)
-	}
-	return strings.TrimSpace(strings.Join(cleanLines, "\n"))
 }
 
 // MessageProcessor 处理来自渠道的消息

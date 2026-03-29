@@ -398,9 +398,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 					mu.Unlock()
 					callback.OnToolResult("", content)
 				case *claudecode.ThinkingBlock:
-					mu.Lock()
-					result += fmt.Sprintf("\n[思考: %s]\n", b.Thinking)
-					mu.Unlock()
+					// 只发送思考卡片，不累积到 result
 					callback.OnThinking(b.Thinking)
 				}
 			}
