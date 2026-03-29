@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS agents (
     user_content TEXT,
     tools_content TEXT,
     model TEXT,
+    provider_key TEXT NOT NULL DEFAULT '',
     max_tokens INTEGER NOT NULL,
     temperature REAL NOT NULL,
     max_iterations INTEGER NOT NULL,
