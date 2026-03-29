@@ -211,7 +211,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			SessionKey:   msg.SessionKey(),
 			CliSessionID: session.GetCliSessionID(),
 		}
-		response, err := p.claudeCodeProcessor.Process(ctx, msg, ccSession, agent.AgentCode().String(), agent.UserCode())
+		response, err := p.claudeCodeProcessor.Process(ctx, msg, ccSession, agent)
 		if err != nil {
 			p.logger.Error("ClaudeCodeProcessor 处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)

@@ -22,13 +22,26 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 	skillsJSON, _ := json.Marshal(snap.SkillsList)
 	toolsJSON, _ := json.Marshal(snap.ToolsList)
 
+	// 序列化 claude_code_config
+	var configJSON []byte
+	var err error
+	if snap.ClaudeCodeConfig != nil {
+		configJSON, err = json.Marshal(snap.ClaudeCodeConfig)
+		if err != nil {
+			configJSON = []byte("{}")
+		}
+	} else {
+		configJSON = []byte("{}")
+	}
+
 	query := `
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
 			user_content, tools_content, model, max_tokens, temperature, max_iterations, history_messages,
-			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
+			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+			claude_code_config
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -48,10 +61,11 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 			is_default=excluded.is_default,
 			enable_thinking_process=excluded.enable_thinking_process,
 			agent_type=excluded.agent_type,
-			updated_at=excluded.updated_at
+			updated_at=excluded.updated_at,
+			claude_code_config=excluded.claude_code_config
 	`
 
-	_, err := r.db.ExecContext(
+	_, err = r.db.ExecContext(
 		ctx,
 		query,
 		snap.ID.String(),
@@ -77,6 +91,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		snap.AgentType.String(),
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
+		string(configJSON),
 	)
 	return err
 }
@@ -93,7 +108,8 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE id = ?`, id.String())
 	return scanAgent(row)
 }
@@ -110,7 +126,8 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE agent_code = ?`, code.String())
 	return scanAgent(row)
 }
@@ -127,7 +144,8 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
 	if err != nil {
 		return nil, err
@@ -148,7 +166,8 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at
+		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -178,29 +197,30 @@ func scanAgents(rows *sql.Rows) ([]*domain.Agent, error) {
 
 func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 	var (
-		idStr             string
-		agentCodeStr      string
-		userCode          string
-		name              string
-		description       string
-		identityContent   string
-		soulContent       string
-		agentsContent     string
-		userContent       string
-		toolsContent      string
-		model             string
-		maxTokens         int
-		temperature       float64
-		maxIterations     int
-		historyMessages   int
-		skillsJSON        []byte
-		toolsJSON         []byte
-		isActiveInt       int
-		isDefaultInt      int
-		enableThinkingInt int
-		agentTypeStr      string
-		createdAtUnix     int64
-		updatedAtUnix     int64
+		idStr               string
+		agentCodeStr        string
+		userCode            string
+		name                string
+		description         string
+		identityContent     string
+		soulContent         string
+		agentsContent       string
+		userContent         string
+		toolsContent        string
+		model               string
+		maxTokens           int
+		temperature         float64
+		maxIterations       int
+		historyMessages     int
+		skillsJSON          []byte
+		toolsJSON           []byte
+		isActiveInt         int
+		isDefaultInt        int
+		enableThinkingInt   int
+		agentTypeStr        string
+		createdAtUnix       int64
+		updatedAtUnix       int64
+		claudeCodeConfigJSON []byte
 	)
 
 	err := scanner.Scan(
@@ -227,6 +247,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&agentTypeStr,
 		&createdAtUnix,
 		&updatedAtUnix,
+		&claudeCodeConfigJSON,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -239,6 +260,12 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 	var tools []string
 	_ = json.Unmarshal(skillsJSON, &skills)
 	_ = json.Unmarshal(toolsJSON, &tools)
+
+	var claudeCodeConfig *domain.ClaudeCodeConfig
+	if len(claudeCodeConfigJSON) > 0 && string(claudeCodeConfigJSON) != "{}" {
+		claudeCodeConfig = &domain.ClaudeCodeConfig{}
+		_ = json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig)
+	}
 
 	agent := &domain.Agent{}
 	agent.FromSnapshot(domain.AgentSnapshot{
@@ -263,6 +290,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		IsActive:              isActiveInt == 1,
 		IsDefault:             isDefaultInt == 1,
 		EnableThinkingProcess: enableThinkingInt == 1,
+		ClaudeCodeConfig:      claudeCodeConfig,
 		CreatedAt:             time.Unix(createdAtUnix, 0),
 		UpdatedAt:             time.Unix(updatedAtUnix, 0),
 	})

@@ -12,7 +12,7 @@ import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCP
 import { listBuiltInTools, type BuiltInTool } from '../api/taskApi';
 import { listSkillsSimple, type Skill } from '../api/skillApi';
 import { useAuthStore } from '../stores/authStore';
-import type { Agent, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../types/agent';
+import type { Agent, ClaudeCodeConfig, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../types/agent';
 import type { LLMProvider } from '../types/provider';
 import type { AgentMCPBinding, MCPServer, MCPTool } from '../types/mcp';
 
@@ -41,6 +41,7 @@ type AgentFormValues = {
   is_default: boolean;
   is_active: boolean;
   enable_thinking_process: boolean;
+  claude_code_config?: ClaudeCodeConfig;
 };
 
 /**
@@ -233,7 +234,7 @@ export const AgentManagementPage: React.FC = () => {
   const watchedModel = Form.useWatch('model', form);
 
   // Drawer Tabs
-  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality' | 'claudecode'>('basic');
 
   // MCP 绑定相关状态（集成到 Drawer 的「技能工具」Tab）
   const [mcpLoading, setMcpLoading] = useState(false);
@@ -425,6 +426,7 @@ export const AgentManagementPage: React.FC = () => {
         is_default: agent.is_default,
         is_active: agent.is_active,
         enable_thinking_process: agent.enable_thinking_process,
+        claude_code_config: agent.claude_code_config,
       });
       await reloadMCP(agent.id);
     } else {
@@ -576,6 +578,7 @@ export const AgentManagementPage: React.FC = () => {
           is_default: values.is_default,
           is_active: values.is_active,
           enable_thinking_process: values.enable_thinking_process,
+          claude_code_config: values.claude_code_config,
         };
         await updateAgent(editing.id, req);
         message.success('更新成功');
@@ -599,6 +602,7 @@ export const AgentManagementPage: React.FC = () => {
           tools_list: values.tools_list || [],
           is_default: values.is_default,
           enable_thinking_process: values.enable_thinking_process,
+          claude_code_config: values.claude_code_config,
         };
         await createAgent(req);
         message.success('创建成功');
@@ -925,7 +929,7 @@ export const AgentManagementPage: React.FC = () => {
                         ) : null
                       }
                     >
-                      {!editing || !editingSections.basicInfo ? (
+                      {editing !== null && !editingSections.basicInfo ? (
                         <div>
                           <div style={{ marginBottom: 8 }}>
                             <span style={{ color: '#999', marginRight: 8 }}>名称：</span>
@@ -990,7 +994,7 @@ export const AgentManagementPage: React.FC = () => {
                         ) : null
                       }
                     >
-                      {!editing || !editingSections.modelConfig ? (
+                      {editing !== null && !editingSections.modelConfig ? (
                         <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
                           <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('model') || '-'}</div>
                           <div><span style={{ color: '#999' }}>Max Tokens：</span>{form.getFieldValue('max_tokens')}</div>
@@ -1107,7 +1111,7 @@ export const AgentManagementPage: React.FC = () => {
                         ) : null
                       }
                     >
-                      {!editing || !editingSections.skillsConfig ? (
+                      {editing !== null && !editingSections.skillsConfig ? (
                         <div>
                           {(form.getFieldValue('skills_list') as string[] || []).length === 0 ? (
                             <span style={{ color: '#999' }}>未配置技能（不限）</span>
@@ -1349,7 +1353,7 @@ export const AgentManagementPage: React.FC = () => {
                         ) : null
                       }
                     >
-                      {!editing || !editingSections.toolsConfig ? (
+                      {editing !== null && !editingSections.toolsConfig ? (
                         <div>
                           {(form.getFieldValue('tools_list') as string[] || []).length === 0 ? (
                             <span style={{ color: '#999' }}>未配置工具（不限）</span>
@@ -1456,6 +1460,323 @@ export const AgentManagementPage: React.FC = () => {
                         )}
                       </Card>
                     ))}
+                  </div>
+                ),
+              },
+              {
+                key: 'claudecode',
+                label: 'Claude Code',
+                children: (
+                  <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+                    {form.getFieldValue('agent_type') !== 'CodingAgent' ? (
+                      <Card
+                        size="small"
+                        styles={{ body: compactCardBody }}
+                        title="Claude Code 配置"
+                      >
+                        <div style={{ color: '#999', textAlign: 'center', padding: '20px 0' }}>
+                          Claude Code 配置仅适用于 CodingAgent 类型<br />
+                          请在「基础信息」中修改 Agent 类型
+                        </div>
+                      </Card>
+                    ) : (
+                      <>
+                        {/* ===== Claude Code 基本配置卡片 ===== */}
+                        <Card
+                          size="small"
+                          styles={{ body: compactCardBody }}
+                          title={<span><ApiOutlined /> Claude Code 基本配置</span>}
+                          style={{ marginBottom: 8 }}
+                          extra={
+                            editing ? (
+                              editingSections.claudeCodeConfig ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  loading={savingSections.claudeCodeConfig}
+                                  onClick={() => {
+                                    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+                                    handlePatchSection('claudeCodeConfig', { claude_code_config: config });
+                                  }}
+                                >
+                                  保存
+                                </Button>
+                              ) : (
+                                <Button type="link" size="small" onClick={() => toggleSectionEdit('claudeCodeConfig')}>
+                                  编辑
+                                </Button>
+                              )
+                            ) : null
+                          }
+                        >
+                          {editing !== null && !editingSections.claudeCodeConfig ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+                              <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || 'MiniMax-M2.7-highspeed'}</div>
+                              <div><span style={{ color: '#999' }}>最大思考 Token：</span>{form.getFieldValue('claude_code_config')?.max_thinking_tokens || 8000}</div>
+                              <div><span style={{ color: '#999' }}>权限模式：</span>{form.getFieldValue('claude_code_config')?.permission_mode || 'default'}</div>
+                              <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>最大对话轮次：</span>{form.getFieldValue('claude_code_config')?.max_turns || '无限制'}</div>
+                              <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd || '默认'}</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Form.Item label="模型" name={['claude_code_config', 'model']} style={{ marginBottom: 8 }}>
+                                <Input placeholder="MiniMax-M2.7-highspeed" />
+                              </Form.Item>
+                              <Form.Item label="系统提示词" name={['claude_code_config', 'system_prompt']} style={{ marginBottom: 8 }}>
+                                <Input.TextArea rows={3} placeholder="设置 Claude Code 的系统提示词" />
+                              </Form.Item>
+                              <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
+                                <Form.Item label="最大思考 Token" name={['claude_code_config', 'max_thinking_tokens']}>
+                                  <InputNumber min={0} style={{ width: '100%' }} placeholder="8000" />
+                                </Form.Item>
+                                <Form.Item label="权限模式" name={['claude_code_config', 'permission_mode']}>
+                                  <Select
+                                    placeholder="选择权限模式"
+                                    options={[
+                                      { value: 'default', label: 'Default - 标准处理' },
+                                      { value: 'acceptEdits', label: 'AcceptEdits - 自动接受编辑' },
+                                      { value: 'plan', label: 'Plan - 计划模式' },
+                                      { value: 'bypassPermissions', label: 'Bypass - 绕过权限' },
+                                    ]}
+                                  />
+                                </Form.Item>
+                                <Form.Item label="最大对话轮次" name={['claude_code_config', 'max_turns']}>
+                                  <InputNumber min={0} style={{ width: '100%' }} placeholder="0 表示无限制" />
+                                </Form.Item>
+                                <Form.Item label="工作目录" name={['claude_code_config', 'cwd']}>
+                                  <Input placeholder="留空使用默认目录" />
+                                </Form.Item>
+                              </div>
+                              <Form.Item label="恢复会话" name={['claude_code_config', 'resume']} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                              </Form.Item>
+                            </div>
+                          )}
+                        </Card>
+
+                        {/* ===== 工具控制卡片 ===== */}
+                        <Card
+                          size="small"
+                          styles={{ body: compactCardBody }}
+                          title={<span><ToolOutlined /> 工具控制</span>}
+                          style={{ marginBottom: 8 }}
+                          extra={
+                            editing ? (
+                              editingSections.claudeCodeTools ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  loading={savingSections.claudeCodeTools}
+                                  onClick={() => {
+                                    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+                                    handlePatchSection('claudeCodeTools', { claude_code_config: config });
+                                  }}
+                                >
+                                  保存
+                                </Button>
+                              ) : (
+                                <Button type="link" size="small" onClick={() => toggleSectionEdit('claudeCodeTools')}>
+                                  编辑
+                                </Button>
+                              )
+                            ) : null
+                          }
+                        >
+                          {editing !== null && !editingSections.claudeCodeTools ? (
+                            <div>
+                              <div style={{ marginBottom: 8 }}>
+                                <span style={{ color: '#999' }}>允许的工具：</span>
+                                {(form.getFieldValue('claude_code_config')?.allowed_tools || []).length === 0 ? (
+                                  <Tag>全部</Tag>
+                                ) : (
+                                  <Space wrap>
+                                    {form.getFieldValue('claude_code_config')?.allowed_tools?.map((t: string) => (
+                                      <Tag key={t} color="blue">{t}</Tag>
+                                    ))}
+                                  </Space>
+                                )}
+                              </div>
+                              <div>
+                                <span style={{ color: '#999' }}>禁止的工具：</span>
+                                {(form.getFieldValue('claude_code_config')?.disallowed_tools || []).length === 0 ? (
+                                  <Tag>无</Tag>
+                                ) : (
+                                  <Space wrap>
+                                    {form.getFieldValue('claude_code_config')?.disallowed_tools?.map((t: string) => (
+                                      <Tag key={t} color="red">{t}</Tag>
+                                    ))}
+                                  </Space>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Form.Item label="允许的工具（留空表示全部允许）" name={['claude_code_config', 'allowed_tools']} style={{ marginBottom: 8 }}>
+                                <Select
+                                  mode="tags"
+                                  placeholder="输入工具名称后回车"
+                                  options={[
+                                    { value: 'Read', label: 'Read - 读取文件' },
+                                    { value: 'Write', label: 'Write - 写入文件' },
+                                    { value: 'Edit', label: 'Edit - 编辑文件' },
+                                    { value: 'Bash', label: 'Bash - 执行命令' },
+                                    { value: 'Glob', label: 'Glob - 文件搜索' },
+                                    { value: 'Grep', label: 'Grep - 内容搜索' },
+                                    { value: 'ToolSearch', label: 'ToolSearch - 工具搜索' },
+                                    { value: 'WebFetch', label: 'WebFetch - 网页获取' },
+                                  ]}
+                                />
+                              </Form.Item>
+                              <Form.Item label="禁止的工具" name={['claude_code_config', 'disallowed_tools']} style={{ marginBottom: 0 }}>
+                                <Select
+                                  mode="tags"
+                                  placeholder="输入工具名称后回车"
+                                  options={[
+                                    { value: 'Bash', label: 'Bash - 执行命令' },
+                                    { value: 'Write', label: 'Write - 写入文件' },
+                                    { value: 'Edit', label: 'Edit - 编辑文件' },
+                                    { value: 'Delete', label: 'Delete - 删除文件' },
+                                  ]}
+                                />
+                              </Form.Item>
+                            </div>
+                          )}
+                        </Card>
+
+                        {/* ===== 沙箱安全卡片 ===== */}
+                        <Card
+                          size="small"
+                          styles={{ body: compactCardBody }}
+                          title={<span><ApiOutlined /> 沙箱安全</span>}
+                          style={{ marginBottom: 8 }}
+                          extra={
+                            editing ? (
+                              editingSections.claudeCodeSandbox ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  loading={savingSections.claudeCodeSandbox}
+                                  onClick={() => {
+                                    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+                                    handlePatchSection('claudeCodeSandbox', { claude_code_config: config });
+                                  }}
+                                >
+                                  保存
+                                </Button>
+                              ) : (
+                                <Button type="link" size="small" onClick={() => toggleSectionEdit('claudeCodeSandbox')}>
+                                  编辑
+                                </Button>
+                              )
+                            ) : null
+                          }
+                        >
+                          {editing !== null && !editingSections.claudeCodeSandbox ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+                              <div><span style={{ color: '#999' }}>沙箱启用：</span>{form.getFieldValue('claude_code_config')?.sandbox_enabled ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>自动批准 Bash：</span>{form.getFieldValue('claude_code_config')?.auto_allow_bash_if_sandboxed ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>排除命令：</span>{(form.getFieldValue('claude_code_config')?.excluded_commands || []).join(', ') || '无'}</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Form.Item label="启用沙箱" name={['claude_code_config', 'sandbox_enabled']} valuePropName="checked" style={{ marginBottom: 8 }}>
+                                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                              </Form.Item>
+                              <Form.Item label="沙箱模式下自动批准 Bash" name={['claude_code_config', 'auto_allow_bash_if_sandboxed']} valuePropName="checked" style={{ marginBottom: 8 }}>
+                                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                              </Form.Item>
+                              <Form.Item label="排除命令（沙箱绕过）" name={['claude_code_config', 'excluded_commands']} style={{ marginBottom: 0 }}>
+                                <Select
+                                  mode="tags"
+                                  placeholder="输入命令名称后回车"
+                                  options={[
+                                    { value: 'git', label: 'git' },
+                                    { value: 'docker', label: 'docker' },
+                                    { value: 'npm', label: 'npm' },
+                                    { value: 'pnpm', label: 'pnpm' },
+                                    { value: 'make', label: 'make' },
+                                  ]}
+                                />
+                              </Form.Item>
+                            </div>
+                          )}
+                        </Card>
+
+                        {/* ===== 高级设置卡片 ===== */}
+                        <Card
+                          size="small"
+                          styles={{ body: compactCardBody }}
+                          title={<span><ApiOutlined /> 高级设置</span>}
+                          style={{ marginBottom: 8 }}
+                          extra={
+                            editing ? (
+                              editingSections.claudeCodeAdvanced ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  loading={savingSections.claudeCodeAdvanced}
+                                  onClick={() => {
+                                    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+                                    handlePatchSection('claudeCodeAdvanced', { claude_code_config: config });
+                                  }}
+                                >
+                                  保存
+                                </Button>
+                              ) : (
+                                <Button type="link" size="small" onClick={() => toggleSectionEdit('claudeCodeAdvanced')}>
+                                  编辑
+                                </Button>
+                              )
+                            ) : null
+                          }
+                        >
+                          {editing !== null && !editingSections.claudeCodeAdvanced ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+                              <div><span style={{ color: '#999' }}>备用模型：</span>{form.getFieldValue('claude_code_config')?.fallback_model || '无'}</div>
+                              <div><span style={{ color: '#999' }}>文件检查点：</span>{form.getFieldValue('claude_code_config')?.file_checkpointing ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>继续会话：</span>{form.getFieldValue('claude_code_config')?.continue_conversation ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>Fork 会话：</span>{form.getFieldValue('claude_code_config')?.fork_session ? '是' : '否'}</div>
+                              <div><span style={{ color: '#999' }}>追加提示词：</span>{form.getFieldValue('claude_code_config')?.append_system_prompt ? '有' : '无'}</div>
+                              <div><span style={{ color: '#999' }}>CLI 路径：</span>{form.getFieldValue('claude_code_config')?.cli_path || '默认'}</div>
+                              <div><span style={{ color: '#999' }}>最大预算 USD：</span>{form.getFieldValue('claude_code_config')?.max_budget_usd || '无限制'}</div>
+                              <div><span style={{ color: '#999' }}>部分消息：</span>{form.getFieldValue('claude_code_config')?.include_partial_messages ? '启用' : '禁用'}</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
+                                <Form.Item label="备用模型" name={['claude_code_config', 'fallback_model']}>
+                                  <Input placeholder="主模型不可用时使用" />
+                                </Form.Item>
+                                <Form.Item label="最大预算 (USD)" name={['claude_code_config', 'max_budget_usd']}>
+                                  <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0 表示无限制" />
+                                </Form.Item>
+                                <Form.Item label="CLI 路径" name={['claude_code_config', 'cli_path']}>
+                                  <Input placeholder="留空使用默认路径" />
+                                </Form.Item>
+                              </div>
+                              <Form.Item label="追加系统提示词" name={['claude_code_config', 'append_system_prompt']} style={{ marginBottom: 8 }}>
+                                <Input.TextArea rows={2} placeholder="在现有系统提示词后追加内容" />
+                              </Form.Item>
+                              <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ display: 'flex' }} align="start">
+                                <Form.Item label="文件检查点" name={['claude_code_config', 'file_checkpointing']} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                                </Form.Item>
+                                <Form.Item label="继续会话" name={['claude_code_config', 'continue_conversation']} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                                </Form.Item>
+                                <Form.Item label="Fork 会话" name={['claude_code_config', 'fork_session']} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                                </Form.Item>
+                                <Form.Item label="部分消息" name={['claude_code_config', 'include_partial_messages']} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                                </Form.Item>
+                              </Space>
+                            </div>
+                          )}
+                        </Card>
+                      </>
+                    )}
                   </div>
                 ),
               },

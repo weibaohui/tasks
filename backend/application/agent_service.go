@@ -282,6 +282,7 @@ type PatchAgentCommand struct {
 	IsDefault             *bool
 	EnableThinkingProcess *bool
 	AgentType             *string
+	ClaudeCodeConfig      *domain.ClaudeCodeConfig
 }
 
 func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgentCommand) (*domain.Agent, error) {
@@ -393,6 +394,10 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 		if err := agent.SetAgentType(domain.AgentType(*cmd.AgentType)); err != nil {
 			return nil, err
 		}
+	}
+
+	if cmd.ClaudeCodeConfig != nil {
+		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
 	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {

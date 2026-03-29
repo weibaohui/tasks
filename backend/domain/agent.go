@@ -152,6 +152,7 @@ type Agent struct {
 	isActive              bool
 	isDefault             bool
 	enableThinkingProcess bool
+	claudeCodeConfig      *ClaudeCodeConfig
 	createdAt             time.Time
 	updatedAt             time.Time
 }
@@ -185,19 +186,20 @@ func NewAgent(
 
 	now := time.Now()
 	return &Agent{
-		id:              id,
-		agentCode:       agentCode,
-		agentType:       agentType,
-		userCode:        userCode,
-		name:            name,
-		description:     description,
-		maxTokens:       4096,
-		temperature:     0.7,
-		maxIterations:   15,
-		historyMessages: 10,
-		isActive:        true,
-		createdAt:       now,
-		updatedAt:       now,
+		id:                 id,
+		agentCode:          agentCode,
+		agentType:          agentType,
+		userCode:           userCode,
+		name:               name,
+		description:        description,
+		maxTokens:          4096,
+		temperature:        0.7,
+		maxIterations:      15,
+		historyMessages:    10,
+		isActive:           true,
+		claudeCodeConfig:   DefaultClaudeCodeConfig(),
+		createdAt:          now,
+		updatedAt:          now,
 	}, nil
 }
 
@@ -224,6 +226,12 @@ func (a *Agent) IsDefault() bool             { return a.isDefault }
 func (a *Agent) EnableThinkingProcess() bool { return a.enableThinkingProcess }
 func (a *Agent) CreatedAt() time.Time        { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time        { return a.updatedAt }
+func (a *Agent) ClaudeCodeConfig() *ClaudeCodeConfig {
+	if a.claudeCodeConfig == nil {
+		a.claudeCodeConfig = DefaultClaudeCodeConfig()
+	}
+	return a.claudeCodeConfig
+}
 
 func (a *Agent) UpdateProfile(name, description string) error {
 	if strings.TrimSpace(name) == "" {
@@ -296,6 +304,22 @@ func (a *Agent) SetAgentType(agentType AgentType) error {
 	return nil
 }
 
+func (a *Agent) UpdateClaudeCodeConfig(config *ClaudeCodeConfig) {
+	if config == nil {
+		return
+	}
+	if a.claudeCodeConfig == nil {
+		a.claudeCodeConfig = &ClaudeCodeConfig{}
+	}
+	a.claudeCodeConfig.MergeWith(config)
+	a.updatedAt = time.Now()
+}
+
+func (a *Agent) SetClaudeCodeConfig(config *ClaudeCodeConfig) {
+	a.claudeCodeConfig = config
+	a.updatedAt = time.Now()
+}
+
 type AgentSnapshot struct {
 	ID                    AgentID
 	AgentCode             AgentCode
@@ -318,6 +342,7 @@ type AgentSnapshot struct {
 	IsActive              bool
 	IsDefault             bool
 	EnableThinkingProcess bool
+	ClaudeCodeConfig      *ClaudeCodeConfig
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -345,6 +370,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		IsActive:              a.isActive,
 		IsDefault:             a.isDefault,
 		EnableThinkingProcess: a.enableThinkingProcess,
+		ClaudeCodeConfig:      a.claudeCodeConfig,
 		CreatedAt:             a.createdAt,
 		UpdatedAt:             a.updatedAt,
 	}
@@ -372,6 +398,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.isActive = snap.IsActive
 	a.isDefault = snap.IsDefault
 	a.enableThinkingProcess = snap.EnableThinkingProcess
+	a.claudeCodeConfig = snap.ClaudeCodeConfig
 	a.createdAt = snap.CreatedAt
 	a.updatedAt = snap.UpdatedAt
 }
