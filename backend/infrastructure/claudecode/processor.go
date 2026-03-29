@@ -451,34 +451,11 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			// 捕获 token usage（Claude CLI 在流式模式下 output_tokens 始终为 0）
 			// 使用所有可用 token 字段求和作为兜底方案
 			if m.Usage != nil && llmUsage != nil {
-				var totalInput, totalOutput, cacheRead, cacheCreate int
-
-				if v, ok := (*m.Usage)["input_tokens"]; ok {
-					if f, ok := toFloat64(v); ok {
-						totalInput = int(f)
-						llmUsage.PromptTokens = totalInput
-					}
-				}
-				if v, ok := (*m.Usage)["output_tokens"]; ok {
-					if f, ok := toFloat64(v); ok {
-						totalOutput = int(f)
-						llmUsage.CompletionTokens = totalOutput
-					}
-				}
-				if v, ok := (*m.Usage)["cache_read_input_tokens"]; ok {
-					if f, ok := toFloat64(v); ok {
-						cacheRead = int(f)
-					}
-				}
-				if v, ok := (*m.Usage)["cache_creation_input_tokens"]; ok {
-					if f, ok := toFloat64(v); ok {
-						cacheCreate = int(f)
-					}
-				}
-
-				// 兜底：累加所有可用 token 作为 total
-				// output_tokens 为 0 是 CLI 限制，此时 total 应包含 input + cache
-				llmUsage.TotalTokens = totalInput + totalOutput + cacheRead + cacheCreate
+				llmUsage.PromptTokens = getUsageInt(*m.Usage, "input_tokens")
+				llmUsage.CompletionTokens = getUsageInt(*m.Usage, "output_tokens")
+				cacheRead := getUsageInt(*m.Usage, "cache_read_input_tokens")
+				cacheCreate := getUsageInt(*m.Usage, "cache_creation_input_tokens")
+				llmUsage.TotalTokens = llmUsage.PromptTokens + llmUsage.CompletionTokens + cacheRead + cacheCreate
 			}
 			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
 			callback.OnComplete(result)
@@ -872,4 +849,14 @@ func toFloat64(v interface{}) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// getUsageInt extracts an int value from a usage map
+func getUsageInt(usage map[string]any, key string) int {
+	if v, ok := usage[key]; ok {
+		if f, ok := toFloat64(v); ok {
+			return int(f)
+		}
+	}
+	return 0
 }
