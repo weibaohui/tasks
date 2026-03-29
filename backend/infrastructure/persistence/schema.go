@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS agents (
     user_content TEXT,
     tools_content TEXT,
     model TEXT,
+    provider_key TEXT NOT NULL DEFAULT '',
     max_tokens INTEGER NOT NULL,
     temperature REAL NOT NULL,
     max_iterations INTEGER NOT NULL,
@@ -306,6 +307,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateAgentTypeColumn(db); err != nil {
 		return err
 	}
+	if err := migrateAgentProviderKeyColumn(db); err != nil {
+		return err
+	}
 	if err := migrateTasksTimeoutToSeconds(db); err != nil {
 		return err
 	}
@@ -376,6 +380,20 @@ func migrateAgentTypeColumn(db *sql.DB) error {
 	}
 	if !has {
 		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'BareLLM'"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateAgentProviderKeyColumn 迁移 agents 表新增 provider_key 字段
+func migrateAgentProviderKeyColumn(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "provider_key")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN provider_key TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}

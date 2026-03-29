@@ -143,6 +143,7 @@ type Agent struct {
 	userContent           string
 	toolsContent          string
 	model                 string
+	providerKey           string // LLM Provider 的 provider_key，用于动态查找
 	maxTokens             int
 	temperature           float64
 	maxIterations         int
@@ -215,6 +216,7 @@ func (a *Agent) AgentsContent() string       { return a.agentsContent }
 func (a *Agent) UserContent() string         { return a.userContent }
 func (a *Agent) ToolsContent() string        { return a.toolsContent }
 func (a *Agent) Model() string               { return a.model }
+func (a *Agent) ProviderKey() string       { return a.providerKey }
 func (a *Agent) MaxTokens() int              { return a.maxTokens }
 func (a *Agent) Temperature() float64        { return a.temperature }
 func (a *Agent) MaxIterations() int          { return a.maxIterations }
@@ -250,6 +252,7 @@ func (a *Agent) UpdateConfig(
 	userContent string,
 	toolsContent string,
 	model string,
+	providerKey string,
 	maxTokens int,
 	temperature float64,
 	maxIterations int,
@@ -264,6 +267,7 @@ func (a *Agent) UpdateConfig(
 	a.userContent = userContent
 	a.toolsContent = toolsContent
 	a.model = model
+	a.providerKey = providerKey
 	if maxTokens > 0 {
 		a.maxTokens = maxTokens
 	}
@@ -333,6 +337,7 @@ type AgentSnapshot struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
+	ProviderKey           string
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -361,6 +366,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		UserContent:           a.userContent,
 		ToolsContent:          a.toolsContent,
 		Model:                 a.model,
+		ProviderKey:           a.providerKey,
 		MaxTokens:             a.maxTokens,
 		Temperature:           a.temperature,
 		MaxIterations:         a.maxIterations,
@@ -389,6 +395,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.userContent = snap.UserContent
 	a.toolsContent = snap.ToolsContent
 	a.model = snap.Model
+	a.providerKey = snap.ProviderKey
 	a.maxTokens = snap.MaxTokens
 	a.temperature = snap.Temperature
 	a.maxIterations = snap.MaxIterations
