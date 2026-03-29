@@ -2,7 +2,7 @@
  * ClaudeCodeToolsCard - Claude Code 工具控制卡片
  */
 import React from 'react';
-import { Card, Form, Select, Space, Switch, Tag } from 'antd';
+import { Button, Card, Form, Select, Space, Tag } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent, ClaudeCodeConfig } from '../../../../types/agent';
@@ -20,6 +20,11 @@ export const ClaudeCodeToolsCard: React.FC<ClaudeCodeToolsCardProps> = ({
 }) => {
   const isEditing = editingSections.claudeCodeTools;
 
+  const handleSave = () => {
+    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+    handlePatchSection('claudeCodeTools', { claude_code_config: config });
+  };
+
   return (
     <Card
       size="small"
@@ -30,17 +35,11 @@ export const ClaudeCodeToolsCard: React.FC<ClaudeCodeToolsCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
-                  handlePatchSection('claudeCodeTools', { claude_code_config: config });
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('claudeCodeTools')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('claudeCodeTools')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('claudeCodeTools')} />
+            <Button size="small" onClick={() => toggleSectionEdit('claudeCodeTools')}>编辑</Button>
           )
         ) : null
       }

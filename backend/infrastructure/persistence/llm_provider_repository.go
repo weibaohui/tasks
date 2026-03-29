@@ -129,6 +129,24 @@ func (r *SQLiteLLMProviderRepository) FindDefaultActive(ctx context.Context, use
 	return scanProvider(row)
 }
 
+func (r *SQLiteLLMProviderRepository) FindByProviderKey(ctx context.Context, providerKey string) (*domain.LLMProvider, error) {
+	query := `SELECT id, user_code, provider_key,
+		COALESCE(provider_name, '') as provider_name,
+		COALESCE(api_key, '') as api_key,
+		COALESCE(api_base, '') as api_base,
+		COALESCE(provider_type, 'openai') as provider_type,
+		COALESCE(extra_headers, '{}') as extra_headers,
+		COALESCE(supported_models, '[]') as supported_models,
+		COALESCE(default_model, '') as default_model,
+		is_default, priority, auto_merge,
+		COALESCE(embedding_models, '[]') as embedding_models,
+		COALESCE(default_embedding_model, '') as default_embedding_model,
+		is_active, created_at, updated_at
+		FROM llm_providers WHERE provider_key = ? AND is_active = 1 LIMIT 1`
+	row := r.db.QueryRowContext(ctx, query, providerKey)
+	return scanProvider(row)
+}
+
 func (r *SQLiteLLMProviderRepository) ClearDefaultByUserCode(ctx context.Context, userCode string, excludeID *domain.LLMProviderID) error {
 	query := `UPDATE llm_providers SET is_default = 0 WHERE user_code = ?`
 	args := []interface{}{userCode}

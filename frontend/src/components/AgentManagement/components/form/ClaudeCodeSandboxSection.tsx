@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { ApiOutlined } from '@ant-design/icons';
-import { Card, Form, Select, Space, Switch } from 'antd';
+import { Button, Card, Form, Select, Space, Switch } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent, ClaudeCodeConfig } from '../../../../types/agent';
 
@@ -20,6 +20,11 @@ export const ClaudeCodeSandboxCard: React.FC<ClaudeCodeSandboxCardProps> = ({
 }) => {
   const isEditing = editingSections.claudeCodeSandbox;
 
+  const handleSave = () => {
+    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+    handlePatchSection('claudeCodeSandbox', { claude_code_config: config });
+  };
+
   return (
     <Card
       size="small"
@@ -30,17 +35,11 @@ export const ClaudeCodeSandboxCard: React.FC<ClaudeCodeSandboxCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
-                  handlePatchSection('claudeCodeSandbox', { claude_code_config: config });
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('claudeCodeSandbox')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('claudeCodeSandbox')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('claudeCodeSandbox')} />
+            <Button size="small" onClick={() => toggleSectionEdit('claudeCodeSandbox')}>编辑</Button>
           )
         ) : null
       }

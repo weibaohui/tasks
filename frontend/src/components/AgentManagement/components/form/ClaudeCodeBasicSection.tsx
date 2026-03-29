@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { ApiOutlined } from '@ant-design/icons';
-import { Card, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
+import { Button, Card, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent, ClaudeCodeConfig } from '../../../../types/agent';
 
@@ -14,12 +14,18 @@ interface ClaudeCodeBasicCardProps {
   screens: Record<string, boolean>;
   toggleSectionEdit: (section: string) => void;
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
+  modelOptions: Array<{ value: string; label: string }>;
 }
 
 export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
-  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection,
+  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection, modelOptions,
 }) => {
   const isEditing = editingSections.claudeCodeConfig;
+
+  const handleSave = () => {
+    const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
+    handlePatchSection('claudeCodeConfig', { claude_code_config: config });
+  };
 
   return (
     <Card
@@ -31,17 +37,11 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
         editing ? (
           isEditing ? (
             <Space>
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="取消" checked={false}
-                onChange={() => {
-                  const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};
-                  handlePatchSection('claudeCodeConfig', { claude_code_config: config });
-                }} />
-              <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={true}
-                onChange={() => toggleSectionEdit('claudeCodeConfig')} />
+              <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+              <Button size="small" onClick={() => toggleSectionEdit('claudeCodeConfig')}>取消</Button>
             </Space>
           ) : (
-            <Switch size="small" checkedChildren="保存" unCheckedChildren="编辑" checked={false}
-              onChange={() => toggleSectionEdit('claudeCodeConfig')} />
+            <Button size="small" onClick={() => toggleSectionEdit('claudeCodeConfig')}>编辑</Button>
           )
         ) : null
       }
@@ -58,7 +58,18 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
       ) : (
         <div>
           <Form.Item label="模型" name={['claude_code_config', 'model']} style={{ marginBottom: 8 }}>
-            <Input placeholder="MiniMax-M2.7-highspeed" />
+            <Select
+              showSearch
+              allowClear
+              placeholder="选择 Anthropic 模型"
+              options={modelOptions}
+              filterOption={(input, option) => {
+                const q = input.toLowerCase();
+                const v = String(option?.value || '').toLowerCase();
+                const l = String(option?.label || '').toLowerCase();
+                return v.includes(q) || l.includes(q);
+              }}
+            />
           </Form.Item>
           <Form.Item label="系统提示词" name={['claude_code_config', 'system_prompt']} style={{ marginBottom: 8 }}>
             <Input.TextArea rows={3} placeholder="设置 Claude Code 的系统提示词" />

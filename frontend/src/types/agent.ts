@@ -88,6 +88,7 @@ export interface Agent {
   user_content: string;
   tools_content: string;
   model: string;
+  provider_key: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -113,6 +114,7 @@ export interface CreateAgentRequest {
   user_content: string;
   tools_content: string;
   model: string;
+  provider_key: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -134,6 +136,7 @@ export interface UpdateAgentRequest {
   user_content: string;
   tools_content: string;
   model: string;
+  provider_key: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -156,6 +159,7 @@ export interface PatchAgentRequest {
   user_content?: string;
   tools_content?: string;
   model?: string;
+  provider_key?: string;
   max_tokens?: number;
   temperature?: number;
   max_iterations?: number;

@@ -17,6 +17,7 @@ interface CodingAgentEditDrawerProps {
   activeTab: string;
   editingSections: Record<string, boolean>;
   agentType: string;
+  modelOptions: Array<{ value: string; label: string }>;
   onClose: () => void;
   onSubmit: () => void;
   onTabChange: (tab: string) => void;
@@ -33,6 +34,7 @@ export const CodingAgentEditDrawer: React.FC<CodingAgentEditDrawerProps> = ({
   activeTab,
   editingSections,
   agentType,
+  modelOptions,
   onClose,
   onSubmit,
   onTabChange,
@@ -125,6 +127,7 @@ export const CodingAgentEditDrawer: React.FC<CodingAgentEditDrawerProps> = ({
                       toggleSectionEdit={onToggleSectionEdit}
                       handlePatchSection={onPatchSection}
                       agentType={agentType}
+                      modelOptions={modelOptions}
                     />
                   </div>
                 ),

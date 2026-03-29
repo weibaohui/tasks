@@ -53,6 +53,7 @@ type LLMProviderRepository interface {
 	Save(ctx context.Context, provider *LLMProvider) error
 	FindByID(ctx context.Context, id LLMProviderID) (*LLMProvider, error)
 	FindByUserCode(ctx context.Context, userCode string) ([]*LLMProvider, error)
+	FindByProviderKey(ctx context.Context, providerKey string) (*LLMProvider, error)
 	FindDefaultActive(ctx context.Context, userCode string) (*LLMProvider, error)
 	ClearDefaultByUserCode(ctx context.Context, userCode string, excludeID *LLMProviderID) error
 	Delete(ctx context.Context, id LLMProviderID) error

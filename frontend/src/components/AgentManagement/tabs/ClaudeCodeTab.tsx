@@ -19,10 +19,11 @@ interface ClaudeCodeTabProps {
   toggleSectionEdit: (section: string) => void;
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
   agentType: string;
+  modelOptions: Array<{ value: string; label: string }>;
 }
 
 export const ClaudeCodeTab: React.FC<ClaudeCodeTabProps> = ({
-  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection, agentType,
+  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection, agentType, modelOptions,
 }) => {
   if (agentType !== 'CodingAgent') {
     return (
@@ -40,6 +41,7 @@ export const ClaudeCodeTab: React.FC<ClaudeCodeTabProps> = ({
       <ClaudeCodeBasicCard
         form={form} editing={editing} editingSections={editingSections}
         screens={screens} toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
+        modelOptions={modelOptions}
       />
       <ClaudeCodeToolsCard
         form={form} editing={editing} editingSections={editingSections}

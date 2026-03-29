@@ -33,6 +33,7 @@ export type AgentFormValues = {
   user_content: string;
   tools_content: string;
   model: string;
+  provider_key: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -45,7 +46,7 @@ export type AgentFormValues = {
   claude_code_config?: ClaudeCodeConfig;
 };
 
-export function getDefaultAgentFormValues(defaultModel?: string): AgentFormValues {
+export function getDefaultAgentFormValues(defaultModel?: string, defaultProviderKey?: string): AgentFormValues {
   return {
     name: '',
     agent_type: 'BareLLM',
@@ -56,6 +57,7 @@ export function getDefaultAgentFormValues(defaultModel?: string): AgentFormValue
     user_content: DEFAULT_USER_CONTENT,
     tools_content: DEFAULT_TOOLS_CONTENT,
     model: defaultModel || 'gpt-4',
+    provider_key: defaultProviderKey || '',
     max_tokens: 4096,
     temperature: 0.7,
     max_iterations: 15,
@@ -85,6 +87,8 @@ export interface UseAgentManagementReturn {
   providersLoading: boolean;
   activeProviders: LLMProvider[];
   modelOptions: Array<{ value: string; label: string }>;
+  claudeCodeModelOptions: Array<{ value: string; label: string }>;
+  providerOptions: Array<{ value: string; label: string }>;
   watchedModel: string | undefined;
   activeTab: 'basic' | 'skills' | 'personality' | 'claudecode';
   mcpLoading: boolean;
@@ -197,6 +201,39 @@ export function useAgentManagement({
     return [{ value: watchedModel, label: watchedModel }, ...modelOptionsFromProviders];
   }, [modelOptionsFromProviders, watchedModel]);
 
+  // ClaudeCode only uses Anthropic models
+  const claudeCodeModelOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: Array<{ value: string; label: string }> = [];
+
+    for (const p of activeProviders) {
+      if (p.provider_type !== 'anthropic') continue;
+      const providerLabel = p.provider_name || p.provider_key || 'Anthropic';
+      const candidates: string[] = [];
+      if (p.default_model) candidates.push(p.default_model);
+      for (const m of p.supported_models || []) {
+        if (m?.name) candidates.push(m.name);
+        else if (m?.id) candidates.push(m.id);
+      }
+      for (const model of candidates) {
+        const value = model.trim();
+        if (!value || seen.has(value)) continue;
+        seen.add(value);
+        opts.push({ value, label: `${value}（${providerLabel}）` });
+      }
+    }
+    opts.sort((a, b) => a.value.localeCompare(b.value));
+    return opts;
+  }, [activeProviders]);
+
+  // Provider options for selection
+  const providerOptions = useMemo(() => {
+    return activeProviders.map((p) => ({
+      value: p.provider_key,
+      label: p.provider_name || p.provider_key,
+    }));
+  }, [activeProviders]);
+
   // Actions
   const fetchList = useCallback(async () => {
     if (!userCode) { setItems([]); return; }
@@ -220,8 +257,8 @@ export function useAgentManagement({
     name: agent.name, agent_type: agent.agent_type, description: agent.description,
     identity_content: agent.identity_content, soul_content: agent.soul_content,
     agents_content: agent.agents_content, user_content: agent.user_content,
-    tools_content: agent.tools_content, model: agent.model, max_tokens: agent.max_tokens,
-    temperature: agent.temperature, max_iterations: agent.max_iterations,
+    tools_content: agent.tools_content, model: agent.model, provider_key: agent.provider_key || '',
+    max_tokens: agent.max_tokens, temperature: agent.temperature, max_iterations: agent.max_iterations,
     history_messages: agent.history_messages, skills_list: agent.skills_list || [],
     tools_list: agent.tools_list || [], is_active: agent.is_active,
     is_default: agent.is_default, enable_thinking_process: agent.enable_thinking_process,
@@ -302,11 +339,13 @@ export function useAgentManagement({
           description: found.description, identity_content: found.identity_content,
           soul_content: found.soul_content, agents_content: found.agents_content,
           user_content: found.user_content, tools_content: found.tools_content,
-          model: found.model, max_tokens: found.max_tokens, temperature: found.temperature,
+          model: found.model, provider_key: found.provider_key || '',
+          max_tokens: found.max_tokens, temperature: found.temperature,
           max_iterations: found.max_iterations, history_messages: found.history_messages,
           skills_list: found.skills_list || [], tools_list: found.tools_list || [],
           is_default: found.is_default, is_active: found.is_active,
           enable_thinking_process: found.enable_thinking_process,
+          claude_code_config: found.claude_code_config,
         });
       }
     } catch { message.error('保存失败'); }
@@ -353,6 +392,7 @@ export function useAgentManagement({
           identity_content: values.identity_content || '', soul_content: values.soul_content || '',
           agents_content: values.agents_content || '', user_content: values.user_content || '',
           tools_content: values.tools_content || '', model: values.model,
+          provider_key: values.provider_key,
           max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
@@ -367,7 +407,8 @@ export function useAgentManagement({
           description: values.description, identity_content: values.identity_content,
           soul_content: values.soul_content, agents_content: values.agents_content,
           user_content: values.user_content, tools_content: values.tools_content,
-          model: values.model, max_tokens: values.max_tokens, temperature: values.temperature,
+          model: values.model, provider_key: values.provider_key,
+          max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
           is_default: values.is_default, enable_thinking_process: values.enable_thinking_process,
@@ -465,7 +506,7 @@ export function useAgentManagement({
 
   return {
     items, loading, saving, open, editing, providers, providersLoading,
-    activeProviders, modelOptions, watchedModel, activeTab,
+    activeProviders, modelOptions, claudeCodeModelOptions, providerOptions, watchedModel, activeTab,
     mcpLoading, mcpServers, mcpBindings,
     toolsDrawerOpen, toolsDrawerLoading, toolsForServer, editingBinding,
     builtInTools, skillsOptions, editingSections, savingSections,
