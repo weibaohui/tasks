@@ -55,7 +55,6 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 	}
 
 	content := msg.Content
-	chatID := msg.ChatID
 
 	// 跳过空消息
 	if strings.TrimSpace(content) == "" {
@@ -63,20 +62,7 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 		return nil
 	}
 
-	// Determine receive_id type based on chat_type
-	// For p2p (person-to-person) chats, use open_id; for group chats, use chat_id
-	receiveIDType := "chat_id"
-	receiveID := chatID
-
-	if msg.Metadata != nil {
-		if chatType, ok := msg.Metadata["chat_type"].(string); ok && chatType == "p2p" {
-			// For p2p chats, use sender's open_id as receive_id
-			receiveIDType = "open_id"
-			if senderID, ok := msg.Metadata["sender_id"].(string); ok && senderID != "" {
-				receiveID = senderID
-			}
-		}
-	}
+	receiveIDType, receiveID := resolveReceiveTarget(msg)
 
 	// 判断消息类型：text 或 interactive(卡片)
 	msgType := "text"
@@ -127,6 +113,48 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 	}
 
 	return nil
+}
+
+func resolveReceiveTarget(msg *bus.OutboundMessage) (string, string) {
+	if msg == nil {
+		return "chat_id", ""
+	}
+
+	receiveIDType := "chat_id"
+	receiveID := msg.ChatID
+
+	if msg.Metadata == nil {
+		return inferReceiveTargetByID(receiveIDType, receiveID)
+	}
+
+	chatType, _ := msg.Metadata["chat_type"].(string)
+	senderID, _ := msg.Metadata["sender_id"].(string)
+	originChatID, _ := msg.Metadata["chat_id"].(string)
+
+	switch chatType {
+	case "p2p":
+		receiveIDType = "open_id"
+		if senderID != "" {
+			receiveID = senderID
+		}
+	case "group":
+		receiveIDType = "chat_id"
+		if originChatID != "" {
+			receiveID = originChatID
+		}
+	}
+
+	return inferReceiveTargetByID(receiveIDType, receiveID)
+}
+
+func inferReceiveTargetByID(receiveIDType, receiveID string) (string, string) {
+	if strings.HasPrefix(receiveID, "ou_") {
+		return "open_id", receiveID
+	}
+	if strings.HasPrefix(receiveID, "oc_") {
+		return "chat_id", receiveID
+	}
+	return receiveIDType, receiveID
 }
 
 // SendWithReply sends a message to Feishu as a reply to another message

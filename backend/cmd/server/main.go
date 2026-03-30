@@ -478,11 +478,15 @@ func (g *Gateway) runMessageLoop(ctx context.Context, channelService *applicatio
 
 		if err := g.processor.Process(ctx, msg); err != nil {
 			g.logger.Error("处理消息失败", zap.Error(err))
+			metadata := make(map[string]any)
+			for k, v := range msg.Metadata {
+				metadata[k] = v
+			}
 			outMsg := &channelBus.OutboundMessage{
 				Channel:  msg.Channel,
 				ChatID:   msg.ChatID,
 				Content:  fmt.Sprintf("处理消息时出错: %v", err),
-				Metadata: make(map[string]any),
+				Metadata: metadata,
 			}
 			g.messageBus.PublishOutbound(outMsg)
 		}
