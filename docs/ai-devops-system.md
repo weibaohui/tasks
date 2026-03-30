@@ -473,3 +473,197 @@ CREATE TABLE task_records (
 1. 飞书集成
 2. 更多工具
 3. 并行执行
+
+## 十一、最小化 MVP：手动触发 Agent 开发并发起 PR
+
+### 11.1 目标范围
+
+本 MVP 只覆盖一条最短可用链路：
+
+1. 维护项目基本信息（Git 仓库地址、初始化步骤）
+2. 维护项目需求列表
+3. 人工选定一个需求并手动触发指定 Agent 执行
+4. 为该需求创建临时工作目录
+5. 基于 CodingAgent 生成分身 Agent（仅工作目录不同）
+6. 分身 Agent 在临时目录完成环境初始化、实现需求、发起 PR
+7. 回写需求开发状态与 PR 信息
+
+### 11.2 核心对象
+
+#### Project（项目）
+
+```json
+{
+  "id": "proj_xxx",
+  "name": "任务平台",
+  "git_repo_url": "git@github.com:org/repo.git",
+  "default_branch": "main",
+  "init_steps": [
+    "go mod tidy",
+    "make test"
+  ]
+}
+```
+
+#### Requirement（需求）
+
+```json
+{
+  "id": "req_xxx",
+  "project_id": "proj_xxx",
+  "title": "支持任务筛选",
+  "description": "任务列表支持按状态筛选",
+  "status": "todo",
+  "dev_state": "idle",
+  "assignee_agent_id": "",
+  "workspace_path": "",
+  "branch_name": "",
+  "pr_url": ""
+}
+```
+
+建议状态字段：
+
+- `status`：`todo` / `in_progress` / `done`
+- `dev_state`：`idle` / `preparing` / `coding` / `pr_opened` / `failed`
+
+#### AgentReplica（Agent 分身）
+
+```json
+{
+  "id": "agent_replica_xxx",
+  "base_agent_id": "coding_agent_default",
+  "type": "coding_agent_replica",
+  "workdir": "/tmp/ai-devops/proj_xxx/req_xxx",
+  "requirement_id": "req_xxx",
+  "status": "running"
+}
+```
+
+### 11.3 手动触发流程
+
+```text
+[人类] 在需求列表选择 req_xxx，点击“开始开发”
+   ↓
+[调度器] 校验项目信息与需求状态（必须是 todo/idle）
+   ↓
+[调度器] 创建临时工作目录 /tmp/ai-devops/{project_id}/{requirement_id}
+   ↓
+[调度器] 基于 CodingAgent 创建分身，覆盖 workdir=临时目录
+   ↓
+[调度器] 下达任务给分身 Agent：
+         1) clone 仓库并切分支
+         2) 执行项目 init_steps
+         3) 实现需求并本地自检
+         4) 提交代码并推送分支
+         5) 发起 PR
+   ↓
+[分身 Agent] 回传执行结果（成功/失败、PR 链接、错误日志）
+   ↓
+[调度器] 更新需求状态与开发状态
+```
+
+### 11.4 调度器执行协议（MVP）
+
+#### 输入参数
+
+```json
+{
+  "project_id": "proj_xxx",
+  "requirement_id": "req_xxx",
+  "trigger_by": "human_user_id",
+  "agent_id": "coding_agent_default"
+}
+```
+
+#### 调度动作
+
+1. 读取 `Project` 与 `Requirement`
+2. 原子更新需求状态：`status=todo, dev_state=idle` -> `status=in_progress, dev_state=preparing`
+3. 创建 workspace 目录
+4. 创建 Agent 分身并绑定 requirement
+5. 发送执行指令（包含 repo、init_steps、需求描述、验收标准）
+6. 监听执行事件并写回 requirement 状态
+
+#### 输出结果
+
+```json
+{
+  "requirement_id": "req_xxx",
+  "status": "in_progress",
+  "dev_state": "coding",
+  "workspace_path": "/tmp/ai-devops/proj_xxx/req_xxx",
+  "replica_agent_id": "agent_replica_xxx"
+}
+```
+
+### 11.5 分身 Agent 标准执行步骤
+
+1. 进入 `workdir`
+2. `git clone <git_repo_url> .`
+3. `git checkout -b feature/req_xxx`
+4. 逐条执行 `init_steps`
+5. 根据需求实现代码
+6. 运行最小自检（例如单测、lint）
+7. `git add/commit/push`
+8. 调用 Git 平台 API 发起 PR
+9. 回传 `pr_url` 与执行摘要
+
+### 11.6 状态回写规则
+
+#### 成功
+
+- `status`: `done`
+- `dev_state`: `pr_opened`
+- `pr_url`: 非空
+
+#### 失败
+
+- `status`: 保持 `in_progress`（等待重试或人工处理）
+- `dev_state`: `failed`
+- 记录 `last_error`
+
+### 11.7 最小表结构补充
+
+```sql
+-- 项目表
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    git_repo_url TEXT NOT NULL,
+    default_branch TEXT NOT NULL DEFAULT 'main',
+    init_steps TEXT NOT NULL, -- JSON 数组
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 需求表
+CREATE TABLE requirements (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'todo',
+    dev_state TEXT NOT NULL DEFAULT 'idle',
+    assignee_agent_id TEXT,
+    workspace_path TEXT,
+    branch_name TEXT,
+    pr_url TEXT,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+```
+
+### 11.8 MVP 验收标准
+
+满足以下条件即视为 MVP 完成：
+
+1. 能创建项目并保存 Git 仓库地址、初始化步骤
+2. 能创建需求并在列表展示状态
+3. 能手动触发某需求进入开发流程
+4. 触发后会创建独立临时工作目录
+5. 使用 CodingAgent 分身在该目录执行初始化和开发
+6. 需求完成后自动发起 PR 并写回 `pr_url`
+7. 需求状态能正确更新为 `done/pr_opened` 或 `failed`
