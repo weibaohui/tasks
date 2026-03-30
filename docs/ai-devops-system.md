@@ -667,3 +667,301 @@ CREATE TABLE requirements (
 5. 使用 CodingAgent 分身在该目录执行初始化和开发
 6. 需求完成后自动发起 PR 并写回 `pr_url`
 7. 需求状态能正确更新为 `done/pr_opened` 或 `failed`
+
+## 十二、MVP 落地设计（复用现有架构，指导 AI 前后端开发）
+
+### 12.1 设计目标
+
+本章用于指导 AI 在当前代码体系内完成 MVP 开发，要求：
+
+1. 不推翻现有 DDD 分层与模块边界
+2. 复用已有 Agent 管理、Task 执行、HTTP 接口与前端管理台模式
+3. 以“最小可用”为优先，实现端到端闭环：创建项目 -> 创建需求 -> 手动触发 -> Agent 分身执行 -> PR 回写
+
+### 12.2 架构复用原则
+
+#### 后端复用点
+
+- **Interface 层**：沿用 `backend/interfaces/http` 的 handler + router 组织方式
+- **Application 层**：沿用命令对象 + `ApplicationService` 编排方式
+- **Domain 层**：沿用聚合根 + 仓储接口（定义在 `domain/repository.go`）
+- **Infrastructure 层**：沿用 SQLite 仓储实现与 `schema.go` 统一迁移入口
+
+#### 前端复用点
+
+- 沿用 `frontend/src/api/*Api.ts` 的 API 封装风格（`apiClient` + Bearer Token）
+- 沿用 React + Ant Design 页面组织方式
+- 沿用“页面 + 组件 + hooks”模式（参考 AgentManagement）
+- 路由统一挂载在 `frontend/src/App.tsx`
+
+### 12.3 模块拆分设计
+
+#### 12.3.1 后端新增模块
+
+建议新增以下模块，命名与现有风格保持一致：
+
+1. `ProjectApplicationService`（项目 CRUD）
+2. `RequirementApplicationService`（需求 CRUD + 状态更新）
+3. `RequirementDispatchService`（手动触发开发，创建分身并下发执行）
+
+建议新增实体（聚合）：
+
+1. `Project`
+2. `Requirement`
+3. `RequirementExecution`（可选，MVP 可并入 Requirement 字段）
+
+#### 12.3.2 前端新增模块
+
+建议新增页面：
+
+1. `ProjectRequirementPage`（项目与需求管理）
+
+建议新增组件：
+
+1. `ProjectForm`
+2. `RequirementList`
+3. `RequirementDispatchModal`
+
+建议新增 API 客户端：
+
+1. `projectApi.ts`
+2. `requirementApi.ts`
+
+### 12.4 数据模型设计（与现有 SQLite 兼容）
+
+#### 12.4.1 projects 表
+
+```sql
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    git_repo_url TEXT NOT NULL,
+    default_branch TEXT NOT NULL DEFAULT 'main',
+    init_steps TEXT NOT NULL, -- JSON 数组
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
+```
+
+#### 12.4.2 requirements 表
+
+```sql
+CREATE TABLE IF NOT EXISTS requirements (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    acceptance_criteria TEXT,
+    status TEXT NOT NULL DEFAULT 'todo',
+    dev_state TEXT NOT NULL DEFAULT 'idle',
+    assignee_agent_id TEXT,
+    replica_agent_id TEXT,
+    workspace_path TEXT,
+    branch_name TEXT,
+    pr_url TEXT,
+    last_error TEXT,
+    started_at INTEGER,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_requirements_project_id ON requirements(project_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status, dev_state);
+```
+
+### 12.5 状态机设计
+
+#### 12.5.1 需求业务状态（status）
+
+- `todo`：待开发
+- `in_progress`：开发中
+- `done`：开发完成（已发 PR）
+
+#### 12.5.2 开发执行状态（dev_state）
+
+- `idle`：尚未触发
+- `preparing`：准备环境/创建分身
+- `coding`：分身执行开发
+- `pr_opened`：PR 已创建
+- `failed`：执行失败
+
+#### 12.5.3 状态约束
+
+1. 仅 `todo + idle` 可被手动触发
+2. 触发时原子更新为 `in_progress + preparing`
+3. 分身进入执行后更新为 `in_progress + coding`
+4. PR 成功后更新为 `done + pr_opened`
+5. 失败时更新为 `in_progress + failed`
+
+### 12.6 后端接口设计（遵循 /api/v1 规范）
+
+#### 12.6.1 项目接口
+
+- `POST /api/v1/projects`：创建项目
+- `GET /api/v1/projects`：列表或按 `id` 查询
+- `PUT /api/v1/projects?id={id}`：更新项目
+- `DELETE /api/v1/projects?id={id}`：删除项目
+
+#### 12.6.2 需求接口
+
+- `POST /api/v1/requirements`：创建需求
+- `GET /api/v1/requirements?project_id={projectID}`：需求列表
+- `PUT /api/v1/requirements?id={id}`：更新需求内容
+
+#### 12.6.3 手动触发接口
+
+- `POST /api/v1/requirements/{id}/dispatch`
+
+请求体：
+
+```json
+{
+  "agent_id": "coding_agent_default"
+}
+```
+
+响应体：
+
+```json
+{
+  "requirement_id": "req_xxx",
+  "status": "in_progress",
+  "dev_state": "coding",
+  "workspace_path": "/tmp/ai-devops/proj_xxx/req_xxx",
+  "replica_agent_id": "agent_replica_xxx"
+}
+```
+
+### 12.7 后端实现分层指引（给 AI 的编码约束）
+
+#### 12.7.1 Domain 层
+
+1. 在 `domain` 新增 `project.go`、`requirement.go`
+2. 新增仓储接口：`ProjectRepository`、`RequirementRepository`
+3. 将状态转换规则收敛到 `Requirement` 方法中，例如：
+   - `StartDispatch()`
+   - `MarkCoding(workspace, replicaAgentID string)`
+   - `MarkPROpened(prURL, branch string)`
+   - `MarkFailed(errMsg string)`
+
+#### 12.7.2 Application 层
+
+1. `ProjectApplicationService`：负责项目 CRUD 编排
+2. `RequirementApplicationService`：负责需求 CRUD 与查询
+3. `RequirementDispatchService`：负责编排触发流程
+   - 加载 requirement/project/base agent
+   - 创建 workspace 路径
+   - 基于 base agent 构建分身 agent（复用 agent 配置）
+   - 覆盖分身 `ClaudeCodeConfig.Cwd`
+   - 下发执行任务（可复用现有 task 创建与执行链路）
+   - 按执行回调更新 requirement 状态
+
+#### 12.7.3 Infrastructure 层
+
+1. 扩展 `infrastructure/persistence/schema.go` 增加新表
+2. 实现 `project_repository.go` 与 `requirement_repository.go`
+3. 使用与现有仓储一致的序列化和错误处理模式
+
+#### 12.7.4 Interface 层
+
+1. 新增 `project_handler.go`、`requirement_handler.go`
+2. 在 `router.go` 挂载 `/api/v1/projects` 与 `/api/v1/requirements` 路由
+3. 复用现有 HTTP 错误响应结构：`{ code, message }`
+
+### 12.8 Agent 分身策略（复用现有 Agent 模型）
+
+MVP 不新增独立“分身表”，直接复用现有 `agents`：
+
+1. 基于目标 CodingAgent 读取快照（模型、提示词、工具、技能、provider）
+2. 创建新 agent，命名约定：`{base_name}-replica-{requirement_id}`
+3. `agent_type` 仍为 `CodingAgent`
+4. 复制原 `ClaudeCodeConfig`，仅覆盖：
+   - `cwd=/tmp/ai-devops/{project_id}/{requirement_id}`
+   - `continue_conversation=false`
+   - `fork_session=true`（可选）
+5. 将 `replica_agent_id` 回写 requirement
+
+### 12.9 调度执行时序（手动触发）
+
+```text
+Frontend 点击“开始开发”
+  -> POST /api/v1/requirements/{id}/dispatch
+  -> RequirementDispatchService.Start()
+  -> Requirement.StartDispatch()
+  -> 创建 workspace 目录
+  -> 基于 CodingAgent 创建 replica agent 并设置 cwd
+  -> 创建/启动 Agent 类型任务（上下文绑定 replica_agent_code）
+  -> 执行完成后更新 requirement:
+       成功 -> MarkPROpened(pr_url, branch)
+       失败 -> MarkFailed(last_error)
+```
+
+### 12.10 前端设计（复用现有管理台交互模式）
+
+#### 12.10.1 页面结构
+
+新增左侧菜单：`项目需求`
+
+页面分区：
+
+1. 上半区：项目信息管理（仓库地址、默认分支、初始化步骤）
+2. 下半区：需求列表（状态、负责人、PR、操作）
+
+#### 12.10.2 需求列表操作
+
+每条需求提供操作按钮：
+
+1. `开始开发`（仅 `todo/idle` 显示）
+2. `查看 PR`（`pr_url` 非空显示）
+3. `查看错误`（`failed` 显示）
+
+#### 12.10.3 UI 状态映射
+
+- `todo/idle`：灰色标签“待开发”
+- `in_progress/preparing`：蓝色标签“准备中”
+- `in_progress/coding`：处理中标签“开发中”
+- `done/pr_opened`：绿色标签“PR 已创建”
+- `in_progress/failed`：红色标签“失败”
+
+### 12.11 AI 开发任务拆解（可直接执行）
+
+#### 任务 A：后端 Domain + Repository
+
+1. 新增 `Project` 与 `Requirement` 领域实体
+2. 扩展 `domain/repository.go` 接口定义
+3. 新增 SQLite 仓储实现与单元测试
+
+#### 任务 B：后端 Application + HTTP
+
+1. 新增项目/需求应用服务
+2. 新增 dispatch 应用服务
+3. 新增 handler 与 router 注册
+4. 新增接口测试（重点覆盖 dispatch 状态流转）
+
+#### 任务 C：前端 API + 页面
+
+1. 新增 `projectApi.ts`、`requirementApi.ts`
+2. 新增 `ProjectRequirementPage.tsx`
+3. 在 `App.tsx` 注册菜单与路由
+4. 增加 dispatch 交互与状态展示
+
+#### 任务 D：联调与验收
+
+1. 创建项目与需求测试数据
+2. 触发 dispatch，检查 workspace 与分身创建
+3. 模拟成功/失败回调，验证需求状态变化
+4. 验证 PR 链接展示与跳转
+
+### 12.12 验收清单（实现完成判定）
+
+1. 后端可完成项目与需求 CRUD
+2. `POST /api/v1/requirements/{id}/dispatch` 可用且有幂等保护
+3. 分身 Agent 的 `cwd` 为需求独立目录
+4. 需求状态按状态机正确流转
+5. 前端可完成创建/列表/触发/状态展示
+6. 成功场景可展示 PR 链接，失败场景可展示错误信息
+7. 实现严格复用现有 DDD 分层与现有路由、API、页面组织方式
