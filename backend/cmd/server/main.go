@@ -164,11 +164,20 @@ func main() {
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
 	logger.Info("ReplicaAgentManager 初始化完成")
 
+	// 初始化 Hook 配置仓储
+	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
+	hookLogRepo := _persistence.NewSQLiteRequirementHookActionLogRepository(db)
+	logger.Info("Hook 仓储初始化完成")
+
 	// 初始化 ConfigurableHookExecutor（数据库驱动的可配置 Hook）
-	// 注意：需要先实现 HookConfigRepository 和 HookActionLogRepository
-	var hookExecutor *domain.ConfigurableHookExecutor
+	// 注意：TriggerAgentExecutor 会在 gateway 初始化后添加
 	hookLogger := &zapRequirementLogger{logger: logger}
-	hookExecutor = domain.NewConfigurableHookExecutor(nil, nil, nil, hookLogger)
+	hookExecutor := domain.NewConfigurableHookExecutor(
+		hookConfigRepo,
+		hookLogRepo,
+		nil, // 暂不设置 executors
+		hookLogger,
+	)
 	logger.Info("ConfigurableHookExecutor 初始化完成")
 
 	requirementDispatchService := application.NewRequirementDispatchService(
@@ -220,6 +229,11 @@ func main() {
 	// 9. 初始化渠道网关
 	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
+
+	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
+	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
+	hookExecutor.AddExecutor(triggerAgentExecutor)
+	logger.Info("TriggerAgentExecutor 注册完成")
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{

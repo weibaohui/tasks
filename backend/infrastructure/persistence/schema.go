@@ -323,6 +323,39 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_session_key ON mcp_tool_logs(sessio
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_mcp_server_id ON mcp_tool_logs(mcp_server_id);
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_tool_name ON mcp_tool_logs(tool_name);
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_created_at ON mcp_tool_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS requirement_hook_configs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    trigger_point TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    action_config TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    priority INTEGER NOT NULL DEFAULT 50,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_hook_configs_trigger ON requirement_hook_configs(trigger_point, enabled);
+
+CREATE TABLE IF NOT EXISTS requirement_hook_action_logs (
+    id TEXT PRIMARY KEY,
+    hook_config_id TEXT NOT NULL,
+    requirement_id TEXT NOT NULL,
+    trigger_point TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    input_context TEXT,
+    result TEXT,
+    error TEXT,
+    started_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    FOREIGN KEY (hook_config_id) REFERENCES requirement_hook_configs(id),
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hook_logs_requirement ON requirement_hook_action_logs(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_hook_logs_config ON requirement_hook_action_logs(hook_config_id);
 `
 
 // InitSchema 初始化数据库 Schema
