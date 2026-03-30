@@ -172,7 +172,7 @@ func (s *RequirementDispatchService) createReplicaAgent(ctx context.Context, bas
 		cfg := *snap.ClaudeCodeConfig
 		snap.ClaudeCodeConfig = &cfg
 	}
-	snap.ClaudeCodeConfig.Cwd = workspacePath
+	snap.ClaudeCodeConfig.Cwd = resolveReplicaAgentCwd(requirement, workspacePath)
 	continueConversation := false
 	forkSession := true
 	snap.ClaudeCodeConfig.ContinueConversation = &continueConversation
@@ -197,6 +197,15 @@ func requirementWorkspaceRoot(requirement *domain.Requirement) string {
 		return requirement.TempWorkspaceRoot()
 	}
 	return workspaceRootPath()
+}
+
+func resolveReplicaAgentCwd(requirement *domain.Requirement, workspacePath string) string {
+	if requirement != nil {
+		if tempWorkspace := strings.TrimSpace(requirement.TempWorkspaceRoot()); tempWorkspace != "" {
+			return tempWorkspace
+		}
+	}
+	return workspacePath
 }
 
 func firstNonEmpty(values ...string) string {
