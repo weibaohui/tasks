@@ -5,6 +5,9 @@ package domain
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -26,14 +29,15 @@ type Hook interface {
 type HookType string
 
 const (
-	HookTypeLifecycle HookType = "lifecycle"
-	HookTypeLLM       HookType = "llm"
-	HookTypeTool      HookType = "tool"
-	HookTypeMessage   HookType = "message"
-	HookTypeSkill     HookType = "skill"
-	HookTypeMCP       HookType = "mcp"
-	HookTypePrompt    HookType = "prompt"
-	HookTypeSession   HookType = "session"
+	HookTypeLifecycle   HookType = "lifecycle"
+	HookTypeLLM         HookType = "llm"
+	HookTypeTool        HookType = "tool"
+	HookTypeMessage     HookType = "message"
+	HookTypeSkill       HookType = "skill"
+	HookTypeMCP         HookType = "mcp"
+	HookTypePrompt      HookType = "prompt"
+	HookTypeSession     HookType = "session"
+	HookTypeRequirement HookType = "requirement"
 )
 
 // BaseHook 基础实现
@@ -347,4 +351,433 @@ func (c *HookContext) GetMetadata(key string) string {
 // Duration 获取执行时长
 func (c *HookContext) Duration() time.Duration {
 	return time.Since(c.startTime)
+}
+
+// ============================================================================
+// Requirement State Change Hook
+// ============================================================================
+
+// RequirementStateEvent 需求状态变更事件
+type RequirementStateEvent string
+
+const (
+	RequirementEventDispatching     RequirementStateEvent = "dispatching"
+	RequirementEventDispatched     RequirementStateEvent = "dispatched"
+	RequirementEventDispatchFailed RequirementStateEvent = "dispatch_failed"
+	RequirementEventCodingStarted  RequirementStateEvent = "coding_started"
+	RequirementEventCodingCompleted RequirementStateEvent = "coding_completed"
+	RequirementEventCodingFailed   RequirementStateEvent = "coding_failed"
+	RequirementEventCompleted      RequirementStateEvent = "completed"
+)
+
+// StateChange 状态变更信息
+type StateChange struct {
+	FromStatus   RequirementStatus
+	ToStatus     RequirementStatus
+	FromDevState RequirementDevState
+	ToDevState   RequirementDevState
+	Trigger      string
+	Reason       string
+	Timestamp    time.Time
+}
+
+// RequirementStateHook 需求状态变更钩子接口
+type RequirementStateHook interface {
+	Hook
+	OnRequirementStateChanged(ctx context.Context, req *Requirement, change *StateChange) error
+}
+
+// RequirementStateHookRegistry 需求状态钩子注册表接口
+type RequirementStateHookRegistry interface {
+	Register(hook RequirementStateHook) error
+	Unregister(name string) error
+	Get(name string) RequirementStateHook
+	List() []RequirementStateHook
+	Enable(name string) error
+	Disable(name string) error
+}
+
+// requirementStateHookRegistry 注册表实现
+type requirementStateHookRegistry struct {
+	mu    sync.RWMutex
+	hooks map[string]RequirementStateHook
+}
+
+// NewRequirementStateHookRegistry 创建注册表
+func NewRequirementStateHookRegistry() RequirementStateHookRegistry {
+	return &requirementStateHookRegistry{
+		hooks: make(map[string]RequirementStateHook),
+	}
+}
+
+func (r *requirementStateHookRegistry) Register(hook RequirementStateHook) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if hook == nil {
+		return errors.New("hook cannot be nil")
+	}
+
+	if _, exists := r.hooks[hook.Name()]; exists {
+		return fmt.Errorf("hook %s already registered", hook.Name())
+	}
+
+	r.hooks[hook.Name()] = hook
+	return nil
+}
+
+func (r *requirementStateHookRegistry) Unregister(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.hooks[name]; !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+
+	delete(r.hooks, name)
+	return nil
+}
+
+func (r *requirementStateHookRegistry) Get(name string) RequirementStateHook {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.hooks[name]
+}
+
+func (r *requirementStateHookRegistry) List() []RequirementStateHook {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	hooks := make([]RequirementStateHook, 0, len(r.hooks))
+	for _, hook := range r.hooks {
+		hooks = append(hooks, hook)
+	}
+	return hooks
+}
+
+func (r *requirementStateHookRegistry) Enable(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	hook, exists := r.hooks[name]
+	if !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+	hook.SetEnabled(true)
+	return nil
+}
+
+func (r *requirementStateHookRegistry) Disable(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	hook, exists := r.hooks[name]
+	if !exists {
+		return fmt.Errorf("hook %s not found", name)
+	}
+	hook.SetEnabled(false)
+	return nil
+}
+
+// RequirementStateHookExecutor 需求状态钩子执行器
+type RequirementStateHookExecutor struct {
+	registry RequirementStateHookRegistry
+	logger   RequirementStateHookLogger
+}
+
+// RequirementStateHookLogger 日志接口
+type RequirementStateHookLogger interface {
+	Debug(msg string, fields ...RequirementStateHookLogField)
+	Info(msg string, fields ...RequirementStateHookLogField)
+	Error(msg string, fields ...RequirementStateHookLogField)
+}
+
+// RequirementStateHookLogField 日志字段接口
+type RequirementStateHookLogField interface{}
+
+// StringField 字符串字段
+type StringField struct {
+	Key string
+	Val string
+}
+
+// String 创建字符串日志字段
+func String(key, val string) RequirementStateHookLogField {
+	return StringField{Key: key, Val: val}
+}
+
+// AnyField 任意类型字段
+type AnyField struct {
+	Key string
+	Val interface{}
+}
+
+// Any 创建任意类型日志字段
+func Any(key string, val interface{}) RequirementStateHookLogField {
+	return AnyField{Key: key, Val: val}
+}
+
+// NewRequirementStateHookExecutor 创建执行器
+func NewRequirementStateHookExecutor(
+	registry RequirementStateHookRegistry,
+	logger RequirementStateHookLogger,
+) *RequirementStateHookExecutor {
+	return &RequirementStateHookExecutor{
+		registry: registry,
+		logger:   logger,
+	}
+}
+
+// Execute 执行所有已注册的状态变更钩子
+func (e *RequirementStateHookExecutor) Execute(ctx context.Context, req *Requirement, change *StateChange) {
+	hooks := e.getEnabledHooks()
+	hooks = e.sortByPriority(hooks)
+
+	for _, hook := range hooks {
+		if err := e.executeHook(ctx, hook, req, change); err != nil {
+			e.logger.Error("requirement state hook execution failed",
+				String("hook", hook.Name()),
+				String("trigger", change.Trigger),
+				Any("error", err),
+			)
+		}
+	}
+}
+
+func (e *RequirementStateHookExecutor) executeHook(ctx context.Context, hook RequirementStateHook, req *Requirement, change *StateChange) error {
+	e.logger.Debug("executing requirement state hook",
+		String("hook", hook.Name()),
+		String("trigger", change.Trigger),
+		String("from_status", string(change.FromStatus)),
+		String("to_status", string(change.ToStatus)),
+	)
+
+	return hook.OnRequirementStateChanged(ctx, req, change)
+}
+
+func (e *RequirementStateHookExecutor) getEnabledHooks() []RequirementStateHook {
+	hooks := e.registry.List()
+	var enabled []RequirementStateHook
+	for _, hook := range hooks {
+		if hook.Enabled() {
+			enabled = append(enabled, hook)
+		}
+	}
+	return enabled
+}
+
+func (e *RequirementStateHookExecutor) sortByPriority(hooks []RequirementStateHook) []RequirementStateHook {
+	sort.Slice(hooks, func(i, j int) bool {
+		return hooks[i].Priority() < hooks[j].Priority()
+	})
+	return hooks
+}
+
+// ============================================================================
+// Configurable Hook System (数据库驱动)
+// ============================================================================
+
+// RequirementHookConfig Hook 配置
+type RequirementHookConfig struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	TriggerPoint string    `json:"trigger_point"` // start_dispatch, mark_coding, mark_failed, mark_pr_opened
+	ActionType   string    `json:"action_type"`   // trigger_agent, notification, webhook
+	ActionConfig string    `json:"action_config"` // JSON 配置
+	Enabled      bool      `json:"enabled"`
+	Priority     int       `json:"priority"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// RequirementHookActionLog 执行日志
+type RequirementHookActionLog struct {
+	ID            string     `json:"id"`
+	HookConfigID  string     `json:"hook_config_id"`
+	RequirementID string     `json:"requirement_id"`
+	TriggerPoint  string     `json:"trigger_point"`
+	ActionType    string     `json:"action_type"`
+	Status        string     `json:"status"` // pending, running, success, failed
+	InputContext  string     `json:"input_context"`
+	Result        string     `json:"result"`
+	Error         string     `json:"error"`
+	StartedAt     time.Time  `json:"started_at"`
+	CompletedAt   *time.Time `json:"completed_at"`
+}
+
+// RequirementHookConfigRepository Hook 配置仓储接口
+type RequirementHookConfigRepository interface {
+	Save(ctx context.Context, config *RequirementHookConfig) error
+	FindByID(ctx context.Context, id string) (*RequirementHookConfig, error)
+	FindByTriggerPoint(ctx context.Context, triggerPoint string) ([]*RequirementHookConfig, error)
+	FindEnabledByTriggerPoint(ctx context.Context, triggerPoint string) ([]*RequirementHookConfig, error)
+	Delete(ctx context.Context, id string) error
+}
+
+// RequirementHookActionLogRepository 执行日志仓储接口
+type RequirementHookActionLogRepository interface {
+	Save(ctx context.Context, log *RequirementHookActionLog) error
+	FindByRequirementID(ctx context.Context, requirementID string) ([]*RequirementHookActionLog, error)
+	FindByHookConfigID(ctx context.Context, hookConfigID string, limit int) ([]*RequirementHookActionLog, error)
+}
+
+// TriggerAgentActionConfig 触发 Agent 动作配置
+type TriggerAgentActionConfig struct {
+	AgentID          string `json:"agent_id"`
+	PromptTemplate   string `json:"prompt_template"`
+	TimeoutMinutes   int    `json:"timeout_minutes"`
+	WorkspaceTemplate string `json:"workspace_template"`
+}
+
+// NotificationActionConfig 通知动作配置
+type NotificationActionConfig struct {
+	Channel  string `json:"channel"`  // feishu, email
+	Template string `json:"template"`
+}
+
+// WebhookActionConfig Webhook 动作配置
+type WebhookActionConfig struct {
+	URL          string            `json:"url"`
+	Method      string            `json:"method"`
+	Headers     map[string]string `json:"headers"`
+	BodyTemplate string           `json:"body_template"`
+}
+
+// ActionExecutor 动作执行器接口
+type ActionExecutor interface {
+	Supports(actionType string) bool
+	Execute(ctx context.Context, config *RequirementHookConfig, req *Requirement, change *StateChange) (*ActionResult, error)
+}
+
+// ActionResult 动作执行结果
+type ActionResult struct {
+	Success bool
+	Output string
+	Error  error
+}
+
+// ConfigurableHookLogger 日志接口
+type ConfigurableHookLogger interface {
+	Debug(msg string, fields ...RequirementStateHookLogField)
+	Info(msg string, fields ...RequirementStateHookLogField)
+	Error(msg string, fields ...RequirementStateHookLogField)
+}
+
+// ConfigurableHookExecutor 可配置 Hook 执行器
+// 从数据库加载配置，按配置执行动作
+type ConfigurableHookExecutor struct {
+	configRepo RequirementHookConfigRepository
+	logRepo    RequirementHookActionLogRepository
+	executors  []ActionExecutor
+	logger     ConfigurableHookLogger
+}
+
+// NewConfigurableHookExecutor 创建执行器
+func NewConfigurableHookExecutor(
+	configRepo RequirementHookConfigRepository,
+	logRepo RequirementHookActionLogRepository,
+	executors []ActionExecutor,
+	logger ConfigurableHookLogger,
+) *ConfigurableHookExecutor {
+	return &ConfigurableHookExecutor{
+		configRepo: configRepo,
+		logRepo:    logRepo,
+		executors: executors,
+		logger:    logger,
+	}
+}
+
+// Execute 执行指定触发点的所有已配置 Hook
+func (e *ConfigurableHookExecutor) Execute(
+	ctx context.Context,
+	triggerPoint string,
+	req *Requirement,
+	change *StateChange,
+) {
+	// 如果没有配置仓储，跳过执行
+	if e.configRepo == nil {
+		return
+	}
+
+	// 1. 从数据库加载该触发点的配置
+	configs, err := e.configRepo.FindEnabledByTriggerPoint(ctx, triggerPoint)
+	if err != nil {
+		e.logger.Error("failed to load hook configs",
+			String("trigger", triggerPoint),
+			Any("error", err),
+		)
+		return
+	}
+
+	if len(configs) == 0 {
+		return
+	}
+
+	// 2. 按优先级排序
+	sorted := make([]*RequirementHookConfig, len(configs))
+	copy(sorted, configs)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Priority < sorted[j].Priority
+	})
+
+	// 3. 遍历执行
+	for _, config := range sorted {
+		e.executeConfig(ctx, config, req, change)
+	}
+}
+
+func (e *ConfigurableHookExecutor) executeConfig(
+	ctx context.Context,
+	config *RequirementHookConfig,
+	req *Requirement,
+	change *StateChange,
+) {
+	// 1. 创建执行日志
+	log := &RequirementHookActionLog{
+		HookConfigID:  config.ID,
+		RequirementID: req.ID().String(),
+		TriggerPoint:  change.Trigger,
+		ActionType:    config.ActionType,
+		Status:        "pending",
+		StartedAt:     time.Now(),
+	}
+	_ = e.logRepo.Save(ctx, log)
+
+	// 2. 查找对应的动作执行器
+	var executor ActionExecutor
+	for _, ae := range e.executors {
+		if ae.Supports(config.ActionType) {
+			executor = ae
+			break
+		}
+	}
+	if executor == nil {
+		log.Status = "failed"
+		log.Error = fmt.Sprintf("no executor for action type: %s", config.ActionType)
+		_ = e.logRepo.Save(ctx, log)
+		return
+	}
+
+	// 3. 执行动作
+	log.Status = "running"
+	_ = e.logRepo.Save(ctx, log)
+
+	result, err := executor.Execute(ctx, config, req, change)
+
+	// 4. 更新日志
+	now := time.Now()
+	log.CompletedAt = &now
+	if err != nil {
+		log.Status = "failed"
+		log.Error = err.Error()
+	} else {
+		log.Status = "success"
+		log.Result = result.Output
+	}
+	_ = e.logRepo.Save(ctx, log)
+}
+
+// AddExecutor 添加动作执行器
+func (e *ConfigurableHookExecutor) AddExecutor(executor ActionExecutor) {
+	e.executors = append(e.executors, executor)
 }

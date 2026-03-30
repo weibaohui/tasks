@@ -159,7 +159,28 @@ func main() {
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
 	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
-	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, sessionService, idGenerator)
+
+	// 初始化 ReplicaAgentManager（强制销毁分身）
+	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
+	logger.Info("ReplicaAgentManager 初始化完成")
+
+	// 初始化 ConfigurableHookExecutor（数据库驱动的可配置 Hook）
+	// 注意：需要先实现 HookConfigRepository 和 HookActionLogRepository
+	var hookExecutor *domain.ConfigurableHookExecutor
+	hookLogger := &zapRequirementLogger{logger: logger}
+	hookExecutor = domain.NewConfigurableHookExecutor(nil, nil, nil, hookLogger)
+	logger.Info("ConfigurableHookExecutor 初始化完成")
+
+	requirementDispatchService := application.NewRequirementDispatchService(
+		requirementRepo,
+		projectRepo,
+		agentRepo,
+		taskService,
+		sessionService,
+		idGenerator,
+		replicaAgentManager,
+		hookExecutor,
+	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -505,4 +526,51 @@ func (g *Gateway) Shutdown() {
 // ChannelCount 返回已注册渠道数量
 func (g *Gateway) ChannelCount() int {
 	return len(g.channelManager.List())
+}
+
+// zapRequirementLogger zap.Logger 到 domain.RequirementStateHookLogger 的适配器
+type zapRequirementLogger struct {
+	logger *zap.Logger
+}
+
+func (l *zapRequirementLogger) Debug(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Debug(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) Info(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Info(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) Error(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Error(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) toZapField(f domain.RequirementStateHookLogField) zap.Field {
+	switch v := f.(type) {
+	case domain.StringField:
+		return zap.String(v.Key, v.Val)
+	default:
+		if af, ok := f.(domain.AnyField); ok {
+			return zap.Any(af.Key, af.Val)
+		}
+		return zap.Any("unknown", f)
+	}
 }
