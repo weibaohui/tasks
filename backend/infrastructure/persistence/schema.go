@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     temp_workspace_root TEXT,
     assignee_agent_id TEXT,
     replica_agent_id TEXT,
+    dispatch_session_key TEXT,
     workspace_path TEXT,
     branch_name TEXT,
     pr_url TEXT,
@@ -496,6 +497,15 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 	}
 	if !has {
 		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN temp_workspace_root TEXT"); err != nil {
+			return err
+		}
+	}
+	hasDispatchSessionKey, err := tableHasColumn(db, "requirements", "dispatch_session_key")
+	if err != nil {
+		return err
+	}
+	if !hasDispatchSessionKey {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN dispatch_session_key TEXT"); err != nil {
 			return err
 		}
 	}

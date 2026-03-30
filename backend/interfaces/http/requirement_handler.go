@@ -11,12 +11,14 @@ import (
 type RequirementHandler struct {
 	requirementService *application.RequirementApplicationService
 	dispatchService    *application.RequirementDispatchService
+	sessionService     *application.SessionApplicationService
 }
 
-func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService) *RequirementHandler {
+func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService, sessionService *application.SessionApplicationService) *RequirementHandler {
 	return &RequirementHandler{
 		requirementService: requirementService,
 		dispatchService:    dispatchService,
+		sessionService:     sessionService,
 	}
 }
 
@@ -69,7 +71,7 @@ func (h *RequirementHandler) CreateRequirement(w http.ResponseWriter, r *http.Re
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(requirementToMap(requirement))
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
 func (h *RequirementHandler) GetRequirement(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +87,7 @@ func (h *RequirementHandler) GetRequirement(w http.ResponseWriter, r *http.Reque
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(requirementToMap(requirement))
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
 func (h *RequirementHandler) ListRequirements(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +105,7 @@ func (h *RequirementHandler) ListRequirements(w http.ResponseWriter, r *http.Req
 	}
 	resp := make([]map[string]interface{}, 0, len(requirements))
 	for _, requirement := range requirements {
-		resp = append(resp, requirementToMap(requirement))
+		resp = append(resp, h.requirementToMap(r, requirement))
 	}
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -127,7 +129,7 @@ func (h *RequirementHandler) UpdateRequirement(w http.ResponseWriter, r *http.Re
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(requirementToMap(requirement))
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
 func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.Request) {
@@ -168,10 +170,10 @@ func (h *RequirementHandler) ReportRequirementPROpened(w http.ResponseWriter, r 
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(requirementToMap(requirement))
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
-func requirementToMap(requirement *domain.Requirement) map[string]interface{} {
+func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
 	startedAt := interface{}(nil)
 	if requirement.StartedAt() != nil {
 		startedAt = requirement.StartedAt().UnixMilli()
@@ -180,24 +182,50 @@ func requirementToMap(requirement *domain.Requirement) map[string]interface{} {
 	if requirement.CompletedAt() != nil {
 		completedAt = requirement.CompletedAt().UnixMilli()
 	}
-	return map[string]interface{}{
-		"id":                  requirement.ID().String(),
-		"project_id":          requirement.ProjectID().String(),
-		"title":               requirement.Title(),
-		"description":         requirement.Description(),
-		"acceptance_criteria": requirement.AcceptanceCriteria(),
-		"temp_workspace_root": requirement.TempWorkspaceRoot(),
-		"status":              requirement.Status(),
-		"dev_state":           requirement.DevState(),
-		"assignee_agent_id":   requirement.AssigneeAgentID(),
-		"replica_agent_id":    requirement.ReplicaAgentID(),
-		"workspace_path":      requirement.WorkspacePath(),
-		"branch_name":         requirement.BranchName(),
-		"pr_url":              requirement.PRURL(),
-		"last_error":          requirement.LastError(),
-		"started_at":          startedAt,
-		"completed_at":        completedAt,
-		"created_at":          requirement.CreatedAt().UnixMilli(),
-		"updated_at":          requirement.UpdatedAt().UnixMilli(),
+	resp := map[string]interface{}{
+		"id":                   requirement.ID().String(),
+		"project_id":           requirement.ProjectID().String(),
+		"title":                requirement.Title(),
+		"description":          requirement.Description(),
+		"acceptance_criteria":  requirement.AcceptanceCriteria(),
+		"temp_workspace_root":  requirement.TempWorkspaceRoot(),
+		"status":               requirement.Status(),
+		"dev_state":            requirement.DevState(),
+		"assignee_agent_id":    requirement.AssigneeAgentID(),
+		"replica_agent_id":     requirement.ReplicaAgentID(),
+		"dispatch_session_key": requirement.DispatchSessionKey(),
+		"workspace_path":       requirement.WorkspacePath(),
+		"branch_name":          requirement.BranchName(),
+		"pr_url":               requirement.PRURL(),
+		"last_error":           requirement.LastError(),
+		"started_at":           startedAt,
+		"completed_at":         completedAt,
+		"created_at":           requirement.CreatedAt().UnixMilli(),
+		"updated_at":           requirement.UpdatedAt().UnixMilli(),
 	}
+	resp["claude_runtime"] = h.getClaudeRuntimeByRequirement(r, requirement)
+	return resp
+}
+
+func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
+	if h.sessionService == nil || requirement == nil {
+		return nil
+	}
+	sessionKey := requirement.DispatchSessionKey()
+	if sessionKey == "" {
+		return nil
+	}
+	metadata, err := h.sessionService.GetSessionMetadata(r.Context(), sessionKey)
+	if err != nil {
+		return nil
+	}
+	rawRuntime, ok := metadata["claude_code_runtime"]
+	if !ok {
+		return nil
+	}
+	runtime, ok := rawRuntime.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return runtime
 }

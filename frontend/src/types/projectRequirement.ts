@@ -23,6 +23,15 @@ export interface Requirement {
   branch_name: string;
   pr_url: string;
   last_error: string;
+  dispatch_session_key: string;
+  claude_runtime?: {
+    status?: string;
+    is_running?: boolean;
+    last_error?: string;
+    started_at?: number | null;
+    ended_at?: number | null;
+    updated_at?: number | null;
+  } | null;
   started_at: number | null;
   completed_at: number | null;
   created_at: number;

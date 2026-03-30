@@ -159,7 +159,7 @@ func main() {
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
 	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
-	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, idGenerator)
+	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, sessionService, idGenerator)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -173,7 +173,7 @@ func main() {
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
 	projectHandler := httpHandler.NewProjectHandler(projectService)
-	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, sessionService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
@@ -197,7 +197,7 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 10. 创建 HTTP Server
@@ -381,6 +381,7 @@ func resolveWorkspace() string {
 // initGateway 初始化渠道网关
 func initGateway(
 	channelService *application.ChannelApplicationService,
+	sessionService *application.SessionApplicationService,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
 	taskService *application.TaskApplicationService,
@@ -404,7 +405,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

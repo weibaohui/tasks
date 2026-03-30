@@ -26,6 +26,12 @@ const devStateColorMap: Record<string, string> = {
   failed: 'red',
 };
 
+const claudeRuntimeColorMap: Record<string, string> = {
+  running: 'processing',
+  completed: 'success',
+  failed: 'error',
+};
+
 const defaultDispatchSessionKey = 'feishu:ou_df798fe15d056000143691af8c1cdb55';
 
 export const ProjectRequirementPage: React.FC = () => {
@@ -322,6 +328,22 @@ export const ProjectRequirementPage: React.FC = () => {
           <Tag color={devStateColorMap[item.dev_state] || 'default'}>{item.dev_state}</Tag>
         </Space>
       ),
+    },
+    {
+      title: 'Claude状态',
+      key: 'claude_runtime',
+      render: (_: unknown, item: Requirement) => {
+        const runtimeStatus = item.claude_runtime?.status || '';
+        if (!runtimeStatus) {
+          return <span>-</span>;
+        }
+        return (
+          <Space>
+            <Tag color={claudeRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
+            {item.claude_runtime?.is_running ? <Tag color="processing">运行中</Tag> : <Tag>已停止</Tag>}
+          </Space>
+        );
+      },
     },
     { title: '分支', dataIndex: 'branch_name', key: 'branch_name' },
     { title: 'PR', dataIndex: 'pr_url', key: 'pr_url', ellipsis: true },

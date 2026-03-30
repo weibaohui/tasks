@@ -84,6 +84,7 @@ func main() {
 	// 6. 初始化应用服务 (在消息处理器之前，因为消息处理器需要 taskService)
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
+	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	logger.Info("任务服务初始化完成")
 
 	// 7. 初始化 Hook Manager
@@ -100,11 +101,10 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务
-	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	logger.Info("应用服务初始化完成")

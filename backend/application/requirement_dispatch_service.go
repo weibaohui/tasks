@@ -40,6 +40,7 @@ type RequirementDispatchService struct {
 	projectRepo      domain.ProjectRepository
 	agentRepo        domain.AgentRepository
 	taskService      *TaskApplicationService
+	sessionService   *SessionApplicationService
 	idGenerator      domain.IDGenerator
 	inboundPublisher interface {
 		PublishInbound(msg *channelBus.InboundMessage)
@@ -51,6 +52,7 @@ func NewRequirementDispatchService(
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
 	taskService *TaskApplicationService,
+	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
@@ -58,6 +60,7 @@ func NewRequirementDispatchService(
 		projectRepo:     projectRepo,
 		agentRepo:       agentRepo,
 		taskService:     taskService,
+		sessionService:  sessionService,
 		idGenerator:     idGenerator,
 	}
 }
@@ -93,6 +96,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err := requirement.StartDispatch(cmd.AgentID.String()); err != nil {
 		return nil, err
 	}
+	requirement.SetDispatchSessionKey(cmd.SessionKey)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
@@ -127,6 +131,12 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		_ = os.RemoveAll(workspacePath)
 		return nil, ErrInboundPublisherNotConfigured
 	}
+	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
+		requirement.MarkFailed(err.Error())
+		_ = s.requirementRepo.Save(ctx, requirement)
+		_ = os.RemoveAll(workspacePath)
+		return nil, err
+	}
 	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath)
 	s.inboundPublisher.PublishInbound(&channelBus.InboundMessage{
 		Channel:   channelType,
@@ -153,6 +163,47 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		ReplicaAgentID: requirement.ReplicaAgentID(),
 		TaskID:         dispatchID,
 	}, nil
+}
+
+func (s *RequirementDispatchService) ensureDispatchSession(
+	ctx context.Context,
+	cmd DispatchRequirementCommand,
+	replicaAgent *domain.Agent,
+	requirement *domain.Requirement,
+	project *domain.Project,
+) error {
+	if s.sessionService == nil {
+		return nil
+	}
+	existingMetadata, err := s.sessionService.GetSessionMetadata(ctx, cmd.SessionKey)
+	if err != nil && !errors.Is(err, ErrSessionNotFound) {
+		return err
+	}
+	mergedMetadata := map[string]interface{}{}
+	for key, value := range existingMetadata {
+		mergedMetadata[key] = value
+	}
+	mergedMetadata["dispatch_source"] = "requirement"
+	mergedMetadata["requirement_id"] = requirement.ID().String()
+	mergedMetadata["project_id"] = project.ID().String()
+	mergedMetadata["channel_code"] = cmd.ChannelCode
+	mergedMetadata["agent_code"] = replicaAgent.AgentCode().String()
+	mergedMetadata["user_code"] = replicaAgent.UserCode()
+	if errors.Is(err, ErrSessionNotFound) {
+		_, createErr := s.sessionService.CreateSession(ctx, CreateSessionCommand{
+			UserCode:    replicaAgent.UserCode(),
+			ChannelCode: cmd.ChannelCode,
+			AgentCode:   replicaAgent.AgentCode().String(),
+			SessionKey:  cmd.SessionKey,
+			ExternalID:  cmd.SessionKey,
+			Metadata:    mergedMetadata,
+		})
+		return createErr
+	}
+	return s.sessionService.UpdateSessionMetadata(ctx, UpdateSessionMetadataCommand{
+		SessionKey: cmd.SessionKey,
+		Metadata:   mergedMetadata,
+	})
 }
 
 func (s *RequirementDispatchService) createReplicaAgent(ctx context.Context, baseAgent *domain.Agent, requirement *domain.Requirement, workspacePath string) (*domain.Agent, error) {

@@ -74,6 +74,7 @@ type Requirement struct {
 	devState           RequirementDevState
 	assigneeAgentID    string
 	replicaAgentID     string
+	dispatchSessionKey string
 	workspacePath      string
 	branchName         string
 	prURL              string
@@ -119,6 +120,7 @@ func (r *Requirement) Status() RequirementStatus     { return r.status }
 func (r *Requirement) DevState() RequirementDevState { return r.devState }
 func (r *Requirement) AssigneeAgentID() string       { return r.assigneeAgentID }
 func (r *Requirement) ReplicaAgentID() string        { return r.replicaAgentID }
+func (r *Requirement) DispatchSessionKey() string    { return r.dispatchSessionKey }
 func (r *Requirement) WorkspacePath() string         { return r.workspacePath }
 func (r *Requirement) BranchName() string            { return r.branchName }
 func (r *Requirement) PRURL() string                 { return r.prURL }
@@ -189,6 +191,11 @@ func (r *Requirement) MarkFailed(lastError string) {
 	r.updatedAt = time.Now()
 }
 
+func (r *Requirement) SetDispatchSessionKey(sessionKey string) {
+	r.dispatchSessionKey = strings.TrimSpace(sessionKey)
+	r.updatedAt = time.Now()
+}
+
 type RequirementSnapshot struct {
 	ID                 RequirementID
 	ProjectID          ProjectID
@@ -200,6 +207,7 @@ type RequirementSnapshot struct {
 	DevState           RequirementDevState
 	AssigneeAgentID    string
 	ReplicaAgentID     string
+	DispatchSessionKey string
 	WorkspacePath      string
 	BranchName         string
 	PRURL              string
@@ -222,6 +230,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		DevState:           r.devState,
 		AssigneeAgentID:    r.assigneeAgentID,
 		ReplicaAgentID:     r.replicaAgentID,
+		DispatchSessionKey: r.dispatchSessionKey,
 		WorkspacePath:      r.workspacePath,
 		BranchName:         r.branchName,
 		PRURL:              r.prURL,
@@ -250,6 +259,7 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.devState = s.DevState
 	r.assigneeAgentID = s.AssigneeAgentID
 	r.replicaAgentID = s.ReplicaAgentID
+	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)
 	r.workspacePath = s.WorkspacePath
 	r.branchName = s.BranchName
 	r.prURL = s.PRURL
