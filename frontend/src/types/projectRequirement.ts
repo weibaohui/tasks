@@ -14,6 +14,7 @@ export interface Requirement {
   title: string;
   description: string;
   acceptance_criteria: string;
+  temp_workspace_root: string;
   status: 'todo' | 'in_progress' | 'done';
   dev_state: 'idle' | 'preparing' | 'coding' | 'pr_opened' | 'failed';
   assignee_agent_id: string;
@@ -44,6 +45,7 @@ export interface CreateRequirementRequest {
   title: string;
   description: string;
   acceptance_criteria: string;
+  temp_workspace_root: string;
 }
 
 export interface UpdateRequirementRequest {
@@ -51,4 +53,5 @@ export interface UpdateRequirementRequest {
   title: string;
   description: string;
   acceptance_criteria: string;
+  temp_workspace_root: string;
 }

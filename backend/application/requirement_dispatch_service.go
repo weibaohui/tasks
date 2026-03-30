@@ -83,7 +83,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
-	workspacePath := filepath.Join(workspaceRootPath(), requirement.ProjectID().String(), requirement.ID().String())
+	workspacePath := filepath.Join(requirementWorkspaceRoot(requirement), requirement.ProjectID().String(), requirement.ID().String())
 	if err := os.MkdirAll(workspacePath, 0o755); err != nil {
 		return nil, err
 	}
@@ -91,6 +91,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err != nil {
 		requirement.MarkFailed(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
+		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
 	branchName := fmt.Sprintf("feature/%s", requirement.ID().String())
@@ -117,11 +118,13 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err != nil {
 		requirement.MarkFailed(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
+		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
 	if err := s.taskService.StartTask(ctx, task.ID()); err != nil {
 		requirement.MarkFailed(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
+		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
 	return &DispatchRequirementResult{
@@ -169,6 +172,13 @@ func workspaceRootPath() string {
 		return p
 	}
 	return "/tmp/ai-devops"
+}
+
+func requirementWorkspaceRoot(requirement *domain.Requirement) string {
+	if requirement != nil && requirement.TempWorkspaceRoot() != "" {
+		return requirement.TempWorkspaceRoot()
+	}
+	return workspaceRootPath()
 }
 
 func firstNonEmpty(values ...string) string {

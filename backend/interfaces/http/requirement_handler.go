@@ -25,6 +25,7 @@ type CreateRequirementRequest struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
 	AcceptanceCriteria string `json:"acceptance_criteria"`
+	TempWorkspaceRoot  string `json:"temp_workspace_root"`
 }
 
 type UpdateRequirementRequest struct {
@@ -32,6 +33,7 @@ type UpdateRequirementRequest struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
 	AcceptanceCriteria string `json:"acceptance_criteria"`
+	TempWorkspaceRoot  string `json:"temp_workspace_root"`
 }
 
 type DispatchRequirementRequest struct {
@@ -59,6 +61,7 @@ func (h *RequirementHandler) CreateRequirement(w http.ResponseWriter, r *http.Re
 		Title:              req.Title,
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
+		TempWorkspaceRoot:  req.TempWorkspaceRoot,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -117,6 +120,7 @@ func (h *RequirementHandler) UpdateRequirement(w http.ResponseWriter, r *http.Re
 		Title:              req.Title,
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
+		TempWorkspaceRoot:  req.TempWorkspaceRoot,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -182,6 +186,7 @@ func requirementToMap(requirement *domain.Requirement) map[string]interface{} {
 		"title":               requirement.Title(),
 		"description":         requirement.Description(),
 		"acceptance_criteria": requirement.AcceptanceCriteria(),
+		"temp_workspace_root": requirement.TempWorkspaceRoot(),
 		"status":              requirement.Status(),
 		"dev_state":           requirement.DevState(),
 		"assignee_agent_id":   requirement.AssigneeAgentID(),

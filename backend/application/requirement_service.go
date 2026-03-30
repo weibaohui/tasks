@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"os"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -16,6 +17,7 @@ type CreateRequirementCommand struct {
 	Title              string
 	Description        string
 	AcceptanceCriteria string
+	TempWorkspaceRoot  string
 }
 
 type UpdateRequirementCommand struct {
@@ -23,6 +25,7 @@ type UpdateRequirementCommand struct {
 	Title              string
 	Description        string
 	AcceptanceCriteria string
+	TempWorkspaceRoot  string
 }
 
 type ReportRequirementPRCommand struct {
@@ -59,6 +62,7 @@ func (s *RequirementApplicationService) CreateRequirement(ctx context.Context, c
 		cmd.Title,
 		cmd.Description,
 		cmd.AcceptanceCriteria,
+		cmd.TempWorkspaceRoot,
 	)
 	if err != nil {
 		return nil, err
@@ -95,7 +99,7 @@ func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, c
 	if requirement == nil {
 		return nil, ErrRequirementNotFound
 	}
-	if err := requirement.UpdateContent(cmd.Title, cmd.Description, cmd.AcceptanceCriteria); err != nil {
+	if err := requirement.UpdateContent(cmd.Title, cmd.Description, cmd.AcceptanceCriteria, cmd.TempWorkspaceRoot); err != nil {
 		return nil, err
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
@@ -111,6 +115,11 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 	}
 	if requirement == nil {
 		return nil, ErrRequirementNotFound
+	}
+	if requirement.WorkspacePath() != "" {
+		if err := os.RemoveAll(requirement.WorkspacePath()); err != nil {
+			return nil, err
+		}
 	}
 	requirement.MarkPROpened(cmd.PRURL, cmd.BranchName)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {

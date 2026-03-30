@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     acceptance_criteria TEXT,
     status TEXT NOT NULL DEFAULT 'todo',
     dev_state TEXT NOT NULL DEFAULT 'idle',
+    temp_workspace_root TEXT,
     assignee_agent_id TEXT,
     replica_agent_id TEXT,
     workspace_path TEXT,
@@ -349,6 +350,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateTasksTimeoutToSeconds(db); err != nil {
 		return err
 	}
+	if err := migrateRequirementsNewColumns(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -479,6 +483,19 @@ func migrateAgentMCPBindingColumn(db *sql.DB) error {
 	}
 	if hasOld && !hasNew {
 		if _, err := db.Exec("ALTER TABLE agent_mcp_bindings RENAME COLUMN is_enabled TO is_active"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateRequirementsNewColumns(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirements", "temp_workspace_root")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN temp_workspace_root TEXT"); err != nil {
 			return err
 		}
 	}

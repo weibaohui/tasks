@@ -162,12 +162,13 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const submitRequirement = async (values: { project_id: string; title: string; description: string; acceptance_criteria: string }) => {
+  const submitRequirement = async (values: { project_id: string; title: string; description: string; acceptance_criteria: string; temp_workspace_root: string }) => {
     const payload: CreateRequirementRequest = {
       project_id: values.project_id,
       title: values.title,
       description: values.description || '',
       acceptance_criteria: values.acceptance_criteria || '',
+      temp_workspace_root: values.temp_workspace_root || '',
     };
     try {
       if (editingRequirement) {
@@ -176,6 +177,7 @@ export const ProjectRequirementPage: React.FC = () => {
           title: payload.title,
           description: payload.description,
           acceptance_criteria: payload.acceptance_criteria,
+          temp_workspace_root: payload.temp_workspace_root,
         });
         message.success('更新需求成功');
       } else {
@@ -205,7 +207,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const openCreateRequirement = () => {
     setEditingRequirement(null);
     requirementForm.resetFields();
-    requirementForm.setFieldsValue({ project_id: selectedProjectId });
+    requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops' });
     setRequirementModalOpen(true);
   };
 
@@ -222,6 +224,7 @@ export const ProjectRequirementPage: React.FC = () => {
       title: item.title,
       description: item.description,
       acceptance_criteria: item.acceptance_criteria,
+      temp_workspace_root: item.temp_workspace_root,
     });
     setRequirementModalOpen(true);
   };
@@ -424,6 +427,9 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Form.Item label="验收标准" name="acceptance_criteria">
             <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item label="临时工作目录根路径" name="temp_workspace_root" rules={[{ required: true, message: '请输入临时工作目录根路径' }]}>
+            <Input placeholder="/tmp/ai-devops" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             保存

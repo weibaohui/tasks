@@ -21,16 +21,17 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 	query := `
 		INSERT INTO requirements (
 			id, project_id, title, description, acceptance_criteria, status, dev_state,
-			assignee_agent_id, replica_agent_id, workspace_path, branch_name, pr_url, last_error,
+			temp_workspace_root, assignee_agent_id, replica_agent_id, workspace_path, branch_name, pr_url, last_error,
 			started_at, completed_at, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
 			acceptance_criteria=excluded.acceptance_criteria,
 			status=excluded.status,
 			dev_state=excluded.dev_state,
+			temp_workspace_root=excluded.temp_workspace_root,
 			assignee_agent_id=excluded.assignee_agent_id,
 			replica_agent_id=excluded.replica_agent_id,
 			workspace_path=excluded.workspace_path,
@@ -51,6 +52,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		snap.AcceptanceCriteria,
 		string(snap.Status),
 		string(snap.DevState),
+		snap.TempWorkspaceRoot,
 		snap.AssigneeAgentID,
 		snap.ReplicaAgentID,
 		snap.WorkspacePath,
@@ -68,7 +70,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.RequirementID) (*domain.Requirement, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, dev_state, COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
+		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
 		       COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at
 		FROM requirements WHERE id = ?`, id.String())
@@ -78,7 +80,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID) ([]*domain.Requirement, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, dev_state, COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
+		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
 		       COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at
 		FROM requirements WHERE project_id = ? ORDER BY created_at DESC`, projectID.String())
@@ -92,7 +94,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Requirement, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, dev_state, COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
+		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_id, ''), COALESCE(replica_agent_id, ''),
 		       COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at
 		FROM requirements ORDER BY created_at DESC`)
@@ -124,23 +126,24 @@ func scanRequirements(rows *sql.Rows) ([]*domain.Requirement, error) {
 
 func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 	var (
-		idStr            string
-		projectIDStr     string
-		title            string
-		description      string
-		acceptance       string
-		statusStr        string
-		devStateStr      string
-		assigneeAgentID  string
-		replicaAgentID   string
-		workspacePath    string
-		branchName       string
-		prURL            string
-		lastError        string
-		startedAtUnix    sql.NullInt64
-		completedAtUnix  sql.NullInt64
-		createdAtUnix    int64
-		updatedAtUnix    int64
+		idStr             string
+		projectIDStr      string
+		title             string
+		description       string
+		acceptance        string
+		statusStr         string
+		devStateStr       string
+		tempWorkspaceRoot string
+		assigneeAgentID   string
+		replicaAgentID    string
+		workspacePath     string
+		branchName        string
+		prURL             string
+		lastError         string
+		startedAtUnix     sql.NullInt64
+		completedAtUnix   sql.NullInt64
+		createdAtUnix     int64
+		updatedAtUnix     int64
 	)
 	err := scanner.Scan(
 		&idStr,
@@ -150,6 +153,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&acceptance,
 		&statusStr,
 		&devStateStr,
+		&tempWorkspaceRoot,
 		&assigneeAgentID,
 		&replicaAgentID,
 		&workspacePath,
@@ -176,6 +180,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		AcceptanceCriteria: acceptance,
 		Status:             domain.RequirementStatus(statusStr),
 		DevState:           domain.RequirementDevState(devStateStr),
+		TempWorkspaceRoot:  tempWorkspaceRoot,
 		AssigneeAgentID:    assigneeAgentID,
 		ReplicaAgentID:     replicaAgentID,
 		WorkspacePath:      workspacePath,
