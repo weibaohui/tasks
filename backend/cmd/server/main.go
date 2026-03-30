@@ -80,6 +80,8 @@ func main() {
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
+	projectRepo := _persistence.NewSQLiteProjectRepository(db)
+	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
 	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
 	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
@@ -155,6 +157,9 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
+	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
+	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
+	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, sessionService, idGenerator)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -167,6 +172,8 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	projectHandler := httpHandler.NewProjectHandler(projectService)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, sessionService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
@@ -178,7 +185,7 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
@@ -190,7 +197,8 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{
@@ -373,6 +381,7 @@ func resolveWorkspace() string {
 // initGateway 初始化渠道网关
 func initGateway(
 	channelService *application.ChannelApplicationService,
+	sessionService *application.SessionApplicationService,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
 	taskService *application.TaskApplicationService,
@@ -396,7 +405,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)
@@ -470,11 +479,15 @@ func (g *Gateway) runMessageLoop(ctx context.Context, channelService *applicatio
 
 		if err := g.processor.Process(ctx, msg); err != nil {
 			g.logger.Error("处理消息失败", zap.Error(err))
+			metadata := make(map[string]any)
+			for k, v := range msg.Metadata {
+				metadata[k] = v
+			}
 			outMsg := &channelBus.OutboundMessage{
 				Channel:  msg.Channel,
 				ChatID:   msg.ChatID,
 				Content:  fmt.Sprintf("处理消息时出错: %v", err),
-				Metadata: make(map[string]any),
+				Metadata: metadata,
 			}
 			g.messageBus.PublishOutbound(outMsg)
 		}

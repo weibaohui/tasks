@@ -5,6 +5,8 @@ package feishu
 
 import (
 	"testing"
+
+	"github.com/weibh/taskmanager/pkg/bus"
 )
 
 func TestNewSyncMap(t *testing.T) {
@@ -225,5 +227,73 @@ func TestMessageEvent(t *testing.T) {
 	}
 	if event.Content != "hello" {
 		t.Errorf("期望 Content 为 hello, 实际为 %s", event.Content)
+	}
+}
+
+func TestResolveReceiveTarget(t *testing.T) {
+	tests := []struct {
+		name            string
+		msg             *bus.OutboundMessage
+		expectedType    string
+		expectedReceive string
+	}{
+		{
+			name: "p2p metadata sender_id",
+			msg: &bus.OutboundMessage{
+				ChatID: "ou_chat",
+				Metadata: map[string]any{
+					"chat_type": "p2p",
+					"sender_id": "ou_sender",
+				},
+			},
+			expectedType:    "open_id",
+			expectedReceive: "ou_sender",
+		},
+		{
+			name: "group metadata origin chat_id",
+			msg: &bus.OutboundMessage{
+				ChatID: "ou_fallback",
+				Metadata: map[string]any{
+					"chat_type": "group",
+					"chat_id":   "oc_group",
+				},
+			},
+			expectedType:    "chat_id",
+			expectedReceive: "oc_group",
+		},
+		{
+			name: "no metadata infer open_id",
+			msg: &bus.OutboundMessage{
+				ChatID: "ou_user",
+			},
+			expectedType:    "open_id",
+			expectedReceive: "ou_user",
+		},
+		{
+			name: "no metadata infer chat_id",
+			msg: &bus.OutboundMessage{
+				ChatID: "oc_group",
+			},
+			expectedType:    "chat_id",
+			expectedReceive: "oc_group",
+		},
+		{
+			name:            "nil message",
+			msg:             nil,
+			expectedType:    "chat_id",
+			expectedReceive: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualType, actualReceive := resolveReceiveTarget(tt.msg)
+			if actualType != tt.expectedType {
+				t.Fatalf("期望 receive_id_type=%s, 实际=%s", tt.expectedType, actualType)
+			}
+			if actualReceive != tt.expectedReceive {
+				t.Fatalf("期望 receive_id=%s, 实际=%s", tt.expectedReceive, actualReceive)
+			}
+		})
 	}
 }

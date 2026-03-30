@@ -17,7 +17,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -31,6 +31,8 @@ func SetupRoutesWithManagement(
 	authHandler *AuthHandler,
 	mcpHandler *MCPHandler,
 	skillHandler *SkillHandler,
+	projectHandler *ProjectHandler,
+	requirementHandler *RequirementHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -402,6 +404,60 @@ func SetupRoutesWithManagement(
 				return
 			}
 			conversationRecordHandler.GetStats(w, r)
+		}))
+	}
+
+	if projectHandler != nil {
+		mux.HandleFunc("/api/v1/projects", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				projectHandler.CreateProject(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					projectHandler.GetProject(w, r)
+					return
+				}
+				projectHandler.ListProjects(w, r)
+			case http.MethodPut:
+				projectHandler.UpdateProject(w, r)
+			case http.MethodDelete:
+				projectHandler.DeleteProject(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+	}
+
+	if requirementHandler != nil {
+		mux.HandleFunc("/api/v1/requirements/dispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.DispatchRequirement(w, r)
+		}))
+		mux.HandleFunc("/api/v1/requirements/pr", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.ReportRequirementPROpened(w, r)
+		}))
+		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				requirementHandler.CreateRequirement(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					requirementHandler.GetRequirement(w, r)
+					return
+				}
+				requirementHandler.ListRequirements(w, r)
+			case http.MethodPut:
+				requirementHandler.UpdateRequirement(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
 		}))
 	}
 

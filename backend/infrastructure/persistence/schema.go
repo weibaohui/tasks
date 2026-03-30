@@ -153,6 +153,44 @@ CREATE INDEX IF NOT EXISTS idx_sessions_session_key ON sessions(session_key);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_code ON sessions(user_code);
 CREATE INDEX IF NOT EXISTS idx_sessions_channel_code ON sessions(channel_code);
 
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    git_repo_url TEXT NOT NULL,
+    default_branch TEXT NOT NULL DEFAULT 'main',
+    init_steps TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
+
+CREATE TABLE IF NOT EXISTS requirements (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    acceptance_criteria TEXT,
+    status TEXT NOT NULL DEFAULT 'todo',
+    dev_state TEXT NOT NULL DEFAULT 'idle',
+    temp_workspace_root TEXT,
+    assignee_agent_id TEXT,
+    replica_agent_id TEXT,
+    dispatch_session_key TEXT,
+    workspace_path TEXT,
+    branch_name TEXT,
+    pr_url TEXT,
+    last_error TEXT,
+    started_at INTEGER,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_requirements_project_id ON requirements(project_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status, dev_state);
+
 CREATE TABLE IF NOT EXISTS cron_jobs (
     id TEXT PRIMARY KEY,
     user_code TEXT NOT NULL,
@@ -313,6 +351,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateTasksTimeoutToSeconds(db); err != nil {
 		return err
 	}
+	if err := migrateRequirementsNewColumns(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -443,6 +484,28 @@ func migrateAgentMCPBindingColumn(db *sql.DB) error {
 	}
 	if hasOld && !hasNew {
 		if _, err := db.Exec("ALTER TABLE agent_mcp_bindings RENAME COLUMN is_enabled TO is_active"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateRequirementsNewColumns(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirements", "temp_workspace_root")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN temp_workspace_root TEXT"); err != nil {
+			return err
+		}
+	}
+	hasDispatchSessionKey, err := tableHasColumn(db, "requirements", "dispatch_session_key")
+	if err != nil {
+		return err
+	}
+	if !hasDispatchSessionKey {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN dispatch_session_key TEXT"); err != nil {
 			return err
 		}
 	}

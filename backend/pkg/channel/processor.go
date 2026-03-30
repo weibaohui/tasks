@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
@@ -208,6 +209,7 @@ type MessageProcessor struct {
 	agentRepo           domain.AgentRepository
 	providerRepo        domain.LLMProviderRepository
 	taskService         *application.TaskApplicationService
+	sessionService      *application.SessionApplicationService
 	workerPool          *application.WorkerPool
 	idGenerator         domain.IDGenerator
 	toolRegistry        *llm.ToolRegistry
@@ -227,6 +229,7 @@ func NewMessageProcessor(
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
 	taskService *application.TaskApplicationService,
+	sessionService *application.SessionApplicationService,
 	workerPool *application.WorkerPool,
 	idGenerator domain.IDGenerator,
 	hookManager *hook.Manager,
@@ -249,6 +252,7 @@ func NewMessageProcessor(
 		agentRepo:           agentRepo,
 		providerRepo:        providerRepo,
 		taskService:         taskService,
+		sessionService:      sessionService,
 		workerPool:          workerPool,
 		idGenerator:         idGenerator,
 		toolRegistry:        registry,
@@ -385,12 +389,15 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 		// 创建流式回调
 		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
+		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "running", "")
 		// 使用流式处理
 		err := p.claudeCodeProcessor.ProcessWithStreaming(ctx, msg, ccSession, agent, callback)
 		if err != nil {
+			p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "failed", err.Error())
 			p.logger.Error("ClaudeCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
 		}
+		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "completed", "")
 		// 更新 session 的 CLI Session ID
 		if ccSession.CliSessionID != "" {
 			session.SetCliSessionID(ccSession.CliSessionID)
@@ -645,6 +652,58 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	return response
+}
+
+func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(sessionKey, status, lastError string) {
+	if p.sessionService == nil || strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+
+	metadata, err := p.sessionService.GetSessionMetadata(context.Background(), sessionKey)
+	if err != nil {
+		p.logger.Debug("更新 Claude Code 运行状态时读取会话失败",
+			zap.String("session_key", sessionKey),
+			zap.Error(err),
+		)
+		return
+	}
+
+	merged := map[string]interface{}{}
+	for k, v := range metadata {
+		merged[k] = v
+	}
+
+	runtime := map[string]interface{}{}
+	if existingRuntime, ok := merged["claude_code_runtime"].(map[string]interface{}); ok {
+		for k, v := range existingRuntime {
+			runtime[k] = v
+		}
+	}
+
+	now := time.Now().UnixMilli()
+	runtime["status"] = status
+	runtime["is_running"] = status == "running"
+	runtime["updated_at"] = now
+	if status == "running" {
+		runtime["started_at"] = now
+		runtime["ended_at"] = nil
+		runtime["last_error"] = ""
+	} else {
+		runtime["ended_at"] = now
+		runtime["last_error"] = lastError
+	}
+	merged["claude_code_runtime"] = runtime
+
+	if err := p.sessionService.UpdateSessionMetadata(context.Background(), application.UpdateSessionMetadataCommand{
+		SessionKey: sessionKey,
+		Metadata:   merged,
+	}); err != nil {
+		p.logger.Warn("更新 Claude Code 运行状态失败",
+			zap.String("session_key", sessionKey),
+			zap.String("status", status),
+			zap.Error(err),
+		)
+	}
 }
 
 // getAgentAndProvider 根据消息获取 Agent 和 LLMProvider

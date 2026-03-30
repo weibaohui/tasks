@@ -10,6 +10,7 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   ApartmentOutlined,
+  BranchesOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   MessageOutlined,
@@ -24,8 +25,9 @@ import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskTreePage } from './pages/TaskTreePage';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { ProjectRequirementPage } from './pages/ProjectRequirementPage';
 import { ProviderManagementPage } from './pages/ProviderManagementPage';
-import { AgentManagementPage } from './pages/AgentManagementPage';
+import AgentManagementPage from './pages/AgentManagementPage';
 import { ChannelManagementPage } from './pages/ChannelManagementPage';
 import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
@@ -53,17 +55,19 @@ const MainLayout: React.FC = () => {
         ? '/agents'
         : location.pathname.startsWith('/mcp')
           ? '/mcp'
-        : location.pathname.startsWith('/skills')
-          ? '/skills'
-        : location.pathname.startsWith('/channels')
-          ? '/channels'
-          : location.pathname.startsWith('/sessions')
-            ? '/sessions'
-            : location.pathname.startsWith('/conversation-records')
-              ? '/conversation-records'
-              : location.pathname.startsWith('/dashboard')
-                ? '/dashboard'
-                : '/tasks';
+          : location.pathname.startsWith('/projects')
+            ? '/projects'
+            : location.pathname.startsWith('/skills')
+              ? '/skills'
+              : location.pathname.startsWith('/channels')
+                ? '/channels'
+                : location.pathname.startsWith('/sessions')
+                  ? '/sessions'
+                  : location.pathname.startsWith('/conversation-records')
+                    ? '/conversation-records'
+                    : location.pathname.startsWith('/dashboard')
+                      ? '/dashboard'
+                      : '/tasks';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -86,6 +90,7 @@ const MainLayout: React.FC = () => {
             items={[
               { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
               { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
+              { key: '/projects', icon: <BranchesOutlined />, label: '项目需求' },
               { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
               { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
               { key: '/skills', icon: <ClusterOutlined />, label: 'Skills 管理' },
@@ -131,6 +136,7 @@ const App: React.FC = () => {
           >
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="tasks" element={<TaskManagement />} />
+            <Route path="projects" element={<ProjectRequirementPage />} />
             <Route path="tasks/:taskId" element={<TaskDetailPage />} />
             <Route path="tasks/trace/:traceId/tree" element={<TaskTreePage />} />
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
