@@ -32,6 +32,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [activeTabKey, setActiveTabKey] = useState<string>('projects');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [requirementModalOpen, setRequirementModalOpen] = useState(false);
@@ -192,6 +193,12 @@ export const ProjectRequirementPage: React.FC = () => {
     setRequirementModalOpen(true);
   };
 
+  const handleViewRequirements = async (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setActiveTabKey('requirements');
+    await fetchRequirements(projectId);
+  };
+
   const openEditRequirement = (item: Requirement) => {
     setEditingRequirement(item);
     requirementForm.setFieldsValue({
@@ -260,7 +267,7 @@ export const ProjectRequirementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, project: Project) => (
         <Space>
-          <Button type="link" onClick={() => setSelectedProjectId(project.id)}>
+          <Button type="link" onClick={() => handleViewRequirements(project.id)}>
             查看需求
           </Button>
           <Button type="link" onClick={() => openEditProject(project)}>
@@ -312,6 +319,8 @@ export const ProjectRequirementPage: React.FC = () => {
   return (
     <div style={{ padding: 0 }}>
       <Tabs
+        activeKey={activeTabKey}
+        onChange={(key) => setActiveTabKey(key)}
         items={[
           {
             key: 'projects',
