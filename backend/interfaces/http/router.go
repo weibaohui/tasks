@@ -17,7 +17,7 @@ func SetupRoutes(handler *TaskHandler) *http.ServeMux {
 }
 
 func SetupRoutesWithUsers(handler *TaskHandler, userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(handler, userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -33,6 +33,7 @@ func SetupRoutesWithManagement(
 	skillHandler *SkillHandler,
 	projectHandler *ProjectHandler,
 	requirementHandler *RequirementHandler,
+	hookHandler *HookHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -458,6 +459,53 @@ func SetupRoutesWithManagement(
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
+		}))
+	}
+
+	// Hook 配置路由
+	if hookHandler != nil {
+		mux.HandleFunc("/api/v1/hook-configs", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				hookHandler.CreateHookConfig(w, r)
+			case http.MethodGet:
+				if r.URL.Query().Get("id") != "" {
+					hookHandler.GetHookConfig(w, r)
+					return
+				}
+				hookHandler.ListHookConfigs(w, r)
+			case http.MethodPut:
+				hookHandler.UpdateHookConfig(w, r)
+			case http.MethodDelete:
+				hookHandler.DeleteHookConfig(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+
+		mux.HandleFunc("/api/v1/hook-configs/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			if strings.HasSuffix(path, "/enable") {
+				if r.Method == http.MethodPatch {
+					hookHandler.EnableHookConfig(w, r)
+					return
+				}
+			} else if strings.HasSuffix(path, "/disable") {
+				if r.Method == http.MethodPatch {
+					hookHandler.DisableHookConfig(w, r)
+					return
+				}
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}))
+
+		// Hook 日志路由
+		mux.HandleFunc("/api/v1/hook-logs", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				hookHandler.ListHookLogs(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}))
 	}
 

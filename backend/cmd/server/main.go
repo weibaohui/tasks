@@ -215,7 +215,11 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler)
+	// 7.2 初始化 Hook Handler
+	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
+	logger.Info("Hook Handler 初始化完成")
+
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler, hookHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
