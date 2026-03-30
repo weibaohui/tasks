@@ -153,6 +153,42 @@ CREATE INDEX IF NOT EXISTS idx_sessions_session_key ON sessions(session_key);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_code ON sessions(user_code);
 CREATE INDEX IF NOT EXISTS idx_sessions_channel_code ON sessions(channel_code);
 
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    git_repo_url TEXT NOT NULL,
+    default_branch TEXT NOT NULL DEFAULT 'main',
+    init_steps TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
+
+CREATE TABLE IF NOT EXISTS requirements (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    acceptance_criteria TEXT,
+    status TEXT NOT NULL DEFAULT 'todo',
+    dev_state TEXT NOT NULL DEFAULT 'idle',
+    assignee_agent_id TEXT,
+    replica_agent_id TEXT,
+    workspace_path TEXT,
+    branch_name TEXT,
+    pr_url TEXT,
+    last_error TEXT,
+    started_at INTEGER,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_requirements_project_id ON requirements(project_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status, dev_state);
+
 CREATE TABLE IF NOT EXISTS cron_jobs (
     id TEXT PRIMARY KEY,
     user_code TEXT NOT NULL,

@@ -80,6 +80,8 @@ func main() {
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
+	projectRepo := _persistence.NewSQLiteProjectRepository(db)
+	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
 	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
 	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
@@ -155,6 +157,9 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
+	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
+	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
+	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, idGenerator)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -167,6 +172,8 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	projectHandler := httpHandler.NewProjectHandler(projectService)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {
@@ -178,7 +185,7 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler)
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)

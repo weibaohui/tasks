@@ -146,6 +146,21 @@ type ConversationRecordRepository interface {
 	GetStats(ctx context.Context, filter ConversationStatsFilter) (*ConversationStats, error)
 }
 
+type ProjectRepository interface {
+	Save(ctx context.Context, project *Project) error
+	FindByID(ctx context.Context, id ProjectID) (*Project, error)
+	FindAll(ctx context.Context) ([]*Project, error)
+	Delete(ctx context.Context, id ProjectID) error
+}
+
+type RequirementRepository interface {
+	Save(ctx context.Context, requirement *Requirement) error
+	FindByID(ctx context.Context, id RequirementID) (*Requirement, error)
+	FindByProjectID(ctx context.Context, projectID ProjectID) ([]*Requirement, error)
+	FindAll(ctx context.Context) ([]*Requirement, error)
+	Delete(ctx context.Context, id RequirementID) error
+}
+
 // EventStore 事件存储接口
 type EventStore interface {
 	// Save 保存事件
