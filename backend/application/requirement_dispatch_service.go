@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
 var (
-	ErrBaseAgentNotFound = errors.New("base agent not found")
+	ErrBaseAgentNotFound             = errors.New("base agent not found")
+	ErrInboundPublisherNotConfigured = errors.New("inbound publisher is not configured")
+	ErrInvalidSessionKey             = errors.New("invalid session key")
 )
 
 type DispatchRequirementCommand struct {
@@ -32,11 +36,14 @@ type DispatchRequirementResult struct {
 }
 
 type RequirementDispatchService struct {
-	requirementRepo domain.RequirementRepository
-	projectRepo     domain.ProjectRepository
-	agentRepo       domain.AgentRepository
-	taskService     *TaskApplicationService
-	idGenerator     domain.IDGenerator
+	requirementRepo  domain.RequirementRepository
+	projectRepo      domain.ProjectRepository
+	agentRepo        domain.AgentRepository
+	taskService      *TaskApplicationService
+	idGenerator      domain.IDGenerator
+	inboundPublisher interface {
+		PublishInbound(msg *channelBus.InboundMessage)
+	}
 }
 
 func NewRequirementDispatchService(
@@ -53,6 +60,12 @@ func NewRequirementDispatchService(
 		taskService:     taskService,
 		idGenerator:     idGenerator,
 	}
+}
+
+func (s *RequirementDispatchService) SetInboundPublisher(publisher interface {
+	PublishInbound(msg *channelBus.InboundMessage)
+}) {
+	s.inboundPublisher = publisher
 }
 
 func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cmd DispatchRequirementCommand) (*DispatchRequirementResult, error) {
@@ -101,39 +114,44 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
-	task, err := s.taskService.CreateTask(ctx, CreateTaskCommand{
-		Name:               requirement.Title(),
-		Description:        requirement.Description(),
-		Type:               domain.TaskTypeAgent,
-		TaskRequirement:    firstNonEmpty(requirement.Description(), requirement.Title()),
-		AcceptanceCriteria: firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并创建 PR"),
-		Timeout:            1800,
-		MaxRetries:         0,
-		Priority:           0,
-		AgentCode:          replicaAgent.AgentCode().String(),
-		UserCode:           replicaAgent.UserCode(),
-		ChannelCode:        cmd.ChannelCode,
-		SessionKey:         cmd.SessionKey,
-	})
+	channelType, chatID, err := parseSessionKey(cmd.SessionKey)
 	if err != nil {
 		requirement.MarkFailed(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
-	if err := s.taskService.StartTask(ctx, task.ID()); err != nil {
-		requirement.MarkFailed(err.Error())
+	if s.inboundPublisher == nil {
+		requirement.MarkFailed(ErrInboundPublisherNotConfigured.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
-		return nil, err
+		return nil, ErrInboundPublisherNotConfigured
 	}
+	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath)
+	s.inboundPublisher.PublishInbound(&channelBus.InboundMessage{
+		Channel:   channelType,
+		SenderID:  "requirement_dispatch",
+		ChatID:    chatID,
+		Content:   dispatchPrompt,
+		Timestamp: time.Now(),
+		Media:     []string{},
+		Metadata: map[string]any{
+			"agent_code":      replicaAgent.AgentCode().String(),
+			"user_code":       replicaAgent.UserCode(),
+			"channel_code":    cmd.ChannelCode,
+			"requirement_id":  requirement.ID().String(),
+			"project_id":      project.ID().String(),
+			"dispatch_source": "requirement",
+		},
+	})
+	dispatchID := "dispatch_" + s.idGenerator.Generate()
 	return &DispatchRequirementResult{
 		RequirementID:  requirement.ID().String(),
 		Status:         string(requirement.Status()),
 		DevState:       string(requirement.DevState()),
 		WorkspacePath:  requirement.WorkspacePath(),
 		ReplicaAgentID: requirement.ReplicaAgentID(),
-		TaskID:         task.ID().String(),
+		TaskID:         dispatchID,
 	}, nil
 }
 
@@ -188,4 +206,57 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseSessionKey(sessionKey string) (string, string, error) {
+	trimmed := strings.TrimSpace(sessionKey)
+	parts := strings.SplitN(trimmed, ":", 2)
+	if len(parts) != 2 {
+		return "", "", ErrInvalidSessionKey
+	}
+	channelType := strings.TrimSpace(parts[0])
+	chatID := strings.TrimSpace(parts[1])
+	if channelType == "" || chatID == "" {
+		return "", "", ErrInvalidSessionKey
+	}
+	return channelType, chatID, nil
+}
+
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string) string {
+	initSteps := project.InitSteps()
+	initStepsText := "无"
+	if len(initSteps) > 0 {
+		initStepsText = strings.Join(initSteps, "\n")
+	}
+	return fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
+
+【需求信息】
+- 需求ID：%s
+- 标题：%s
+- 描述：%s
+
+【验收标准】
+%s
+
+【项目信息】
+- 项目ID：%s
+- 项目名称：%s
+- 仓库地址：%s
+- 默认分支：%s
+- 初始化步骤：
+%s
+
+【工作目录】
+- 当前工作目录：%s
+- 要求：必须在该目录内完成代码操作
+
+请按以下顺序执行：
+1. 在当前工作目录准备代码仓库并切换到默认分支
+2. 严格执行初始化步骤
+3. 基于需求与验收标准完成实现
+4. 运行必要的校验命令
+5. 准备提交分支与 PR 信息（若当前环境无法直接创建 PR，请输出建议的 PR 标题与描述）
+`, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+		firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
+		project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath)
 }

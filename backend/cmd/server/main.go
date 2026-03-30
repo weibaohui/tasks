@@ -198,6 +198,7 @@ func main() {
 
 	// 9. 初始化渠道网关
 	gateway := initGateway(channelService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 10. 创建 HTTP Server
 	server := &http.Server{

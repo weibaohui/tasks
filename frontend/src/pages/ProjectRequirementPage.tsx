@@ -26,6 +26,8 @@ const devStateColorMap: Record<string, string> = {
   failed: 'red',
 };
 
+const defaultDispatchSessionKey = 'feishu:ou_df798fe15d056000143691af8c1cdb55';
+
 export const ProjectRequirementPage: React.FC = () => {
   const { user } = useAuthStore();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -234,7 +236,9 @@ export const ProjectRequirementPage: React.FC = () => {
     dispatchForm.resetFields();
     const defaultChannelCode = channels[0]?.channel_code;
     if (defaultChannelCode) {
-      dispatchForm.setFieldsValue({ channel_code: defaultChannelCode });
+      dispatchForm.setFieldsValue({ channel_code: defaultChannelCode, session_key: defaultDispatchSessionKey });
+    } else {
+      dispatchForm.setFieldsValue({ session_key: defaultDispatchSessionKey });
     }
     setDispatchModalOpen(true);
   };
