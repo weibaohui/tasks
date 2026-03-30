@@ -69,6 +69,7 @@ type Requirement struct {
 	title              string
 	description        string
 	acceptanceCriteria string
+	tempWorkspaceRoot  string
 	status             RequirementStatus
 	devState           RequirementDevState
 	assigneeAgentID    string
@@ -83,7 +84,7 @@ type Requirement struct {
 	updatedAt          time.Time
 }
 
-func NewRequirement(id RequirementID, projectID ProjectID, title, description, acceptanceCriteria string) (*Requirement, error) {
+func NewRequirement(id RequirementID, projectID ProjectID, title, description, acceptanceCriteria, tempWorkspaceRoot string) (*Requirement, error) {
 	if id.String() == "" {
 		return nil, ErrRequirementIDRequired
 	}
@@ -100,6 +101,7 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 		title:              title,
 		description:        description,
 		acceptanceCriteria: acceptanceCriteria,
+		tempWorkspaceRoot:  strings.TrimSpace(tempWorkspaceRoot),
 		status:             RequirementStatusTodo,
 		devState:           RequirementDevStateIdle,
 		createdAt:          now,
@@ -107,32 +109,36 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 	}, nil
 }
 
-func (r *Requirement) ID() RequirementID                   { return r.id }
-func (r *Requirement) ProjectID() ProjectID                { return r.projectID }
-func (r *Requirement) Title() string                       { return r.title }
-func (r *Requirement) Description() string                 { return r.description }
-func (r *Requirement) AcceptanceCriteria() string          { return r.acceptanceCriteria }
-func (r *Requirement) Status() RequirementStatus           { return r.status }
-func (r *Requirement) DevState() RequirementDevState       { return r.devState }
-func (r *Requirement) AssigneeAgentID() string             { return r.assigneeAgentID }
-func (r *Requirement) ReplicaAgentID() string              { return r.replicaAgentID }
-func (r *Requirement) WorkspacePath() string               { return r.workspacePath }
-func (r *Requirement) BranchName() string                  { return r.branchName }
-func (r *Requirement) PRURL() string                       { return r.prURL }
-func (r *Requirement) LastError() string                   { return r.lastError }
-func (r *Requirement) StartedAt() *time.Time               { return copyTimePtr(r.startedAt) }
-func (r *Requirement) CompletedAt() *time.Time             { return copyTimePtr(r.completedAt) }
-func (r *Requirement) CreatedAt() time.Time                { return r.createdAt }
-func (r *Requirement) UpdatedAt() time.Time                { return r.updatedAt }
-func (r *Requirement) CanDispatch() bool                   { return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle }
+func (r *Requirement) ID() RequirementID             { return r.id }
+func (r *Requirement) ProjectID() ProjectID          { return r.projectID }
+func (r *Requirement) Title() string                 { return r.title }
+func (r *Requirement) Description() string           { return r.description }
+func (r *Requirement) AcceptanceCriteria() string    { return r.acceptanceCriteria }
+func (r *Requirement) TempWorkspaceRoot() string     { return r.tempWorkspaceRoot }
+func (r *Requirement) Status() RequirementStatus     { return r.status }
+func (r *Requirement) DevState() RequirementDevState { return r.devState }
+func (r *Requirement) AssigneeAgentID() string       { return r.assigneeAgentID }
+func (r *Requirement) ReplicaAgentID() string        { return r.replicaAgentID }
+func (r *Requirement) WorkspacePath() string         { return r.workspacePath }
+func (r *Requirement) BranchName() string            { return r.branchName }
+func (r *Requirement) PRURL() string                 { return r.prURL }
+func (r *Requirement) LastError() string             { return r.lastError }
+func (r *Requirement) StartedAt() *time.Time         { return copyTimePtr(r.startedAt) }
+func (r *Requirement) CompletedAt() *time.Time       { return copyTimePtr(r.completedAt) }
+func (r *Requirement) CreatedAt() time.Time          { return r.createdAt }
+func (r *Requirement) UpdatedAt() time.Time          { return r.updatedAt }
+func (r *Requirement) CanDispatch() bool {
+	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
+}
 
-func (r *Requirement) UpdateContent(title, description, acceptanceCriteria string) error {
+func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, tempWorkspaceRoot string) error {
 	if strings.TrimSpace(title) == "" {
 		return ErrRequirementTitleRequired
 	}
 	r.title = title
 	r.description = description
 	r.acceptanceCriteria = acceptanceCriteria
+	r.tempWorkspaceRoot = strings.TrimSpace(tempWorkspaceRoot)
 	r.updatedAt = time.Now()
 	return nil
 }
@@ -189,6 +195,7 @@ type RequirementSnapshot struct {
 	Title              string
 	Description        string
 	AcceptanceCriteria string
+	TempWorkspaceRoot  string
 	Status             RequirementStatus
 	DevState           RequirementDevState
 	AssigneeAgentID    string
@@ -210,6 +217,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		Title:              r.title,
 		Description:        r.description,
 		AcceptanceCriteria: r.acceptanceCriteria,
+		TempWorkspaceRoot:  r.tempWorkspaceRoot,
 		Status:             r.status,
 		DevState:           r.devState,
 		AssigneeAgentID:    r.assigneeAgentID,
@@ -237,6 +245,7 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.title = s.Title
 	r.description = s.Description
 	r.acceptanceCriteria = s.AcceptanceCriteria
+	r.tempWorkspaceRoot = strings.TrimSpace(s.TempWorkspaceRoot)
 	r.status = s.Status
 	r.devState = s.DevState
 	r.assigneeAgentID = s.AssigneeAgentID

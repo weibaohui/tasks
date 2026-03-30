@@ -37,6 +37,8 @@ type UpdateRequirementRequest struct {
 type DispatchRequirementRequest struct {
 	RequirementID string `json:"requirement_id"`
 	AgentID       string `json:"agent_id"`
+	ChannelCode   string `json:"channel_code"`
+	SessionKey    string `json:"session_key"`
 }
 
 type ReportRequirementPRRequest struct {
@@ -134,6 +136,8 @@ func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.
 	result, err := h.dispatchService.DispatchRequirement(r.Context(), application.DispatchRequirementCommand{
 		RequirementID: domain.NewRequirementID(req.RequirementID),
 		AgentID:       domain.NewAgentID(req.AgentID),
+		ChannelCode:   req.ChannelCode,
+		SessionKey:    req.SessionKey,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

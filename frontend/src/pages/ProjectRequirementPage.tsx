@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, message } from 'antd';
 import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
+import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
+import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement } from '../types/projectRequirement';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
@@ -29,6 +31,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -90,10 +93,23 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   }, [user?.user_code]);
 
+  const fetchChannels = useCallback(async () => {
+    if (!user?.user_code) {
+      return;
+    }
+    try {
+      const data = await listChannels(user.user_code);
+      setChannels(data.filter((channel) => channel.is_active));
+    } catch (_error) {
+      message.error('获取渠道列表失败');
+    }
+  }, [user?.user_code]);
+
   useEffect(() => {
     fetchProjects();
     fetchAgents();
-  }, [fetchAgents, fetchProjects]);
+    fetchChannels();
+  }, [fetchAgents, fetchChannels, fetchProjects]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -213,15 +229,20 @@ export const ProjectRequirementPage: React.FC = () => {
   const openDispatchModal = (item: Requirement) => {
     setDispatchRequirementItem(item);
     dispatchForm.resetFields();
+    const defaultChannelCode = channels[0]?.channel_code;
+    if (defaultChannelCode) {
+      dispatchForm.setFieldsValue({ channel_code: defaultChannelCode });
+    }
     setDispatchModalOpen(true);
   };
 
-  const submitDispatch = async (values: { agent_id: string }) => {
+  const submitDispatch = async (values: { agent_id: string; channel_code: string; session_key: string }) => {
     if (!dispatchRequirementItem) {
       return;
     }
     try {
-      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_id);
+      const sessionKey = values.session_key.trim();
+      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_id, values.channel_code, sessionKey);
       message.success(`派发成功，任务ID: ${result.task_id}`);
       setDispatchModalOpen(false);
       await fetchRequirements(selectedProjectId);
@@ -414,6 +435,45 @@ export const ProjectRequirementPage: React.FC = () => {
         <Form layout="vertical" form={dispatchForm} onFinish={submitDispatch}>
           <Form.Item label="执行 Agent" name="agent_id" rules={[{ required: true, message: '请选择执行 Agent' }]}>
             <Select options={agents.map((agent) => ({ label: `${agent.name} (${agent.agent_code})`, value: agent.id }))} />
+          </Form.Item>
+          <Form.Item label="派发渠道" name="channel_code" rules={[{ required: true, message: '请选择渠道' }]}>
+            <Select
+              options={channels.map((channel) => ({
+                label: `${channel.name} (${channel.type})`,
+                value: channel.channel_code,
+              }))}
+              onChange={(channelCode) => {
+                const selectedChannel = channels.find((channel) => channel.channel_code === channelCode);
+                if (!selectedChannel) {
+                  return;
+                }
+                const currentSessionKey = dispatchForm.getFieldValue('session_key') as string | undefined;
+                if (!currentSessionKey || !currentSessionKey.includes(':')) {
+                  dispatchForm.setFieldValue('session_key', `${selectedChannel.type}:`);
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item
+            label="SessionKey"
+            name="session_key"
+            rules={[
+              { required: true, message: '请输入 SessionKey，例如 feishu:ou_xxx' },
+              {
+                validator: async (_, value: string) => {
+                  const channelCode = dispatchForm.getFieldValue('channel_code') as string | undefined;
+                  const selectedChannel = channels.find((channel) => channel.channel_code === channelCode);
+                  if (!value || !selectedChannel) {
+                    return;
+                  }
+                  if (!value.startsWith(`${selectedChannel.type}:`)) {
+                    throw new Error(`SessionKey 需要以 ${selectedChannel.type}: 开头`);
+                  }
+                },
+              },
+            ]}
+          >
+            <Input placeholder="例如：feishu:ou_df798fe15d056000143691af8c1cdb55" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             确认派发

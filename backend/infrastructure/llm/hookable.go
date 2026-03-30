@@ -6,6 +6,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -123,6 +124,13 @@ func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string
 	if p.channelCode != "" {
 		callMetadata["channel_code"] = p.channelCode
 	}
+	channelTypeFromSession, chatIDFromSession := parseSessionKey(p.sessionID)
+	if channelTypeFromSession != "" {
+		callMetadata["channel_type"] = channelTypeFromSession
+	}
+	if chatIDFromSession != "" {
+		callMetadata["chat_id"] = chatIDFromSession
+	}
 
 	// Pre Hook - 保存上下文供 Post 复用
 	if p.hookMgr != nil {
@@ -186,4 +194,18 @@ func (p *HookableProvider) GetLastUsage() Usage {
 // GenerateWithTools 生成文本，支持工具调用（直接委托给 wrapped provider，暂不添加 hook 支持）
 func (p *HookableProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
 	return p.wrapped.GenerateWithTools(ctx, prompt, tools, maxIterations)
+}
+
+// parseSessionKey 解析 session_key，提取渠道类型与会话 ID
+func parseSessionKey(sessionKey string) (string, string) {
+	parts := strings.SplitN(strings.TrimSpace(sessionKey), ":", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	channelType := strings.TrimSpace(parts[0])
+	chatID := strings.TrimSpace(parts[1])
+	if channelType == "" || chatID == "" {
+		return "", ""
+	}
+	return channelType, chatID
 }

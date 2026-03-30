@@ -44,7 +44,7 @@ export async function updateRequirement(payload: UpdateRequirementRequest): Prom
   return response.data;
 }
 
-export async function dispatchRequirement(requirementId: string, agentId: string): Promise<{
+export async function dispatchRequirement(requirementId: string, agentId: string, channelCode: string, sessionKey: string): Promise<{
   requirement_id: string;
   status: string;
   dev_state: string;
@@ -55,6 +55,8 @@ export async function dispatchRequirement(requirementId: string, agentId: string
   const response = await apiClient.post('/requirements/dispatch', {
     requirement_id: requirementId,
     agent_id: agentId,
+    channel_code: channelCode,
+    session_key: sessionKey,
   });
   return response.data;
 }

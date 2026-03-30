@@ -18,6 +18,8 @@ var (
 type DispatchRequirementCommand struct {
 	RequirementID domain.RequirementID
 	AgentID       domain.AgentID
+	ChannelCode   string
+	SessionKey    string
 }
 
 type DispatchRequirementResult struct {
@@ -109,6 +111,8 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		Priority:           0,
 		AgentCode:          replicaAgent.AgentCode().String(),
 		UserCode:           replicaAgent.UserCode(),
+		ChannelCode:        cmd.ChannelCode,
+		SessionKey:         cmd.SessionKey,
 	})
 	if err != nil {
 		requirement.MarkFailed(err.Error())
