@@ -19,6 +19,7 @@ import {
   UserOutlined,
   ClusterOutlined,
   ThunderboltOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
 import { TaskManagement } from './pages/TaskManagement';
@@ -35,6 +36,7 @@ import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
 import { MCPManagementPage } from './pages/MCPManagementPage';
 import { SkillsManagementPage } from './pages/SkillsManagementPage';
 import HookManagementPage from './pages/HookManagementPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { useAuthStore } from './stores/authStore';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -104,6 +106,7 @@ const MainLayout: React.FC = () => {
               { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
               { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
               { key: '/users', icon: <UserOutlined />, label: '用户管理' },
+              { key: '/settings', icon: <SettingOutlined />, label: '设置' },
             ]}
             onClick={(item) => navigate(item.key)}
           />
@@ -153,6 +156,7 @@ const App: React.FC = () => {
             <Route path="providers" element={<ProviderManagementPage />} />
             <Route path="mcp" element={<MCPManagementPage />} />
             <Route path="users" element={<UserManagementPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

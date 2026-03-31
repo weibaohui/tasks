@@ -134,6 +134,25 @@ func SetupRoutesWithManagement(
 			}
 			authHandler.Me(w, r)
 		}))
+
+		// Token管理路由
+		mux.HandleFunc("/api/v1/users/tokens", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				authHandler.CreateToken(w, r)
+			case http.MethodGet:
+				authHandler.ListTokens(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+		mux.HandleFunc("/api/v1/users/tokens/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodDelete {
+				authHandler.DeleteToken(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
 	}
 
 	// MCP 路由

@@ -18,6 +18,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -57,7 +58,14 @@ func main() {
 
 	logger.Info("启动任务管理服务...")
 
-	// 1. 初始化数据库
+	// 1. 加载配置
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("加载配置失败", zap.Error(err))
+	}
+	logger.Info("配置加载完成", zap.Int("server_port", cfg.Server.Port), zap.String("api_base_url", cfg.API.BaseURL))
+
+	// 2. 初始化数据库
 	dbPath := resolveDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -76,6 +84,7 @@ func main() {
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 	userRepo := _persistence.NewSQLiteUserRepository(db)
+	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
@@ -213,7 +222,7 @@ func main() {
 	if authSecret == "" {
 		authSecret = "taskmanager-dev-secret"
 	}
-	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
+	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 
 	// 7.1 初始化技能加载器
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
@@ -245,8 +254,9 @@ func main() {
 	logger.Info("TriggerAgentExecutor 注册完成")
 
 	// 10. 创建 HTTP Server
+	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	server := &http.Server{
-		Addr:         ":8888",
+		Addr:         addr,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -255,7 +265,7 @@ func main() {
 
 	// 11. 启动服务器
 	go func() {
-		logger.Info("HTTP Server 启动在 :8888")
+		logger.Info("HTTP Server 启动", zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
 		}

@@ -64,6 +64,21 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_user_code ON users(user_code);
 
+CREATE TABLE IF NOT EXISTS user_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    token_hash TEXT NOT NULL,
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    is_active INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_tokens_user_id ON user_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tokens_token_hash ON user_tokens(token_hash);
+
 CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY,
     agent_code TEXT NOT NULL UNIQUE,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -11,9 +12,15 @@ import (
 
 // Config 配置结构
 type Config struct {
-	Database DatabaseConfig `yaml:"database"`
+	Server   ServerConfig   `yaml:"server"`
+	Database DatabaseConfig  `yaml:"database"`
 	API      APIConfig      `yaml:"api"`
-	Logging  LoggingConfig  `yaml:"logging"`
+	Logging  LoggingConfig   `yaml:"logging"`
+}
+
+// ServerConfig 服务器配置
+type ServerConfig struct {
+	Port int `yaml:"port"`
 }
 
 // DatabaseConfig 数据库配置
@@ -60,6 +67,9 @@ func defaultConfig() *Config {
 	}
 
 	return &Config{
+		Server: ServerConfig{
+			Port: 8888,
+		},
 		Database: DatabaseConfig{
 			Path: defaultDBPath,
 		},
@@ -107,6 +117,13 @@ func loadFromFile(path string, cfg *Config) error {
 
 // applyEnvOverrides 应用环境变量覆盖
 func applyEnvOverrides(cfg *Config) {
+	// SERVER_PORT 环境变量
+	if port := os.Getenv("TASKMANAGER_SERVER_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.Server.Port = p
+		}
+	}
+
 	// DB_PATH 环境变量
 	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
 		cfg.Database.Path = dbPath
@@ -175,6 +192,9 @@ func EnsureConfigDir() error {
 // WriteDefaultConfig 写入默认配置文件
 func WriteDefaultConfig(path string) error {
 	cfg := &Config{
+		Server: ServerConfig{
+			Port: 8888,
+		},
 		Database: DatabaseConfig{
 			Path: getLegacyDBPath(),
 		},
