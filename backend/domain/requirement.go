@@ -51,16 +51,17 @@ func (s RequirementStatus) IsValid() bool {
 type RequirementDevState string
 
 const (
-	RequirementDevStateIdle      RequirementDevState = "idle"
-	RequirementDevStatePreparing RequirementDevState = "preparing"
+	RequirementDevStateIdle       RequirementDevState = "idle"
+	RequirementDevStatePreparing  RequirementDevState = "preparing"
 	RequirementDevStateCoding    RequirementDevState = "coding"
 	RequirementDevStatePROpened  RequirementDevState = "pr_opened"
 	RequirementDevStateFailed    RequirementDevState = "failed"
+	RequirementDevStateCompleted  RequirementDevState = "completed"
 )
 
 func (s RequirementDevState) IsValid() bool {
 	switch s {
-	case RequirementDevStateIdle, RequirementDevStatePreparing, RequirementDevStateCoding, RequirementDevStatePROpened, RequirementDevStateFailed:
+	case RequirementDevStateIdle, RequirementDevStatePreparing, RequirementDevStateCoding, RequirementDevStatePROpened, RequirementDevStateFailed, RequirementDevStateCompleted:
 		return true
 	default:
 		return false
@@ -427,6 +428,36 @@ func (r *Requirement) MarkFailed(lastError string) {
 		Trigger:      "mark_failed",
 		Reason:       lastError,
 		Timestamp:    now,
+	})
+
+	// 强制销毁分身（代码约束）
+	if r.replicaAgentManager != nil {
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
+	}
+}
+
+// MarkCompleted 标记需求为已完成（Claude Code 正常结束）
+// 注意：只触发 mark_completed 事件，不触发 claude_code_finished
+// 因为 claude_code_finished 会触发新的 coding agent，而完成状态不需要再启动新的 agent
+func (r *Requirement) MarkCompleted() {
+	fromStatus := r.status
+	fromDevState := r.devState
+
+	r.status = RequirementStatusInProgress
+	r.devState = RequirementDevStateCompleted
+	now := time.Now()
+	r.completedAt = &now
+	r.updatedAt = now
+
+	// 只触发 mark_completed 事件，不触发 claude_code_finished
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_completed",
+		Reason:       "Claude Code 执行完成",
+		Timestamp:    time.Now(),
 	})
 
 	// 强制销毁分身（代码约束）
