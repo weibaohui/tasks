@@ -77,7 +77,7 @@ func main() {
 	if err := _persistence.InitSchema(db); err != nil {
 		logger.Fatal("Failed to init schema", zap.Error(err))
 	}
-	logger.Info("数据库初始化完成")
+	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
 	idGenerator := utils.NewNanoIDGenerator(21)
@@ -434,7 +434,12 @@ func resolveDBPath() string {
 	if p := os.Getenv("DB_PATH"); p != "" {
 		return p
 	}
-	// 如果当前目录存在 backend 目录，优先写入 backend/tasks.db（适配从仓库根目录执行）
+	// 如果当前目录是 backend 目录（通过检查 cmd/server 是否存在来判断），
+	// 说明是从 backend 目录直接运行，使用 ./tasks.db
+	if st, err := os.Stat("./cmd/server"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./tasks.db")
+	}
+	// 如果当前目录存在 backend 目录，说明是从仓库根目录执行
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./backend/tasks.db")
 	}

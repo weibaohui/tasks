@@ -55,7 +55,9 @@ func (s *HeartbeatScheduler) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to load projects: %w", err)
 	}
 
+	log.Printf("[HEARTBEAT] found %d projects total", len(projects))
 	for _, project := range projects {
+		log.Printf("[HEARTBEAT] checking project %s: heartbeat_enabled=%v, agent_code=%s", project.Name(), project.HeartbeatEnabled(), project.AgentCode())
 		if project.HeartbeatEnabled() && project.AgentCode() != "" {
 			if err := s.scheduleProject(project); err != nil {
 				log.Printf("failed to schedule heartbeat for project %s: %v", project.ID(), err)
@@ -67,7 +69,7 @@ func (s *HeartbeatScheduler) Start(ctx context.Context) error {
 	}
 
 	s.cron.Start()
-	log.Printf("heartbeat scheduler started with %d projects", len(projects))
+	log.Printf("heartbeat scheduler started")
 	return nil
 }
 
