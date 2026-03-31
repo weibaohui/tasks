@@ -207,6 +207,9 @@ func main() {
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
+	// 6.3 初始化心跳调度器（延迟到 gateway 初始化之后）
+	var heartbeatScheduler *application.HeartbeatScheduler
+
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
 	userHandler := httpHandler.NewUserHandler(userService)
@@ -215,7 +218,7 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
-	projectHandler := httpHandler.NewProjectHandler(projectService)
+	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, sessionService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
@@ -247,11 +250,29 @@ func main() {
 	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
+	// 9. 初始化心跳调度器
+	heartbeatScheduler = application.NewHeartbeatScheduler(
+		projectRepo,
+		agentRepo,
+		requirementRepo,
+		idGenerator,
+		gateway.messageBus,
+		requirementDispatchService,
+	)
+
 	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
 	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
 	hookExecutor.AddExecutor(triggerAgentExecutor)
 	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
 	logger.Info("TriggerAgentExecutor 注册完成")
+
+	// 9.2 启动心跳调度器
+	heartbeatCtx := context.Background()
+	if err := heartbeatScheduler.Start(heartbeatCtx); err != nil {
+		logger.Error("心跳调度器启动失败", zap.Error(err))
+	} else {
+		logger.Info("心跳调度器启动完成")
+	}
 
 	// 10. 创建 HTTP Server
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
@@ -281,6 +302,9 @@ func main() {
 	<-quit
 
 	logger.Info("正在关闭服务器...")
+
+	// 关闭心跳调度器
+	heartbeatScheduler.Stop()
 
 	// 关闭渠道网关
 	gateway.Shutdown()

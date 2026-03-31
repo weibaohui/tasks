@@ -4,6 +4,10 @@ export interface Project {
   git_repo_url: string;
   default_branch: string;
   init_steps: string[];
+  heartbeat_enabled: boolean;
+  heartbeat_interval_minutes: number;
+  heartbeat_md_content: string;
+  heartbeat_agent_id: string;
   created_at: number;
   updated_at: number;
 }
@@ -47,6 +51,10 @@ export interface CreateProjectRequest {
 
 export interface UpdateProjectRequest extends CreateProjectRequest {
   id: string;
+  heartbeat_enabled: boolean;
+  heartbeat_interval_minutes: number;
+  heartbeat_md_content: string;
+  heartbeat_agent_id: string;
 }
 
 export interface CreateRequirementRequest {

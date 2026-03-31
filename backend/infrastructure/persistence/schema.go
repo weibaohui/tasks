@@ -175,6 +175,10 @@ CREATE TABLE IF NOT EXISTS projects (
     git_repo_url TEXT NOT NULL,
     default_branch TEXT NOT NULL DEFAULT 'main',
     init_steps TEXT NOT NULL,
+    heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+    heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 60,
+    heartbeat_md_content TEXT NOT NULL DEFAULT '',
+    heartbeat_agent_id TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

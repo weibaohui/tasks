@@ -13,7 +13,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
@@ -71,6 +73,7 @@ func printUsage() {
 	fmt.Println("  requirement complete  完成需求（创建 PR 后调用）")
 	fmt.Println("  requirement list      列出需求")
 	fmt.Println("  requirement get       获取需求详情")
+	fmt.Println("  requirement review    分析PR并创建需求")
 	fmt.Println("  config init           初始化配置文件")
 	fmt.Println("  config show           显示当前配置")
 	fmt.Println("")
@@ -111,6 +114,8 @@ func handleRequirementCommand(logger *zap.Logger) {
 		listRequirements(logger)
 	case "get":
 		getRequirement(logger)
+	case "review":
+		reviewPR(logger)
 	default:
 		fmt.Printf("Unknown requirement subcommand: %s\n", os.Args[2])
 		printRequirementUsage()
@@ -128,6 +133,7 @@ func printRequirementUsage() {
 	fmt.Println("  complete  完成需求")
 	fmt.Println("  list      列出需求")
 	fmt.Println("  get       获取需求详情")
+	fmt.Println("  review    分析PR并创建需求")
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
@@ -535,6 +541,192 @@ func completeRequirement(logger *zap.Logger) {
 		zap.String("branch", result.BranchName),
 	)
 	fmt.Printf("需求 %s 已标记为完成，PR: %s\n", result.RequirementID, result.PRURL)
+}
+
+// reviewPR 分析PR并创建需求
+// 用法: taskmanager requirement review <pr_url> <project_id> [--title <title>]
+// PR URL 格式: https://github.com/owner/repo/pull/123
+// 或者只传 owner/repo 和 PR号: owner/repo 123
+func reviewPR(logger *zap.Logger) {
+	flag.CommandLine.Parse(os.Args[3:])
+	args := flag.CommandLine.Args()
+
+	if len(args) < 2 {
+		fmt.Println("错误: 缺少必填参数")
+		fmt.Println("")
+		fmt.Println("用法: taskmanager requirement review <pr_url> <project_id> [--title <title>]")
+		fmt.Println("   或: taskmanager requirement review <owner/repo> <pr_number> <project_id>")
+		fmt.Println("")
+		fmt.Println("示例:")
+		fmt.Println("  taskmanager requirement review https://github.com/owner/repo/pull/123 prj_xxx")
+		fmt.Println("  taskmanager requirement review owner/repo 123 prj_xxx")
+		fmt.Println("  taskmanager requirement review owner/repo 123 prj_xxx --title '修复登录bug'")
+		os.Exit(1)
+	}
+
+	var prURL, owner, repo string
+	var prNumber int
+
+	// 解析参数
+	if strings.HasPrefix(args[0], "http") {
+		// 完整URL格式
+		prURL = args[0]
+		// 从URL中提取owner/repo
+		parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
+		if len(parts) >= 2 {
+			owner = parts[len(parts)-4]
+			repo = parts[len(parts)-3]
+		}
+	} else {
+		// owner/repo 格式
+		ownerRepo := args[0]
+		prNumberStr := args[1]
+
+		parts := strings.Split(ownerRepo, "/")
+		if len(parts) != 2 {
+			fmt.Println("错误: owner/repo 格式不正确")
+			os.Exit(1)
+		}
+		owner = parts[0]
+		repo = parts[1]
+
+		fmt.Sscanf(prNumberStr, "%d", &prNumber)
+		prURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber)
+	}
+
+	projectID := args[len(args)-1]
+
+	titlePtr := flag.String("title", "", "需求标题 (可选)")
+
+	// 1. 登录获取 token
+	token, err := login()
+	if err != nil {
+		logger.Fatal("登录失败", zap.Error(err))
+	}
+
+	// 2. 获取PR信息
+	prInfo, err := fetchPRInfo(owner, repo, prNumber)
+	if err != nil {
+		logger.Fatal("获取PR信息失败", zap.Error(err))
+	}
+
+	// 3. 获取PR评论
+	comments, err := fetchPRComments(owner, repo, prNumber)
+	if err != nil {
+		logger.Warn("获取PR评论失败", zap.Error(err))
+		comments = []PRComment{}
+	}
+
+	// 4. 生成需求内容
+	title := *titlePtr
+	if title == "" {
+		title = fmt.Sprintf("PR #%d: %s", prNumber, prInfo.Title)
+	}
+
+	description := "## PR 信息\n\n"
+	description += fmt.Sprintf("- PR: %s\n", prURL)
+	description += fmt.Sprintf("- 标题: %s\n", prInfo.Title)
+	description += fmt.Sprintf("- 作者: %s\n", prInfo.Author)
+	description += fmt.Sprintf("- 状态: %s\n", prInfo.State)
+	description += fmt.Sprintf("- 创建时间: %s\n", prInfo.CreatedAt)
+	description += "\n## PR 描述\n\n" + prInfo.Body + "\n\n"
+
+	if len(comments) > 0 {
+		description += "## PR 评论\n\n"
+		for _, c := range comments {
+			description += fmt.Sprintf("### %s (%s)\n%s\n\n", c.Author, c.CreatedAt, c.Body)
+		}
+	}
+
+	// 5. 调用创建需求 API
+	reqBody := map[string]string{
+		"project_id":          projectID,
+		"title":              title,
+		"description":        description,
+		"acceptance_criteria": "根据PR评论内容确定验收标准",
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		logger.Fatal("创建请求失败", zap.Error(err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Fatal("创建需求请求失败", zap.Error(err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Fatal("创建需求失败", zap.String("status", resp.Status), zap.String("body", string(body)))
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Fatal("解析响应失败", zap.Error(err))
+	}
+
+	logger.Info("需求创建成功",
+		zap.String("requirement_id", result.ID),
+		zap.String("pr_url", prURL),
+	)
+	fmt.Printf("需求 %s 已创建 (来源: PR %s)\n", result.ID, prURL)
+}
+
+// PRInfo PR信息
+type PRInfo struct {
+	Title     string
+	Body      string
+	Author    string
+	State     string
+	CreatedAt string
+}
+
+// PRComment PR评论
+type PRComment struct {
+	Author    string
+	Body      string
+	CreatedAt string
+}
+
+// fetchPRInfo 获取PR信息
+func fetchPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
+	// 使用 gh 命令获取PR信息
+	cmd := exec.Command("gh", "pr", "view", fmt.Sprintf("%s/%s#%d", owner, repo, prNumber),
+		"--json", "title,body,author,state,createdAt", "-q", ".")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch PR info: %w", err)
+	}
+
+	var prInfo PRInfo
+	if err := json.Unmarshal(output, &prInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse PR info: %w", err)
+	}
+	return &prInfo, nil
+}
+
+// fetchPRComments 获取PR评论
+func fetchPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
+	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, prNumber),
+		"--jq", ".[] | {author: .user.login, body: .body, createdAt: .created_at}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch PR comments: %w", err)
+	}
+
+	var comments []PRComment
+	if err := json.Unmarshal(output, &comments); err != nil {
+		return nil, fmt.Errorf("failed to parse PR comments: %w", err)
+	}
+	return comments, nil
 }
 
 // listRequirements 列出需求

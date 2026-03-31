@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/weibh/taskmanager/application"
@@ -9,11 +11,12 @@ import (
 )
 
 type ProjectHandler struct {
-	projectService *application.ProjectApplicationService
+	projectService      *application.ProjectApplicationService
+	heartbeatScheduler  *application.HeartbeatScheduler
 }
 
-func NewProjectHandler(projectService *application.ProjectApplicationService) *ProjectHandler {
-	return &ProjectHandler{projectService: projectService}
+func NewProjectHandler(projectService *application.ProjectApplicationService, heartbeatScheduler *application.HeartbeatScheduler) *ProjectHandler {
+	return &ProjectHandler{projectService: projectService, heartbeatScheduler: heartbeatScheduler}
 }
 
 type CreateProjectRequest struct {
@@ -24,11 +27,15 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	GitRepoURL    string   `json:"git_repo_url"`
-	DefaultBranch string   `json:"default_branch"`
-	InitSteps     []string `json:"init_steps"`
+	ID                       string `json:"id"`
+	Name                     string `json:"name"`
+	GitRepoURL               string `json:"git_repo_url"`
+	DefaultBranch            string `json:"default_branch"`
+	InitSteps                []string `json:"init_steps"`
+	HeartbeatEnabled         bool   `json:"heartbeat_enabled"`
+	HeartbeatIntervalMinutes int    `json:"heartbeat_interval_minutes"`
+	HeartbeatMDContent       string `json:"heartbeat_md_content"`
+	HeartbeatAgentID         string `json:"heartbeat_agent_id"`
 }
 
 func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
@@ -91,16 +98,26 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	project, err := h.projectService.UpdateProject(r.Context(), application.UpdateProjectCommand{
-		ID:            domain.NewProjectID(req.ID),
-		Name:          req.Name,
-		GitRepoURL:    req.GitRepoURL,
-		DefaultBranch: req.DefaultBranch,
-		InitSteps:     req.InitSteps,
+		ID:                       domain.NewProjectID(req.ID),
+		Name:                     req.Name,
+		GitRepoURL:               req.GitRepoURL,
+		DefaultBranch:            req.DefaultBranch,
+		InitSteps:                req.InitSteps,
+		HeartbeatEnabled:         req.HeartbeatEnabled,
+		HeartbeatIntervalMinutes: req.HeartbeatIntervalMinutes,
+		HeartbeatMDContent:       req.HeartbeatMDContent,
+		HeartbeatAgentID:         req.HeartbeatAgentID,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
+	}
+	// 刷新心跳调度
+	if h.heartbeatScheduler != nil {
+		if err := h.heartbeatScheduler.RefreshSchedule(context.Background()); err != nil {
+			log.Printf("failed to refresh heartbeat schedule: %v", err)
+		}
 	}
 	_ = json.NewEncoder(w).Encode(projectToMap(project))
 }
@@ -122,12 +139,16 @@ func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 
 func projectToMap(project *domain.Project) map[string]interface{} {
 	return map[string]interface{}{
-		"id":             project.ID().String(),
-		"name":           project.Name(),
-		"git_repo_url":   project.GitRepoURL(),
-		"default_branch": project.DefaultBranch(),
-		"init_steps":     project.InitSteps(),
-		"created_at":     project.CreatedAt().UnixMilli(),
-		"updated_at":     project.UpdatedAt().UnixMilli(),
+		"id":                        project.ID().String(),
+		"name":                      project.Name(),
+		"git_repo_url":              project.GitRepoURL(),
+		"default_branch":            project.DefaultBranch(),
+		"init_steps":                project.InitSteps(),
+		"heartbeat_enabled":         project.HeartbeatEnabled(),
+		"heartbeat_interval_minutes": project.HeartbeatIntervalMinutes(),
+		"heartbeat_md_content":      project.HeartbeatMDContent(),
+		"heartbeat_agent_id":        project.HeartbeatAgentID(),
+		"created_at":                project.CreatedAt().UnixMilli(),
+		"updated_at":                project.UpdatedAt().UnixMilli(),
 	}
 }
