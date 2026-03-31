@@ -131,7 +131,7 @@ func printRequirementUsage() {
 	fmt.Println("  update    更新需求")
 	fmt.Println("  dispatch  派发需求（从项目配置获取agent/channel/sessionkey）")
 	fmt.Println("  complete  完成需求")
-	fmt.Println("  list      列出需求")
+	fmt.Println("  list      列出需求（默认过滤心跳需求）")
 	fmt.Println("  get       获取需求详情")
 	fmt.Println("  review    分析PR并创建需求")
 	fmt.Println("")
@@ -141,6 +141,7 @@ func printRequirementUsage() {
 	fmt.Println("  taskmanager requirement dispatch <requirement_id>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager requirement list --project-id <id>")
+	fmt.Println("  taskmanager requirement list --include-heartbeat  # 包含心跳需求")
 	fmt.Println("  taskmanager requirement get --id <id>")
 }
 
@@ -764,9 +765,10 @@ func fetchPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
 }
 
 // listRequirements 列出需求
-// 用法: taskmanager requirement list [--project-id <id>]
+// 用法: taskmanager requirement list [--project-id <id>] [--include-heartbeat]
 func listRequirements(logger *zap.Logger) {
 	projectIDPtr := flag.String("project-id", "", "项目 ID (可选)")
+	includeHeartbeatPtr := flag.Bool("include-heartbeat", false, "包含心跳需求（默认不显示）")
 
 	flag.CommandLine.Parse(os.Args[3:])
 
@@ -793,16 +795,32 @@ func listRequirements(logger *zap.Logger) {
 		logger.Fatal("列出需求失败", zap.Error(err))
 	}
 
+	// 过滤掉心跳需求（除非指定 --include-heartbeat）
+	// 心跳需求有两种：1) requirement_type=heartbeat  2) 标题以[心跳]开头（旧数据）
+	if !*includeHeartbeatPtr {
+		filtered := make([]*domain.Requirement, 0)
+		for _, req := range requirements {
+			if req.RequirementType() == domain.RequirementTypeHeartbeat {
+				continue
+			}
+			// 兼容旧数据：标题以[心跳]开头也算心跳需求
+			if strings.HasPrefix(req.Title(), "[心跳]") {
+				continue
+			}
+			filtered = append(filtered, req)
+		}
+		requirements = filtered
+	}
+
 	fmt.Printf("\n需求列表 (共 %d 个):\n", len(requirements))
 	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf("%-20s %-10s %-10s %-10s %s\n", "ID", "状态", "开发状态", "类型", "标题")
+	fmt.Printf("%-20s %-10s %-10s %s\n", "ID", "状态", "开发状态", "标题")
 	fmt.Println("--------------------------------------------------------------------------------")
 	for _, req := range requirements {
-		fmt.Printf("%-20s %-10s %-10s %-10s %s\n",
+		fmt.Printf("%-20s %-10s %-10s %s\n",
 			req.ID().String()[:16]+"...",
 			req.Status(),
 			req.DevState(),
-			req.RequirementType(),
 			req.Title())
 	}
 	fmt.Println()
