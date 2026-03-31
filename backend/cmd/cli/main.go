@@ -86,7 +86,7 @@ func printUsage() {
 	fmt.Println("  taskmanager agent list")
 	fmt.Println("  taskmanager project list")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
-	fmt.Println("  taskmanager requirement dispatch --id <id> --agent-id <agent-id> --session-key <key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager config init")
 	fmt.Println("  taskmanager config show")
@@ -132,7 +132,7 @@ func printRequirementUsage() {
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
 	fmt.Println("  taskmanager requirement update --id <id> --title <new-title>")
-	fmt.Println("  taskmanager requirement dispatch --id <id> --agent-id <agent-id> --session-key <key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager requirement list --project-id <id>")
 	fmt.Println("  taskmanager requirement get --id <id>")
@@ -358,28 +358,30 @@ func updateRequirement(logger *zap.Logger) {
 }
 
 // dispatchRequirement 派发需求
-// 用法: taskmanager requirement dispatch --id <id> --agent-id <agent-id> --session-key <key> [--channel-code <code>]
+// 用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key> [--channel-code <code>]
 func dispatchRequirement(logger *zap.Logger) {
-	idPtr := flag.String("id", "", "需求 ID (必填)")
-	agentIDPtr := flag.String("agent-id", "", "Coding Agent ID (必填)")
-	sessionKeyPtr := flag.String("session-key", "", "Session Key (必填)")
 	channelCodePtr := flag.String("channel-code", "feishu", "渠道代码")
 
 	flag.CommandLine.Parse(os.Args[3:])
 
-	if *idPtr == "" || *agentIDPtr == "" || *sessionKeyPtr == "" {
-		fmt.Println("错误: --id, --agent-id, --session-key 是必填参数")
+	args := flag.CommandLine.Args()
+	if len(args) < 3 {
+		fmt.Println("错误: 缺少必填参数")
 		fmt.Println("")
-		fmt.Println("用法: taskmanager requirement dispatch --id <id> --agent-id <agent-id> --session-key <key>")
+		fmt.Println("用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
 		fmt.Println("")
 		fmt.Println("示例: taskmanager requirement dispatch \\")
-		fmt.Println("  --id y6Wfok055CoE2twsr8dtD \\")
-		fmt.Println("  --agent-id Yt1rVbqBPPti6kZeOhD5A \\")
-		fmt.Println("  --session-key feishu:ou_df798fe15d056000143691af8c1cdb55")
+		fmt.Println("  y6Wfok055CoE2twsr8dtD \\")
+		fmt.Println("  Yt1rVbqBPPti6kZeOhD5A \\")
+		fmt.Println("  feishu:ou_df798fe15d056000143691af8c1cdb55")
 		fmt.Println("")
 		fmt.Println("提示: 可用 Agent ID 可以通过 taskmanager agent list 查看")
 		os.Exit(1)
 	}
+
+	idPtr := args[0]
+	agentIDPtr := args[1]
+	sessionKeyPtr := args[2]
 
 	// 1. 登录获取 token
 	token, err := login()
@@ -389,10 +391,10 @@ func dispatchRequirement(logger *zap.Logger) {
 
 	// 2. 调用派发 API
 	reqBody := map[string]string{
-		"requirement_id": *idPtr,
-		"agent_id":       *agentIDPtr,
+		"requirement_id": idPtr,
+		"agent_id":       agentIDPtr,
 		"channel_code":   *channelCodePtr,
-		"session_key":   *sessionKeyPtr,
+		"session_key":   sessionKeyPtr,
 	}
 	reqJSON, _ := json.Marshal(reqBody)
 
