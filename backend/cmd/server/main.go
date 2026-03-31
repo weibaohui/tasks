@@ -66,7 +66,7 @@ func main() {
 	logger.Info("配置加载完成", zap.Int("server_port", cfg.Server.Port), zap.String("api_base_url", cfg.API.BaseURL))
 
 	// 2. 初始化数据库
-	dbPath := resolveDBPath()
+	dbPath := config.ExpandPath(cfg.Database.Path)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))

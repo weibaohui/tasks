@@ -61,11 +61,7 @@ func Load() (*Config, error) {
 // defaultConfig 返回默认配置
 func defaultConfig() *Config {
 	home, _ := os.UserHomeDir()
-	defaultDBPath := filepath.Join(home, ".taskmanager", "tasks.db")
-	if _, err := os.Stat(defaultDBPath); os.IsNotExist(err) {
-		// 如果默认路径不存在，使用项目内路径
-		defaultDBPath = "./backend/tasks.db"
-	}
+	defaultDBPath := filepath.Join(home, ".taskmanager", "data.db")
 
 	return &Config{
 		Server: ServerConfig{
