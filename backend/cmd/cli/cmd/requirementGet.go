@@ -36,33 +36,57 @@ var requirementGetCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("\n需求详情:")
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("ID: %s\n", requirement.ID().String())
-		fmt.Printf("项目ID: %s\n", requirement.ProjectID().String())
-		fmt.Printf("标题: %s\n", requirement.Title())
-		fmt.Printf("描述: %s\n", requirement.Description())
-		fmt.Printf("验收标准: %s\n", requirement.AcceptanceCriteria())
-		fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
-		fmt.Printf("类型: %s\n", requirement.RequirementType())
-		fmt.Printf("工作目录: %s\n", requirement.WorkspacePath())
-		fmt.Printf("PR URL: %s\n", requirement.PRURL())
-		fmt.Printf("分支: %s\n", requirement.BranchName())
-		if requirement.StartedAt() != nil {
-			fmt.Printf("开始时间: %s\n", requirement.StartedAt().Format("2006-01-02 15:04:05"))
-		}
-		if requirement.CompletedAt() != nil {
-			fmt.Printf("完成时间: %s\n", requirement.CompletedAt().Format("2006-01-02 15:04:05"))
-		}
-		if reqResult := requirement.ClaudeRuntimeResult(); reqResult != "" {
-			resultPreview := reqResult
-			if len(resultPreview) > 100 {
-				resultPreview = resultPreview[:100] + "..."
-			}
-			fmt.Printf("Claude执行结果: %s\n", resultPreview)
-		}
-		fmt.Println()
+		printRequirementDetail(requirement)
 	},
+}
+
+func printRequirementDetail(r *domain.Requirement) {
+	fmt.Println("\n===================================== 需求详情 =====================================")
+	fmt.Printf("ID:              %s\n", r.ID().String())
+	fmt.Printf("项目ID:          %s\n", r.ProjectID().String())
+	fmt.Println("-----------------------------------------------------------------------------------------------")
+	fmt.Printf("标题:            %s\n", r.Title())
+	fmt.Printf("描述:            %s\n", r.Description())
+	fmt.Printf("验收标准:        %s\n", r.AcceptanceCriteria())
+	fmt.Println("-----------------------------------------------------------------------------------------------")
+	fmt.Printf("状态:            %s / %s\n", r.Status(), r.DevState())
+	fmt.Printf("类型:            %s\n", r.RequirementType())
+	fmt.Println("===================================== 派发信息 =====================================")
+	fmt.Printf("工作目录:        %s\n", r.WorkspacePath())
+	fmt.Printf("分身Agent:       %s\n", r.ReplicaAgentCode())
+	fmt.Printf("派发SessionKey:  %s\n", r.DispatchSessionKey())
+	fmt.Printf("分支:            %s\n", r.BranchName())
+	fmt.Printf("PR URL:          %s\n", r.PRURL())
+	fmt.Println("===================================== 时间信息 =====================================")
+	fmt.Printf("创建时间:        %s\n", r.CreatedAt().Format("2006-01-02 15:04:05"))
+	fmt.Printf("更新时间:        %s\n", r.UpdatedAt().Format("2006-01-02 15:04:05"))
+	if r.StartedAt() != nil {
+		fmt.Printf("开始时间:        %s\n", r.StartedAt().Format("2006-01-02 15:04:05"))
+	}
+	if r.CompletedAt() != nil {
+		fmt.Printf("完成时间:        %s\n", r.CompletedAt().Format("2006-01-02 15:04:05"))
+	}
+	fmt.Println("===================================== Claude 执行状态 =====================================")
+	fmt.Printf("Runtime状态:     %s\n", r.ClaudeRuntimeStatus())
+	if r.ClaudeRuntimeStartedAt() != nil {
+		fmt.Printf("Runtime开始:     %s\n", r.ClaudeRuntimeStartedAt().Format("2006-01-02 15:04:05"))
+	}
+	if r.ClaudeRuntimeEndedAt() != nil {
+		fmt.Printf("Runtime结束:     %s\n", r.ClaudeRuntimeEndedAt().Format("2006-01-02 15:04:05"))
+	}
+	if r.ClaudeRuntimeError() != "" {
+		fmt.Printf("Runtime错误:     %s\n", r.ClaudeRuntimeError())
+	}
+	if r.ClaudeRuntimeResult() != "" {
+		fmt.Println("-----------------------------------------------------------------------------------------------")
+		fmt.Println("Claude执行结果:")
+		fmt.Println("-----------------------------------------------------------------------------------------------")
+		fmt.Println(r.ClaudeRuntimeResult())
+	}
+	if r.LastError() != "" {
+		fmt.Printf("最近错误:        %s\n", r.LastError())
+	}
+	fmt.Println("===============================================================================================\n")
 }
 
 func init() {
