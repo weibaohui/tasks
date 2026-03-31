@@ -20,19 +20,19 @@ var (
 )
 
 type DispatchRequirementCommand struct {
-	RequirementID domain.RequirementID
-	AgentID       domain.AgentID
+	RequirementID  domain.RequirementID
+	AgentCode     string
 	ChannelCode   string
 	SessionKey    string
 }
 
 type DispatchRequirementResult struct {
-	RequirementID  string `json:"requirement_id"`
-	Status         string `json:"status"`
-	DevState       string `json:"dev_state"`
-	WorkspacePath  string `json:"workspace_path"`
-	ReplicaAgentID string `json:"replica_agent_id"`
-	TaskID         string `json:"task_id"`
+	RequirementID   string `json:"requirement_id"`
+	Status          string `json:"status"`
+	DevState        string `json:"dev_state"`
+	WorkspacePath   string `json:"workspace_path"`
+	ReplicaAgentCode string `json:"replica_agent_code"`
+	TaskID          string `json:"task_id"`
 }
 
 type RequirementDispatchService struct {
@@ -101,14 +101,14 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if project == nil {
 		return nil, ErrProjectNotFound
 	}
-	baseAgent, err := s.agentRepo.FindByID(ctx, cmd.AgentID)
+	baseAgent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(cmd.AgentCode))
 	if err != nil {
 		return nil, err
 	}
 	if baseAgent == nil {
 		return nil, ErrBaseAgentNotFound
 	}
-	if err := requirement.StartDispatch(cmd.AgentID.String()); err != nil {
+	if err := requirement.StartDispatch(cmd.AgentCode); err != nil {
 		return nil, err
 	}
 	requirement.SetDispatchSessionKey(cmd.SessionKey)
@@ -127,7 +127,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, err
 	}
 	branchName := fmt.Sprintf("feature/%s", requirement.ID().String())
-	if err := requirement.MarkCoding(workspacePath, replicaAgent.ID().String(), branchName); err != nil {
+	if err := requirement.MarkCoding(workspacePath, replicaAgent.AgentCode().String(), branchName); err != nil {
 		return nil, err
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
@@ -171,12 +171,12 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	})
 	dispatchID := "dispatch_" + s.idGenerator.Generate()
 	return &DispatchRequirementResult{
-		RequirementID:  requirement.ID().String(),
-		Status:         string(requirement.Status()),
-		DevState:       string(requirement.DevState()),
-		WorkspacePath:  requirement.WorkspacePath(),
-		ReplicaAgentID: requirement.ReplicaAgentID(),
-		TaskID:         dispatchID,
+		RequirementID:   requirement.ID().String(),
+		Status:          string(requirement.Status()),
+		DevState:        string(requirement.DevState()),
+		WorkspacePath:   requirement.WorkspacePath(),
+		ReplicaAgentCode: requirement.ReplicaAgentCode(),
+		TaskID:          dispatchID,
 	}, nil
 }
 

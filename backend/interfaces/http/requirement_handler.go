@@ -40,7 +40,7 @@ type UpdateRequirementRequest struct {
 
 type DispatchRequirementRequest struct {
 	RequirementID string `json:"requirement_id"`
-	AgentID       string `json:"agent_id"`
+	AgentCode     string `json:"agent_code"`
 	ChannelCode   string `json:"channel_code"`
 	SessionKey    string `json:"session_key"`
 }
@@ -141,9 +141,9 @@ func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.
 	}
 	result, err := h.dispatchService.DispatchRequirement(r.Context(), application.DispatchRequirementCommand{
 		RequirementID: domain.NewRequirementID(req.RequirementID),
-		AgentID:       domain.NewAgentID(req.AgentID),
-		ChannelCode:   req.ChannelCode,
-		SessionKey:    req.SessionKey,
+		AgentCode:    req.AgentCode,
+		ChannelCode:  req.ChannelCode,
+		SessionKey:   req.SessionKey,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -207,21 +207,21 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 	resp := map[string]interface{}{
 		"id":                   requirement.ID().String(),
 		"project_id":           requirement.ProjectID().String(),
-		"title":                requirement.Title(),
-		"description":          requirement.Description(),
-		"acceptance_criteria":  requirement.AcceptanceCriteria(),
-		"temp_workspace_root":  requirement.TempWorkspaceRoot(),
-		"status":               requirement.Status(),
-		"dev_state":            requirement.DevState(),
-		"assignee_agent_id":    requirement.AssigneeAgentID(),
-		"replica_agent_id":     requirement.ReplicaAgentID(),
-		"dispatch_session_key": requirement.DispatchSessionKey(),
-		"workspace_path":       requirement.WorkspacePath(),
-		"branch_name":          requirement.BranchName(),
-		"pr_url":               requirement.PRURL(),
-		"last_error":           requirement.LastError(),
-		"started_at":           startedAt,
-		"completed_at":         completedAt,
+		"title":                 requirement.Title(),
+		"description":           requirement.Description(),
+		"acceptance_criteria":   requirement.AcceptanceCriteria(),
+		"temp_workspace_root":   requirement.TempWorkspaceRoot(),
+		"status":                requirement.Status(),
+		"dev_state":             requirement.DevState(),
+		"assignee_agent_code":   requirement.AssigneeAgentCode(),
+		"replica_agent_code":    requirement.ReplicaAgentCode(),
+		"dispatch_session_key":   requirement.DispatchSessionKey(),
+		"workspace_path":        requirement.WorkspacePath(),
+		"branch_name":           requirement.BranchName(),
+		"pr_url":                requirement.PRURL(),
+		"last_error":            requirement.LastError(),
+		"started_at":            startedAt,
+		"completed_at":          completedAt,
 		"created_at":           requirement.CreatedAt().UnixMilli(),
 		"updated_at":           requirement.UpdatedAt().UnixMilli(),
 	}

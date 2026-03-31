@@ -110,13 +110,6 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 
 	log.Printf("[HEARTBEAT] executing heartbeat for project %s", project.Name())
 
-	// 查找 agent
-	agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(project.AgentCode()))
-	if err != nil || agent == nil {
-		log.Printf("heartbeat: failed to find agent %s: %v", project.AgentCode(), err)
-		return
-	}
-
 	// 替换模板变量
 	prompt := s.renderTemplate(project.HeartbeatMDContent(), project)
 
@@ -153,9 +146,9 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
-			AgentID:       agent.ID(),
-			ChannelCode:   channelCode,
-			SessionKey:    sessionKey,
+			AgentCode:    project.AgentCode(),
+			ChannelCode:  channelCode,
+			SessionKey:   sessionKey,
 		})
 		if err != nil {
 			log.Printf("heartbeat: failed to dispatch requirement %s: %v", requirement.ID(), err)

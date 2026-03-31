@@ -270,9 +270,13 @@ export const ProjectRequirementPage: React.FC = () => {
 
     // 获取项目配置的派发渠道和 session_key
     const project = projects.find((p) => p.id === item.project_id);
+    const projectAgentCode = project?.agent_code;
     const projectChannelCode = project?.dispatch_channel_code;
     const projectSessionKey = project?.dispatch_session_key;
 
+    if (projectAgentCode) {
+      dispatchForm.setFieldsValue({ agent_code: projectAgentCode });
+    }
     if (projectChannelCode && projectSessionKey) {
       dispatchForm.setFieldsValue({ channel_code: projectChannelCode, session_key: projectSessionKey });
     } else if (channels.length > 0) {
@@ -281,13 +285,13 @@ export const ProjectRequirementPage: React.FC = () => {
     setDispatchModalOpen(true);
   };
 
-  const submitDispatch = async (values: { agent_id: string; channel_code: string; session_key: string }) => {
+  const submitDispatch = async (values: { agent_code: string; channel_code: string; session_key: string }) => {
     if (!dispatchRequirementItem) {
       return;
     }
     try {
       const sessionKey = values.session_key.trim();
-      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_id, values.channel_code, sessionKey);
+      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_code, values.channel_code, sessionKey);
       message.success(`派发成功，任务ID: ${result.task_id}`);
       setDispatchModalOpen(false);
       await fetchRequirements(selectedProjectId);
@@ -697,8 +701,8 @@ export const ProjectRequirementPage: React.FC = () => {
 
       <Modal title="派发需求" open={dispatchModalOpen} footer={null} onCancel={() => setDispatchModalOpen(false)}>
         <Form layout="vertical" form={dispatchForm} onFinish={submitDispatch}>
-          <Form.Item label="执行 Agent" name="agent_id" rules={[{ required: true, message: '请选择执行 Agent' }]}>
-            <Select options={agents.map((agent) => ({ label: `${agent.name} (${agent.agent_code})`, value: agent.id }))} />
+          <Form.Item label="执行 Agent" name="agent_code" rules={[{ required: true, message: '请选择执行 Agent' }]}>
+            <Select options={agents.map((agent) => ({ label: `${agent.name} (${agent.agent_code})`, value: agent.agent_code }))} />
           </Form.Item>
           <Form.Item label="派发渠道" name="channel_code" rules={[{ required: true, message: '请选择渠道' }]}>
             <Select

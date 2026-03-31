@@ -945,7 +945,7 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	// **立即清理分身**（代码约束，不是 Hook）
 	// 在触发任何 hook 之前清理分身，确保清理一定会执行
 	if p.replicaAgentManager != nil {
-		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentID(), requirement.WorkspacePath())
+		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
 	}
 
 	// 创建 StateChange

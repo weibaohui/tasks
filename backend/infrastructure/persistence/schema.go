@@ -196,8 +196,8 @@ CREATE TABLE IF NOT EXISTS requirements (
     status TEXT NOT NULL DEFAULT 'todo',
     dev_state TEXT NOT NULL DEFAULT 'idle',
     temp_workspace_root TEXT,
-    assignee_agent_id TEXT,
-    replica_agent_id TEXT,
+    assignee_agent_code TEXT,
+    replica_agent_code TEXT,
     dispatch_session_key TEXT,
     workspace_path TEXT,
     branch_name TEXT,
@@ -574,6 +574,37 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 			return err
 		}
 	}
+
+	// 重命名 assignee_agent_id -> assignee_agent_code
+	hasOldAssignee, err := tableHasColumn(db, "requirements", "assignee_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewAssignee, err := tableHasColumn(db, "requirements", "assignee_agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldAssignee && !hasNewAssignee {
+		if _, err := db.Exec("ALTER TABLE requirements RENAME COLUMN assignee_agent_id TO assignee_agent_code"); err != nil {
+			return err
+		}
+	}
+
+	// 重命名 replica_agent_id -> replica_agent_code
+	hasOldReplica, err := tableHasColumn(db, "requirements", "replica_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewReplica, err := tableHasColumn(db, "requirements", "replica_agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldReplica && !hasNewReplica {
+		if _, err := db.Exec("ALTER TABLE requirements RENAME COLUMN replica_agent_id TO replica_agent_code"); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
