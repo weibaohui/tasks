@@ -72,6 +72,7 @@ func main() {
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
+	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 
 	// 4. 初始化 Message Bus
 	messageBus := channelBus.NewMessageBus(logger)
@@ -101,7 +102,7 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, nil, nil, nil)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务
@@ -136,7 +137,7 @@ func main() {
 	// 创建最小化的 mux 用于管理 API
 	taskHandler := httpHandler.NewTaskHandler(taskService, nil)
 	userService := application.NewUserApplicationService(nil, idGenerator)
-	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
+	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/auth/login", authHandler.Login)
 	mux.HandleFunc("/api/tasks", taskHandler.CreateTask)

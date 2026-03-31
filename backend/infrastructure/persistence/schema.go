@@ -207,6 +207,10 @@ CREATE TABLE IF NOT EXISTS requirements (
     completed_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    claude_runtime_status TEXT,
+    claude_runtime_started_at INTEGER,
+    claude_runtime_ended_at INTEGER,
+    claude_runtime_error TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
@@ -419,6 +423,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateProjectsNewColumns(db); err != nil {
 		return err
 	}
+	if err := migrateRequirementsClaudeRuntime(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -605,6 +612,32 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// migrateRequirementsClaudeRuntime 迁移 requirements 表新增 claude_runtime 相关字段
+func migrateRequirementsClaudeRuntime(db *sql.DB) error {
+	columns := []struct {
+		name    string
+		sqlType string
+	}{
+		{"claude_runtime_status", "TEXT"},
+		{"claude_runtime_started_at", "INTEGER"},
+		{"claude_runtime_ended_at", "INTEGER"},
+		{"claude_runtime_error", "TEXT"},
+	}
+
+	for _, col := range columns {
+		has, err := tableHasColumn(db, "requirements", col.name)
+		if err != nil {
+			return err
+		}
+		if !has {
+			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE requirements ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

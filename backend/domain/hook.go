@@ -791,7 +791,7 @@ func (e *ConfigurableHookExecutor) executeConfig(
 	if executor == nil {
 		fmt.Printf("[DEBUG] No executor found for actionType: %s (registered executors: %d)\n", config.ActionType, len(e.executors))
 		for i, ae := range e.executors {
-			fmt.Printf("[DEBUG] Executor %d supports: %s\n", i, ae.Supports("test"))
+			fmt.Printf("[DEBUG] Executor %d supports: %v\n", i, ae.Supports("test"))
 		}
 		log.Status = "failed"
 		log.Error = fmt.Sprintf("no executor for action type: %s", config.ActionType)

@@ -87,6 +87,11 @@ type Requirement struct {
 	completedAt         *time.Time
 	createdAt           time.Time
 	updatedAt           time.Time
+	// Claude Runtime 状态（持久化）
+	claudeRuntimeStatus    string        // running, completed, failed, ""
+	claudeRuntimeStartedAt *time.Time
+	claudeRuntimeEndedAt  *time.Time
+	claudeRuntimeError    string
 
 	// stateChangeCallbacks 状态变更回调列表（不持久化）
 	stateChangeCallbacks []StateChangeCallback
@@ -208,6 +213,11 @@ func (r *Requirement) StartedAt() *time.Time          { return copyTimePtr(r.sta
 func (r *Requirement) CompletedAt() *time.Time        { return copyTimePtr(r.completedAt) }
 func (r *Requirement) CreatedAt() time.Time           { return r.createdAt }
 func (r *Requirement) UpdatedAt() time.Time           { return r.updatedAt }
+func (r *Requirement) ClaudeRuntimeStatus() string     { return r.claudeRuntimeStatus }
+func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time { return copyTimePtr(r.claudeRuntimeStartedAt) }
+func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time  { return copyTimePtr(r.claudeRuntimeEndedAt) }
+func (r *Requirement) ClaudeRuntimeError() string       { return r.claudeRuntimeError }
+
 func (r *Requirement) CanDispatch() bool {
 	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
 }
@@ -218,6 +228,29 @@ func (r *Requirement) CanRedispatch() bool {
 	// 初始状态：todo + idle -> 不需要重新派发
 	// 其他状态都可以重新派发
 	return !(r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle)
+}
+
+// StartClaudeRuntime 开始 Claude Runtime
+func (r *Requirement) StartClaudeRuntime() {
+	now := time.Now()
+	r.claudeRuntimeStatus = "running"
+	r.claudeRuntimeStartedAt = &now
+	r.claudeRuntimeEndedAt = nil
+	r.claudeRuntimeError = ""
+	r.updatedAt = now
+}
+
+// EndClaudeRuntime 结束 Claude Runtime
+func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
+	now := time.Now()
+	if success {
+		r.claudeRuntimeStatus = "completed"
+	} else {
+		r.claudeRuntimeStatus = "failed"
+		r.claudeRuntimeError = errMsg
+	}
+	r.claudeRuntimeEndedAt = &now
+	r.updatedAt = now
 }
 
 // Redispatch 重置需求状态，允许重新派发
@@ -408,48 +441,56 @@ func (r *Requirement) SetDispatchSessionKey(sessionKey string) {
 }
 
 type RequirementSnapshot struct {
-	ID                  RequirementID
-	ProjectID           ProjectID
-	Title               string
-	Description         string
-	AcceptanceCriteria  string
-	TempWorkspaceRoot   string
-	Status              RequirementStatus
-	DevState            RequirementDevState
-	AssigneeAgentCode   string
-	ReplicaAgentCode    string
-	DispatchSessionKey  string
-	WorkspacePath       string
-	BranchName          string
-	PRURL               string
-	LastError           string
-	StartedAt           *time.Time
-	CompletedAt         *time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                     RequirementID
+	ProjectID              ProjectID
+	Title                  string
+	Description            string
+	AcceptanceCriteria     string
+	TempWorkspaceRoot      string
+	Status                 RequirementStatus
+	DevState               RequirementDevState
+	AssigneeAgentCode      string
+	ReplicaAgentCode       string
+	DispatchSessionKey     string
+	WorkspacePath          string
+	BranchName             string
+	PRURL                  string
+	LastError              string
+	StartedAt              *time.Time
+	CompletedAt            *time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	ClaudeRuntimeStatus    string
+	ClaudeRuntimeStartedAt *time.Time
+	ClaudeRuntimeEndedAt   *time.Time
+	ClaudeRuntimeError     string
 }
 
 func (r *Requirement) ToSnapshot() RequirementSnapshot {
 	return RequirementSnapshot{
-		ID:                  r.id,
-		ProjectID:           r.projectID,
-		Title:               r.title,
-		Description:         r.description,
-		AcceptanceCriteria:  r.acceptanceCriteria,
-		TempWorkspaceRoot:   r.tempWorkspaceRoot,
-		Status:              r.status,
-		DevState:            r.devState,
-		AssigneeAgentCode:   r.assigneeAgentCode,
-		ReplicaAgentCode:    r.replicaAgentCode,
-		DispatchSessionKey:  r.dispatchSessionKey,
-		WorkspacePath:       r.workspacePath,
-		BranchName:          r.branchName,
-		PRURL:               r.prURL,
-		LastError:           r.lastError,
-		StartedAt:           copyTimePtr(r.startedAt),
-		CompletedAt:         copyTimePtr(r.completedAt),
-		CreatedAt:           r.createdAt,
-		UpdatedAt:           r.updatedAt,
+		ID:                     r.id,
+		ProjectID:              r.projectID,
+		Title:                  r.title,
+		Description:            r.description,
+		AcceptanceCriteria:    r.acceptanceCriteria,
+		TempWorkspaceRoot:     r.tempWorkspaceRoot,
+		Status:                 r.status,
+		DevState:              r.devState,
+		AssigneeAgentCode:      r.assigneeAgentCode,
+		ReplicaAgentCode:       r.replicaAgentCode,
+		DispatchSessionKey:     r.dispatchSessionKey,
+		WorkspacePath:          r.workspacePath,
+		BranchName:             r.branchName,
+		PRURL:                  r.prURL,
+		LastError:              r.lastError,
+		StartedAt:              copyTimePtr(r.startedAt),
+		CompletedAt:            copyTimePtr(r.completedAt),
+		CreatedAt:              r.createdAt,
+		UpdatedAt:              r.updatedAt,
+		ClaudeRuntimeStatus:    r.claudeRuntimeStatus,
+		ClaudeRuntimeStartedAt: copyTimePtr(r.claudeRuntimeStartedAt),
+		ClaudeRuntimeEndedAt:   copyTimePtr(r.claudeRuntimeEndedAt),
+		ClaudeRuntimeError:     r.claudeRuntimeError,
 	}
 }
 
@@ -479,6 +520,10 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.completedAt = copyTimePtr(s.CompletedAt)
 	r.createdAt = s.CreatedAt
 	r.updatedAt = s.UpdatedAt
+	r.claudeRuntimeStatus = s.ClaudeRuntimeStatus
+	r.claudeRuntimeStartedAt = copyTimePtr(s.ClaudeRuntimeStartedAt)
+	r.claudeRuntimeEndedAt = copyTimePtr(s.ClaudeRuntimeEndedAt)
+	r.claudeRuntimeError = s.ClaudeRuntimeError
 	return nil
 }
 
