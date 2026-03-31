@@ -33,7 +33,7 @@ type Project struct {
 	heartbeatEnabled         bool
 	heartbeatIntervalMinutes  int
 	heartbeatMDContent       string
-	heartbeatAgentID         string
+	agentCode                string
 	dispatchChannelCode      string
 	dispatchSessionKey       string
 	createdAt                time.Time
@@ -63,7 +63,7 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 		heartbeatEnabled:         false,
 		heartbeatIntervalMinutes:  60,
 		heartbeatMDContent:       "",
-		heartbeatAgentID:         "",
+		agentCode:                "",
 		dispatchChannelCode:      "",
 		dispatchSessionKey:       "",
 		createdAt:                now,
@@ -79,7 +79,7 @@ func (p *Project) InitSteps() []string      { return append([]string(nil), p.ini
 func (p *Project) HeartbeatEnabled() bool    { return p.heartbeatEnabled }
 func (p *Project) HeartbeatIntervalMinutes() int { return p.heartbeatIntervalMinutes }
 func (p *Project) HeartbeatMDContent() string { return p.heartbeatMDContent }
-func (p *Project) HeartbeatAgentID() string   { return p.heartbeatAgentID }
+func (p *Project) AgentCode() string          { return p.agentCode }
 func (p *Project) DispatchChannelCode() string { return p.dispatchChannelCode }
 func (p *Project) DispatchSessionKey() string { return p.dispatchSessionKey }
 func (p *Project) CreatedAt() time.Time       { return p.createdAt }
@@ -104,11 +104,11 @@ func (p *Project) Update(name, gitRepoURL, defaultBranch string, initSteps []str
 }
 
 // UpdateHeartbeatConfig 更新心跳配置
-func (p *Project) UpdateHeartbeatConfig(enabled bool, intervalMinutes int, mdContent, agentID string) {
+func (p *Project) UpdateHeartbeatConfig(enabled bool, intervalMinutes int, mdContent, agentCode string) {
 	p.heartbeatEnabled = enabled
 	p.heartbeatIntervalMinutes = intervalMinutes
 	p.heartbeatMDContent = mdContent
-	p.heartbeatAgentID = agentID
+	p.agentCode = agentCode
 	p.updatedAt = time.Now()
 }
 
@@ -128,9 +128,9 @@ type ProjectSnapshot struct {
 	HeartbeatEnabled          bool
 	HeartbeatIntervalMinutes   int
 	HeartbeatMDContent        string
-	HeartbeatAgentID          string
+	AgentCode                 string
 	DispatchChannelCode       string
-	DispatchSessionKey       string
+	DispatchSessionKey        string
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 }
@@ -145,7 +145,7 @@ func (p *Project) ToSnapshot() ProjectSnapshot {
 		HeartbeatEnabled:          p.heartbeatEnabled,
 		HeartbeatIntervalMinutes:   p.heartbeatIntervalMinutes,
 		HeartbeatMDContent:        p.heartbeatMDContent,
-		HeartbeatAgentID:          p.heartbeatAgentID,
+		AgentCode:                 p.agentCode,
 		DispatchChannelCode:       p.dispatchChannelCode,
 		DispatchSessionKey:        p.dispatchSessionKey,
 		CreatedAt:                 p.createdAt,
@@ -162,7 +162,7 @@ func (p *Project) FromSnapshot(s ProjectSnapshot) {
 	p.heartbeatEnabled = s.HeartbeatEnabled
 	p.heartbeatIntervalMinutes = s.HeartbeatIntervalMinutes
 	p.heartbeatMDContent = s.HeartbeatMDContent
-	p.heartbeatAgentID = s.HeartbeatAgentID
+	p.agentCode = s.AgentCode
 	p.dispatchChannelCode = s.DispatchChannelCode
 	p.dispatchSessionKey = s.DispatchSessionKey
 	p.createdAt = s.CreatedAt

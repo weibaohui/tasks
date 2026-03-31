@@ -178,7 +178,7 @@ export const ProjectRequirementPage: React.FC = () => {
           heartbeat_enabled: editingProject.heartbeat_enabled || false,
           heartbeat_interval_minutes: editingProject.heartbeat_interval_minutes || 60,
           heartbeat_md_content: editingProject.heartbeat_md_content || '',
-          heartbeat_agent_id: editingProject.heartbeat_agent_id || '',
+          agent_code: editingProject.agent_code || '',
           dispatch_channel_code: editingProject.dispatch_channel_code || '',
           dispatch_session_key: editingProject.dispatch_session_key || '',
         });
@@ -347,7 +347,7 @@ export const ProjectRequirementPage: React.FC = () => {
       heartbeat_enabled: project.heartbeat_enabled || false,
       heartbeat_interval_minutes: project.heartbeat_interval_minutes || 60,
       heartbeat_md_content: project.heartbeat_md_content || '',
-      heartbeat_agent_id: project.heartbeat_agent_id || '',
+      agent_code: project.agent_code || '',
     });
 
     try {
@@ -489,7 +489,7 @@ export const ProjectRequirementPage: React.FC = () => {
         heartbeat_enabled: values.heartbeat_enabled || false,
         heartbeat_interval_minutes: values.heartbeat_interval_minutes || 60,
         heartbeat_md_content: values.heartbeat_md_content || '',
-        heartbeat_agent_id: values.heartbeat_agent_id || '',
+        agent_code: values.agent_code || '',
         dispatch_channel_code: values.dispatch_channel_code || '',
         dispatch_session_key: values.dispatch_session_key || '',
       });
@@ -833,7 +833,7 @@ export const ProjectRequirementPage: React.FC = () => {
                       heartbeat_enabled: configProject?.heartbeat_enabled || false,
                       heartbeat_interval_minutes: configProject?.heartbeat_interval_minutes || 60,
                       heartbeat_md_content: configProject?.heartbeat_md_content || '',
-                      heartbeat_agent_id: configProject?.heartbeat_agent_id || '',
+                      agent_code: configProject?.agent_code || '',
                       dispatch_channel_code: configProject?.dispatch_channel_code || '',
                       dispatch_session_key: configProject?.dispatch_session_key || '',
                     }}
@@ -857,11 +857,11 @@ export const ProjectRequirementPage: React.FC = () => {
                       />
                     </Form.Item>
 
-                    <Form.Item label="心跳执行 Agent" name="heartbeat_agent_id">
+                    <Form.Item label="心跳执行 Agent" name="agent_code">
                       <Select
                         options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
-                          label: a.name,
-                          value: a.id,
+                          label: `${a.name} (${a.agent_code})`,
+                          value: a.agent_code,
                         }))}
                         placeholder="选择用于执行心跳的 Coding Agent"
                         style={{ width: 300 }}

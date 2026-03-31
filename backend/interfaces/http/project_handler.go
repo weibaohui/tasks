@@ -35,7 +35,7 @@ type UpdateProjectRequest struct {
 	HeartbeatEnabled          bool     `json:"heartbeat_enabled"`
 	HeartbeatIntervalMinutes  int      `json:"heartbeat_interval_minutes"`
 	HeartbeatMDContent        string   `json:"heartbeat_md_content"`
-	HeartbeatAgentID          string   `json:"heartbeat_agent_id"`
+	AgentCode                string   `json:"agent_code"`
 	DispatchChannelCode       string   `json:"dispatch_channel_code"`
 	DispatchSessionKey        string   `json:"dispatch_session_key"`
 }
@@ -108,7 +108,7 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		HeartbeatEnabled:          req.HeartbeatEnabled,
 		HeartbeatIntervalMinutes:  req.HeartbeatIntervalMinutes,
 		HeartbeatMDContent:        req.HeartbeatMDContent,
-		HeartbeatAgentID:          req.HeartbeatAgentID,
+		AgentCode:                req.AgentCode,
 		DispatchChannelCode:       req.DispatchChannelCode,
 		DispatchSessionKey:        req.DispatchSessionKey,
 	})
@@ -151,7 +151,7 @@ func projectToMap(project *domain.Project) map[string]interface{} {
 		"heartbeat_enabled":          project.HeartbeatEnabled(),
 		"heartbeat_interval_minutes":  project.HeartbeatIntervalMinutes(),
 		"heartbeat_md_content":       project.HeartbeatMDContent(),
-		"heartbeat_agent_id":         project.HeartbeatAgentID(),
+		"agent_code":                project.AgentCode(),
 		"dispatch_channel_code":      project.DispatchChannelCode(),
 		"dispatch_session_key":       project.DispatchSessionKey(),
 		"created_at":                 project.CreatedAt().UnixMilli(),

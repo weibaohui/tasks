@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS projects (
     heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
     heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 60,
     heartbeat_md_content TEXT NOT NULL DEFAULT '',
-    heartbeat_agent_id TEXT NOT NULL DEFAULT '',
+    agent_code TEXT NOT NULL DEFAULT '',
     dispatch_channel_code TEXT NOT NULL DEFAULT '',
     dispatch_session_key TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
@@ -638,6 +638,21 @@ func migrateProjectsNewColumns(db *sql.DB) error {
 	}
 	if !has {
 		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN dispatch_session_key TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// 将 heartbeat_agent_id 重命名为 agent_code
+	hasOldColumn, err := tableHasColumn(db, "projects", "heartbeat_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewColumn, err := tableHasColumn(db, "projects", "agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldColumn && !hasNewColumn {
+		if _, err := db.Exec("ALTER TABLE projects RENAME COLUMN heartbeat_agent_id TO agent_code"); err != nil {
 			return err
 		}
 	}

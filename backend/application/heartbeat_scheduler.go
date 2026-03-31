@@ -56,7 +56,7 @@ func (s *HeartbeatScheduler) Start(ctx context.Context) error {
 	}
 
 	for _, project := range projects {
-		if project.HeartbeatEnabled() && project.HeartbeatAgentID() != "" {
+		if project.HeartbeatEnabled() && project.AgentCode() != "" {
 			if err := s.scheduleProject(project); err != nil {
 				log.Printf("failed to schedule heartbeat for project %s: %v", project.ID(), err)
 			} else {
@@ -111,9 +111,9 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 	log.Printf("[HEARTBEAT] executing heartbeat for project %s", project.Name())
 
 	// 查找 agent
-	agent, err := s.agentRepo.FindByID(ctx, domain.NewAgentID(project.HeartbeatAgentID()))
+	agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(project.AgentCode()))
 	if err != nil || agent == nil {
-		log.Printf("heartbeat: failed to find agent %s: %v", project.HeartbeatAgentID(), err)
+		log.Printf("heartbeat: failed to find agent %s: %v", project.AgentCode(), err)
 		return
 	}
 
@@ -153,7 +153,7 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
-			AgentID:       domain.NewAgentID(project.HeartbeatAgentID()),
+			AgentID:       agent.ID(),
 			ChannelCode:   channelCode,
 			SessionKey:    sessionKey,
 		})
@@ -201,7 +201,7 @@ func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context) error {
 	}
 
 	for _, project := range projects {
-		if project.HeartbeatEnabled() && project.HeartbeatAgentID() != "" {
+		if project.HeartbeatEnabled() && project.AgentCode() != "" {
 			if err := s.scheduleProject(project); err != nil {
 				log.Printf("failed to schedule heartbeat for project %s: %v", project.ID(), err)
 			}

@@ -21,7 +21,7 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 	snap := project.ToSnapshot()
 	initStepsJSON, _ := json.Marshal(snap.InitSteps)
 	query := `
-		INSERT INTO projects (id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, heartbeat_agent_id, dispatch_channel_code, dispatch_session_key, created_at, updated_at)
+		INSERT INTO projects (id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, agent_code, dispatch_channel_code, dispatch_session_key, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
@@ -31,7 +31,7 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 			heartbeat_enabled=excluded.heartbeat_enabled,
 			heartbeat_interval_minutes=excluded.heartbeat_interval_minutes,
 			heartbeat_md_content=excluded.heartbeat_md_content,
-			heartbeat_agent_id=excluded.heartbeat_agent_id,
+			agent_code=excluded.agent_code,
 			dispatch_channel_code=excluded.dispatch_channel_code,
 			dispatch_session_key=excluded.dispatch_session_key,
 			updated_at=excluded.updated_at
@@ -47,7 +47,7 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 		snap.HeartbeatEnabled,
 		snap.HeartbeatIntervalMinutes,
 		snap.HeartbeatMDContent,
-		snap.HeartbeatAgentID,
+		snap.AgentCode,
 		snap.DispatchChannelCode,
 		snap.DispatchSessionKey,
 		snap.CreatedAt.Unix(),
@@ -58,14 +58,14 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 
 func (r *SQLiteProjectRepository) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, heartbeat_agent_id, dispatch_channel_code, dispatch_session_key, created_at, updated_at
+		SELECT id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, agent_code, dispatch_channel_code, dispatch_session_key, created_at, updated_at
 		FROM projects WHERE id = ?`, id.String())
 	return scanProject(row)
 }
 
 func (r *SQLiteProjectRepository) FindAll(ctx context.Context) ([]*domain.Project, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, heartbeat_agent_id, dispatch_channel_code, dispatch_session_key, created_at, updated_at
+		SELECT id, name, git_repo_url, default_branch, init_steps, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_md_content, agent_code, dispatch_channel_code, dispatch_session_key, created_at, updated_at
 		FROM projects ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -99,13 +99,13 @@ func scanProject(scanner rowScanner) (*domain.Project, error) {
 		heartbeatEnabled        int
 		heartbeatIntervalMinutes int
 		heartbeatMDContent     string
-		heartbeatAgentID       string
+		agentCode              string
 		dispatchChannelCode    string
 		dispatchSessionKey     string
 		createdAtUnix          int64
 		updatedAtUnix          int64
 	)
-	err := scanner.Scan(&idStr, &name, &gitRepoURL, &defaultBranch, &initStepsJSON, &heartbeatEnabled, &heartbeatIntervalMinutes, &heartbeatMDContent, &heartbeatAgentID, &dispatchChannelCode, &dispatchSessionKey, &createdAtUnix, &updatedAtUnix)
+	err := scanner.Scan(&idStr, &name, &gitRepoURL, &defaultBranch, &initStepsJSON, &heartbeatEnabled, &heartbeatIntervalMinutes, &heartbeatMDContent, &agentCode, &dispatchChannelCode, &dispatchSessionKey, &createdAtUnix, &updatedAtUnix)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -124,7 +124,7 @@ func scanProject(scanner rowScanner) (*domain.Project, error) {
 		HeartbeatEnabled:          heartbeatEnabled == 1,
 		HeartbeatIntervalMinutes:   heartbeatIntervalMinutes,
 		HeartbeatMDContent:        heartbeatMDContent,
-		HeartbeatAgentID:          heartbeatAgentID,
+		AgentCode:                 agentCode,
 		DispatchChannelCode:        dispatchChannelCode,
 		DispatchSessionKey:        dispatchSessionKey,
 		CreatedAt:                 time.Unix(createdAtUnix, 0),

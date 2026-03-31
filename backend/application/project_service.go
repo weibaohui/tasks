@@ -27,7 +27,7 @@ type UpdateProjectCommand struct {
 	HeartbeatEnabled          bool
 	HeartbeatIntervalMinutes  int
 	HeartbeatMDContent        string
-	HeartbeatAgentID          string
+	AgentCode                string
 	DispatchChannelCode      string
 	DispatchSessionKey       string
 }
@@ -84,7 +84,7 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	if err := project.Update(cmd.Name, cmd.GitRepoURL, cmd.DefaultBranch, cmd.InitSteps); err != nil {
 		return nil, err
 	}
-	project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.HeartbeatAgentID)
+	project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
 	project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err
