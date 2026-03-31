@@ -38,6 +38,14 @@ type feishuStreamingCallback struct {
 	spanID      string
 	hookManager *hook.Manager
 	mu          sync.Mutex
+	finalResult string // 存储最终结果
+}
+
+// GetFinalResult 获取最终结果
+func (c *feishuStreamingCallback) GetFinalResult() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.finalResult
 }
 
 func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound *bus.InboundMessage, traceID, spanID string, hookManager *hook.Manager) *feishuStreamingCallback {
@@ -184,6 +192,11 @@ func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 	if finalResult == "" {
 		return
 	}
+
+	// 存储最终结果
+	c.mu.Lock()
+	c.finalResult = finalResult
+	c.mu.Unlock()
 
 	if len(finalResult) > 2000 {
 		finalResult = finalResult[:2000] + "..."

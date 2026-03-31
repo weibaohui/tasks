@@ -625,6 +625,7 @@ func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 		{"claude_runtime_started_at", "INTEGER"},
 		{"claude_runtime_ended_at", "INTEGER"},
 		{"claude_runtime_error", "TEXT"},
+		{"claude_runtime_result", "TEXT"},
 	}
 
 	for _, col := range columns {
