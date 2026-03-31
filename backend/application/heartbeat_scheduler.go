@@ -211,6 +211,9 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 		return
 	}
 
+	// 标记为心跳需求类型
+	requirement.SetRequirementType(domain.RequirementTypeHeartbeat)
+
 	// 保存需求
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		log.Printf("heartbeat: failed to save requirement: %v", err)

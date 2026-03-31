@@ -68,6 +68,13 @@ func (s RequirementDevState) IsValid() bool {
 	}
 }
 
+type RequirementType string
+
+const (
+	RequirementTypeNormal   RequirementType = "normal"
+	RequirementTypeHeartbeat RequirementType = "heartbeat"
+)
+
 type Requirement struct {
 	id                  RequirementID
 	projectID           ProjectID
@@ -88,6 +95,8 @@ type Requirement struct {
 	completedAt         *time.Time
 	createdAt           time.Time
 	updatedAt           time.Time
+	// 需求类型：normal（普通需求，不自动触发）| heartbeat（心跳需求，自动触发）
+	requirementType     RequirementType
 	// Claude Runtime 状态（持久化）
 	claudeRuntimeStatus    string        // running, completed, failed, ""
 	claudeRuntimeStartedAt *time.Time
@@ -191,6 +200,7 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 		tempWorkspaceRoot:  strings.TrimSpace(tempWorkspaceRoot),
 		status:             RequirementStatusTodo,
 		devState:           RequirementDevStateIdle,
+		requirementType:    RequirementTypeNormal,
 		createdAt:          now,
 		updatedAt:          now,
 	}, nil
@@ -215,6 +225,7 @@ func (r *Requirement) StartedAt() *time.Time          { return copyTimePtr(r.sta
 func (r *Requirement) CompletedAt() *time.Time        { return copyTimePtr(r.completedAt) }
 func (r *Requirement) CreatedAt() time.Time           { return r.createdAt }
 func (r *Requirement) UpdatedAt() time.Time           { return r.updatedAt }
+func (r *Requirement) RequirementType() RequirementType { return r.requirementType }
 func (r *Requirement) ClaudeRuntimeStatus() string     { return r.claudeRuntimeStatus }
 func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time { return copyTimePtr(r.claudeRuntimeStartedAt) }
 func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time  { return copyTimePtr(r.claudeRuntimeEndedAt) }
@@ -224,6 +235,11 @@ func (r *Requirement) ClaudeRuntimeResult() string      { return r.claudeRuntime
 // SetClaudeRuntimeResult 设置 Claude Code 执行结果
 func (r *Requirement) SetClaudeRuntimeResult(result string) {
 	r.claudeRuntimeResult = result
+}
+
+// SetRequirementType 设置需求类型
+func (r *Requirement) SetRequirementType(t RequirementType) {
+	r.requirementType = t
 }
 
 func (r *Requirement) CanDispatch() bool {
@@ -498,6 +514,7 @@ type RequirementSnapshot struct {
 	CompletedAt            *time.Time
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+	RequirementType        RequirementType
 	ClaudeRuntimeStatus    string
 	ClaudeRuntimeStartedAt *time.Time
 	ClaudeRuntimeEndedAt   *time.Time
@@ -526,6 +543,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		CompletedAt:            copyTimePtr(r.completedAt),
 		CreatedAt:              r.createdAt,
 		UpdatedAt:              r.updatedAt,
+		RequirementType:        r.requirementType,
 		ClaudeRuntimeStatus:    r.claudeRuntimeStatus,
 		ClaudeRuntimeStartedAt: copyTimePtr(r.claudeRuntimeStartedAt),
 		ClaudeRuntimeEndedAt:   copyTimePtr(r.claudeRuntimeEndedAt),
@@ -560,6 +578,7 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.completedAt = copyTimePtr(s.CompletedAt)
 	r.createdAt = s.CreatedAt
 	r.updatedAt = s.UpdatedAt
+	r.requirementType = s.RequirementType
 	r.claudeRuntimeStatus = s.ClaudeRuntimeStatus
 	r.claudeRuntimeStartedAt = copyTimePtr(s.ClaudeRuntimeStartedAt)
 	r.claudeRuntimeEndedAt = copyTimePtr(s.ClaudeRuntimeEndedAt)

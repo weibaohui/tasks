@@ -426,6 +426,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateRequirementsClaudeRuntime(db); err != nil {
 		return err
 	}
+	if err := migrateRequirementType(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -637,6 +640,20 @@ func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE requirements ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// migrateRequirementType 迁移 requirements 表新增 requirement_type 字段
+func migrateRequirementType(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirements", "requirement_type")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN requirement_type TEXT NOT NULL DEFAULT 'normal'"); err != nil {
+			return err
 		}
 	}
 	return nil

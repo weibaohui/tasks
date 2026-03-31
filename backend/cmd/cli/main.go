@@ -89,7 +89,7 @@ func printUsage() {
 	fmt.Println("  taskmanager agent list")
 	fmt.Println("  taskmanager project list")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
-	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager config init")
 	fmt.Println("  taskmanager config show")
@@ -129,7 +129,7 @@ func printRequirementUsage() {
 	fmt.Println("Subcommands:")
 	fmt.Println("  create    创建新需求")
 	fmt.Println("  update    更新需求")
-	fmt.Println("  dispatch  派发需求")
+	fmt.Println("  dispatch  派发需求（从项目配置获取agent/channel/sessionkey）")
 	fmt.Println("  complete  完成需求")
 	fmt.Println("  list      列出需求")
 	fmt.Println("  get       获取需求详情")
@@ -138,7 +138,7 @@ func printRequirementUsage() {
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
 	fmt.Println("  taskmanager requirement update --id <id> --title <new-title>")
-	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager requirement list --project-id <id>")
 	fmt.Println("  taskmanager requirement get --id <id>")
@@ -169,7 +169,7 @@ func getUserRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator
 	return userRepo, idGenerator, cleanup
 }
 
-func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *application.RequirementApplicationService, *application.RequirementDispatchService, func()) {
+func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, domain.ProjectRepository, *application.RequirementApplicationService, *application.RequirementDispatchService, func()) {
 	dbPath := getDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -201,7 +201,7 @@ func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *app
 		db.Close()
 	}
 
-	return requirementRepo, appService, dispatchService, cleanup
+	return requirementRepo, projectRepo, appService, dispatchService, cleanup
 }
 
 func createAdminUser(logger *zap.Logger) {
@@ -280,7 +280,7 @@ func createRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	_, appService, _, cleanup := getRequirementRepos(logger)
+	_, _, appService, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -320,7 +320,7 @@ func updateRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -364,55 +364,89 @@ func updateRequirement(logger *zap.Logger) {
 }
 
 // dispatchRequirement 派发需求
-// 用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key> [--channel-code <code>]
+// 用法: taskmanager requirement dispatch <requirement_id>
+// agent/channel/sessionkey 从项目配置中获取
 func dispatchRequirement(logger *zap.Logger) {
-	channelCodePtr := flag.String("channel-code", "feishu", "渠道代码")
-
 	flag.CommandLine.Parse(os.Args[3:])
 
 	args := flag.CommandLine.Args()
-	if len(args) < 3 {
+	if len(args) < 1 {
 		fmt.Println("错误: 缺少必填参数")
 		fmt.Println("")
-		fmt.Println("用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+		fmt.Println("用法: taskmanager requirement dispatch <requirement_id>")
 		fmt.Println("")
-		fmt.Println("示例: taskmanager requirement dispatch \\")
-		fmt.Println("  y6Wfok055CoE2twsr8dtD \\")
-		fmt.Println("  Yt1rVbqBPPti6kZeOhD5A \\")
-		fmt.Println("  feishu:ou_df798fe15d056000143691af8c1cdb55")
-		fmt.Println("")
-		fmt.Println("提示: 可用 Agent ID 可以通过 taskmanager agent list 查看")
+		fmt.Println("示例: taskmanager requirement dispatch y6Wfok055CoE2twsr8dtD")
 		os.Exit(1)
 	}
 
-	idPtr := args[0]
-	agentIDPtr := args[1]
-	sessionKeyPtr := args[2]
+	requirementID := args[0]
 
-	// 1. 登录获取 token
+	// 1. 获取需求和项目信息（从数据库直接读取）
+	requirementRepo, projectRepo, _, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 查找需求
+	req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
+	if err != nil {
+		logger.Fatal("查找需求失败", zap.Error(err))
+	}
+	if req == nil {
+		logger.Fatal("需求不存在", zap.String("id", requirementID))
+	}
+
+	// 查找项目获取派发配置
+	project, err := projectRepo.FindByID(ctx, req.ProjectID())
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", req.ProjectID().String()))
+	}
+
+	// 检查项目是否配置了派发信息
+	agentCode := project.AgentCode()
+	channelCode := project.DispatchChannelCode()
+	sessionKey := project.DispatchSessionKey()
+
+	if agentCode == "" || sessionKey == "" {
+		logger.Fatal("项目未配置派发信息",
+			zap.String("project_id", project.ID().String()),
+			zap.String("project_name", project.Name()),
+			zap.String("agent_code", agentCode),
+			zap.String("session_key", sessionKey))
+	}
+
+	// 如果 channelCode 为空，使用默认值
+	if channelCode == "" {
+		channelCode = "feishu"
+	}
+
+	// 2. 登录获取 token
 	token, err := login()
 	if err != nil {
 		logger.Fatal("登录失败", zap.Error(err))
 	}
 
-	// 2. 调用派发 API
+	// 3. 调用派发 API
 	reqBody := map[string]string{
-		"requirement_id": idPtr,
-		"agent_id":       agentIDPtr,
-		"channel_code":   *channelCodePtr,
-		"session_key":   sessionKeyPtr,
+		"requirement_id": requirementID,
+		"agent_code":    agentCode,
+		"channel_code":  channelCode,
+		"session_key":   sessionKey,
 	}
 	reqJSON, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
+	httpReq, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
 	if err != nil {
 		logger.Fatal("创建请求失败", zap.Error(err))
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		logger.Fatal("派发请求失败", zap.Error(err))
 	}
@@ -424,10 +458,10 @@ func dispatchRequirement(logger *zap.Logger) {
 	}
 
 	var result struct {
-		RequirementID string `json:"requirement_id"`
-		TaskID       string `json:"task_id"`
-		WorkspacePath string `json:"workspace_path"`
-		ReplicaAgentID string `json:"replica_agent_id"`
+		RequirementID   string `json:"requirement_id"`
+		TaskID         string `json:"task_id"`
+		WorkspacePath  string `json:"workspace_path"`
+		ReplicaAgentCode string `json:"replica_agent_code"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		logger.Fatal("解析响应失败", zap.Error(err))
@@ -437,10 +471,10 @@ func dispatchRequirement(logger *zap.Logger) {
 		zap.String("requirement_id", result.RequirementID),
 		zap.String("task_id", result.TaskID),
 		zap.String("workspace_path", result.WorkspacePath),
-		zap.String("replica_agent_id", result.ReplicaAgentID),
+		zap.String("replica_agent_code", result.ReplicaAgentCode),
 	)
-	fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentID: %s\n",
-		result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentID)
+	fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentCode: %s\n",
+		result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentCode)
 }
 
 // login 登录获取 token
@@ -736,7 +770,7 @@ func listRequirements(logger *zap.Logger) {
 
 	flag.CommandLine.Parse(os.Args[3:])
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -761,13 +795,14 @@ func listRequirements(logger *zap.Logger) {
 
 	fmt.Printf("\n需求列表 (共 %d 个):\n", len(requirements))
 	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf("%-20s %-10s %-10s %s\n", "ID", "状态", "开发状态", "标题")
+	fmt.Printf("%-20s %-10s %-10s %-10s %s\n", "ID", "状态", "开发状态", "类型", "标题")
 	fmt.Println("--------------------------------------------------------------------------------")
 	for _, req := range requirements {
-		fmt.Printf("%-20s %-10s %-10s %s\n",
+		fmt.Printf("%-20s %-10s %-10s %-10s %s\n",
 			req.ID().String()[:16]+"...",
 			req.Status(),
 			req.DevState(),
+			req.RequirementType(),
 			req.Title())
 	}
 	fmt.Println()
@@ -786,7 +821,7 @@ func getRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -809,6 +844,7 @@ func getRequirement(logger *zap.Logger) {
 	fmt.Printf("描述: %s\n", requirement.Description())
 	fmt.Printf("验收标准: %s\n", requirement.AcceptanceCriteria())
 	fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
+	fmt.Printf("类型: %s\n", requirement.RequirementType())
 	fmt.Printf("工作目录: %s\n", requirement.WorkspacePath())
 	fmt.Printf("PR URL: %s\n", requirement.PRURL())
 	fmt.Printf("分支: %s\n", requirement.BranchName())
@@ -817,6 +853,13 @@ func getRequirement(logger *zap.Logger) {
 	}
 	if requirement.CompletedAt() != nil {
 		fmt.Printf("完成时间: %s\n", requirement.CompletedAt().Format("2006-01-02 15:04:05"))
+	}
+	if reqResult := requirement.ClaudeRuntimeResult(); reqResult != "" {
+		resultPreview := reqResult
+		if len(resultPreview) > 100 {
+			resultPreview = resultPreview[:100] + "..."
+		}
+		fmt.Printf("Claude执行结果: %s\n", resultPreview)
 	}
 	fmt.Println()
 }

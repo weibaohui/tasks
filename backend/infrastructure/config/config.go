@@ -147,9 +147,9 @@ func GetDatabasePath() string {
 	cfg, err := Load()
 	if err != nil {
 		// 回退到旧逻辑
-		return getLegacyDBPath()
+		return ExpandPath(getLegacyDBPath())
 	}
-	return cfg.Database.Path
+	return ExpandPath(cfg.Database.Path)
 }
 
 // GetAPIBaseURL 获取 API Base URL

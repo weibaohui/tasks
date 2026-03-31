@@ -23,9 +23,9 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			id, project_id, title, description, acceptance_criteria, status, dev_state,
 			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, branch_name, pr_url, last_error,
 			started_at, completed_at, created_at, updated_at,
-			claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result
+			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -43,6 +43,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			started_at=excluded.started_at,
 			completed_at=excluded.completed_at,
 			updated_at=excluded.updated_at,
+			requirement_type=excluded.requirement_type,
 			claude_runtime_status=excluded.claude_runtime_status,
 			claude_runtime_started_at=excluded.claude_runtime_started_at,
 			claude_runtime_ended_at=excluded.claude_runtime_ended_at,
@@ -71,6 +72,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		timePtrToUnix(snap.CompletedAt),
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
+		string(snap.RequirementType),
 		snap.ClaudeRuntimeStatus,
 		timePtrToUnix(snap.ClaudeRuntimeStartedAt),
 		timePtrToUnix(snap.ClaudeRuntimeEndedAt),
@@ -86,7 +88,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
 		FROM requirements WHERE id = ?`, id.String())
 	return scanRequirement(row)
 }
@@ -97,7 +99,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
 		FROM requirements WHERE project_id = ? ORDER BY created_at DESC`, projectID.String())
 	if err != nil {
 		return nil, err
@@ -112,7 +114,7 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, '')
 		FROM requirements ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -161,6 +163,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		completedAtUnix          sql.NullInt64
 		createdAtUnix            int64
 		updatedAtUnix            int64
+		requirementType         string
 		claudeRuntimeStatus     string
 		claudeRuntimeStartedAt  sql.NullInt64
 		claudeRuntimeEndedAt    sql.NullInt64
@@ -187,6 +190,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&completedAtUnix,
 		&createdAtUnix,
 		&updatedAtUnix,
+		&requirementType,
 		&claudeRuntimeStatus,
 		&claudeRuntimeStartedAt,
 		&claudeRuntimeEndedAt,
@@ -220,6 +224,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		CompletedAt:             unixToTimePtr(completedAtUnix),
 		CreatedAt:               time.Unix(createdAtUnix, 0),
 		UpdatedAt:               time.Unix(updatedAtUnix, 0),
+		RequirementType:         domain.RequirementType(requirementType),
 		ClaudeRuntimeStatus:     claudeRuntimeStatus,
 		ClaudeRuntimeStartedAt:  unixToTimePtr(claudeRuntimeStartedAt),
 		ClaudeRuntimeEndedAt:    unixToTimePtr(claudeRuntimeEndedAt),

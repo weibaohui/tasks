@@ -224,6 +224,7 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 		"completed_at":          completedAt,
 		"created_at":           requirement.CreatedAt().UnixMilli(),
 		"updated_at":           requirement.UpdatedAt().UnixMilli(),
+		"requirement_type":      requirement.RequirementType(),
 	}
 	resp["claude_runtime"] = h.getClaudeRuntimeByRequirement(r, requirement)
 	return resp
