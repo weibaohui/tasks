@@ -63,18 +63,19 @@ func printUsage() {
 	fmt.Println("Usage: taskmanager <command> [options]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  create-admin          创建默认管理员用户 (admin/admin123)")
-	fmt.Println("  delete-admin          删除默认管理员用户")
-	fmt.Println("  agent list            列出所有 Agent")
-	fmt.Println("  project list          列出所有项目")
-	fmt.Println("  requirement create    创建新需求")
-	fmt.Println("  requirement update     更新需求")
-	fmt.Println("  requirement dispatch  派发需求")
-	fmt.Println("  requirement complete  完成需求（创建 PR 后调用）")
-	fmt.Println("  requirement list      列出需求")
-	fmt.Println("  requirement get       获取需求详情")
-	fmt.Println("  requirement review    分析PR并创建需求")
-	fmt.Println("  config init           初始化配置文件")
+	fmt.Println("  create-admin                创建默认管理员用户 (admin/admin123)")
+	fmt.Println("  delete-admin                删除默认管理员用户")
+	fmt.Println("  agent list                  列出所有 Agent")
+	fmt.Println("  project list                列出所有项目")
+	fmt.Println("  project heartbeat           心跳设置 (enable/disable/set-interval)")
+	fmt.Println("  requirement create          创建新需求")
+	fmt.Println("  requirement update          更新需求")
+	fmt.Println("  requirement dispatch        派发需求")
+	fmt.Println("  requirement complete        完成需求（创建 PR 后调用）")
+	fmt.Println("  requirement list           列出需求")
+	fmt.Println("  requirement get            获取需求详情")
+	fmt.Println("  requirement review         分析PR并创建需求")
+	fmt.Println("  config init               初始化配置文件")
 	fmt.Println("  config show           显示当前配置")
 	fmt.Println("")
 	fmt.Println("Configuration:")
@@ -982,6 +983,8 @@ func handleProjectCommand(logger *zap.Logger) {
 	switch os.Args[2] {
 	case "list":
 		listProjects(logger)
+	case "heartbeat":
+		handleProjectHeartbeatCommand(logger)
 	default:
 		fmt.Printf("Unknown project subcommand: %s\n", os.Args[2])
 		printProjectUsage()
@@ -993,10 +996,14 @@ func printProjectUsage() {
 	fmt.Println("Usage: taskmanager project <subcommand>")
 	fmt.Println("")
 	fmt.Println("Subcommands:")
-	fmt.Println("  list   列出所有项目")
+	fmt.Println("  list     列出所有项目")
+	fmt.Println("  heartbeat  管理心跳设置 (enable/disable/set-interval)")
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager project list")
+	fmt.Println("  taskmanager project heartbeat enable <project_id>")
+	fmt.Println("  taskmanager project heartbeat disable <project_id>")
+	fmt.Println("  taskmanager project heartbeat set-interval <project_id> <minutes>")
 }
 
 func getProjectRepos(logger *zap.Logger) (domain.ProjectRepository, func()) {
@@ -1041,6 +1048,137 @@ func listProjects(logger *zap.Logger) {
 			project.Name())
 	}
 	fmt.Println()
+}
+
+// handleProjectHeartbeatCommand 处理 project heartbeat 子命令
+func handleProjectHeartbeatCommand(logger *zap.Logger) {
+	if len(os.Args) < 4 {
+		printProjectHeartbeatUsage()
+		os.Exit(1)
+	}
+
+	action := os.Args[3]
+
+	switch action {
+	case "enable":
+		enableHeartbeat(logger)
+	case "disable":
+		disableHeartbeat(logger)
+	case "set-interval":
+		setHeartbeatInterval(logger)
+	default:
+		fmt.Printf("Unknown heartbeat action: %s\n", action)
+		printProjectHeartbeatUsage()
+		os.Exit(1)
+	}
+}
+
+func printProjectHeartbeatUsage() {
+	fmt.Println("Usage: taskmanager project heartbeat <action> <project_id> [minutes]")
+	fmt.Println("")
+	fmt.Println("Actions:")
+	fmt.Println("  enable <project_id>            开启心跳")
+	fmt.Println("  disable <project_id>           关闭心跳")
+	fmt.Println("  set-interval <project_id> <minutes>  设置心跳间隔（分钟）")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  taskmanager project heartbeat enable prj_xxx")
+	fmt.Println("  taskmanager project heartbeat disable prj_xxx")
+	fmt.Println("  taskmanager project heartbeat set-interval prj_xxx 30")
+}
+
+func enableHeartbeat(logger *zap.Logger) {
+	if len(os.Args) < 5 {
+		fmt.Println("错误: 缺少 project_id 参数")
+		fmt.Println("用法: taskmanager project heartbeat enable <project_id>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	interval := project.HeartbeatIntervalMinutes()
+	if interval < 1 {
+		interval = 30
+	}
+	project.UpdateHeartbeatConfig(true, interval, project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳已开启，项目: %s，间隔: %d 分钟\n", project.Name(), interval)
+}
+
+func disableHeartbeat(logger *zap.Logger) {
+	if len(os.Args) < 5 {
+		fmt.Println("错误: 缺少 project_id 参数")
+		fmt.Println("用法: taskmanager project heartbeat disable <project_id>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	project.UpdateHeartbeatConfig(false, project.HeartbeatIntervalMinutes(), project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳已关闭，项目: %s\n", project.Name())
+}
+
+func setHeartbeatInterval(logger *zap.Logger) {
+	if len(os.Args) < 6 {
+		fmt.Println("错误: 缺少参数")
+		fmt.Println("用法: taskmanager project heartbeat set-interval <project_id> <minutes>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+	minutes := 0
+	fmt.Sscanf(os.Args[5], "%d", &minutes)
+	if minutes < 1 {
+		fmt.Println("错误: minutes 必须大于 0")
+		os.Exit(1)
+	}
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	project.UpdateHeartbeatConfig(project.HeartbeatEnabled(), minutes, project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, project.Name())
 }
 
 // handleConfigCommand 处理 config 子命令
