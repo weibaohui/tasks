@@ -31,6 +31,7 @@ type DatabaseConfig struct {
 // APIConfig API 配置
 type APIConfig struct {
 	BaseURL string `yaml:"base_url"`
+	Token   string `yaml:"token"`
 }
 
 // LoggingConfig 日志配置
@@ -162,6 +163,15 @@ func GetAPIBaseURL() string {
 		return "http://localhost:8888/api/v1"
 	}
 	return cfg.API.BaseURL
+}
+
+// GetAPIToken 获取 API Token
+func GetAPIToken() string {
+	cfg, err := Load()
+	if err != nil {
+		return ""
+	}
+	return cfg.API.Token
 }
 
 // getLegacyDBPath 回退到旧的路径逻辑

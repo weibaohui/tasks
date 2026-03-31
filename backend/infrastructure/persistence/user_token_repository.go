@@ -129,12 +129,12 @@ func scanUserToken(scanner rowScanner) (*domain.UserToken, error) {
 
 	var expiresAtTime *time.Time
 	if expiresAt != nil {
-		t := time.Unix(*expiresAt, 0)
+		t := time.UnixMilli(*expiresAt)
 		expiresAtTime = &t
 	}
 	var lastUsedAtTime *time.Time
 	if lastUsedAt != nil {
-		t := time.Unix(*lastUsedAt, 0)
+		t := time.UnixMilli(*lastUsedAt)
 		lastUsedAtTime = &t
 	}
 
