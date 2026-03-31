@@ -153,6 +153,7 @@ type Agent struct {
 	isActive              bool
 	isDefault             bool
 	enableThinkingProcess bool
+	shadowFrom            string // 分身来源：如果是分身，则记录被分身的 Agent Code
 	claudeCodeConfig      *ClaudeCodeConfig
 	createdAt             time.Time
 	updatedAt             time.Time
@@ -226,6 +227,7 @@ func (a *Agent) ToolsList() []string         { return append([]string(nil), a.to
 func (a *Agent) IsActive() bool              { return a.isActive }
 func (a *Agent) IsDefault() bool             { return a.isDefault }
 func (a *Agent) EnableThinkingProcess() bool { return a.enableThinkingProcess }
+func (a *Agent) ShadowFrom() string         { return a.shadowFrom }
 func (a *Agent) CreatedAt() time.Time        { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time        { return a.updatedAt }
 func (a *Agent) ClaudeCodeConfig() *ClaudeCodeConfig {
@@ -347,6 +349,7 @@ type AgentSnapshot struct {
 	IsActive              bool
 	IsDefault             bool
 	EnableThinkingProcess bool
+	ShadowFrom            string
 	ClaudeCodeConfig      *ClaudeCodeConfig
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
@@ -376,6 +379,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		IsActive:              a.isActive,
 		IsDefault:             a.isDefault,
 		EnableThinkingProcess: a.enableThinkingProcess,
+		ShadowFrom:            a.shadowFrom,
 		ClaudeCodeConfig:      a.claudeCodeConfig,
 		CreatedAt:             a.createdAt,
 		UpdatedAt:             a.updatedAt,
@@ -405,6 +409,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.isActive = snap.IsActive
 	a.isDefault = snap.IsDefault
 	a.enableThinkingProcess = snap.EnableThinkingProcess
+	a.shadowFrom = snap.ShadowFrom
 	a.claudeCodeConfig = snap.ClaudeCodeConfig
 	a.createdAt = snap.CreatedAt
 	a.updatedAt = snap.UpdatedAt

@@ -1,19 +1,24 @@
 /**
- * CLI 工具 - 用户管理
+ * CLI 工具 - 任务管理 CLI
  */
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	"go.uber.org/zap"
@@ -28,9 +33,6 @@ func main() {
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
-	createCmd := flag.NewFlagSet("create-admin", flag.ExitOnError)
-	deleteCmd := flag.NewFlagSet("delete-admin", flag.ExitOnError)
-
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -38,9 +40,17 @@ func main() {
 
 	switch os.Args[1] {
 	case "create-admin":
-		createAdminUser(createCmd, logger)
+		createAdminUser(logger)
 	case "delete-admin":
-		deleteAdminUser(deleteCmd, logger)
+		deleteAdminUser(logger)
+	case "requirement":
+		handleRequirementCommand(logger)
+	case "agent":
+		handleAgentCommand(logger)
+	case "project":
+		handleProjectCommand(logger)
+	case "config":
+		handleConfigCommand(logger)
 	default:
 		printUsage()
 		os.Exit(1)
@@ -48,19 +58,92 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: cli <command> [options]")
+	fmt.Println("Usage: taskmanager <command> [options]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  create-admin    创建默认管理员用户 (admin/admin123)")
-	fmt.Println("  delete-admin   删除默认管理员用户")
+	fmt.Println("  create-admin          创建默认管理员用户 (admin/admin123)")
+	fmt.Println("  delete-admin          删除默认管理员用户")
+	fmt.Println("  agent list            列出所有 Agent")
+	fmt.Println("  project list          列出所有项目")
+	fmt.Println("  requirement create    创建新需求")
+	fmt.Println("  requirement update     更新需求")
+	fmt.Println("  requirement dispatch  派发需求")
+	fmt.Println("  requirement complete  完成需求（创建 PR 后调用）")
+	fmt.Println("  requirement list      列出需求")
+	fmt.Println("  requirement get       获取需求详情")
+	fmt.Println("  config init           初始化配置文件")
+	fmt.Println("  config show           显示当前配置")
+	fmt.Println("")
+	fmt.Println("Configuration:")
+	fmt.Println("  配置文件路径: ~/.taskmanager/config.yaml")
+	fmt.Println("  环境变量: TASKMANAGER_CONFIG (配置文件的路径)")
+	fmt.Println("  环境变量: TASKMANAGER_DB_PATH (数据库路径)")
+	fmt.Println("  环境变量: TASKMANAGER_API_BASE_URL (API 地址)")
 	fmt.Println("")
 	fmt.Println("Examples:")
-	fmt.Println("  cli create-admin")
-	fmt.Println("  cli delete-admin")
+	fmt.Println("  taskmanager create-admin")
+	fmt.Println("  taskmanager delete-admin")
+	fmt.Println("  taskmanager agent list")
+	fmt.Println("  taskmanager project list")
+	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
+	fmt.Println("  taskmanager config init")
+	fmt.Println("  taskmanager config show")
 }
 
-func getDBAndRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func()) {
-	dbPath := resolveDBPath()
+func handleRequirementCommand(logger *zap.Logger) {
+	if len(os.Args) < 3 {
+		printRequirementUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[2] {
+	case "create":
+		createRequirement(logger)
+	case "update":
+		updateRequirement(logger)
+	case "dispatch":
+		dispatchRequirement(logger)
+	case "complete":
+		completeRequirement(logger)
+	case "list":
+		listRequirements(logger)
+	case "get":
+		getRequirement(logger)
+	default:
+		fmt.Printf("Unknown requirement subcommand: %s\n", os.Args[2])
+		printRequirementUsage()
+		os.Exit(1)
+	}
+}
+
+func printRequirementUsage() {
+	fmt.Println("Usage: taskmanager requirement <subcommand>")
+	fmt.Println("")
+	fmt.Println("Subcommands:")
+	fmt.Println("  create    创建新需求")
+	fmt.Println("  update    更新需求")
+	fmt.Println("  dispatch  派发需求")
+	fmt.Println("  complete  完成需求")
+	fmt.Println("  list      列出需求")
+	fmt.Println("  get       获取需求详情")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
+	fmt.Println("  taskmanager requirement update --id <id> --title <new-title>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
+	fmt.Println("  taskmanager requirement list --project-id <id>")
+	fmt.Println("  taskmanager requirement get --id <id>")
+}
+
+func getDBPath() string {
+	return config.GetDatabasePath()
+}
+
+func getUserRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func()) {
+	dbPath := getDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
@@ -80,8 +163,43 @@ func getDBAndRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerato
 	return userRepo, idGenerator, cleanup
 }
 
-func createAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
-	userRepo, idGen, cleanup := getDBAndRepos(logger)
+func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *application.RequirementApplicationService, *application.RequirementDispatchService, func()) {
+	dbPath := getDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	if err := _persistence.InitSchema(db); err != nil {
+		logger.Fatal("Failed to init schema", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	idGenerator := utils.NewNanoIDGenerator(21)
+	agentRepo := _persistence.NewSQLiteAgentRepository(db)
+	projectRepo := _persistence.NewSQLiteProjectRepository(db)
+	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
+
+	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, nil, nil)
+	dispatchService := application.NewRequirementDispatchService(
+		requirementRepo,
+		projectRepo,
+		agentRepo,
+		nil, // taskService
+		nil, // sessionService
+		idGenerator,
+		nil, // replicaAgentManager
+		nil, // hookExecutor
+	)
+
+	cleanup := func() {
+		db.Close()
+	}
+
+	return requirementRepo, appService, dispatchService, cleanup
+}
+
+func createAdminUser(logger *zap.Logger) {
+	userRepo, idGen, cleanup := getUserRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -115,8 +233,8 @@ func createAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
 	fmt.Printf("初始密码: %s (请登录后立即修改)\n", DefaultAdminPassword)
 }
 
-func deleteAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
-	userRepo, _, cleanup := getDBAndRepos(logger)
+func deleteAdminUser(logger *zap.Logger) {
+	userRepo, _, cleanup := getUserRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -139,15 +257,629 @@ func deleteAdminUser(cmd *flag.FlagSet, logger *zap.Logger) {
 	logger.Info("管理员用户已删除", zap.String("username", DefaultAdminUsername))
 }
 
-func resolveDBPath() string {
-	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
-		return p
+// createRequirement 创建新需求
+// 用法: taskmanager requirement create --project-id <id> --title <title> [--description <desc>] [--acceptance-criteria <criteria>] [--temp-workspace-root <path>]
+func createRequirement(logger *zap.Logger) {
+	projectIDPtr := flag.String("project-id", "", "项目 ID (必填)")
+	titlePtr := flag.String("title", "", "需求标题 (必填)")
+	descriptionPtr := flag.String("description", "", "需求描述")
+	acceptanceCriteriaPtr := flag.String("acceptance-criteria", "", "验收标准")
+	tempWorkspaceRootPtr := flag.String("temp-workspace-root", "", "临时工作目录根路径")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	if *projectIDPtr == "" || *titlePtr == "" {
+		fmt.Println("错误: --project-id 和 --title 是必填参数")
+		fmt.Println("用法: taskmanager requirement create --project-id <id> --title <title> [--description <desc>]")
+		os.Exit(1)
 	}
-	if p := os.Getenv("DB_PATH"); p != "" {
-		return p
+
+	_, appService, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 创建需求
+	requirement, err := appService.CreateRequirement(ctx, application.CreateRequirementCommand{
+		ProjectID:          domain.NewProjectID(*projectIDPtr),
+		Title:              *titlePtr,
+		Description:        *descriptionPtr,
+		AcceptanceCriteria: *acceptanceCriteriaPtr,
+		TempWorkspaceRoot:  *tempWorkspaceRootPtr,
+	})
+	if err != nil {
+		logger.Fatal("创建需求失败", zap.Error(err))
 	}
-	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
-		return filepath.FromSlash("./backend/tasks.db")
+
+	logger.Info("需求创建成功",
+		zap.String("requirement_id", requirement.ID().String()),
+		zap.String("title", requirement.Title()),
+	)
+	fmt.Printf("需求创建成功！\nID: %s\n标题: %s\n", requirement.ID().String(), requirement.Title())
+}
+
+// updateRequirement 更新需求
+// 用法: taskmanager requirement update --id <id> [--title <title>] [--description <desc>]
+func updateRequirement(logger *zap.Logger) {
+	idPtr := flag.String("id", "", "需求 ID (必填)")
+	titlePtr := flag.String("title", "", "需求标题")
+	descriptionPtr := flag.String("description", "", "需求描述")
+	acceptanceCriteriaPtr := flag.String("acceptance-criteria", "", "验收标准")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	if *idPtr == "" {
+		fmt.Println("错误: --id 是必填参数")
+		fmt.Println("用法: taskmanager requirement update --id <id> [--title <title>]")
+		os.Exit(1)
 	}
-	return filepath.FromSlash("./tasks.db")
+
+	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 查找需求
+	requirementID := domain.NewRequirementID(*idPtr)
+	requirement, err := requirementRepo.FindByID(ctx, requirementID)
+	if err != nil {
+		logger.Fatal("查找需求失败", zap.Error(err))
+	}
+	if requirement == nil {
+		logger.Fatal("需求不存在", zap.String("id", *idPtr))
+	}
+
+	// 更新字段
+	if *titlePtr != "" || *descriptionPtr != "" || *acceptanceCriteriaPtr != "" {
+		newTitle := *titlePtr
+		if newTitle == "" {
+			newTitle = requirement.Title()
+		}
+		newDesc := *descriptionPtr
+		if newDesc == "" {
+			newDesc = requirement.Description()
+		}
+		newCriteria := *acceptanceCriteriaPtr
+		if newCriteria == "" {
+			newCriteria = requirement.AcceptanceCriteria()
+		}
+		if err := requirement.UpdateContent(newTitle, newDesc, newCriteria, requirement.TempWorkspaceRoot()); err != nil {
+			logger.Fatal("更新需求失败", zap.Error(err))
+		}
+		if err := requirementRepo.Save(ctx, requirement); err != nil {
+			logger.Fatal("保存需求失败", zap.Error(err))
+		}
+		logger.Info("需求更新成功",
+			zap.String("requirement_id", requirement.ID().String()),
+			zap.String("title", requirement.Title()),
+		)
+		fmt.Printf("需求更新成功！\nID: %s\n标题: %s\n", requirement.ID().String(), requirement.Title())
+	}
+}
+
+// dispatchRequirement 派发需求
+// 用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key> [--channel-code <code>]
+func dispatchRequirement(logger *zap.Logger) {
+	channelCodePtr := flag.String("channel-code", "feishu", "渠道代码")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	args := flag.CommandLine.Args()
+	if len(args) < 3 {
+		fmt.Println("错误: 缺少必填参数")
+		fmt.Println("")
+		fmt.Println("用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+		fmt.Println("")
+		fmt.Println("示例: taskmanager requirement dispatch \\")
+		fmt.Println("  y6Wfok055CoE2twsr8dtD \\")
+		fmt.Println("  Yt1rVbqBPPti6kZeOhD5A \\")
+		fmt.Println("  feishu:ou_df798fe15d056000143691af8c1cdb55")
+		fmt.Println("")
+		fmt.Println("提示: 可用 Agent ID 可以通过 taskmanager agent list 查看")
+		os.Exit(1)
+	}
+
+	idPtr := args[0]
+	agentIDPtr := args[1]
+	sessionKeyPtr := args[2]
+
+	// 1. 登录获取 token
+	token, err := login()
+	if err != nil {
+		logger.Fatal("登录失败", zap.Error(err))
+	}
+
+	// 2. 调用派发 API
+	reqBody := map[string]string{
+		"requirement_id": idPtr,
+		"agent_id":       agentIDPtr,
+		"channel_code":   *channelCodePtr,
+		"session_key":   sessionKeyPtr,
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		logger.Fatal("创建请求失败", zap.Error(err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Fatal("派发请求失败", zap.Error(err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Fatal("派发需求失败", zap.String("status", resp.Status), zap.String("body", string(body)))
+	}
+
+	var result struct {
+		RequirementID string `json:"requirement_id"`
+		TaskID       string `json:"task_id"`
+		WorkspacePath string `json:"workspace_path"`
+		ReplicaAgentID string `json:"replica_agent_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Fatal("解析响应失败", zap.Error(err))
+	}
+
+	logger.Info("需求派发成功",
+		zap.String("requirement_id", result.RequirementID),
+		zap.String("task_id", result.TaskID),
+		zap.String("workspace_path", result.WorkspacePath),
+		zap.String("replica_agent_id", result.ReplicaAgentID),
+	)
+	fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentID: %s\n",
+		result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentID)
+}
+
+// login 登录获取 token
+func login() (string, error) {
+	reqBody := map[string]string{
+		"username": DefaultAdminUsername,
+		"password": DefaultAdminPassword,
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/auth/login", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("login failed: %s", string(body))
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.Token, nil
+}
+
+// completeRequirement 完成需求（创建 PR 后调用）
+// 用法: taskmanager requirement complete --id <requirement_id> --pr-url <pr_url> [--branch <branch_name>]
+func completeRequirement(logger *zap.Logger) {
+	idPtr := flag.String("id", "", "需求 ID (必填)")
+	prURLPtr := flag.String("pr-url", "", "PR URL (必填)")
+	branchPtr := flag.String("branch", "", "分支名 (可选)")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	if *idPtr == "" || *prURLPtr == "" {
+		fmt.Println("错误: --id 和 --pr-url 是必填参数")
+		fmt.Println("用法: taskmanager requirement complete --id <requirement_id> --pr-url <pr_url>")
+		os.Exit(1)
+	}
+
+	// 1. 登录获取 token
+	token, err := login()
+	if err != nil {
+		logger.Fatal("登录失败", zap.Error(err))
+	}
+
+	// 2. 调用完成需求 API
+	reqBody := map[string]string{
+		"requirement_id": *idPtr,
+		"pr_url":        *prURLPtr,
+		"branch_name":   *branchPtr,
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/pr", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		logger.Fatal("创建请求失败", zap.Error(err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Fatal("完成需求请求失败", zap.Error(err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Fatal("完成需求失败", zap.String("status", resp.Status), zap.String("body", string(body)))
+	}
+
+	var result struct {
+		RequirementID string `json:"requirement_id"`
+		PRURL        string `json:"pr_url"`
+		BranchName   string `json:"branch_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Fatal("解析响应失败", zap.Error(err))
+	}
+
+	logger.Info("需求已完成",
+		zap.String("requirement_id", result.RequirementID),
+		zap.String("pr_url", result.PRURL),
+		zap.String("branch", result.BranchName),
+	)
+	fmt.Printf("需求 %s 已标记为完成，PR: %s\n", result.RequirementID, result.PRURL)
+}
+
+// listRequirements 列出需求
+// 用法: taskmanager requirement list [--project-id <id>]
+func listRequirements(logger *zap.Logger) {
+	projectIDPtr := flag.String("project-id", "", "项目 ID (可选)")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	var requirements []*domain.Requirement
+	var err error
+
+	if *projectIDPtr != "" {
+		requirements, err = requirementRepo.FindByProjectID(ctx, domain.NewProjectID(*projectIDPtr))
+	} else {
+		// 查找所有项目
+		allReqs, err := requirementRepo.FindAll(ctx)
+		if err != nil {
+			logger.Fatal("列出需求失败", zap.Error(err))
+		}
+		requirements = allReqs
+	}
+
+	if err != nil {
+		logger.Fatal("列出需求失败", zap.Error(err))
+	}
+
+	fmt.Printf("\n需求列表 (共 %d 个):\n", len(requirements))
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("%-20s %-10s %-10s %s\n", "ID", "状态", "开发状态", "标题")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, req := range requirements {
+		fmt.Printf("%-20s %-10s %-10s %s\n",
+			req.ID().String()[:16]+"...",
+			req.Status(),
+			req.DevState(),
+			req.Title())
+	}
+	fmt.Println()
+}
+
+// getRequirement 获取需求详情
+// 用法: taskmanager requirement get --id <id>
+func getRequirement(logger *zap.Logger) {
+	idPtr := flag.String("id", "", "需求 ID (必填)")
+
+	flag.CommandLine.Parse(os.Args[3:])
+
+	if *idPtr == "" {
+		fmt.Println("错误: --id 是必填参数")
+		fmt.Println("用法: taskmanager requirement get --id <id>")
+		os.Exit(1)
+	}
+
+	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 查找需求
+	requirementID := domain.NewRequirementID(*idPtr)
+	requirement, err := requirementRepo.FindByID(ctx, requirementID)
+	if err != nil {
+		logger.Fatal("查找需求失败", zap.Error(err))
+	}
+	if requirement == nil {
+		logger.Fatal("需求不存在", zap.String("id", *idPtr))
+	}
+
+	fmt.Println("\n需求详情:")
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("ID: %s\n", requirement.ID().String())
+	fmt.Printf("项目ID: %s\n", requirement.ProjectID().String())
+	fmt.Printf("标题: %s\n", requirement.Title())
+	fmt.Printf("描述: %s\n", requirement.Description())
+	fmt.Printf("验收标准: %s\n", requirement.AcceptanceCriteria())
+	fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
+	fmt.Printf("工作目录: %s\n", requirement.WorkspacePath())
+	fmt.Printf("PR URL: %s\n", requirement.PRURL())
+	fmt.Printf("分支: %s\n", requirement.BranchName())
+	if requirement.StartedAt() != nil {
+		fmt.Printf("开始时间: %s\n", requirement.StartedAt().Format("2006-01-02 15:04:05"))
+	}
+	if requirement.CompletedAt() != nil {
+		fmt.Printf("完成时间: %s\n", requirement.CompletedAt().Format("2006-01-02 15:04:05"))
+	}
+	fmt.Println()
+}
+
+// handleAgentCommand 处理 agent 子命令
+func handleAgentCommand(logger *zap.Logger) {
+	if len(os.Args) < 3 {
+		printAgentUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[2] {
+	case "list":
+		listAgents(logger)
+	default:
+		fmt.Printf("Unknown agent subcommand: %s\n", os.Args[2])
+		printAgentUsage()
+		os.Exit(1)
+	}
+}
+
+func printAgentUsage() {
+	fmt.Println("Usage: taskmanager agent <subcommand>")
+	fmt.Println("")
+	fmt.Println("Subcommands:")
+	fmt.Println("  list   列出所有 Agent")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  taskmanager agent list")
+}
+
+func getAgentRepos(logger *zap.Logger) (domain.AgentRepository, func()) {
+	dbPath := getDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	if err := _persistence.InitSchema(db); err != nil {
+		logger.Fatal("Failed to init schema", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	agentRepo := _persistence.NewSQLiteAgentRepository(db)
+
+	cleanup := func() {
+		db.Close()
+	}
+
+	return agentRepo, cleanup
+}
+
+// listAgents 列出所有 Agent
+func listAgents(logger *zap.Logger) {
+	agentRepo, cleanup := getAgentRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	agents, err := agentRepo.FindAll(ctx)
+	if err != nil {
+		logger.Fatal("列出 Agent 失败", zap.Error(err))
+	}
+
+	fmt.Printf("\nAgent 列表 (共 %d 个):\n", len(agents))
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("%-20s %-15s %-15s %s\n", "ID", "类型", "状态", "名称")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, agent := range agents {
+		agentType := "Unknown"
+		if agent.AgentType() == domain.AgentTypeCoding {
+			agentType = "CodingAgent"
+		} else if agent.AgentType() == domain.AgentTypeBareLLM {
+			agentType = "BareLLM"
+		}
+
+		status := "禁用"
+		if agent.IsActive() {
+			status = "启用"
+		}
+
+		name := agent.Name()
+		if name == "" {
+			name = "(无名称)"
+		}
+
+		fmt.Printf("%-20s %-15s %-15s %s\n",
+			agent.ID().String()[:16]+"...",
+			agentType,
+			status,
+			name)
+	}
+	fmt.Println()
+}
+
+// handleProjectCommand 处理 project 子命令
+func handleProjectCommand(logger *zap.Logger) {
+	if len(os.Args) < 3 {
+		printProjectUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[2] {
+	case "list":
+		listProjects(logger)
+	default:
+		fmt.Printf("Unknown project subcommand: %s\n", os.Args[2])
+		printProjectUsage()
+		os.Exit(1)
+	}
+}
+
+func printProjectUsage() {
+	fmt.Println("Usage: taskmanager project <subcommand>")
+	fmt.Println("")
+	fmt.Println("Subcommands:")
+	fmt.Println("  list   列出所有项目")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  taskmanager project list")
+}
+
+func getProjectRepos(logger *zap.Logger) (domain.ProjectRepository, func()) {
+	dbPath := getDBPath()
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	if err := _persistence.InitSchema(db); err != nil {
+		logger.Fatal("Failed to init schema", zap.String("path", dbPath), zap.Error(err))
+	}
+
+	projectRepo := _persistence.NewSQLiteProjectRepository(db)
+
+	cleanup := func() {
+		db.Close()
+	}
+
+	return projectRepo, cleanup
+}
+
+// listProjects 列出所有项目
+func listProjects(logger *zap.Logger) {
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	projects, err := projectRepo.FindAll(ctx)
+	if err != nil {
+		logger.Fatal("列出项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("\n项目列表 (共 %d 个):\n", len(projects))
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("%-20s %s\n", "ID", "名称")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, project := range projects {
+		fmt.Printf("%-20s %s\n",
+			project.ID().String()[:16]+"...",
+			project.Name())
+	}
+	fmt.Println()
+}
+
+// handleConfigCommand 处理 config 子命令
+func handleConfigCommand(logger *zap.Logger) {
+	if len(os.Args) < 3 {
+		printConfigUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[2] {
+	case "init":
+		initConfig(logger)
+	case "show":
+		showConfig(logger)
+	default:
+		fmt.Printf("Unknown config subcommand: %s\n", os.Args[2])
+		printConfigUsage()
+		os.Exit(1)
+	}
+}
+
+func printConfigUsage() {
+	fmt.Println("Usage: taskmanager config <subcommand>")
+	fmt.Println("")
+	fmt.Println("Subcommands:")
+	fmt.Println("  init   初始化配置文件 (~/.taskmanager/config.yaml)")
+	fmt.Println("  show   显示当前配置")
+	fmt.Println("")
+	fmt.Println("Configuration file location (priority):")
+	fmt.Println("  1. $TASKMANAGER_CONFIG environment variable")
+	fmt.Println("  2. ./taskmanager.yaml (current directory)")
+	fmt.Println("  3. ~/.taskmanager/config.yaml (home directory)")
+	fmt.Println("")
+	fmt.Println("Environment variables:")
+	fmt.Println("  TASKMANAGER_CONFIG      - Config file path")
+	fmt.Println("  TASKMANAGER_DB_PATH     - Database file path")
+	fmt.Println("  TASKMANAGER_API_BASE_URL - API base URL")
+}
+
+// initConfig 初始化配置文件
+func initConfig(logger *zap.Logger) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Fatal("Failed to get home directory", zap.Error(err))
+	}
+
+	configPath := filepath.Join(home, ".taskmanager", "config.yaml")
+
+	if err := config.WriteDefaultConfig(configPath); err != nil {
+		logger.Fatal("Failed to write config file", zap.String("path", configPath), zap.Error(err))
+	}
+
+	fmt.Printf("配置文件已创建: %s\n", configPath)
+	fmt.Println("")
+	fmt.Println("请编辑配置文件设置数据库路径:")
+	fmt.Printf("  vim %s\n", configPath)
+}
+
+// showConfig 显示当前配置
+func showConfig(logger *zap.Logger) {
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("Failed to load config", zap.Error(err))
+	}
+
+	fmt.Println("当前配置:")
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("Database Path: %s\n", cfg.Database.Path)
+	fmt.Printf("API Base URL: %s\n", cfg.API.BaseURL)
+	fmt.Printf("Log Level: %s\n", cfg.Logging.Level)
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Println("")
+	fmt.Println("配置加载来源:")
+	configPath := ""
+	if p := os.Getenv("TASKMANAGER_CONFIG"); p != "" {
+		configPath = fmt.Sprintf("TASKMANAGER_CONFIG=%s", p)
+	} else {
+		home, _ := os.UserHomeDir()
+		defaultPath := filepath.Join(home, ".taskmanager", "config.yaml")
+		if _, err := os.Stat(defaultPath); err == nil {
+			configPath = fmt.Sprintf("~/.taskmanager/config.yaml (default)")
+		} else {
+			configPath = "无配置文件，使用环境变量或默认值"
+		}
+	}
+	fmt.Printf("  %s\n", configPath)
+	fmt.Println("")
+	fmt.Println("环境变量覆盖:")
+	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
+		fmt.Printf("  TASKMANAGER_DB_PATH=%s\n", dbPath)
+	}
+	if apiURL := os.Getenv("TASKMANAGER_API_BASE_URL"); apiURL != "" {
+		fmt.Printf("  TASKMANAGER_API_BASE_URL=%s\n", apiURL)
+	}
 }

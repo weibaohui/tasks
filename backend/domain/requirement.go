@@ -1,7 +1,11 @@
 package domain
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -83,6 +87,74 @@ type Requirement struct {
 	completedAt        *time.Time
 	createdAt          time.Time
 	updatedAt          time.Time
+
+	// stateChangeCallbacks 状态变更回调列表（不持久化）
+	stateChangeCallbacks []StateChangeCallback
+
+	// replicaAgentManager 分身管理器（不持久化）
+	// 通过 SetReplicaAgentManager 设置
+	replicaAgentManager *ReplicaAgentManager
+}
+
+// ReplicaAgentManager 分身管理器
+// 负责强制销毁分身，这是代码约束而非 Hook
+type ReplicaAgentManager struct {
+	agentRepo AgentRepository
+}
+
+// NewReplicaAgentManager 创建分身管理器
+func NewReplicaAgentManager(agentRepo AgentRepository) *ReplicaAgentManager {
+	return &ReplicaAgentManager{agentRepo: agentRepo}
+}
+
+// EnsureDisposed 确保分身已销毁（幂等方法）
+// 这是一个幂等操作，调用多次和调用一次效果相同
+func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentID, workspacePath string) {
+	if replicaAgentID == "" {
+		return
+	}
+
+	// 1. 删除分身 Agent
+	if err := m.agentRepo.Delete(ctx, NewAgentID(replicaAgentID)); err != nil {
+		log.Printf("failed to delete replica agent %s: %v", replicaAgentID, err)
+	} else {
+		log.Printf("replica agent %s disposed", replicaAgentID)
+	}
+
+	// 2. 清理工作目录
+	if workspacePath != "" {
+		if err := os.RemoveAll(workspacePath); err != nil {
+			log.Printf("failed to cleanup workspace %s: %v", workspacePath, err)
+		} else {
+			log.Printf("workspace %s cleaned", workspacePath)
+		}
+	}
+}
+
+// SetReplicaAgentManager 设置分身管理器
+func (r *Requirement) SetReplicaAgentManager(manager *ReplicaAgentManager) {
+	r.replicaAgentManager = manager
+}
+
+// StateChangeCallback 状态变更回调函数类型
+type StateChangeCallback func(change *StateChange)
+
+// SetStateChangeCallback 设置状态变更回调
+func (r *Requirement) SetStateChangeCallback(cb StateChangeCallback) {
+	r.stateChangeCallbacks = append(r.stateChangeCallbacks, cb)
+}
+
+// ClearStateChangeCallbacks 清除所有回调
+func (r *Requirement) ClearStateChangeCallbacks() {
+	r.stateChangeCallbacks = nil
+}
+
+// fireStateChange 触发状态变更回调
+func (r *Requirement) fireStateChange(change *StateChange) {
+	fmt.Printf("[DEBUG] fireStateChange: trigger=%s, callbacks=%d\n", change.Trigger, len(r.stateChangeCallbacks))
+	for _, cb := range r.stateChangeCallbacks {
+		cb(change)
+	}
 }
 
 func NewRequirement(id RequirementID, projectID ProjectID, title, description, acceptanceCriteria, tempWorkspaceRoot string) (*Requirement, error) {
@@ -133,6 +205,49 @@ func (r *Requirement) CanDispatch() bool {
 	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
 }
 
+// CanRedispatch 检查是否可以重新派发
+// 只要需求不是初始状态（todo + idle），就可以重新派发
+func (r *Requirement) CanRedispatch() bool {
+	// 初始状态：todo + idle -> 不需要重新派发
+	// 其他状态都可以重新派发
+	return !(r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle)
+}
+
+// Redispatch 重置需求状态，允许重新派发
+func (r *Requirement) Redispatch() error {
+	if !r.CanRedispatch() {
+		return ErrRequirementCannotDispatch
+	}
+
+	fromStatus := r.status
+	fromDevState := r.devState
+
+	now := time.Now()
+	r.status = RequirementStatusTodo
+	r.devState = RequirementDevStateIdle
+	r.assigneeAgentID = ""
+	r.replicaAgentID = ""
+	r.workspacePath = ""
+	r.branchName = ""
+	r.prURL = ""
+	r.lastError = ""
+	r.startedAt = nil
+	r.completedAt = nil
+	r.updatedAt = now
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "redispatch",
+		Reason:       "manual redispatch",
+		Timestamp:    now,
+	})
+
+	return nil
+}
+
 func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, tempWorkspaceRoot string) error {
 	if strings.TrimSpace(title) == "" {
 		return ErrRequirementTitleRequired
@@ -149,6 +264,10 @@ func (r *Requirement) StartDispatch(assigneeAgentID string) error {
 	if !r.CanDispatch() {
 		return ErrRequirementCannotDispatch
 	}
+
+	fromStatus := r.status
+	fromDevState := r.devState
+
 	now := time.Now()
 	r.status = RequirementStatusInProgress
 	r.devState = RequirementDevStatePreparing
@@ -156,6 +275,17 @@ func (r *Requirement) StartDispatch(assigneeAgentID string) error {
 	r.startedAt = &now
 	r.lastError = ""
 	r.updatedAt = now
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "start_dispatch",
+		Reason:       "",
+		Timestamp:    now,
+	})
+
 	return nil
 }
 
@@ -163,15 +293,33 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentID, branchName strin
 	if r.status != RequirementStatusInProgress {
 		return ErrRequirementCannotDispatch
 	}
+
+	fromDevState := r.devState
+
 	r.devState = RequirementDevStateCoding
 	r.workspacePath = workspacePath
 	r.replicaAgentID = replicaAgentID
 	r.branchName = branchName
-	r.updatedAt = time.Now()
+	now := time.Now()
+	r.updatedAt = now
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   r.status,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_coding",
+		Reason:       "",
+		Timestamp:    now,
+	})
+
 	return nil
 }
 
 func (r *Requirement) MarkPROpened(prURL, branchName string) {
+	fromStatus := r.status
+	fromDevState := r.devState
+
 	now := time.Now()
 	r.status = RequirementStatusDone
 	r.devState = RequirementDevStatePROpened
@@ -182,13 +330,69 @@ func (r *Requirement) MarkPROpened(prURL, branchName string) {
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
+
+	// Claude Code 结束 - 成功
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "claude_code_finished",
+		Reason:       "",
+		Timestamp:    now,
+	})
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_pr_opened",
+		Reason:       "",
+		Timestamp:    now,
+	})
+
+	// 强制销毁分身（代码约束）
+	if r.replicaAgentManager != nil {
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentID, r.workspacePath)
+	}
 }
 
 func (r *Requirement) MarkFailed(lastError string) {
+	fromStatus := r.status
+	fromDevState := r.devState
+
 	r.status = RequirementStatusInProgress
 	r.devState = RequirementDevStateFailed
 	r.lastError = lastError
-	r.updatedAt = time.Now()
+	now := time.Now()
+	r.updatedAt = now
+
+	// Claude Code 结束 - 失败
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "claude_code_finished",
+		Reason:       lastError,
+		Timestamp:    now,
+	})
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_failed",
+		Reason:       lastError,
+		Timestamp:    now,
+	})
+
+	// 强制销毁分身（代码约束）
+	if r.replicaAgentManager != nil {
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentID, r.workspacePath)
+	}
 }
 
 func (r *Requirement) SetDispatchSessionKey(sessionKey string) {

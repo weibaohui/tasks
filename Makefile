@@ -1,4 +1,4 @@
-.PHONY: help build clean dev dev-backend dev-web stop test fmt lint setup
+.PHONY: help build clean dev dev-backend dev-web stop test fmt lint setup install
 SHELL := /bin/bash
 
 # 默认目标
@@ -6,6 +6,7 @@ help:
 	@echo "可用的命令:"
 	@echo "  make setup       - 安装依赖 (包括 air)"
 	@echo "  make build       - 构建后端和前端"
+	@echo "  make install     - 安装 taskmanager CLI 到 /usr/local/bin"
 	@echo "  make clean       - 清理构建产物"
 	@echo "  make dev         - 同时启动后端和前端开发服务器"
 	@echo "  make dev-backend - 仅启动后端开发服务器 (air 热重载)"
@@ -29,6 +30,15 @@ build:
 	cd backend && go build -o bin/taskmanager ./cmd/server
 	@echo "构建前端..."
 	cd frontend && pnpm run build
+
+# 安装 CLI 到 /usr/local/bin
+install:
+	@echo "安装 taskmanager CLI 到 /usr/local/bin..."
+	cd backend && go build -o taskmanager ./cmd/cli
+	@cp backend/taskmanager /usr/local/bin/taskmanager
+	@rm backend/taskmanager
+	@echo "taskmanager CLI 安装完成！"
+	@echo "用法: taskmanager <command>"
 
 # 清理
 clean:

@@ -12,6 +12,8 @@
 | [02-design.md](./02-design.md) | 设计文档：架构设计、核心接口、Registry/Executor 实现 |
 | [03-implementation.md](./03-implementation.md) | 实现文档：代码实现、LLM 集成、使用示例 |
 | [04-testing.md](./04-testing.md) | 测试文档：单元测试、集成测试、E2E 测试 |
+| [05-requirement-state-hook-requirements.md](./05-requirement-state-hook-requirements.md) | **Requirement 状态变更 Hook**：需求文档、背景问题、事件类型 |
+| [06-requirement-state-hook-design.md](./06-requirement-state-hook-design.md) | **Requirement 状态变更 Hook**：设计文档、接口定义、清理钩子实现 |
 
 ## 快速开始
 

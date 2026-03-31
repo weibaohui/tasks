@@ -118,10 +118,13 @@ func boolPtr(b bool) *bool {
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger       *zap.Logger
-	hookManager  *hook.Manager
-	providerRepo domain.LLMProviderRepository
-	idGenerator  domain.IDGenerator
+	logger             *zap.Logger
+	hookManager        *hook.Manager
+	providerRepo       domain.LLMProviderRepository
+	idGenerator        domain.IDGenerator
+	requirementRepo    domain.RequirementRepository
+	hookExecutor       *domain.ConfigurableHookExecutor
+	replicaAgentManager *domain.ReplicaAgentManager
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -142,12 +145,18 @@ func NewClaudeCodeProcessor(
 	hookManager *hook.Manager,
 	providerRepo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
+	requirementRepo domain.RequirementRepository,
+	hookExecutor *domain.ConfigurableHookExecutor,
+	replicaAgentManager *domain.ReplicaAgentManager,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:       logger,
-		hookManager:  hookManager,
-		providerRepo: providerRepo,
-		idGenerator:  idGenerator,
+		logger:             logger,
+		hookManager:        hookManager,
+		providerRepo:       providerRepo,
+		idGenerator:        idGenerator,
+		requirementRepo:    requirementRepo,
+		hookExecutor:       hookExecutor,
+		replicaAgentManager: replicaAgentManager,
 	}
 }
 
@@ -289,6 +298,9 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 			zap.String("cli_session_id", newCliSessionID),
 		)
 	}
+
+	// Claude Code 执行完成，触发 claude_code_finished hook
+	p.triggerClaudeCodeFinishedHook(ctx, msg, agent)
 
 	return nil
 }
@@ -888,4 +900,65 @@ func getUsageInt(usage map[string]any, key string) int {
 		}
 	}
 	return 0
+}
+
+// triggerClaudeCodeFinishedHook 触发 Claude Code 完成 hook
+func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context, msg *bus.InboundMessage, agent *domain.Agent) {
+	// 检查是否有 requirement_id 元数据
+	if msg.Metadata == nil {
+		p.logger.Debug("Claude Code 完成，无 requirement_id 元数据")
+		return
+	}
+
+	requirementIDStr, ok := msg.Metadata["requirement_id"].(string)
+	if !ok || requirementIDStr == "" {
+		p.logger.Debug("Claude Code 完成，requirement_id 为空或不存在",
+			zap.Any("metadata", msg.Metadata))
+		return
+	}
+
+	// 检查是否有 hookExecutor
+	if p.hookExecutor == nil {
+		p.logger.Debug("Claude Code 完成，hookExecutor 为 nil")
+		return
+	}
+
+	// 查找 requirement
+	requirementID := domain.NewRequirementID(requirementIDStr)
+	requirement, err := p.requirementRepo.FindByID(ctx, requirementID)
+	if err != nil {
+		p.logger.Error("Claude Code 完成，查找 requirement 失败",
+			zap.String("requirement_id", requirementIDStr),
+			zap.Error(err))
+		return
+	}
+	if requirement == nil {
+		p.logger.Warn("Claude Code 完成，requirement 不存在",
+			zap.String("requirement_id", requirementIDStr))
+		return
+	}
+
+	p.logger.Info("Claude Code 完成，触发 claude_code_finished hook",
+		zap.String("requirement_id", requirementIDStr),
+		zap.String("requirement_title", requirement.Title()))
+
+	// **立即清理分身**（代码约束，不是 Hook）
+	// 在触发任何 hook 之前清理分身，确保清理一定会执行
+	if p.replicaAgentManager != nil {
+		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentID(), requirement.WorkspacePath())
+	}
+
+	// 创建 StateChange
+	change := &domain.StateChange{
+		FromStatus:   requirement.Status(),
+		ToStatus:     requirement.Status(),
+		FromDevState: requirement.DevState(),
+		ToDevState:   requirement.DevState(),
+		Trigger:      "claude_code_finished",
+		Reason:       "Claude Code 对话结束",
+		Timestamp:    time.Now(),
+	}
+
+	// 触发 hook
+	p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
 }

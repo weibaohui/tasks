@@ -2,6 +2,7 @@ package bus
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -138,12 +139,29 @@ func (b *MessageBus) dispatchToSubscribers(msg *OutboundMessage) {
 
 	for _, callback := range subscribers {
 		if err := callback(msg); err != nil {
-			b.logger.Error("Failed to dispatch message to channel",
-				zap.String("channel", msg.Channel),
-				zap.Error(err),
-			)
+			// Feishu cross-app open_id error is common and noisy - log at debug level
+			if isFeishuCrossAppError(err) {
+				b.logger.Debug("Feishu dispatch skipped (cross-app open_id)",
+					zap.String("channel", msg.Channel),
+					zap.Error(err),
+				)
+			} else {
+				b.logger.Error("Failed to dispatch message to channel",
+					zap.String("channel", msg.Channel),
+					zap.Error(err),
+				)
+			}
 		}
 	}
+}
+
+// isFeishuCrossAppError checks if the error is a Feishu cross-app open_id error
+func isFeishuCrossAppError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "99992361") || strings.Contains(errStr, "open_id cross app")
 }
 
 // dispatchStreamToSubscribers dispatches a streaming message to subscribers

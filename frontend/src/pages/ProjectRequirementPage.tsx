@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, message } from 'antd';
-import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message } from 'antd';
+import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
+import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement } from '../types/projectRequirement';
+import type { HookConfig, CreateHookConfigRequest, UpdateHookConfigRequest } from '../types/hook';
+import { TRIGGER_POINTS, ACTION_TYPES } from '../types/hook';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -56,6 +59,16 @@ export const ProjectRequirementPage: React.FC = () => {
   const [requirementForm] = Form.useForm();
   const [dispatchForm] = Form.useForm();
   const [prForm] = Form.useForm();
+
+  // 项目配置抽屉状态
+  const [projectConfigDrawerOpen, setProjectConfigDrawerOpen] = useState(false);
+  const [configProject, setConfigProject] = useState<Project | null>(null);
+  const [projectHooks, setProjectHooks] = useState<HookConfig[]>([]);
+  const [loadingProjectHooks, setLoadingProjectHooks] = useState(false);
+  const [hookModalOpen, setHookModalOpen] = useState(false);
+  const [editingHook, setEditingHook] = useState<HookConfig | null>(null);
+  const [hookForm] = Form.useForm();
+  const [savingHook, setSavingHook] = useState(false);
 
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
@@ -265,6 +278,7 @@ export const ProjectRequirementPage: React.FC = () => {
   };
 
   const openReportPRModal = (item: Requirement) => {
+    console.log('[DEBUG] openReportPRModal called:', item.id, item.status, item.dev_state);
     setPrRequirementItem(item);
     prForm.setFieldsValue({
       pr_url: item.pr_url || '',
@@ -274,16 +288,160 @@ export const ProjectRequirementPage: React.FC = () => {
   };
 
   const submitReportPR = async (values: { pr_url: string; branch_name: string }) => {
+    console.log('[DEBUG] submitReportPR function entered');
     if (!prRequirementItem) {
+      console.log('[DEBUG] prRequirementItem is null, returning');
       return;
     }
+    console.log('[DEBUG] submitReportPR called:', prRequirementItem.id, values.pr_url, values.branch_name);
     try {
+      console.log('[DEBUG] calling API...');
       await reportRequirementPROpened(prRequirementItem.id, values.pr_url, values.branch_name || '');
+      console.log('[DEBUG] API call success');
       message.success('PR 状态更新成功');
       setPrModalOpen(false);
       await fetchRequirements(selectedProjectId);
     } catch (_error) {
+      console.error('[DEBUG] API error:', _error);
       message.error('PR 状态更新失败');
+    }
+  };
+
+  const handleRedispatch = async (item: Requirement) => {
+    try {
+      await redispatchRequirement(item.id);
+      message.success('重新派发成功');
+      await fetchRequirements(selectedProjectId);
+    } catch (_error) {
+      message.error('重新派发失败');
+    }
+  };
+
+  // 项目配置相关处理
+  const openProjectConfig = async (project: Project) => {
+    setConfigProject(project);
+    setProjectConfigDrawerOpen(true);
+    setLoadingProjectHooks(true);
+    try {
+      const hooks = await listHookConfigs(project.id);
+      setProjectHooks(hooks);
+    } catch (_error) {
+      message.error('获取项目 Hook 配置失败');
+    } finally {
+      setLoadingProjectHooks(false);
+    }
+  };
+
+  const closeProjectConfig = () => {
+    setProjectConfigDrawerOpen(false);
+    setConfigProject(null);
+    setProjectHooks([]);
+  };
+
+  const openCreateHook = () => {
+    setEditingHook(null);
+    hookForm.resetFields();
+    hookForm.setFieldsValue({
+      project_id: configProject?.id,
+      trigger_point: 'start_dispatch',
+      action_type: 'coding_agent',
+      enabled: true,
+      priority: 50,
+    });
+    setHookModalOpen(true);
+  };
+
+  const openEditHook = (hook: HookConfig) => {
+    setEditingHook(hook);
+    const formValues: Record<string, unknown> = {
+      project_id: hook.project_id,
+      name: hook.name,
+      trigger_point: hook.trigger_point,
+      action_type: hook.action_type,
+      enabled: hook.enabled,
+      priority: hook.priority,
+    };
+
+    // 解析 action_config JSON
+    if (hook.action_type === 'coding_agent') {
+      try {
+        const config = JSON.parse(hook.action_config || '{}');
+        formValues.agent_id = config.agent_id || '';
+        formValues.prompt_template = config.prompt_template || '';
+      } catch {
+        formValues.agent_id = '';
+        formValues.prompt_template = '';
+      }
+    } else {
+      formValues.action_config = hook.action_config;
+    }
+
+    hookForm.setFieldsValue(formValues);
+    setHookModalOpen(true);
+  };
+
+  const submitHook = async (values: CreateHookConfigRequest & { agent_id?: string; prompt_template?: string }) => {
+    setSavingHook(true);
+    try {
+      const submitValues = { ...values };
+
+      // 如果是 coding_agent，将 agent_id 和 prompt_template 合并为 action_config
+      if (values.action_type === 'coding_agent') {
+        const actionConfig = {
+          agent_id: values.agent_id || '',
+          prompt_template: values.prompt_template || '',
+        };
+        submitValues.action_config = JSON.stringify(actionConfig);
+        delete submitValues.agent_id;
+        delete submitValues.prompt_template;
+      }
+
+      if (editingHook) {
+        await updateHookConfig({ ...submitValues, id: editingHook.id } as UpdateHookConfigRequest);
+        message.success('更新 Hook 成功');
+      } else {
+        await createHookConfig(submitValues as CreateHookConfigRequest);
+        message.success('创建 Hook 成功');
+      }
+      setHookModalOpen(false);
+      // 刷新项目 Hook 列表
+      if (configProject) {
+        const hooks = await listHookConfigs(configProject.id);
+        setProjectHooks(hooks);
+      }
+    } catch (_error) {
+      message.error(editingHook ? '更新 Hook 失败' : '创建 Hook 失败');
+    } finally {
+      setSavingHook(false);
+    }
+  };
+
+  const handleDeleteHook = async (id: string) => {
+    try {
+      await deleteHookConfig(id);
+      message.success('删除 Hook 成功');
+      if (configProject) {
+        const hooks = await listHookConfigs(configProject.id);
+        setProjectHooks(hooks);
+      }
+    } catch (_error) {
+      message.error('删除 Hook 失败');
+    }
+  };
+
+  const handleToggleHookEnabled = async (hook: HookConfig) => {
+    try {
+      if (hook.enabled) {
+        await disableHookConfig(hook.id);
+      } else {
+        await enableHookConfig(hook.id);
+      }
+      if (configProject) {
+        const hooks = await listHookConfigs(configProject.id);
+        setProjectHooks(hooks);
+      }
+    } catch (_error) {
+      message.error('操作失败');
     }
   };
 
@@ -301,6 +459,9 @@ export const ProjectRequirementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, project: Project) => (
         <Space>
+          <Button type="link" onClick={() => openProjectConfig(project)}>
+            配置
+          </Button>
           <Button type="link" onClick={() => handleViewRequirements(project.id)}>
             查看需求
           </Button>
@@ -360,6 +521,9 @@ export const ProjectRequirementPage: React.FC = () => {
           </Button>
           <Button type="link" onClick={() => openReportPRModal(item)}>
             更新PR
+          </Button>
+          <Button type="link" disabled={item.status === 'todo' && item.dev_state === 'idle'} onClick={() => handleRedispatch(item)}>
+            重新派发
           </Button>
         </Space>
       ),
@@ -523,6 +687,180 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             更新状态
+          </Button>
+        </Form>
+      </Modal>
+
+      {/* 项目配置抽屉 - 包含 Hook 管理 */}
+      <Drawer
+        title={`项目配置 - ${configProject?.name || ''}`}
+        placement="right"
+        width={700}
+        onClose={closeProjectConfig}
+        open={projectConfigDrawerOpen}
+        extra={
+          <Button type="primary" onClick={openCreateHook}>
+            新建 Hook
+          </Button>
+        }
+      >
+        <Table
+          dataSource={projectHooks}
+          loading={loadingProjectHooks}
+          rowKey="id"
+          pagination={false}
+          size="small"
+          columns={[
+            { title: '名称', dataIndex: 'name', key: 'name', width: 120 },
+            { title: '触发点', dataIndex: 'trigger_point', key: 'trigger_point', width: 140 },
+            { title: '动作类型', dataIndex: 'action_type', key: 'action_type', width: 100 },
+            { title: '优先级', dataIndex: 'priority', key: 'priority', width: 60 },
+            {
+              title: '启用',
+              dataIndex: 'enabled',
+              key: 'enabled',
+              width: 60,
+              render: (enabled: boolean, hook: HookConfig) => (
+                <Switch checked={enabled} onChange={() => handleToggleHookEnabled(hook)} />
+              ),
+            },
+            {
+              title: '操作',
+              key: 'action',
+              width: 120,
+              render: (_: unknown, hook: HookConfig) => (
+                <Space size="small">
+                  <Button type="link" size="small" onClick={() => openEditHook(hook)}>
+                    编辑
+                  </Button>
+                  <Popconfirm title="确定删除此 Hook？" onConfirm={() => handleDeleteHook(hook.id)}>
+                    <Button type="link" size="small" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Drawer>
+
+      {/* Hook 编辑 Modal */}
+      <Modal
+        title={editingHook ? '编辑 Hook' : '新建 Hook'}
+        open={hookModalOpen}
+        footer={null}
+        onCancel={() => setHookModalOpen(false)}
+        width={600}
+      >
+        <Form layout="vertical" form={hookForm} onFinish={submitHook}>
+          <Form.Item name="project_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input placeholder="例如：派发时通知" />
+          </Form.Item>
+          <Form.Item label="触发点" name="trigger_point" rules={[{ required: true, message: '请选择触发点' }]}>
+            <Select>
+              {TRIGGER_POINTS.map((tp) => (
+                <Select.Option key={tp.value} value={tp.value}>
+                  {tp.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item label="动作类型" name="action_type" rules={[{ required: true, message: '请选择动作类型' }]}>
+            <Select>
+              {ACTION_TYPES.map((at) => (
+                <Select.Option key={at.value} value={at.value}>
+                  {at.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {/* Coding Agent 配置 */}
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.action_type !== curr.action_type}>
+            {({ getFieldValue }) => {
+              const actionType = getFieldValue('action_type');
+              if (actionType === 'coding_agent') {
+                return (
+                  <>
+                    <Form.Item
+                      label="选择 Agent"
+                      name="agent_id"
+                      rules={[{ required: true, message: '请选择 Agent' }]}
+                    >
+                      <Select placeholder="选择 Coding Agent">
+                        {agents.map((agent) => (
+                          <Select.Option key={agent.id} value={agent.id}>
+                            {agent.name} ({agent.agent_code})
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      label="Prompt 模板"
+                      name="prompt_template"
+                      rules={[{ required: true, message: '请输入 Prompt 模板' }]}
+                      extra={
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+                            可用变量（会被替换为实际值）：
+                          </div>
+                          <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
+{`\${requirement.id}           - 需求ID
+\${requirement.title}         - 需求标题
+\${requirement.description}     - 需求描述
+\${requirement.status}          - 需求状态 (todo/in_progress/done)
+\${requirement.dev_state}      - 开发状态 (idle/preparing/coding/pr_opened/failed)
+\${requirement.temp_workspace_root} - 临时工作目录根路径
+\${project.id}               - 项目ID
+\${project.name}         - 项目名称
+\${workspace.path}        - 工作目录路径
+\${branch_name}           - 分支名
+\${change.trigger}        - 触发事件名称
+\${change.reason}        - 状态变更原因`}
+                          </pre>
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 12, marginBottom: 8 }}>
+                            完成后请执行以下 CLI 命令标记需求完成：
+                          </div>
+                          <pre style={{ fontSize: 11, background: '#f0f8ff', padding: 8, borderRadius: 4 }}>
+{`taskmanager requirement complete --id \${requirement.id} --pr-url <PR_URL> [--branch \${branch_name}]`}
+                          </pre>
+                        </div>
+                      }
+                    >
+                      <Input.TextArea rows={6} placeholder="请处理需求 {{requirement.title}}，描述：{{requirement.description}}。完成后执行 taskmanager requirement complete 命令。" />
+                    </Form.Item>
+                  </>
+                );
+              }
+              return (
+                <Form.Item
+                  label="动作配置"
+                  name="action_config"
+                  rules={[{ required: true, message: '请输入动作配置' }]}
+                  extra={
+                    <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
+{`{"key": "value"}`}
+                    </pre>
+                  }
+                >
+                  <Input.TextArea rows={4} placeholder='{"key": "value"}' />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+
+          <Form.Item label="优先级" name="priority" initialValue={50}>
+            <Input type="number" placeholder="数值越大越优先执行" />
+          </Form.Item>
+          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue={true}>
+            <Switch />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={savingHook}>
+            保存
           </Button>
         </Form>
       </Modal>

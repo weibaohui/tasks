@@ -18,6 +18,7 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -47,7 +48,8 @@ type Gateway struct {
 }
 
 func main() {
-	logger, _ := zap.NewProduction()
+	// 使用 Development 模式，输出 Debug 级别日志
+	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
 	if runAdminSubcommandIfMatched(logger) {
@@ -56,7 +58,14 @@ func main() {
 
 	logger.Info("启动任务管理服务...")
 
-	// 1. 初始化数据库
+	// 1. 加载配置
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("加载配置失败", zap.Error(err))
+	}
+	logger.Info("配置加载完成", zap.Int("server_port", cfg.Server.Port), zap.String("api_base_url", cfg.API.BaseURL))
+
+	// 2. 初始化数据库
 	dbPath := resolveDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -75,6 +84,7 @@ func main() {
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 	userRepo := _persistence.NewSQLiteUserRepository(db)
+	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
@@ -158,8 +168,41 @@ func main() {
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
-	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
-	requirementDispatchService := application.NewRequirementDispatchService(requirementRepo, projectRepo, agentRepo, taskService, sessionService, idGenerator)
+
+	// 初始化 Hook 配置仓储
+	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
+	hookLogRepo := _persistence.NewSQLiteRequirementHookActionLogRepository(db)
+	logger.Info("Hook 仓储初始化完成")
+
+	// 初始化 ConfigurableHookExecutor（数据库驱动的可配置 Hook）
+	// 注意：TriggerAgentExecutor 会在 gateway 初始化后添加
+	hookLogger := &zapRequirementLogger{logger: logger}
+	hookExecutor := domain.NewConfigurableHookExecutor(
+		hookConfigRepo,
+		hookLogRepo,
+		nil, // 暂不设置 executors
+		hookLogger,
+		idGenerator,
+	)
+	logger.Info("ConfigurableHookExecutor 初始化完成")
+
+	// 初始化 ReplicaAgentManager（强制销毁分身）
+	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
+	logger.Info("ReplicaAgentManager 初始化完成")
+
+	// 初始化 RequirementApplicationService（需要在 hookExecutor 之后）
+	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, hookExecutor, replicaAgentManager)
+
+	requirementDispatchService := application.NewRequirementDispatchService(
+		requirementRepo,
+		projectRepo,
+		agentRepo,
+		taskService,
+		sessionService,
+		idGenerator,
+		replicaAgentManager,
+		hookExecutor,
+	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
@@ -179,13 +222,17 @@ func main() {
 	if authSecret == "" {
 		authSecret = "taskmanager-dev-secret"
 	}
-	authHandler := httpHandler.NewAuthHandler(userService, authSecret, 7*24*time.Hour)
+	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 
 	// 7.1 初始化技能加载器
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler)
+	// 7.2 初始化 Hook Handler
+	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
+	logger.Info("Hook Handler 初始化完成")
+
+	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler, hookHandler)
 
 	// 8. 初始化 WebSocket
 	wsHandler := ws.NewWebSocketHandler(eventBus)
@@ -197,12 +244,19 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
+	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
+	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
+	hookExecutor.AddExecutor(triggerAgentExecutor)
+	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
+	logger.Info("TriggerAgentExecutor 注册完成")
+
 	// 10. 创建 HTTP Server
+	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	server := &http.Server{
-		Addr:         ":8888",
+		Addr:         addr,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -211,7 +265,7 @@ func main() {
 
 	// 11. 启动服务器
 	go func() {
-		logger.Info("HTTP Server 启动在 :8888")
+		logger.Info("HTTP Server 启动", zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
 		}
@@ -391,6 +445,9 @@ func initGateway(
 	logger *zap.Logger,
 	mcpService *application.MCPApplicationService,
 	skillsLoader *skill.SkillsLoader,
+	requirementRepo domain.RequirementRepository,
+	hookExecutor *domain.ConfigurableHookExecutor,
+	replicaAgentManager *domain.ReplicaAgentManager,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,
@@ -405,7 +462,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)
@@ -505,4 +562,51 @@ func (g *Gateway) Shutdown() {
 // ChannelCount 返回已注册渠道数量
 func (g *Gateway) ChannelCount() int {
 	return len(g.channelManager.List())
+}
+
+// zapRequirementLogger zap.Logger 到 domain.RequirementStateHookLogger 的适配器
+type zapRequirementLogger struct {
+	logger *zap.Logger
+}
+
+func (l *zapRequirementLogger) Debug(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Debug(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) Info(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Info(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) Error(msg string, fields ...domain.RequirementStateHookLogField) {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
+			zapFields[i] = l.toZapField(sf)
+		}
+	}
+	l.logger.Error(msg, zapFields...)
+}
+
+func (l *zapRequirementLogger) toZapField(f domain.RequirementStateHookLogField) zap.Field {
+	switch v := f.(type) {
+	case domain.StringField:
+		return zap.String(v.Key, v.Val)
+	default:
+		if af, ok := f.(domain.AnyField); ok {
+			return zap.Any(af.Key, af.Val)
+		}
+		return zap.Any("unknown", f)
+	}
 }

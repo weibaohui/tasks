@@ -2,11 +2,26 @@
  * AgentTable - Agent 卡片组件
  */
 import React, { useState } from 'react';
-import { Button, Card, Flex, Input, Switch, Tag, Typography } from 'antd';
-import { CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { Button, Card, Flex, Input, Switch, Tag, Typography, Tooltip, Popconfirm } from 'antd';
+import { CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { Agent } from '../../../types/agent';
 
 const { Text } = Typography;
+
+// 计算上岗时长
+function getUptime(createdAt: number): string {
+  const now = Date.now();
+  const diff = now - createdAt;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}天${hours % 24}小时`;
+  if (hours > 0) return `${hours}小时${minutes % 60}分钟`;
+  if (minutes > 0) return `${minutes}分钟`;
+  return '刚上岗';
+}
 
 interface AgentTableProps {
   items: Agent[];
@@ -71,6 +86,8 @@ export const AgentTable: React.FC<AgentTableProps> = ({
   const renderAgentCard = (agent: Agent) => {
     const isEditing = editingId === agent.id;
     const typeInfo = typeMap[agent.agent_type] || { label: agent.agent_type || 'BareLLM', color: 'default' };
+    const isShadow = !!agent.shadow_from;
+    const uptime = getUptime(agent.created_at);
 
     return (
       <Card
@@ -102,7 +119,10 @@ export const AgentTable: React.FC<AgentTableProps> = ({
                 />
               </Flex>
             )}
-            <Tag color={typeInfo.color} style={{ marginLeft: 8 }}>{typeInfo.label}</Tag>
+            <Flex gap={4}>
+              <Tag color={typeInfo.color} style={{ marginLeft: 8 }}>{typeInfo.label}</Tag>
+              {isShadow && <Tag color="purple">分身</Tag>}
+            </Flex>
           </Flex>
 
           {/* 描述 */}
@@ -120,6 +140,14 @@ export const AgentTable: React.FC<AgentTableProps> = ({
             </Text>
           )}
 
+          {/* 分身来源 */}
+          {isShadow && (
+            <Flex align="center" gap={4}>
+              <Text type="secondary" style={{ fontSize: 12 }}>来源：</Text>
+              <Text style={{ fontSize: 12, color: '#8b5cf6' }}>{agent.shadow_from}</Text>
+            </Flex>
+          )}
+
           {/* 状态标签 */}
           <Flex gap={8} align="center">
             <Text type="secondary" style={{ fontSize: 12 }}>思考</Text>
@@ -132,6 +160,11 @@ export const AgentTable: React.FC<AgentTableProps> = ({
             <Tag color={agent.is_active ? 'success' : 'default'}>
               {agent.is_active ? '启用' : '停用'}
             </Tag>
+            <Tooltip title={`上岗时间：${new Date(agent.created_at).toLocaleString()}`}>
+              <Tag icon={<ClockCircleOutlined />} color="default" style={{ marginLeft: 'auto' }}>
+                {uptime}
+              </Tag>
+            </Tooltip>
           </Flex>
 
           {/* 编辑操作按钮 */}
@@ -163,14 +196,22 @@ export const AgentTable: React.FC<AgentTableProps> = ({
                   设为默认
                 </Button>
               )}
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => onDelete(agent.id)}
+              <Popconfirm
+                title="确定删除此 Agent？"
+                description="删除后无法恢复，请谨慎操作"
+                onConfirm={() => onDelete(agent.id)}
+                okText="确定"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
               >
-                删除
-              </Button>
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
             </Flex>
           )}
         </Flex>

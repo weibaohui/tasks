@@ -64,6 +64,21 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_user_code ON users(user_code);
 
+CREATE TABLE IF NOT EXISTS user_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    token_hash TEXT NOT NULL,
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    is_active INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_tokens_user_id ON user_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tokens_token_hash ON user_tokens(token_hash);
+
 CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY,
     agent_code TEXT NOT NULL UNIQUE,
@@ -87,6 +102,7 @@ CREATE TABLE IF NOT EXISTS agents (
     is_default INTEGER NOT NULL,
     enable_thinking_process INTEGER NOT NULL,
     agent_type TEXT NOT NULL DEFAULT 'BareLLM',
+    shadow_from TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -323,6 +339,40 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_session_key ON mcp_tool_logs(sessio
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_mcp_server_id ON mcp_tool_logs(mcp_server_id);
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_tool_name ON mcp_tool_logs(tool_name);
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_created_at ON mcp_tool_logs(created_at);
+
+CREATE TABLE IF NOT EXISTS requirement_hook_configs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    name TEXT NOT NULL,
+    trigger_point TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    action_config TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    priority INTEGER NOT NULL DEFAULT 50,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_hook_configs_trigger ON requirement_hook_configs(trigger_point, enabled);
+
+CREATE TABLE IF NOT EXISTS requirement_hook_action_logs (
+    id TEXT PRIMARY KEY,
+    hook_config_id TEXT NOT NULL,
+    requirement_id TEXT NOT NULL,
+    trigger_point TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    input_context TEXT,
+    result TEXT,
+    error TEXT,
+    started_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    FOREIGN KEY (hook_config_id) REFERENCES requirement_hook_configs(id),
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hook_logs_requirement ON requirement_hook_action_logs(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_hook_logs_config ON requirement_hook_action_logs(hook_config_id);
 `
 
 // InitSchema 初始化数据库 Schema
@@ -352,6 +402,12 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	if err := migrateRequirementsNewColumns(db); err != nil {
+		return err
+	}
+	if err := migrateAgentShadowFrom(db); err != nil {
+		return err
+	}
+	if err := migrateHookConfigProjectID(db); err != nil {
 		return err
 	}
 	return migrateConversationRecordsTimestampToMillis(db)
@@ -519,6 +575,34 @@ func migrateLLMProviderTypeColumn(db *sql.DB) error {
 	}
 	if !hasColumn {
 		if _, err := db.Exec("ALTER TABLE llm_providers ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateAgentShadowFrom 迁移 agents 表新增 shadow_from 字段
+func migrateAgentShadowFrom(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "shadow_from")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN shadow_from TEXT"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateHookConfigProjectID 迁移 requirement_hook_configs 表新增 project_id 字段
+func migrateHookConfigProjectID(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirement_hook_configs", "project_id")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirement_hook_configs ADD COLUMN project_id TEXT"); err != nil {
 			return err
 		}
 	}
