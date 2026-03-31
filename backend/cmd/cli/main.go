@@ -1066,6 +1066,8 @@ func handleProjectHeartbeatCommand(logger *zap.Logger) {
 		disableHeartbeat(logger)
 	case "set-interval":
 		setHeartbeatInterval(logger)
+	case "status":
+		showHeartbeatStatus(logger)
 	default:
 		fmt.Printf("Unknown heartbeat action: %s\n", action)
 		printProjectHeartbeatUsage()
@@ -1074,14 +1076,17 @@ func handleProjectHeartbeatCommand(logger *zap.Logger) {
 }
 
 func printProjectHeartbeatUsage() {
-	fmt.Println("Usage: taskmanager project heartbeat <action> <project_id> [minutes]")
+	fmt.Println("Usage: taskmanager project heartbeat <action> [project_id] [minutes]")
 	fmt.Println("")
 	fmt.Println("Actions:")
-	fmt.Println("  enable <project_id>            开启心跳")
-	fmt.Println("  disable <project_id>           关闭心跳")
-	fmt.Println("  set-interval <project_id> <minutes>  设置心跳间隔（分钟）")
+	fmt.Println("  status [project_id]                查看心跳状态（可指定项目）")
+	fmt.Println("  enable <project_id>                开启心跳")
+	fmt.Println("  disable <project_id>               关闭心跳")
+	fmt.Println("  set-interval <project_id> <minutes> 设置心跳间隔（分钟）")
 	fmt.Println("")
 	fmt.Println("Examples:")
+	fmt.Println("  taskmanager project heartbeat status")
+	fmt.Println("  taskmanager project heartbeat status prj_xxx")
 	fmt.Println("  taskmanager project heartbeat enable prj_xxx")
 	fmt.Println("  taskmanager project heartbeat disable prj_xxx")
 	fmt.Println("  taskmanager project heartbeat set-interval prj_xxx 30")
@@ -1179,6 +1184,34 @@ func setHeartbeatInterval(logger *zap.Logger) {
 	}
 
 	fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, project.Name())
+}
+
+func showHeartbeatStatus(logger *zap.Logger) {
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	projects, err := projectRepo.FindAll(ctx)
+	if err != nil {
+		logger.Fatal("列出项目失败", zap.Error(err))
+	}
+
+	fmt.Println("\n项目心跳状态:")
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("%-20s %-10s %-10s %s\n", "项目ID", "心跳", "间隔(分钟)", "项目名称")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, project := range projects {
+		status := "关闭"
+		if project.HeartbeatEnabled() {
+			status = "开启"
+		}
+		fmt.Printf("%-20s %-10s %-10d %s\n",
+			project.ID().String()[:16]+"...",
+			status,
+			project.HeartbeatIntervalMinutes(),
+			project.Name())
+	}
+	fmt.Println()
 }
 
 // handleConfigCommand 处理 config 子命令
