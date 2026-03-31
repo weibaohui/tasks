@@ -25,7 +25,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			started_at, completed_at, created_at, updated_at,
 			claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
