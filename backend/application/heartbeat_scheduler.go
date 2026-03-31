@@ -49,6 +49,9 @@ func NewHeartbeatScheduler(
 
 // Start 启动调度器
 func (s *HeartbeatScheduler) Start(ctx context.Context) error {
+	// 启动时清理过期的需求（服务器被kill时可能留下）
+	s.cleanupStaleRequirements(ctx)
+
 	// 加载所有启用心跳的项目
 	projects, err := s.projectRepo.FindAll(ctx)
 	if err != nil {
@@ -71,6 +74,85 @@ func (s *HeartbeatScheduler) Start(ctx context.Context) error {
 	s.cron.Start()
 	log.Printf("heartbeat scheduler started")
 	return nil
+}
+
+// cleanupStaleRequirements 清理过期的需求
+// 当服务器异常关闭时，可能会留下处于 in_progress|coding 状态的需求
+// 这些需求的分身可能没有被正确清理，需要在启动时检查并清理
+func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
+	if s.requirementRepo == nil {
+		return
+	}
+
+	requirements, err := s.requirementRepo.FindAll(ctx)
+	if err != nil {
+		log.Printf("[HEARTBEAT] cleanup: failed to find requirements: %v", err)
+		return
+	}
+
+	now := time.Now()
+	staleCount := 0
+	for _, req := range requirements {
+		// 检查是否处于 coding 状态
+		if string(req.Status()) == "in_progress" && string(req.DevState()) == "coding" {
+			updatedAt := req.UpdatedAt()
+			shouldCleanup := false
+			reason := ""
+
+			// 如果超过 30 分钟未更新，标记为需要清理
+			if now.Sub(updatedAt) > 30*time.Minute {
+				shouldCleanup = true
+				reason = "timeout - no update for 30+ minutes"
+			}
+
+			// 检查分身是否缺失（可能被之前的服务器异常关闭删除）
+			// 如果分身不存在，且需求处于 coding 状态超过 5 分钟，说明可能出问题了
+			if !shouldCleanup && req.ReplicaAgentCode() != "" {
+				if s.agentRepo != nil {
+					agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(req.ReplicaAgentCode()))
+					if err == nil && agent == nil {
+						// 分身不存在，可能是服务器异常关闭后被清理了
+						if now.Sub(updatedAt) > 5*time.Minute {
+							shouldCleanup = true
+							reason = "replica agent missing - possible server crash during execution"
+						}
+					}
+				}
+			}
+
+			if shouldCleanup {
+				staleCount++
+				log.Printf("[HEARTBEAT] cleanup: found stale requirement %s (title: %s, reason: %s, updated: %s ago)",
+					req.ID(), req.Title(), reason, now.Sub(updatedAt).Round(time.Minute))
+
+				// 清理分身（如果还存在）
+				if replicaAgentCode := req.ReplicaAgentCode(); replicaAgentCode != "" {
+					if s.agentRepo != nil {
+						agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
+						if err == nil && agent != nil {
+							if err := s.agentRepo.Delete(ctx, agent.ID()); err != nil {
+								log.Printf("[HEARTBEAT] cleanup: failed to delete replica agent %s: %v", replicaAgentCode, err)
+							} else {
+								log.Printf("[HEARTBEAT] cleanup: deleted replica agent %s", replicaAgentCode)
+							}
+						}
+					}
+				}
+
+				// 标记为失败
+				req.MarkFailed("cleanup: " + reason)
+				if err := s.requirementRepo.Save(ctx, req); err != nil {
+					log.Printf("[HEARTBEAT] cleanup: failed to save requirement %s: %v", req.ID(), err)
+				} else {
+					log.Printf("[HEARTBEAT] cleanup: marked requirement %s as failed", req.ID())
+				}
+			}
+		}
+	}
+
+	if staleCount > 0 {
+		log.Printf("[HEARTBEAT] cleanup: cleaned up %d stale requirements", staleCount)
+	}
 }
 
 // Stop 停止调度器

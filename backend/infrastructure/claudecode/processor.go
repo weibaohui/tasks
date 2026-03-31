@@ -287,6 +287,8 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
 	if err != nil {
 		p.logger.Error("Claude Code 流式调用失败", zap.Error(err))
+		// 即使出错也要触发清理 hook
+		p.triggerClaudeCodeFinishedHook(ctx, msg, agent)
 		return fmt.Errorf("Claude Code 调用失败: %w", err)
 	}
 
