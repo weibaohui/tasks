@@ -326,12 +326,17 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 要求：必须在该目录内完成代码操作
 
 请按以下顺序执行：
-1. 在当前工作目录准备代码仓库并切换到默认分支
-2. 严格执行初始化步骤
-3. 基于需求与验收标准完成实现
-4. 运行必要的校验命令
-5. 准备提交分支与 PR 信息（若当前环境无法直接创建 PR，请输出建议的 PR 标题与描述）
+1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
+2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
+3. 严格执行初始化步骤
+4. 基于需求与验收标准完成实现
+5. 运行必要的校验命令
+6. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
+7. 推送代码：git push origin feature/%s
+8. 创建 PR 或输出 PR 信息
 `, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 		firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
-		project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath)
+		project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
+		project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
+		requirement.ID().String(), requirement.ID().String())
 }
