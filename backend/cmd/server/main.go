@@ -186,12 +186,12 @@ func main() {
 	)
 	logger.Info("ConfigurableHookExecutor 初始化完成")
 
-	// 初始化 RequirementApplicationService（需要在 hookExecutor 之后）
-	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, hookExecutor)
-
 	// 初始化 ReplicaAgentManager（强制销毁分身）
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
 	logger.Info("ReplicaAgentManager 初始化完成")
+
+	// 初始化 RequirementApplicationService（需要在 hookExecutor 之后）
+	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, hookExecutor, replicaAgentManager)
 
 	requirementDispatchService := application.NewRequirementDispatchService(
 		requirementRepo,

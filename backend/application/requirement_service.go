@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -40,10 +39,11 @@ type RedispatchRequirementCommand struct {
 }
 
 type RequirementApplicationService struct {
-	requirementRepo domain.RequirementRepository
-	projectRepo     domain.ProjectRepository
-	idGenerator     domain.IDGenerator
-	hookExecutor   *domain.ConfigurableHookExecutor
+	requirementRepo     domain.RequirementRepository
+	projectRepo         domain.ProjectRepository
+	idGenerator         domain.IDGenerator
+	hookExecutor        *domain.ConfigurableHookExecutor
+	replicaAgentManager *domain.ReplicaAgentManager
 }
 
 func NewRequirementApplicationService(
@@ -51,12 +51,14 @@ func NewRequirementApplicationService(
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
 	hookExecutor *domain.ConfigurableHookExecutor,
+	replicaAgentManager *domain.ReplicaAgentManager,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
-		requirementRepo: requirementRepo,
-		projectRepo:     projectRepo,
-		idGenerator:     idGenerator,
-		hookExecutor:   hookExecutor,
+		requirementRepo:     requirementRepo,
+		projectRepo:         projectRepo,
+		idGenerator:         idGenerator,
+		hookExecutor:        hookExecutor,
+		replicaAgentManager: replicaAgentManager,
 	}
 }
 
@@ -130,6 +132,9 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 		return nil, ErrRequirementNotFound
 	}
 
+	// 设置分身管理器（用于清理）
+	requirement.SetReplicaAgentManager(s.replicaAgentManager)
+
 	// 设置状态变更回调
 	requirement.ClearStateChangeCallbacks()
 	if s.hookExecutor != nil {
@@ -142,11 +147,6 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 		fmt.Println("[DEBUG] Hook executor is NIL!")
 	}
 
-	if requirement.WorkspacePath() != "" {
-		if err := os.RemoveAll(requirement.WorkspacePath()); err != nil {
-			return nil, err
-		}
-	}
 	requirement.MarkPROpened(cmd.PRURL, cmd.BranchName)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err

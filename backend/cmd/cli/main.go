@@ -179,7 +179,7 @@ func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *app
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 
-	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, nil)
+	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, nil, nil)
 	dispatchService := application.NewRequirementDispatchService(
 		requirementRepo,
 		projectRepo,
