@@ -27,15 +27,17 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
-	ID                       string `json:"id"`
-	Name                     string `json:"name"`
-	GitRepoURL               string `json:"git_repo_url"`
-	DefaultBranch            string `json:"default_branch"`
-	InitSteps                []string `json:"init_steps"`
-	HeartbeatEnabled         bool   `json:"heartbeat_enabled"`
-	HeartbeatIntervalMinutes int    `json:"heartbeat_interval_minutes"`
-	HeartbeatMDContent       string `json:"heartbeat_md_content"`
-	HeartbeatAgentID         string `json:"heartbeat_agent_id"`
+	ID                        string   `json:"id"`
+	Name                      string   `json:"name"`
+	GitRepoURL                string   `json:"git_repo_url"`
+	DefaultBranch             string   `json:"default_branch"`
+	InitSteps                 []string `json:"init_steps"`
+	HeartbeatEnabled          bool     `json:"heartbeat_enabled"`
+	HeartbeatIntervalMinutes  int      `json:"heartbeat_interval_minutes"`
+	HeartbeatMDContent        string   `json:"heartbeat_md_content"`
+	HeartbeatAgentID          string   `json:"heartbeat_agent_id"`
+	DispatchChannelCode       string   `json:"dispatch_channel_code"`
+	DispatchSessionKey        string   `json:"dispatch_session_key"`
 }
 
 func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
@@ -98,15 +100,17 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	project, err := h.projectService.UpdateProject(r.Context(), application.UpdateProjectCommand{
-		ID:                       domain.NewProjectID(req.ID),
-		Name:                     req.Name,
-		GitRepoURL:               req.GitRepoURL,
-		DefaultBranch:            req.DefaultBranch,
-		InitSteps:                req.InitSteps,
-		HeartbeatEnabled:         req.HeartbeatEnabled,
-		HeartbeatIntervalMinutes: req.HeartbeatIntervalMinutes,
-		HeartbeatMDContent:       req.HeartbeatMDContent,
-		HeartbeatAgentID:         req.HeartbeatAgentID,
+		ID:                        domain.NewProjectID(req.ID),
+		Name:                      req.Name,
+		GitRepoURL:                req.GitRepoURL,
+		DefaultBranch:             req.DefaultBranch,
+		InitSteps:                 req.InitSteps,
+		HeartbeatEnabled:          req.HeartbeatEnabled,
+		HeartbeatIntervalMinutes:  req.HeartbeatIntervalMinutes,
+		HeartbeatMDContent:        req.HeartbeatMDContent,
+		HeartbeatAgentID:          req.HeartbeatAgentID,
+		DispatchChannelCode:       req.DispatchChannelCode,
+		DispatchSessionKey:        req.DispatchSessionKey,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -139,16 +143,18 @@ func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 
 func projectToMap(project *domain.Project) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                        project.ID().String(),
-		"name":                      project.Name(),
-		"git_repo_url":              project.GitRepoURL(),
-		"default_branch":            project.DefaultBranch(),
-		"init_steps":                project.InitSteps(),
-		"heartbeat_enabled":         project.HeartbeatEnabled(),
-		"heartbeat_interval_minutes": project.HeartbeatIntervalMinutes(),
-		"heartbeat_md_content":      project.HeartbeatMDContent(),
-		"heartbeat_agent_id":        project.HeartbeatAgentID(),
-		"created_at":                project.CreatedAt().UnixMilli(),
-		"updated_at":                project.UpdatedAt().UnixMilli(),
+		"id":                         project.ID().String(),
+		"name":                       project.Name(),
+		"git_repo_url":               project.GitRepoURL(),
+		"default_branch":             project.DefaultBranch(),
+		"init_steps":                 project.InitSteps(),
+		"heartbeat_enabled":          project.HeartbeatEnabled(),
+		"heartbeat_interval_minutes":  project.HeartbeatIntervalMinutes(),
+		"heartbeat_md_content":       project.HeartbeatMDContent(),
+		"heartbeat_agent_id":         project.HeartbeatAgentID(),
+		"dispatch_channel_code":      project.DispatchChannelCode(),
+		"dispatch_session_key":       project.DispatchSessionKey(),
+		"created_at":                 project.CreatedAt().UnixMilli(),
+		"updated_at":                 project.UpdatedAt().UnixMilli(),
 	}
 }

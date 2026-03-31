@@ -8,6 +8,8 @@ export interface Project {
   heartbeat_interval_minutes: number;
   heartbeat_md_content: string;
   heartbeat_agent_id: string;
+  dispatch_channel_code: string;
+  dispatch_session_key: string;
   created_at: number;
   updated_at: number;
 }
@@ -55,6 +57,8 @@ export interface UpdateProjectRequest extends CreateProjectRequest {
   heartbeat_interval_minutes: number;
   heartbeat_md_content: string;
   heartbeat_agent_id: string;
+  dispatch_channel_code: string;
+  dispatch_session_key: string;
 }
 
 export interface CreateRequirementRequest {

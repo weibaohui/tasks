@@ -179,6 +179,8 @@ CREATE TABLE IF NOT EXISTS projects (
     heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 60,
     heartbeat_md_content TEXT NOT NULL DEFAULT '',
     heartbeat_agent_id TEXT NOT NULL DEFAULT '',
+    dispatch_channel_code TEXT NOT NULL DEFAULT '',
+    dispatch_session_key TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -414,6 +416,9 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateHookConfigProjectID(db); err != nil {
 		return err
 	}
+	if err := migrateProjectsNewColumns(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -610,6 +615,33 @@ func migrateHookConfigProjectID(db *sql.DB) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// migrateProjectsNewColumns 迁移 projects 表新增字段
+func migrateProjectsNewColumns(db *sql.DB) error {
+	// 添加 dispatch_channel_code 列
+	has, err := tableHasColumn(db, "projects", "dispatch_channel_code")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN dispatch_channel_code TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// 添加 dispatch_session_key 列
+	has, err = tableHasColumn(db, "projects", "dispatch_session_key")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN dispatch_session_key TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

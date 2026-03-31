@@ -179,6 +179,8 @@ export const ProjectRequirementPage: React.FC = () => {
           heartbeat_interval_minutes: editingProject.heartbeat_interval_minutes || 60,
           heartbeat_md_content: editingProject.heartbeat_md_content || '',
           heartbeat_agent_id: editingProject.heartbeat_agent_id || '',
+          dispatch_channel_code: editingProject.dispatch_channel_code || '',
+          dispatch_session_key: editingProject.dispatch_session_key || '',
         });
         message.success('更新项目成功');
       } else {
@@ -265,11 +267,16 @@ export const ProjectRequirementPage: React.FC = () => {
   const openDispatchModal = (item: Requirement) => {
     setDispatchRequirementItem(item);
     dispatchForm.resetFields();
-    const defaultChannelCode = channels[0]?.channel_code;
-    if (defaultChannelCode) {
-      dispatchForm.setFieldsValue({ channel_code: defaultChannelCode, session_key: defaultDispatchSessionKey });
-    } else {
-      dispatchForm.setFieldsValue({ session_key: defaultDispatchSessionKey });
+
+    // 获取项目配置的派发渠道和 session_key
+    const project = projects.find((p) => p.id === item.project_id);
+    const projectChannelCode = project?.dispatch_channel_code;
+    const projectSessionKey = project?.dispatch_session_key;
+
+    if (projectChannelCode && projectSessionKey) {
+      dispatchForm.setFieldsValue({ channel_code: projectChannelCode, session_key: projectSessionKey });
+    } else if (channels.length > 0) {
+      dispatchForm.setFieldsValue({ channel_code: channels[0]?.channel_code, session_key: defaultDispatchSessionKey });
     }
     setDispatchModalOpen(true);
   };
@@ -483,6 +490,8 @@ export const ProjectRequirementPage: React.FC = () => {
         heartbeat_interval_minutes: values.heartbeat_interval_minutes || 60,
         heartbeat_md_content: values.heartbeat_md_content || '',
         heartbeat_agent_id: values.heartbeat_agent_id || '',
+        dispatch_channel_code: values.dispatch_channel_code || '',
+        dispatch_session_key: values.dispatch_session_key || '',
       });
       message.success('心跳配置已保存');
       await fetchProjects();
@@ -825,6 +834,8 @@ export const ProjectRequirementPage: React.FC = () => {
                       heartbeat_interval_minutes: configProject?.heartbeat_interval_minutes || 60,
                       heartbeat_md_content: configProject?.heartbeat_md_content || '',
                       heartbeat_agent_id: configProject?.heartbeat_agent_id || '',
+                      dispatch_channel_code: configProject?.dispatch_channel_code || '',
+                      dispatch_session_key: configProject?.dispatch_session_key || '',
                     }}
                   >
                     <Form.Item label="启用心跳" name="heartbeat_enabled" valuePropName="checked">
@@ -856,6 +867,22 @@ export const ProjectRequirementPage: React.FC = () => {
                         style={{ width: 300 }}
                         allowClear
                       />
+                    </Form.Item>
+
+                    <Form.Item label="派发渠道" name="dispatch_channel_code">
+                      <Select
+                        options={channels.map((c) => ({
+                          label: `${c.name} (${c.type})`,
+                          value: c.channel_code,
+                        }))}
+                        placeholder="选择派发渠道"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="派发 SessionKey" name="dispatch_session_key">
+                      <Input placeholder="例如：feishu:ou_xxx" style={{ width: 400 }} />
                     </Form.Item>
 
                     <Form.Item

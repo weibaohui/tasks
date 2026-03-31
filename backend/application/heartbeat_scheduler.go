@@ -144,12 +144,17 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 
 	// 直接派发心跳需求
 	if s.requirementDispatchService != nil {
-		// 使用项目配置的默认 session_key 或者心跳专用渠道
-		sessionKey := "feishu:ou_df798fe15d056000143691af8c1cdb55"
+		// 使用项目配置的派发渠道和 session_key
+		channelCode := project.DispatchChannelCode()
+		sessionKey := project.DispatchSessionKey()
+		if channelCode == "" || sessionKey == "" {
+			log.Printf("heartbeat: project %s has no dispatch channel or session key configured", project.Name())
+			return
+		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
 			AgentID:       domain.NewAgentID(project.HeartbeatAgentID()),
-			ChannelCode:   "feishu",
+			ChannelCode:   channelCode,
 			SessionKey:    sessionKey,
 		})
 		if err != nil {

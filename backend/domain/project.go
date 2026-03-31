@@ -112,6 +112,13 @@ func (p *Project) UpdateHeartbeatConfig(enabled bool, intervalMinutes int, mdCon
 	p.updatedAt = time.Now()
 }
 
+// UpdateDispatchConfig 更新派发配置
+func (p *Project) UpdateDispatchConfig(channelCode, sessionKey string) {
+	p.dispatchChannelCode = channelCode
+	p.dispatchSessionKey = sessionKey
+	p.updatedAt = time.Now()
+}
+
 type ProjectSnapshot struct {
 	ID                        ProjectID
 	Name                      string
@@ -156,6 +163,8 @@ func (p *Project) FromSnapshot(s ProjectSnapshot) {
 	p.heartbeatIntervalMinutes = s.HeartbeatIntervalMinutes
 	p.heartbeatMDContent = s.HeartbeatMDContent
 	p.heartbeatAgentID = s.HeartbeatAgentID
+	p.dispatchChannelCode = s.DispatchChannelCode
+	p.dispatchSessionKey = s.DispatchSessionKey
 	p.createdAt = s.CreatedAt
 	p.updatedAt = s.UpdatedAt
 }
