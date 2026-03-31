@@ -4,6 +4,12 @@ export interface Project {
   git_repo_url: string;
   default_branch: string;
   init_steps: string[];
+  heartbeat_enabled: boolean;
+  heartbeat_interval_minutes: number;
+  heartbeat_md_content: string;
+  agent_code: string;
+  dispatch_channel_code: string;
+  dispatch_session_key: string;
   created_at: number;
   updated_at: number;
 }
@@ -17,8 +23,8 @@ export interface Requirement {
   temp_workspace_root: string;
   status: 'todo' | 'in_progress' | 'done';
   dev_state: 'idle' | 'preparing' | 'coding' | 'pr_opened' | 'failed';
-  assignee_agent_id: string;
-  replica_agent_id: string;
+  assignee_agent_code: string;
+  replica_agent_code: string;
   workspace_path: string;
   branch_name: string;
   pr_url: string;
@@ -47,6 +53,12 @@ export interface CreateProjectRequest {
 
 export interface UpdateProjectRequest extends CreateProjectRequest {
   id: string;
+  heartbeat_enabled: boolean;
+  heartbeat_interval_minutes: number;
+  heartbeat_md_content: string;
+  agent_code: string;
+  dispatch_channel_code: string;
+  dispatch_session_key: string;
 }
 
 export interface CreateRequirementRequest {

@@ -51,42 +51,58 @@ func (s RequirementStatus) IsValid() bool {
 type RequirementDevState string
 
 const (
-	RequirementDevStateIdle      RequirementDevState = "idle"
-	RequirementDevStatePreparing RequirementDevState = "preparing"
+	RequirementDevStateIdle       RequirementDevState = "idle"
+	RequirementDevStatePreparing  RequirementDevState = "preparing"
 	RequirementDevStateCoding    RequirementDevState = "coding"
 	RequirementDevStatePROpened  RequirementDevState = "pr_opened"
 	RequirementDevStateFailed    RequirementDevState = "failed"
+	RequirementDevStateCompleted  RequirementDevState = "completed"
 )
 
 func (s RequirementDevState) IsValid() bool {
 	switch s {
-	case RequirementDevStateIdle, RequirementDevStatePreparing, RequirementDevStateCoding, RequirementDevStatePROpened, RequirementDevStateFailed:
+	case RequirementDevStateIdle, RequirementDevStatePreparing, RequirementDevStateCoding, RequirementDevStatePROpened, RequirementDevStateFailed, RequirementDevStateCompleted:
 		return true
 	default:
 		return false
 	}
 }
 
+type RequirementType string
+
+const (
+	RequirementTypeNormal   RequirementType = "normal"
+	RequirementTypeHeartbeat RequirementType = "heartbeat"
+)
+
 type Requirement struct {
-	id                 RequirementID
-	projectID          ProjectID
-	title              string
-	description        string
-	acceptanceCriteria string
-	tempWorkspaceRoot  string
-	status             RequirementStatus
-	devState           RequirementDevState
-	assigneeAgentID    string
-	replicaAgentID     string
-	dispatchSessionKey string
-	workspacePath      string
-	branchName         string
-	prURL              string
-	lastError          string
-	startedAt          *time.Time
-	completedAt        *time.Time
-	createdAt          time.Time
-	updatedAt          time.Time
+	id                  RequirementID
+	projectID           ProjectID
+	title               string
+	description         string
+	acceptanceCriteria  string
+	tempWorkspaceRoot   string
+	status              RequirementStatus
+	devState            RequirementDevState
+	assigneeAgentCode   string
+	replicaAgentCode    string
+	dispatchSessionKey  string
+	workspacePath       string
+	branchName          string
+	prURL               string
+	lastError           string
+	startedAt           *time.Time
+	completedAt         *time.Time
+	createdAt           time.Time
+	updatedAt           time.Time
+	// 需求类型：normal（普通需求，不自动触发）| heartbeat（心跳需求，自动触发）
+	requirementType     RequirementType
+	// Claude Runtime 状态（持久化）
+	claudeRuntimeStatus    string        // running, completed, failed, ""
+	claudeRuntimeStartedAt *time.Time
+	claudeRuntimeEndedAt  *time.Time
+	claudeRuntimeError    string
+	claudeRuntimeResult   string        // Claude Code 执行结果摘要
 
 	// stateChangeCallbacks 状态变更回调列表（不持久化）
 	stateChangeCallbacks []StateChangeCallback
@@ -109,19 +125,26 @@ func NewReplicaAgentManager(agentRepo AgentRepository) *ReplicaAgentManager {
 
 // EnsureDisposed 确保分身已销毁（幂等方法）
 // 这是一个幂等操作，调用多次和调用一次效果相同
-func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentID, workspacePath string) {
-	if replicaAgentID == "" {
+func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentCode, workspacePath string) {
+	if replicaAgentCode == "" {
 		return
 	}
 
-	// 1. 删除分身 Agent
-	if err := m.agentRepo.Delete(ctx, NewAgentID(replicaAgentID)); err != nil {
-		log.Printf("failed to delete replica agent %s: %v", replicaAgentID, err)
-	} else {
-		log.Printf("replica agent %s disposed", replicaAgentID)
+	// 1. 根据 agent code 查找分身 agent
+	agent, err := m.agentRepo.FindByAgentCode(ctx, NewAgentCode(replicaAgentCode))
+	if err != nil || agent == nil {
+		log.Printf("failed to find replica agent %s: %v", replicaAgentCode, err)
+		return
 	}
 
-	// 2. 清理工作目录
+	// 2. 删除分身 Agent
+	if err := m.agentRepo.Delete(ctx, agent.ID()); err != nil {
+		log.Printf("failed to delete replica agent %s: %v", agent.ID(), err)
+	} else {
+		log.Printf("replica agent %s disposed", agent.ID())
+	}
+
+	// 3. 清理工作目录
 	if workspacePath != "" {
 		if err := os.RemoveAll(workspacePath); err != nil {
 			log.Printf("failed to cleanup workspace %s: %v", workspacePath, err)
@@ -177,30 +200,48 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 		tempWorkspaceRoot:  strings.TrimSpace(tempWorkspaceRoot),
 		status:             RequirementStatusTodo,
 		devState:           RequirementDevStateIdle,
+		requirementType:    RequirementTypeNormal,
 		createdAt:          now,
 		updatedAt:          now,
 	}, nil
 }
 
-func (r *Requirement) ID() RequirementID             { return r.id }
-func (r *Requirement) ProjectID() ProjectID          { return r.projectID }
-func (r *Requirement) Title() string                 { return r.title }
-func (r *Requirement) Description() string           { return r.description }
-func (r *Requirement) AcceptanceCriteria() string    { return r.acceptanceCriteria }
-func (r *Requirement) TempWorkspaceRoot() string     { return r.tempWorkspaceRoot }
-func (r *Requirement) Status() RequirementStatus     { return r.status }
-func (r *Requirement) DevState() RequirementDevState { return r.devState }
-func (r *Requirement) AssigneeAgentID() string       { return r.assigneeAgentID }
-func (r *Requirement) ReplicaAgentID() string        { return r.replicaAgentID }
-func (r *Requirement) DispatchSessionKey() string    { return r.dispatchSessionKey }
-func (r *Requirement) WorkspacePath() string         { return r.workspacePath }
-func (r *Requirement) BranchName() string            { return r.branchName }
-func (r *Requirement) PRURL() string                 { return r.prURL }
-func (r *Requirement) LastError() string             { return r.lastError }
-func (r *Requirement) StartedAt() *time.Time         { return copyTimePtr(r.startedAt) }
-func (r *Requirement) CompletedAt() *time.Time       { return copyTimePtr(r.completedAt) }
-func (r *Requirement) CreatedAt() time.Time          { return r.createdAt }
-func (r *Requirement) UpdatedAt() time.Time          { return r.updatedAt }
+func (r *Requirement) ID() RequirementID              { return r.id }
+func (r *Requirement) ProjectID() ProjectID           { return r.projectID }
+func (r *Requirement) Title() string                  { return r.title }
+func (r *Requirement) Description() string            { return r.description }
+func (r *Requirement) AcceptanceCriteria() string     { return r.acceptanceCriteria }
+func (r *Requirement) TempWorkspaceRoot() string      { return r.tempWorkspaceRoot }
+func (r *Requirement) Status() RequirementStatus      { return r.status }
+func (r *Requirement) DevState() RequirementDevState  { return r.devState }
+func (r *Requirement) AssigneeAgentCode() string      { return r.assigneeAgentCode }
+func (r *Requirement) ReplicaAgentCode() string       { return r.replicaAgentCode }
+func (r *Requirement) DispatchSessionKey() string     { return r.dispatchSessionKey }
+func (r *Requirement) WorkspacePath() string          { return r.workspacePath }
+func (r *Requirement) BranchName() string             { return r.branchName }
+func (r *Requirement) PRURL() string                  { return r.prURL }
+func (r *Requirement) LastError() string              { return r.lastError }
+func (r *Requirement) StartedAt() *time.Time          { return copyTimePtr(r.startedAt) }
+func (r *Requirement) CompletedAt() *time.Time        { return copyTimePtr(r.completedAt) }
+func (r *Requirement) CreatedAt() time.Time           { return r.createdAt }
+func (r *Requirement) UpdatedAt() time.Time           { return r.updatedAt }
+func (r *Requirement) RequirementType() RequirementType { return r.requirementType }
+func (r *Requirement) ClaudeRuntimeStatus() string     { return r.claudeRuntimeStatus }
+func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time { return copyTimePtr(r.claudeRuntimeStartedAt) }
+func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time  { return copyTimePtr(r.claudeRuntimeEndedAt) }
+func (r *Requirement) ClaudeRuntimeError() string       { return r.claudeRuntimeError }
+func (r *Requirement) ClaudeRuntimeResult() string      { return r.claudeRuntimeResult }
+
+// SetClaudeRuntimeResult 设置 Claude Code 执行结果
+func (r *Requirement) SetClaudeRuntimeResult(result string) {
+	r.claudeRuntimeResult = result
+}
+
+// SetRequirementType 设置需求类型
+func (r *Requirement) SetRequirementType(t RequirementType) {
+	r.requirementType = t
+}
+
 func (r *Requirement) CanDispatch() bool {
 	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
 }
@@ -211,6 +252,29 @@ func (r *Requirement) CanRedispatch() bool {
 	// 初始状态：todo + idle -> 不需要重新派发
 	// 其他状态都可以重新派发
 	return !(r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle)
+}
+
+// StartClaudeRuntime 开始 Claude Runtime
+func (r *Requirement) StartClaudeRuntime() {
+	now := time.Now()
+	r.claudeRuntimeStatus = "running"
+	r.claudeRuntimeStartedAt = &now
+	r.claudeRuntimeEndedAt = nil
+	r.claudeRuntimeError = ""
+	r.updatedAt = now
+}
+
+// EndClaudeRuntime 结束 Claude Runtime
+func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
+	now := time.Now()
+	if success {
+		r.claudeRuntimeStatus = "completed"
+	} else {
+		r.claudeRuntimeStatus = "failed"
+		r.claudeRuntimeError = errMsg
+	}
+	r.claudeRuntimeEndedAt = &now
+	r.updatedAt = now
 }
 
 // Redispatch 重置需求状态，允许重新派发
@@ -225,8 +289,8 @@ func (r *Requirement) Redispatch() error {
 	now := time.Now()
 	r.status = RequirementStatusTodo
 	r.devState = RequirementDevStateIdle
-	r.assigneeAgentID = ""
-	r.replicaAgentID = ""
+	r.assigneeAgentCode = ""
+	r.replicaAgentCode = ""
 	r.workspacePath = ""
 	r.branchName = ""
 	r.prURL = ""
@@ -260,7 +324,7 @@ func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, temp
 	return nil
 }
 
-func (r *Requirement) StartDispatch(assigneeAgentID string) error {
+func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	if !r.CanDispatch() {
 		return ErrRequirementCannotDispatch
 	}
@@ -271,7 +335,7 @@ func (r *Requirement) StartDispatch(assigneeAgentID string) error {
 	now := time.Now()
 	r.status = RequirementStatusInProgress
 	r.devState = RequirementDevStatePreparing
-	r.assigneeAgentID = assigneeAgentID
+	r.assigneeAgentCode = assigneeAgentCode
 	r.startedAt = &now
 	r.lastError = ""
 	r.updatedAt = now
@@ -289,7 +353,7 @@ func (r *Requirement) StartDispatch(assigneeAgentID string) error {
 	return nil
 }
 
-func (r *Requirement) MarkCoding(workspacePath, replicaAgentID, branchName string) error {
+func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode, branchName string) error {
 	if r.status != RequirementStatusInProgress {
 		return ErrRequirementCannotDispatch
 	}
@@ -298,7 +362,7 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentID, branchName strin
 
 	r.devState = RequirementDevStateCoding
 	r.workspacePath = workspacePath
-	r.replicaAgentID = replicaAgentID
+	r.replicaAgentCode = replicaAgentCode
 	r.branchName = branchName
 	now := time.Now()
 	r.updatedAt = now
@@ -354,7 +418,7 @@ func (r *Requirement) MarkPROpened(prURL, branchName string) {
 
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
-		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentID, r.workspacePath)
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
 	}
 }
 
@@ -391,7 +455,37 @@ func (r *Requirement) MarkFailed(lastError string) {
 
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
-		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentID, r.workspacePath)
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
+	}
+}
+
+// MarkCompleted 标记需求为已完成（Claude Code 正常结束）
+// 注意：只触发 mark_completed 事件，不触发 claude_code_finished
+// 因为 claude_code_finished 会触发新的 coding agent，而完成状态不需要再启动新的 agent
+func (r *Requirement) MarkCompleted() {
+	fromStatus := r.status
+	fromDevState := r.devState
+
+	r.status = RequirementStatusInProgress
+	r.devState = RequirementDevStateCompleted
+	now := time.Now()
+	r.completedAt = &now
+	r.updatedAt = now
+
+	// 只触发 mark_completed 事件，不触发 claude_code_finished
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_completed",
+		Reason:       "Claude Code 执行完成",
+		Timestamp:    time.Now(),
+	})
+
+	// 强制销毁分身（代码约束）
+	if r.replicaAgentManager != nil {
+		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
 	}
 }
 
@@ -401,48 +495,60 @@ func (r *Requirement) SetDispatchSessionKey(sessionKey string) {
 }
 
 type RequirementSnapshot struct {
-	ID                 RequirementID
-	ProjectID          ProjectID
-	Title              string
-	Description        string
-	AcceptanceCriteria string
-	TempWorkspaceRoot  string
-	Status             RequirementStatus
-	DevState           RequirementDevState
-	AssigneeAgentID    string
-	ReplicaAgentID     string
-	DispatchSessionKey string
-	WorkspacePath      string
-	BranchName         string
-	PRURL              string
-	LastError          string
-	StartedAt          *time.Time
-	CompletedAt        *time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                     RequirementID
+	ProjectID              ProjectID
+	Title                  string
+	Description            string
+	AcceptanceCriteria     string
+	TempWorkspaceRoot      string
+	Status                 RequirementStatus
+	DevState               RequirementDevState
+	AssigneeAgentCode      string
+	ReplicaAgentCode       string
+	DispatchSessionKey     string
+	WorkspacePath          string
+	BranchName             string
+	PRURL                  string
+	LastError              string
+	StartedAt              *time.Time
+	CompletedAt            *time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	RequirementType        RequirementType
+	ClaudeRuntimeStatus    string
+	ClaudeRuntimeStartedAt *time.Time
+	ClaudeRuntimeEndedAt   *time.Time
+	ClaudeRuntimeError     string
+	ClaudeRuntimeResult    string
 }
 
 func (r *Requirement) ToSnapshot() RequirementSnapshot {
 	return RequirementSnapshot{
-		ID:                 r.id,
-		ProjectID:          r.projectID,
-		Title:              r.title,
-		Description:        r.description,
-		AcceptanceCriteria: r.acceptanceCriteria,
-		TempWorkspaceRoot:  r.tempWorkspaceRoot,
-		Status:             r.status,
-		DevState:           r.devState,
-		AssigneeAgentID:    r.assigneeAgentID,
-		ReplicaAgentID:     r.replicaAgentID,
-		DispatchSessionKey: r.dispatchSessionKey,
-		WorkspacePath:      r.workspacePath,
-		BranchName:         r.branchName,
-		PRURL:              r.prURL,
-		LastError:          r.lastError,
-		StartedAt:          copyTimePtr(r.startedAt),
-		CompletedAt:        copyTimePtr(r.completedAt),
-		CreatedAt:          r.createdAt,
-		UpdatedAt:          r.updatedAt,
+		ID:                     r.id,
+		ProjectID:              r.projectID,
+		Title:                  r.title,
+		Description:            r.description,
+		AcceptanceCriteria:    r.acceptanceCriteria,
+		TempWorkspaceRoot:     r.tempWorkspaceRoot,
+		Status:                 r.status,
+		DevState:              r.devState,
+		AssigneeAgentCode:      r.assigneeAgentCode,
+		ReplicaAgentCode:       r.replicaAgentCode,
+		DispatchSessionKey:     r.dispatchSessionKey,
+		WorkspacePath:          r.workspacePath,
+		BranchName:             r.branchName,
+		PRURL:                  r.prURL,
+		LastError:              r.lastError,
+		StartedAt:              copyTimePtr(r.startedAt),
+		CompletedAt:            copyTimePtr(r.completedAt),
+		CreatedAt:              r.createdAt,
+		UpdatedAt:              r.updatedAt,
+		RequirementType:        r.requirementType,
+		ClaudeRuntimeStatus:    r.claudeRuntimeStatus,
+		ClaudeRuntimeStartedAt: copyTimePtr(r.claudeRuntimeStartedAt),
+		ClaudeRuntimeEndedAt:   copyTimePtr(r.claudeRuntimeEndedAt),
+		ClaudeRuntimeError:     r.claudeRuntimeError,
+		ClaudeRuntimeResult:    r.claudeRuntimeResult,
 	}
 }
 
@@ -461,8 +567,8 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.tempWorkspaceRoot = strings.TrimSpace(s.TempWorkspaceRoot)
 	r.status = s.Status
 	r.devState = s.DevState
-	r.assigneeAgentID = s.AssigneeAgentID
-	r.replicaAgentID = s.ReplicaAgentID
+	r.assigneeAgentCode = s.AssigneeAgentCode
+	r.replicaAgentCode = s.ReplicaAgentCode
 	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)
 	r.workspacePath = s.WorkspacePath
 	r.branchName = s.BranchName
@@ -472,6 +578,12 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.completedAt = copyTimePtr(s.CompletedAt)
 	r.createdAt = s.CreatedAt
 	r.updatedAt = s.UpdatedAt
+	r.requirementType = s.RequirementType
+	r.claudeRuntimeStatus = s.ClaudeRuntimeStatus
+	r.claudeRuntimeStartedAt = copyTimePtr(s.ClaudeRuntimeStartedAt)
+	r.claudeRuntimeEndedAt = copyTimePtr(s.ClaudeRuntimeEndedAt)
+	r.claudeRuntimeError = s.ClaudeRuntimeError
+	r.claudeRuntimeResult = s.ClaudeRuntimeResult
 	return nil
 }
 

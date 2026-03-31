@@ -179,7 +179,7 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 	result = strings.ReplaceAll(result, "${branch_name}", req.BranchName())
 
 	// 替换 Agent 相关变量
-	result = strings.ReplaceAll(result, "${agent.id}", req.ReplicaAgentID())
+	result = strings.ReplaceAll(result, "${agent.id}", req.ReplicaAgentCode())
 
 	// 替换状态变更相关变量
 	result = strings.ReplaceAll(result, "${change.trigger}", change.Trigger)

@@ -66,7 +66,7 @@ func main() {
 	logger.Info("配置加载完成", zap.Int("server_port", cfg.Server.Port), zap.String("api_base_url", cfg.API.BaseURL))
 
 	// 2. 初始化数据库
-	dbPath := resolveDBPath()
+	dbPath := config.ExpandPath(cfg.Database.Path)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.String("path", dbPath), zap.Error(err))
@@ -77,7 +77,7 @@ func main() {
 	if err := _persistence.InitSchema(db); err != nil {
 		logger.Fatal("Failed to init schema", zap.Error(err))
 	}
-	logger.Info("数据库初始化完成")
+	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
 	idGenerator := utils.NewNanoIDGenerator(21)
@@ -207,6 +207,9 @@ func main() {
 	taskService.SetWorkerPool(workerPool)
 	queryService := application.NewQueryService(taskRepo)
 
+	// 6.3 初始化心跳调度器（延迟到 gateway 初始化之后）
+	var heartbeatScheduler *application.HeartbeatScheduler
+
 	// 7. 初始化 HTTP Handler
 	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
 	userHandler := httpHandler.NewUserHandler(userService)
@@ -215,7 +218,7 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
-	projectHandler := httpHandler.NewProjectHandler(projectService)
+	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, sessionService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
@@ -247,11 +250,29 @@ func main() {
 	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
+	// 9. 初始化心跳调度器
+	heartbeatScheduler = application.NewHeartbeatScheduler(
+		projectRepo,
+		agentRepo,
+		requirementRepo,
+		idGenerator,
+		gateway.messageBus,
+		requirementDispatchService,
+	)
+
 	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
 	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
 	hookExecutor.AddExecutor(triggerAgentExecutor)
 	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
 	logger.Info("TriggerAgentExecutor 注册完成")
+
+	// 9.2 启动心跳调度器
+	heartbeatCtx := context.Background()
+	if err := heartbeatScheduler.Start(heartbeatCtx); err != nil {
+		logger.Error("心跳调度器启动失败", zap.Error(err))
+	} else {
+		logger.Info("心跳调度器启动完成")
+	}
 
 	// 10. 创建 HTTP Server
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
@@ -281,6 +302,9 @@ func main() {
 	<-quit
 
 	logger.Info("正在关闭服务器...")
+
+	// 关闭心跳调度器
+	heartbeatScheduler.Stop()
 
 	// 关闭渠道网关
 	gateway.Shutdown()
@@ -410,7 +434,12 @@ func resolveDBPath() string {
 	if p := os.Getenv("DB_PATH"); p != "" {
 		return p
 	}
-	// 如果当前目录存在 backend 目录，优先写入 backend/tasks.db（适配从仓库根目录执行）
+	// 如果当前目录是 backend 目录（通过检查 cmd/server 是否存在来判断），
+	// 说明是从 backend 目录直接运行，使用 ./tasks.db
+	if st, err := os.Stat("./cmd/server"); err == nil && st.IsDir() {
+		return filepath.FromSlash("./tasks.db")
+	}
+	// 如果当前目录存在 backend 目录，说明是从仓库根目录执行
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./backend/tasks.db")
 	}

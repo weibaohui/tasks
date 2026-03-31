@@ -175,6 +175,12 @@ CREATE TABLE IF NOT EXISTS projects (
     git_repo_url TEXT NOT NULL,
     default_branch TEXT NOT NULL DEFAULT 'main',
     init_steps TEXT NOT NULL,
+    heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+    heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 60,
+    heartbeat_md_content TEXT NOT NULL DEFAULT '',
+    agent_code TEXT NOT NULL DEFAULT '',
+    dispatch_channel_code TEXT NOT NULL DEFAULT '',
+    dispatch_session_key TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -190,8 +196,8 @@ CREATE TABLE IF NOT EXISTS requirements (
     status TEXT NOT NULL DEFAULT 'todo',
     dev_state TEXT NOT NULL DEFAULT 'idle',
     temp_workspace_root TEXT,
-    assignee_agent_id TEXT,
-    replica_agent_id TEXT,
+    assignee_agent_code TEXT,
+    replica_agent_code TEXT,
     dispatch_session_key TEXT,
     workspace_path TEXT,
     branch_name TEXT,
@@ -201,6 +207,10 @@ CREATE TABLE IF NOT EXISTS requirements (
     completed_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    claude_runtime_status TEXT,
+    claude_runtime_started_at INTEGER,
+    claude_runtime_ended_at INTEGER,
+    claude_runtime_error TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
@@ -410,6 +420,15 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateHookConfigProjectID(db); err != nil {
 		return err
 	}
+	if err := migrateProjectsNewColumns(db); err != nil {
+		return err
+	}
+	if err := migrateRequirementsClaudeRuntime(db); err != nil {
+		return err
+	}
+	if err := migrateRequirementType(db); err != nil {
+		return err
+	}
 	return migrateConversationRecordsTimestampToMillis(db)
 }
 
@@ -565,6 +584,78 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 			return err
 		}
 	}
+
+	// 重命名 assignee_agent_id -> assignee_agent_code
+	hasOldAssignee, err := tableHasColumn(db, "requirements", "assignee_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewAssignee, err := tableHasColumn(db, "requirements", "assignee_agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldAssignee && !hasNewAssignee {
+		if _, err := db.Exec("ALTER TABLE requirements RENAME COLUMN assignee_agent_id TO assignee_agent_code"); err != nil {
+			return err
+		}
+	}
+
+	// 重命名 replica_agent_id -> replica_agent_code
+	hasOldReplica, err := tableHasColumn(db, "requirements", "replica_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewReplica, err := tableHasColumn(db, "requirements", "replica_agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldReplica && !hasNewReplica {
+		if _, err := db.Exec("ALTER TABLE requirements RENAME COLUMN replica_agent_id TO replica_agent_code"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateRequirementsClaudeRuntime 迁移 requirements 表新增 claude_runtime 相关字段
+func migrateRequirementsClaudeRuntime(db *sql.DB) error {
+	columns := []struct {
+		name    string
+		sqlType string
+	}{
+		{"claude_runtime_status", "TEXT"},
+		{"claude_runtime_started_at", "INTEGER"},
+		{"claude_runtime_ended_at", "INTEGER"},
+		{"claude_runtime_error", "TEXT"},
+		{"claude_runtime_result", "TEXT"},
+	}
+
+	for _, col := range columns {
+		has, err := tableHasColumn(db, "requirements", col.name)
+		if err != nil {
+			return err
+		}
+		if !has {
+			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE requirements ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// migrateRequirementType 迁移 requirements 表新增 requirement_type 字段
+func migrateRequirementType(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirements", "requirement_type")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN requirement_type TEXT NOT NULL DEFAULT 'normal'"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -606,6 +697,48 @@ func migrateHookConfigProjectID(db *sql.DB) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// migrateProjectsNewColumns 迁移 projects 表新增字段
+func migrateProjectsNewColumns(db *sql.DB) error {
+	// 添加 dispatch_channel_code 列
+	has, err := tableHasColumn(db, "projects", "dispatch_channel_code")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN dispatch_channel_code TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// 添加 dispatch_session_key 列
+	has, err = tableHasColumn(db, "projects", "dispatch_session_key")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN dispatch_session_key TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// 将 heartbeat_agent_id 重命名为 agent_code
+	hasOldColumn, err := tableHasColumn(db, "projects", "heartbeat_agent_id")
+	if err != nil {
+		return err
+	}
+	hasNewColumn, err := tableHasColumn(db, "projects", "agent_code")
+	if err != nil {
+		return err
+	}
+	if hasOldColumn && !hasNewColumn {
+		if _, err := db.Exec("ALTER TABLE projects RENAME COLUMN heartbeat_agent_id TO agent_code"); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

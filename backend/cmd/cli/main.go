@@ -13,7 +13,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
@@ -61,17 +63,19 @@ func printUsage() {
 	fmt.Println("Usage: taskmanager <command> [options]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  create-admin          创建默认管理员用户 (admin/admin123)")
-	fmt.Println("  delete-admin          删除默认管理员用户")
-	fmt.Println("  agent list            列出所有 Agent")
-	fmt.Println("  project list          列出所有项目")
-	fmt.Println("  requirement create    创建新需求")
-	fmt.Println("  requirement update     更新需求")
-	fmt.Println("  requirement dispatch  派发需求")
-	fmt.Println("  requirement complete  完成需求（创建 PR 后调用）")
-	fmt.Println("  requirement list      列出需求")
-	fmt.Println("  requirement get       获取需求详情")
-	fmt.Println("  config init           初始化配置文件")
+	fmt.Println("  create-admin                创建默认管理员用户 (admin/admin123)")
+	fmt.Println("  delete-admin                删除默认管理员用户")
+	fmt.Println("  agent list                  列出所有 Agent")
+	fmt.Println("  project list                列出所有项目")
+	fmt.Println("  project heartbeat           心跳设置 (enable/disable/set-interval)")
+	fmt.Println("  requirement create          创建新需求")
+	fmt.Println("  requirement update          更新需求")
+	fmt.Println("  requirement dispatch        派发需求")
+	fmt.Println("  requirement complete        完成需求（创建 PR 后调用）")
+	fmt.Println("  requirement list           列出需求")
+	fmt.Println("  requirement get            获取需求详情")
+	fmt.Println("  requirement review         分析PR并创建需求")
+	fmt.Println("  config init               初始化配置文件")
 	fmt.Println("  config show           显示当前配置")
 	fmt.Println("")
 	fmt.Println("Configuration:")
@@ -86,7 +90,7 @@ func printUsage() {
 	fmt.Println("  taskmanager agent list")
 	fmt.Println("  taskmanager project list")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
-	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager config init")
 	fmt.Println("  taskmanager config show")
@@ -111,6 +115,8 @@ func handleRequirementCommand(logger *zap.Logger) {
 		listRequirements(logger)
 	case "get":
 		getRequirement(logger)
+	case "review":
+		reviewPR(logger)
 	default:
 		fmt.Printf("Unknown requirement subcommand: %s\n", os.Args[2])
 		printRequirementUsage()
@@ -124,17 +130,19 @@ func printRequirementUsage() {
 	fmt.Println("Subcommands:")
 	fmt.Println("  create    创建新需求")
 	fmt.Println("  update    更新需求")
-	fmt.Println("  dispatch  派发需求")
+	fmt.Println("  dispatch  派发需求（从项目配置获取agent/channel/sessionkey）")
 	fmt.Println("  complete  完成需求")
-	fmt.Println("  list      列出需求")
+	fmt.Println("  list      列出需求（默认过滤心跳需求）")
 	fmt.Println("  get       获取需求详情")
+	fmt.Println("  review    分析PR并创建需求")
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager requirement create --project-id <id> --title <title> --description <desc>")
 	fmt.Println("  taskmanager requirement update --id <id> --title <new-title>")
-	fmt.Println("  taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+	fmt.Println("  taskmanager requirement dispatch <requirement_id>")
 	fmt.Println("  taskmanager requirement complete --id <id> --pr-url <url>")
 	fmt.Println("  taskmanager requirement list --project-id <id>")
+	fmt.Println("  taskmanager requirement list --include-heartbeat  # 包含心跳需求")
 	fmt.Println("  taskmanager requirement get --id <id>")
 }
 
@@ -163,7 +171,7 @@ func getUserRepos(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator
 	return userRepo, idGenerator, cleanup
 }
 
-func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *application.RequirementApplicationService, *application.RequirementDispatchService, func()) {
+func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, domain.ProjectRepository, *application.RequirementApplicationService, *application.RequirementDispatchService, func()) {
 	dbPath := getDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -195,7 +203,7 @@ func getRequirementRepos(logger *zap.Logger) (domain.RequirementRepository, *app
 		db.Close()
 	}
 
-	return requirementRepo, appService, dispatchService, cleanup
+	return requirementRepo, projectRepo, appService, dispatchService, cleanup
 }
 
 func createAdminUser(logger *zap.Logger) {
@@ -274,7 +282,7 @@ func createRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	_, appService, _, cleanup := getRequirementRepos(logger)
+	_, _, appService, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -314,7 +322,7 @@ func updateRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -358,55 +366,89 @@ func updateRequirement(logger *zap.Logger) {
 }
 
 // dispatchRequirement 派发需求
-// 用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key> [--channel-code <code>]
+// 用法: taskmanager requirement dispatch <requirement_id>
+// agent/channel/sessionkey 从项目配置中获取
 func dispatchRequirement(logger *zap.Logger) {
-	channelCodePtr := flag.String("channel-code", "feishu", "渠道代码")
-
 	flag.CommandLine.Parse(os.Args[3:])
 
 	args := flag.CommandLine.Args()
-	if len(args) < 3 {
+	if len(args) < 1 {
 		fmt.Println("错误: 缺少必填参数")
 		fmt.Println("")
-		fmt.Println("用法: taskmanager requirement dispatch <requirement_id> <agent_id> <session_key>")
+		fmt.Println("用法: taskmanager requirement dispatch <requirement_id>")
 		fmt.Println("")
-		fmt.Println("示例: taskmanager requirement dispatch \\")
-		fmt.Println("  y6Wfok055CoE2twsr8dtD \\")
-		fmt.Println("  Yt1rVbqBPPti6kZeOhD5A \\")
-		fmt.Println("  feishu:ou_df798fe15d056000143691af8c1cdb55")
-		fmt.Println("")
-		fmt.Println("提示: 可用 Agent ID 可以通过 taskmanager agent list 查看")
+		fmt.Println("示例: taskmanager requirement dispatch y6Wfok055CoE2twsr8dtD")
 		os.Exit(1)
 	}
 
-	idPtr := args[0]
-	agentIDPtr := args[1]
-	sessionKeyPtr := args[2]
+	requirementID := args[0]
 
-	// 1. 登录获取 token
+	// 1. 获取需求和项目信息（从数据库直接读取）
+	requirementRepo, projectRepo, _, _, cleanup := getRequirementRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 查找需求
+	req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
+	if err != nil {
+		logger.Fatal("查找需求失败", zap.Error(err))
+	}
+	if req == nil {
+		logger.Fatal("需求不存在", zap.String("id", requirementID))
+	}
+
+	// 查找项目获取派发配置
+	project, err := projectRepo.FindByID(ctx, req.ProjectID())
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", req.ProjectID().String()))
+	}
+
+	// 检查项目是否配置了派发信息
+	agentCode := project.AgentCode()
+	channelCode := project.DispatchChannelCode()
+	sessionKey := project.DispatchSessionKey()
+
+	if agentCode == "" || sessionKey == "" {
+		logger.Fatal("项目未配置派发信息",
+			zap.String("project_id", project.ID().String()),
+			zap.String("project_name", project.Name()),
+			zap.String("agent_code", agentCode),
+			zap.String("session_key", sessionKey))
+	}
+
+	// 如果 channelCode 为空，使用默认值
+	if channelCode == "" {
+		channelCode = "feishu"
+	}
+
+	// 2. 登录获取 token
 	token, err := login()
 	if err != nil {
 		logger.Fatal("登录失败", zap.Error(err))
 	}
 
-	// 2. 调用派发 API
+	// 3. 调用派发 API
 	reqBody := map[string]string{
-		"requirement_id": idPtr,
-		"agent_id":       agentIDPtr,
-		"channel_code":   *channelCodePtr,
-		"session_key":   sessionKeyPtr,
+		"requirement_id": requirementID,
+		"agent_code":    agentCode,
+		"channel_code":  channelCode,
+		"session_key":   sessionKey,
 	}
 	reqJSON, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
+	httpReq, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
 	if err != nil {
 		logger.Fatal("创建请求失败", zap.Error(err))
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		logger.Fatal("派发请求失败", zap.Error(err))
 	}
@@ -418,10 +460,10 @@ func dispatchRequirement(logger *zap.Logger) {
 	}
 
 	var result struct {
-		RequirementID string `json:"requirement_id"`
-		TaskID       string `json:"task_id"`
-		WorkspacePath string `json:"workspace_path"`
-		ReplicaAgentID string `json:"replica_agent_id"`
+		RequirementID   string `json:"requirement_id"`
+		TaskID         string `json:"task_id"`
+		WorkspacePath  string `json:"workspace_path"`
+		ReplicaAgentCode string `json:"replica_agent_code"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		logger.Fatal("解析响应失败", zap.Error(err))
@@ -431,10 +473,10 @@ func dispatchRequirement(logger *zap.Logger) {
 		zap.String("requirement_id", result.RequirementID),
 		zap.String("task_id", result.TaskID),
 		zap.String("workspace_path", result.WorkspacePath),
-		zap.String("replica_agent_id", result.ReplicaAgentID),
+		zap.String("replica_agent_code", result.ReplicaAgentCode),
 	)
-	fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentID: %s\n",
-		result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentID)
+	fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentCode: %s\n",
+		result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentCode)
 }
 
 // login 登录获取 token
@@ -537,14 +579,201 @@ func completeRequirement(logger *zap.Logger) {
 	fmt.Printf("需求 %s 已标记为完成，PR: %s\n", result.RequirementID, result.PRURL)
 }
 
+// reviewPR 分析PR并创建需求
+// 用法: taskmanager requirement review <pr_url> <project_id> [--title <title>]
+// PR URL 格式: https://github.com/owner/repo/pull/123
+// 或者只传 owner/repo 和 PR号: owner/repo 123
+func reviewPR(logger *zap.Logger) {
+	flag.CommandLine.Parse(os.Args[3:])
+	args := flag.CommandLine.Args()
+
+	if len(args) < 2 {
+		fmt.Println("错误: 缺少必填参数")
+		fmt.Println("")
+		fmt.Println("用法: taskmanager requirement review <pr_url> <project_id> [--title <title>]")
+		fmt.Println("   或: taskmanager requirement review <owner/repo> <pr_number> <project_id>")
+		fmt.Println("")
+		fmt.Println("示例:")
+		fmt.Println("  taskmanager requirement review https://github.com/owner/repo/pull/123 prj_xxx")
+		fmt.Println("  taskmanager requirement review owner/repo 123 prj_xxx")
+		fmt.Println("  taskmanager requirement review owner/repo 123 prj_xxx --title '修复登录bug'")
+		os.Exit(1)
+	}
+
+	var prURL, owner, repo string
+	var prNumber int
+
+	// 解析参数
+	if strings.HasPrefix(args[0], "http") {
+		// 完整URL格式
+		prURL = args[0]
+		// 从URL中提取owner/repo
+		parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
+		if len(parts) >= 2 {
+			owner = parts[len(parts)-4]
+			repo = parts[len(parts)-3]
+		}
+	} else {
+		// owner/repo 格式
+		ownerRepo := args[0]
+		prNumberStr := args[1]
+
+		parts := strings.Split(ownerRepo, "/")
+		if len(parts) != 2 {
+			fmt.Println("错误: owner/repo 格式不正确")
+			os.Exit(1)
+		}
+		owner = parts[0]
+		repo = parts[1]
+
+		fmt.Sscanf(prNumberStr, "%d", &prNumber)
+		prURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber)
+	}
+
+	projectID := args[len(args)-1]
+
+	titlePtr := flag.String("title", "", "需求标题 (可选)")
+
+	// 1. 登录获取 token
+	token, err := login()
+	if err != nil {
+		logger.Fatal("登录失败", zap.Error(err))
+	}
+
+	// 2. 获取PR信息
+	prInfo, err := fetchPRInfo(owner, repo, prNumber)
+	if err != nil {
+		logger.Fatal("获取PR信息失败", zap.Error(err))
+	}
+
+	// 3. 获取PR评论
+	comments, err := fetchPRComments(owner, repo, prNumber)
+	if err != nil {
+		logger.Warn("获取PR评论失败", zap.Error(err))
+		comments = []PRComment{}
+	}
+
+	// 4. 生成需求内容
+	title := *titlePtr
+	if title == "" {
+		title = fmt.Sprintf("PR #%d: %s", prNumber, prInfo.Title)
+	}
+
+	description := "## PR 信息\n\n"
+	description += fmt.Sprintf("- PR: %s\n", prURL)
+	description += fmt.Sprintf("- 标题: %s\n", prInfo.Title)
+	description += fmt.Sprintf("- 作者: %s\n", prInfo.Author)
+	description += fmt.Sprintf("- 状态: %s\n", prInfo.State)
+	description += fmt.Sprintf("- 创建时间: %s\n", prInfo.CreatedAt)
+	description += "\n## PR 描述\n\n" + prInfo.Body + "\n\n"
+
+	if len(comments) > 0 {
+		description += "## PR 评论\n\n"
+		for _, c := range comments {
+			description += fmt.Sprintf("### %s (%s)\n%s\n\n", c.Author, c.CreatedAt, c.Body)
+		}
+	}
+
+	// 5. 调用创建需求 API
+	reqBody := map[string]string{
+		"project_id":          projectID,
+		"title":              title,
+		"description":        description,
+		"acceptance_criteria": "根据PR评论内容确定验收标准",
+	}
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		logger.Fatal("创建请求失败", zap.Error(err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Fatal("创建需求请求失败", zap.Error(err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Fatal("创建需求失败", zap.String("status", resp.Status), zap.String("body", string(body)))
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Fatal("解析响应失败", zap.Error(err))
+	}
+
+	logger.Info("需求创建成功",
+		zap.String("requirement_id", result.ID),
+		zap.String("pr_url", prURL),
+	)
+	fmt.Printf("需求 %s 已创建 (来源: PR %s)\n", result.ID, prURL)
+}
+
+// PRInfo PR信息
+type PRInfo struct {
+	Title     string
+	Body      string
+	Author    string
+	State     string
+	CreatedAt string
+}
+
+// PRComment PR评论
+type PRComment struct {
+	Author    string
+	Body      string
+	CreatedAt string
+}
+
+// fetchPRInfo 获取PR信息
+func fetchPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
+	// 使用 gh 命令获取PR信息
+	cmd := exec.Command("gh", "pr", "view", fmt.Sprintf("%s/%s#%d", owner, repo, prNumber),
+		"--json", "title,body,author,state,createdAt", "-q", ".")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch PR info: %w", err)
+	}
+
+	var prInfo PRInfo
+	if err := json.Unmarshal(output, &prInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse PR info: %w", err)
+	}
+	return &prInfo, nil
+}
+
+// fetchPRComments 获取PR评论
+func fetchPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
+	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, prNumber),
+		"--jq", ".[] | {author: .user.login, body: .body, createdAt: .created_at}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch PR comments: %w", err)
+	}
+
+	var comments []PRComment
+	if err := json.Unmarshal(output, &comments); err != nil {
+		return nil, fmt.Errorf("failed to parse PR comments: %w", err)
+	}
+	return comments, nil
+}
+
 // listRequirements 列出需求
-// 用法: taskmanager requirement list [--project-id <id>]
+// 用法: taskmanager requirement list [--project-id <id>] [--include-heartbeat]
 func listRequirements(logger *zap.Logger) {
 	projectIDPtr := flag.String("project-id", "", "项目 ID (可选)")
+	includeHeartbeatPtr := flag.Bool("include-heartbeat", false, "包含心跳需求（默认不显示）")
 
 	flag.CommandLine.Parse(os.Args[3:])
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -565,6 +794,23 @@ func listRequirements(logger *zap.Logger) {
 
 	if err != nil {
 		logger.Fatal("列出需求失败", zap.Error(err))
+	}
+
+	// 过滤掉心跳需求（除非指定 --include-heartbeat）
+	// 心跳需求有两种：1) requirement_type=heartbeat  2) 标题以[心跳]开头（旧数据）
+	if !*includeHeartbeatPtr {
+		filtered := make([]*domain.Requirement, 0)
+		for _, req := range requirements {
+			if req.RequirementType() == domain.RequirementTypeHeartbeat {
+				continue
+			}
+			// 兼容旧数据：标题以[心跳]开头也算心跳需求
+			if strings.HasPrefix(req.Title(), "[心跳]") {
+				continue
+			}
+			filtered = append(filtered, req)
+		}
+		requirements = filtered
 	}
 
 	fmt.Printf("\n需求列表 (共 %d 个):\n", len(requirements))
@@ -594,7 +840,7 @@ func getRequirement(logger *zap.Logger) {
 		os.Exit(1)
 	}
 
-	requirementRepo, _, _, cleanup := getRequirementRepos(logger)
+	requirementRepo, _, _, _, cleanup := getRequirementRepos(logger)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -617,6 +863,7 @@ func getRequirement(logger *zap.Logger) {
 	fmt.Printf("描述: %s\n", requirement.Description())
 	fmt.Printf("验收标准: %s\n", requirement.AcceptanceCriteria())
 	fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
+	fmt.Printf("类型: %s\n", requirement.RequirementType())
 	fmt.Printf("工作目录: %s\n", requirement.WorkspacePath())
 	fmt.Printf("PR URL: %s\n", requirement.PRURL())
 	fmt.Printf("分支: %s\n", requirement.BranchName())
@@ -625,6 +872,13 @@ func getRequirement(logger *zap.Logger) {
 	}
 	if requirement.CompletedAt() != nil {
 		fmt.Printf("完成时间: %s\n", requirement.CompletedAt().Format("2006-01-02 15:04:05"))
+	}
+	if reqResult := requirement.ClaudeRuntimeResult(); reqResult != "" {
+		resultPreview := reqResult
+		if len(resultPreview) > 100 {
+			resultPreview = resultPreview[:100] + "..."
+		}
+		fmt.Printf("Claude执行结果: %s\n", resultPreview)
 	}
 	fmt.Println()
 }
@@ -729,6 +983,8 @@ func handleProjectCommand(logger *zap.Logger) {
 	switch os.Args[2] {
 	case "list":
 		listProjects(logger)
+	case "heartbeat":
+		handleProjectHeartbeatCommand(logger)
 	default:
 		fmt.Printf("Unknown project subcommand: %s\n", os.Args[2])
 		printProjectUsage()
@@ -740,10 +996,14 @@ func printProjectUsage() {
 	fmt.Println("Usage: taskmanager project <subcommand>")
 	fmt.Println("")
 	fmt.Println("Subcommands:")
-	fmt.Println("  list   列出所有项目")
+	fmt.Println("  list     列出所有项目")
+	fmt.Println("  heartbeat  管理心跳设置 (enable/disable/set-interval)")
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  taskmanager project list")
+	fmt.Println("  taskmanager project heartbeat enable <project_id>")
+	fmt.Println("  taskmanager project heartbeat disable <project_id>")
+	fmt.Println("  taskmanager project heartbeat set-interval <project_id> <minutes>")
 }
 
 func getProjectRepos(logger *zap.Logger) (domain.ProjectRepository, func()) {
@@ -785,6 +1045,170 @@ func listProjects(logger *zap.Logger) {
 	for _, project := range projects {
 		fmt.Printf("%-20s %s\n",
 			project.ID().String()[:16]+"...",
+			project.Name())
+	}
+	fmt.Println()
+}
+
+// handleProjectHeartbeatCommand 处理 project heartbeat 子命令
+func handleProjectHeartbeatCommand(logger *zap.Logger) {
+	if len(os.Args) < 4 {
+		printProjectHeartbeatUsage()
+		os.Exit(1)
+	}
+
+	action := os.Args[3]
+
+	switch action {
+	case "enable":
+		enableHeartbeat(logger)
+	case "disable":
+		disableHeartbeat(logger)
+	case "set-interval":
+		setHeartbeatInterval(logger)
+	case "status":
+		showHeartbeatStatus(logger)
+	default:
+		fmt.Printf("Unknown heartbeat action: %s\n", action)
+		printProjectHeartbeatUsage()
+		os.Exit(1)
+	}
+}
+
+func printProjectHeartbeatUsage() {
+	fmt.Println("Usage: taskmanager project heartbeat <action> [project_id] [minutes]")
+	fmt.Println("")
+	fmt.Println("Actions:")
+	fmt.Println("  status [project_id]                查看心跳状态（可指定项目）")
+	fmt.Println("  enable <project_id>                开启心跳")
+	fmt.Println("  disable <project_id>               关闭心跳")
+	fmt.Println("  set-interval <project_id> <minutes> 设置心跳间隔（分钟）")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  taskmanager project heartbeat status")
+	fmt.Println("  taskmanager project heartbeat status prj_xxx")
+	fmt.Println("  taskmanager project heartbeat enable prj_xxx")
+	fmt.Println("  taskmanager project heartbeat disable prj_xxx")
+	fmt.Println("  taskmanager project heartbeat set-interval prj_xxx 30")
+}
+
+func enableHeartbeat(logger *zap.Logger) {
+	if len(os.Args) < 5 {
+		fmt.Println("错误: 缺少 project_id 参数")
+		fmt.Println("用法: taskmanager project heartbeat enable <project_id>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	interval := project.HeartbeatIntervalMinutes()
+	if interval < 1 {
+		interval = 30
+	}
+	project.UpdateHeartbeatConfig(true, interval, project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳已开启，项目: %s，间隔: %d 分钟\n", project.Name(), interval)
+}
+
+func disableHeartbeat(logger *zap.Logger) {
+	if len(os.Args) < 5 {
+		fmt.Println("错误: 缺少 project_id 参数")
+		fmt.Println("用法: taskmanager project heartbeat disable <project_id>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	project.UpdateHeartbeatConfig(false, project.HeartbeatIntervalMinutes(), project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳已关闭，项目: %s\n", project.Name())
+}
+
+func setHeartbeatInterval(logger *zap.Logger) {
+	if len(os.Args) < 6 {
+		fmt.Println("错误: 缺少参数")
+		fmt.Println("用法: taskmanager project heartbeat set-interval <project_id> <minutes>")
+		os.Exit(1)
+	}
+	projectID := os.Args[4]
+	minutes := 0
+	fmt.Sscanf(os.Args[5], "%d", &minutes)
+	if minutes < 1 {
+		fmt.Println("错误: minutes 必须大于 0")
+		os.Exit(1)
+	}
+
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		logger.Fatal("查找项目失败", zap.Error(err))
+	}
+	if project == nil {
+		logger.Fatal("项目不存在", zap.String("project_id", projectID))
+	}
+
+	project.UpdateHeartbeatConfig(project.HeartbeatEnabled(), minutes, project.HeartbeatMDContent(), project.AgentCode())
+	if err := projectRepo.Save(ctx, project); err != nil {
+		logger.Fatal("保存项目失败", zap.Error(err))
+	}
+
+	fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, project.Name())
+}
+
+func showHeartbeatStatus(logger *zap.Logger) {
+	projectRepo, cleanup := getProjectRepos(logger)
+	defer cleanup()
+
+	ctx := context.Background()
+	projects, err := projectRepo.FindAll(ctx)
+	if err != nil {
+		logger.Fatal("列出项目失败", zap.Error(err))
+	}
+
+	fmt.Println("\n项目心跳状态:")
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("%-20s %-10s %-10s %s\n", "项目ID", "心跳", "间隔(分钟)", "项目名称")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, project := range projects {
+		status := "关闭"
+		if project.HeartbeatEnabled() {
+			status = "开启"
+		}
+		fmt.Printf("%-20s %-10s %-10d %s\n",
+			project.ID().String()[:16]+"...",
+			status,
+			project.HeartbeatIntervalMinutes(),
 			project.Name())
 	}
 	fmt.Println()

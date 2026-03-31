@@ -19,11 +19,17 @@ type CreateProjectCommand struct {
 }
 
 type UpdateProjectCommand struct {
-	ID            domain.ProjectID
-	Name          string
-	GitRepoURL    string
-	DefaultBranch string
-	InitSteps     []string
+	ID                        domain.ProjectID
+	Name                      string
+	GitRepoURL                string
+	DefaultBranch             string
+	InitSteps                 []string
+	HeartbeatEnabled          bool
+	HeartbeatIntervalMinutes  int
+	HeartbeatMDContent        string
+	AgentCode                string
+	DispatchChannelCode      string
+	DispatchSessionKey       string
 }
 
 type ProjectApplicationService struct {
@@ -78,6 +84,8 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	if err := project.Update(cmd.Name, cmd.GitRepoURL, cmd.DefaultBranch, cmd.InitSteps); err != nil {
 		return nil, err
 	}
+	project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
+	project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err
 	}

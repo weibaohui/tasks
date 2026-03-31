@@ -22,6 +22,7 @@ type StreamingCallback interface {
 	OnToolResult(toolName string, result string)
 	OnText(text string)
 	OnComplete(finalResult string)
+	GetFinalResult() string
 }
 
 // toolHookAdapter bridges Claude Code SDK hooks to the domain hook system
@@ -287,6 +288,8 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
 	if err != nil {
 		p.logger.Error("Claude Code 流式调用失败", zap.Error(err))
+		// 即使出错也要触发清理 hook
+		p.triggerClaudeCodeFinishedHook(ctx, msg, agent, false, "")
 		return fmt.Errorf("Claude Code 调用失败: %w", err)
 	}
 
@@ -299,8 +302,14 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		)
 	}
 
+	// 获取最终结果
+	finalResult := ""
+	if callback != nil {
+		finalResult = callback.GetFinalResult()
+	}
+
 	// Claude Code 执行完成，触发 claude_code_finished hook
-	p.triggerClaudeCodeFinishedHook(ctx, msg, agent)
+	p.triggerClaudeCodeFinishedHook(ctx, msg, agent, true, finalResult)
 
 	return nil
 }
@@ -903,7 +912,9 @@ func getUsageInt(usage map[string]any, key string) int {
 }
 
 // triggerClaudeCodeFinishedHook 触发 Claude Code 完成 hook
-func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context, msg *bus.InboundMessage, agent *domain.Agent) {
+// success 参数表示 Claude Code 是否成功完成（不是错误退出）
+// finalResult 参数是 Claude Code 的最终执行结果
+func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context, msg *bus.InboundMessage, agent *domain.Agent, success bool, finalResult string) {
 	// 检查是否有 requirement_id 元数据
 	if msg.Metadata == nil {
 		p.logger.Debug("Claude Code 完成，无 requirement_id 元数据")
@@ -914,12 +925,6 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	if !ok || requirementIDStr == "" {
 		p.logger.Debug("Claude Code 完成，requirement_id 为空或不存在",
 			zap.Any("metadata", msg.Metadata))
-		return
-	}
-
-	// 检查是否有 hookExecutor
-	if p.hookExecutor == nil {
-		p.logger.Debug("Claude Code 完成，hookExecutor 为 nil")
 		return
 	}
 
@@ -940,25 +945,41 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 
 	p.logger.Info("Claude Code 完成，触发 claude_code_finished hook",
 		zap.String("requirement_id", requirementIDStr),
-		zap.String("requirement_title", requirement.Title()))
+		zap.String("requirement_title", requirement.Title()),
+		zap.Bool("success", success))
 
 	// **立即清理分身**（代码约束，不是 Hook）
 	// 在触发任何 hook 之前清理分身，确保清理一定会执行
 	if p.replicaAgentManager != nil {
-		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentID(), requirement.WorkspacePath())
+		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
 	}
 
-	// 创建 StateChange
-	change := &domain.StateChange{
-		FromStatus:   requirement.Status(),
-		ToStatus:     requirement.Status(),
-		FromDevState: requirement.DevState(),
-		ToDevState:   requirement.DevState(),
-		Trigger:      "claude_code_finished",
-		Reason:       "Claude Code 对话结束",
-		Timestamp:    time.Now(),
+	// 成功完成时，标记需求为 completed 状态并保存执行结果
+	if success {
+		requirement.MarkCompleted()
+		requirement.SetClaudeRuntimeResult(finalResult)
+		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+			p.logger.Error("Claude Code 完成，保存 requirement 失败",
+				zap.String("requirement_id", requirementIDStr),
+				zap.Error(err))
+			return
+		}
+		p.logger.Info("Claude Code 完成，requirement 已标记为 completed",
+			zap.String("requirement_id", requirementIDStr),
+			zap.Any("result_length", len(finalResult)))
 	}
 
 	// 触发 hook
-	p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
+	if p.hookExecutor != nil {
+		change := &domain.StateChange{
+			FromStatus:   requirement.Status(),
+			ToStatus:     requirement.Status(),
+			FromDevState: requirement.DevState(),
+			ToDevState:   requirement.DevState(),
+			Trigger:      "claude_code_finished",
+			Reason:       "Claude Code 对话结束",
+			Timestamp:    time.Now(),
+		}
+		p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
+	}
 }

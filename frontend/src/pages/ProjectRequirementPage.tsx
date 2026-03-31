@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message } from 'antd';
+import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert } from 'antd';
 import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
@@ -10,6 +10,7 @@ import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement } from '../types/projectRequirement';
 import type { HookConfig, CreateHookConfigRequest, UpdateHookConfigRequest } from '../types/hook';
 import { TRIGGER_POINTS, ACTION_TYPES } from '../types/hook';
+import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -69,6 +70,10 @@ export const ProjectRequirementPage: React.FC = () => {
   const [editingHook, setEditingHook] = useState<HookConfig | null>(null);
   const [hookForm] = Form.useForm();
   const [savingHook, setSavingHook] = useState(false);
+
+  // 心跳配置相关状态
+  const [heartbeatForm] = Form.useForm();
+  const [savingHeartbeat, setSavingHeartbeat] = useState(false);
 
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
@@ -167,7 +172,16 @@ export const ProjectRequirementPage: React.FC = () => {
     };
     try {
       if (editingProject) {
-        await updateProject({ ...payload, id: editingProject.id });
+        await updateProject({
+          ...payload,
+          id: editingProject.id,
+          heartbeat_enabled: editingProject.heartbeat_enabled || false,
+          heartbeat_interval_minutes: editingProject.heartbeat_interval_minutes || 60,
+          heartbeat_md_content: editingProject.heartbeat_md_content || '',
+          agent_code: editingProject.agent_code || '',
+          dispatch_channel_code: editingProject.dispatch_channel_code || '',
+          dispatch_session_key: editingProject.dispatch_session_key || '',
+        });
         message.success('更新项目成功');
       } else {
         await createProject(payload);
@@ -253,22 +267,31 @@ export const ProjectRequirementPage: React.FC = () => {
   const openDispatchModal = (item: Requirement) => {
     setDispatchRequirementItem(item);
     dispatchForm.resetFields();
-    const defaultChannelCode = channels[0]?.channel_code;
-    if (defaultChannelCode) {
-      dispatchForm.setFieldsValue({ channel_code: defaultChannelCode, session_key: defaultDispatchSessionKey });
-    } else {
-      dispatchForm.setFieldsValue({ session_key: defaultDispatchSessionKey });
+
+    // 获取项目配置的派发渠道和 session_key
+    const project = projects.find((p) => p.id === item.project_id);
+    const projectAgentCode = project?.agent_code;
+    const projectChannelCode = project?.dispatch_channel_code;
+    const projectSessionKey = project?.dispatch_session_key;
+
+    if (projectAgentCode) {
+      dispatchForm.setFieldsValue({ agent_code: projectAgentCode });
+    }
+    if (projectChannelCode && projectSessionKey) {
+      dispatchForm.setFieldsValue({ channel_code: projectChannelCode, session_key: projectSessionKey });
+    } else if (channels.length > 0) {
+      dispatchForm.setFieldsValue({ channel_code: channels[0]?.channel_code, session_key: defaultDispatchSessionKey });
     }
     setDispatchModalOpen(true);
   };
 
-  const submitDispatch = async (values: { agent_id: string; channel_code: string; session_key: string }) => {
+  const submitDispatch = async (values: { agent_code: string; channel_code: string; session_key: string }) => {
     if (!dispatchRequirementItem) {
       return;
     }
     try {
       const sessionKey = values.session_key.trim();
-      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_id, values.channel_code, sessionKey);
+      const result = await dispatchRequirement(dispatchRequirementItem.id, values.agent_code, values.channel_code, sessionKey);
       message.success(`派发成功，任务ID: ${result.task_id}`);
       setDispatchModalOpen(false);
       await fetchRequirements(selectedProjectId);
@@ -322,6 +345,15 @@ export const ProjectRequirementPage: React.FC = () => {
     setConfigProject(project);
     setProjectConfigDrawerOpen(true);
     setLoadingProjectHooks(true);
+
+    // 设置心跳表单默认值
+    heartbeatForm.setFieldsValue({
+      heartbeat_enabled: project.heartbeat_enabled || false,
+      heartbeat_interval_minutes: project.heartbeat_interval_minutes || 60,
+      heartbeat_md_content: project.heartbeat_md_content || '',
+      agent_code: project.agent_code || '',
+    });
+
     try {
       const hooks = await listHookConfigs(project.id);
       setProjectHooks(hooks);
@@ -445,6 +477,35 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
+  // 心跳配置保存
+  const handleSaveHeartbeat = async () => {
+    if (!configProject) return;
+
+    setSavingHeartbeat(true);
+    try {
+      const values = heartbeatForm.getFieldsValue(true);
+      await updateProject({
+        id: configProject.id,
+        name: configProject.name,
+        git_repo_url: configProject.git_repo_url,
+        default_branch: configProject.default_branch,
+        init_steps: configProject.init_steps || [],
+        heartbeat_enabled: values.heartbeat_enabled || false,
+        heartbeat_interval_minutes: values.heartbeat_interval_minutes || 60,
+        heartbeat_md_content: values.heartbeat_md_content || '',
+        agent_code: values.agent_code || '',
+        dispatch_channel_code: values.dispatch_channel_code || '',
+        dispatch_session_key: values.dispatch_session_key || '',
+      });
+      message.success('心跳配置已保存');
+      await fetchProjects();
+    } catch (_error) {
+      message.error('保存心跳配置失败');
+    } finally {
+      setSavingHeartbeat(false);
+    }
+  };
+
   const projectColumns = [
     { title: '项目名称', dataIndex: 'name', key: 'name' },
     { title: '仓库地址', dataIndex: 'git_repo_url', key: 'git_repo_url' },
@@ -453,6 +514,17 @@ export const ProjectRequirementPage: React.FC = () => {
       title: '初始化步骤',
       key: 'init_steps',
       render: (_: unknown, project: Project) => (project.init_steps || []).length,
+    },
+    {
+      title: '心跳',
+      key: 'heartbeat',
+      width: 80,
+      render: (_: unknown, project: Project) =>
+        project.heartbeat_enabled ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="default">未启用</Tag>
+        ),
     },
     {
       title: '操作',
@@ -629,8 +701,8 @@ export const ProjectRequirementPage: React.FC = () => {
 
       <Modal title="派发需求" open={dispatchModalOpen} footer={null} onCancel={() => setDispatchModalOpen(false)}>
         <Form layout="vertical" form={dispatchForm} onFinish={submitDispatch}>
-          <Form.Item label="执行 Agent" name="agent_id" rules={[{ required: true, message: '请选择执行 Agent' }]}>
-            <Select options={agents.map((agent) => ({ label: `${agent.name} (${agent.agent_code})`, value: agent.id }))} />
+          <Form.Item label="执行 Agent" name="agent_code" rules={[{ required: true, message: '请选择执行 Agent' }]}>
+            <Select options={agents.map((agent) => ({ label: `${agent.name} (${agent.agent_code})`, value: agent.agent_code }))} />
           </Form.Item>
           <Form.Item label="派发渠道" name="channel_code" rules={[{ required: true, message: '请选择渠道' }]}>
             <Select
@@ -691,54 +763,164 @@ export const ProjectRequirementPage: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* 项目配置抽屉 - 包含 Hook 管理 */}
+      {/* 项目配置抽屉 - 包含 Hook 管理 和 心跳配置 */}
       <Drawer
         title={`项目配置 - ${configProject?.name || ''}`}
         placement="right"
-        width={700}
+        width={800}
         onClose={closeProjectConfig}
         open={projectConfigDrawerOpen}
-        extra={
-          <Button type="primary" onClick={openCreateHook}>
-            新建 Hook
-          </Button>
-        }
       >
-        <Table
-          dataSource={projectHooks}
-          loading={loadingProjectHooks}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          columns={[
-            { title: '名称', dataIndex: 'name', key: 'name', width: 120 },
-            { title: '触发点', dataIndex: 'trigger_point', key: 'trigger_point', width: 140 },
-            { title: '动作类型', dataIndex: 'action_type', key: 'action_type', width: 100 },
-            { title: '优先级', dataIndex: 'priority', key: 'priority', width: 60 },
+        <Tabs
+          items={[
             {
-              title: '启用',
-              dataIndex: 'enabled',
-              key: 'enabled',
-              width: 60,
-              render: (enabled: boolean, hook: HookConfig) => (
-                <Switch checked={enabled} onChange={() => handleToggleHookEnabled(hook)} />
+              key: 'hooks',
+              label: 'Hook 配置',
+              children: (
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <Button type="primary" onClick={openCreateHook}>
+                      新建 Hook
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={projectHooks}
+                    loading={loadingProjectHooks}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    columns={[
+                      { title: '名称', dataIndex: 'name', key: 'name', width: 120 },
+                      { title: '触发点', dataIndex: 'trigger_point', key: 'trigger_point', width: 140 },
+                      { title: '动作类型', dataIndex: 'action_type', key: 'action_type', width: 100 },
+                      { title: '优先级', dataIndex: 'priority', key: 'priority', width: 60 },
+                      {
+                        title: '启用',
+                        dataIndex: 'enabled',
+                        key: 'enabled',
+                        width: 60,
+                        render: (enabled: boolean, hook: HookConfig) => (
+                          <Switch checked={enabled} onChange={() => handleToggleHookEnabled(hook)} />
+                        ),
+                      },
+                      {
+                        title: '操作',
+                        key: 'action',
+                        width: 120,
+                        render: (_: unknown, hook: HookConfig) => (
+                          <Space size="small">
+                            <Button type="link" size="small" onClick={() => openEditHook(hook)}>
+                              编辑
+                            </Button>
+                            <Popconfirm title="确定删除此 Hook？" onConfirm={() => handleDeleteHook(hook.id)}>
+                              <Button type="link" size="small" danger>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                </>
               ),
             },
             {
-              title: '操作',
-              key: 'action',
-              width: 120,
-              render: (_: unknown, hook: HookConfig) => (
-                <Space size="small">
-                  <Button type="link" size="small" onClick={() => openEditHook(hook)}>
-                    编辑
-                  </Button>
-                  <Popconfirm title="确定删除此 Hook？" onConfirm={() => handleDeleteHook(hook.id)}>
-                    <Button type="link" size="small" danger>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                </Space>
+              key: 'heartbeat',
+              label: '心跳配置',
+              children: (
+                <>
+                  <Form
+                    form={heartbeatForm}
+                    layout="vertical"
+                    initialValues={{
+                      heartbeat_enabled: configProject?.heartbeat_enabled || false,
+                      heartbeat_interval_minutes: configProject?.heartbeat_interval_minutes || 60,
+                      heartbeat_md_content: configProject?.heartbeat_md_content || '',
+                      agent_code: configProject?.agent_code || '',
+                      dispatch_channel_code: configProject?.dispatch_channel_code || '',
+                      dispatch_session_key: configProject?.dispatch_session_key || '',
+                    }}
+                  >
+                    <Form.Item label="启用心跳" name="heartbeat_enabled" valuePropName="checked">
+                      <Switch />
+                    </Form.Item>
+
+                    <Form.Item label="心跳间隔（分钟）" name="heartbeat_interval_minutes">
+                      <Select
+                        options={[
+                          { label: '15分钟', value: 15 },
+                          { label: '30分钟', value: 30 },
+                          { label: '1小时', value: 60 },
+                          { label: '2小时', value: 120 },
+                          { label: '6小时', value: 360 },
+                          { label: '12小时', value: 720 },
+                          { label: '24小时', value: 1440 },
+                        ]}
+                        style={{ width: 200 }}
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="心跳执行 Agent" name="agent_code">
+                      <Select
+                        options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
+                          label: `${a.name} (${a.agent_code})`,
+                          value: a.agent_code,
+                        }))}
+                        placeholder="选择用于执行心跳的 Coding Agent"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="派发渠道" name="dispatch_channel_code">
+                      <Select
+                        options={channels.map((c) => ({
+                          label: `${c.name} (${c.type})`,
+                          value: c.channel_code,
+                        }))}
+                        placeholder="选择派发渠道"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="派发 SessionKey" name="dispatch_session_key">
+                      <Input placeholder="例如：feishu:ou_xxx" style={{ width: 400 }} />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="heartbeat_md_content"
+                      hidden
+                    >
+                      <Input />
+                    </Form.Item>
+                    <HeartbeatTemplateEditor
+                      value={heartbeatForm.getFieldValue('heartbeat_md_content')}
+                      onChange={(value) => heartbeatForm.setFieldValue('heartbeat_md_content', value)}
+                    />
+
+                    <Form.Item>
+                      <Space>
+                        <Button
+                          type="primary"
+                          onClick={handleSaveHeartbeat}
+                          loading={savingHeartbeat}
+                        >
+                          保存心跳配置
+                        </Button>
+                      </Space>
+                    </Form.Item>
+                  </Form>
+
+                  <Alert
+                    message="提示"
+                    description="心跳任务会使用选定的 Agent 定期执行，分析项目 PR 并根据评论内容决定是否创建新的需求。没问题的 PR 会评论 /lgtm，需要处理的会创建需求让其他 AI 执行修复。"
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                </>
               ),
             },
           ]}

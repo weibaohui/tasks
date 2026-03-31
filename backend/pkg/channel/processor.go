@@ -38,6 +38,14 @@ type feishuStreamingCallback struct {
 	spanID      string
 	hookManager *hook.Manager
 	mu          sync.Mutex
+	finalResult string // 存储最终结果
+}
+
+// GetFinalResult 获取最终结果
+func (c *feishuStreamingCallback) GetFinalResult() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.finalResult
 }
 
 func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound *bus.InboundMessage, traceID, spanID string, hookManager *hook.Manager) *feishuStreamingCallback {
@@ -184,6 +192,11 @@ func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 	if finalResult == "" {
 		return
 	}
+
+	// 存储最终结果
+	c.mu.Lock()
+	c.finalResult = finalResult
+	c.mu.Unlock()
 
 	if len(finalResult) > 2000 {
 		finalResult = finalResult[:2000] + "..."
@@ -399,14 +412,24 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		// 创建流式回调
 		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
 		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "running", "")
+		// 更新需求的 Claude Runtime 状态
+		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+			p.updateRequirementClaudeRuntimeStatus(requirementID, "running", "")
+		}
 		// 使用流式处理
 		err := p.claudeCodeProcessor.ProcessWithStreaming(ctx, msg, ccSession, agent, callback)
 		if err != nil {
 			p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "failed", err.Error())
+			if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+				p.updateRequirementClaudeRuntimeStatus(requirementID, "failed", err.Error())
+			}
 			p.logger.Error("ClaudeCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
 		}
 		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "completed", "")
+		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+			p.updateRequirementClaudeRuntimeStatus(requirementID, "completed", "")
+		}
 		// 更新 session 的 CLI Session ID
 		if ccSession.CliSessionID != "" {
 			session.SetCliSessionID(ccSession.CliSessionID)
@@ -709,6 +732,45 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(sessionKey, status, las
 	}); err != nil {
 		p.logger.Warn("更新 Claude Code 运行状态失败",
 			zap.String("session_key", sessionKey),
+			zap.String("status", status),
+			zap.Error(err),
+		)
+	}
+}
+
+// updateRequirementClaudeRuntimeStatus 更新需求的 Claude Runtime 状态
+func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(requirementID string, status string, lastError string) {
+	if p.requirementRepo == nil || strings.TrimSpace(requirementID) == "" {
+		return
+	}
+
+	req, err := p.requirementRepo.FindByID(context.Background(), domain.NewRequirementID(requirementID))
+	if err != nil || req == nil {
+		p.logger.Debug("更新需求 Claude Runtime 状态时查找需求失败",
+			zap.String("requirement_id", requirementID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	switch status {
+	case "running":
+		req.StartClaudeRuntime()
+	case "completed":
+		req.EndClaudeRuntime(true, "")
+	case "failed":
+		req.EndClaudeRuntime(false, lastError)
+	default:
+		p.logger.Warn("未知的 Claude Runtime 状态",
+			zap.String("requirement_id", requirementID),
+			zap.String("status", status),
+		)
+		return
+	}
+
+	if err := p.requirementRepo.Save(context.Background(), req); err != nil {
+		p.logger.Warn("更新需求 Claude Runtime 状态失败",
+			zap.String("requirement_id", requirementID),
 			zap.String("status", status),
 			zap.Error(err),
 		)

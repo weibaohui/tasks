@@ -20,19 +20,19 @@ var (
 )
 
 type DispatchRequirementCommand struct {
-	RequirementID domain.RequirementID
-	AgentID       domain.AgentID
+	RequirementID  domain.RequirementID
+	AgentCode     string
 	ChannelCode   string
 	SessionKey    string
 }
 
 type DispatchRequirementResult struct {
-	RequirementID  string `json:"requirement_id"`
-	Status         string `json:"status"`
-	DevState       string `json:"dev_state"`
-	WorkspacePath  string `json:"workspace_path"`
-	ReplicaAgentID string `json:"replica_agent_id"`
-	TaskID         string `json:"task_id"`
+	RequirementID   string `json:"requirement_id"`
+	Status          string `json:"status"`
+	DevState        string `json:"dev_state"`
+	WorkspacePath   string `json:"workspace_path"`
+	ReplicaAgentCode string `json:"replica_agent_code"`
+	TaskID          string `json:"task_id"`
 }
 
 type RequirementDispatchService struct {
@@ -101,14 +101,14 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if project == nil {
 		return nil, ErrProjectNotFound
 	}
-	baseAgent, err := s.agentRepo.FindByID(ctx, cmd.AgentID)
+	baseAgent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(cmd.AgentCode))
 	if err != nil {
 		return nil, err
 	}
 	if baseAgent == nil {
 		return nil, ErrBaseAgentNotFound
 	}
-	if err := requirement.StartDispatch(cmd.AgentID.String()); err != nil {
+	if err := requirement.StartDispatch(cmd.AgentCode); err != nil {
 		return nil, err
 	}
 	requirement.SetDispatchSessionKey(cmd.SessionKey)
@@ -127,7 +127,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, err
 	}
 	branchName := fmt.Sprintf("feature/%s", requirement.ID().String())
-	if err := requirement.MarkCoding(workspacePath, replicaAgent.ID().String(), branchName); err != nil {
+	if err := requirement.MarkCoding(workspacePath, replicaAgent.AgentCode().String(), branchName); err != nil {
 		return nil, err
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
@@ -171,12 +171,12 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	})
 	dispatchID := "dispatch_" + s.idGenerator.Generate()
 	return &DispatchRequirementResult{
-		RequirementID:  requirement.ID().String(),
-		Status:         string(requirement.Status()),
-		DevState:       string(requirement.DevState()),
-		WorkspacePath:  requirement.WorkspacePath(),
-		ReplicaAgentID: requirement.ReplicaAgentID(),
-		TaskID:         dispatchID,
+		RequirementID:   requirement.ID().String(),
+		Status:          string(requirement.Status()),
+		DevState:        string(requirement.DevState()),
+		WorkspacePath:   requirement.WorkspacePath(),
+		ReplicaAgentCode: requirement.ReplicaAgentCode(),
+		TaskID:          dispatchID,
 	}, nil
 }
 
@@ -298,12 +298,50 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 }
 
 func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string) string {
-	initSteps := project.InitSteps()
-	initStepsText := "无"
-	if len(initSteps) > 0 {
-		initStepsText = strings.Join(initSteps, "\n")
-	}
-	return fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
+	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
+
+	// 心跳需求不需要初始化步骤
+	var prompt string
+	if isHeartbeat {
+		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
+
+【需求信息】
+- 需求ID：%s
+- 标题：%s
+- 描述：%s
+
+【验收标准】
+%s
+
+【项目信息】
+- 项目ID：%s
+- 项目名称：%s
+- 仓库地址：%s
+- 默认分支：%s
+
+【工作目录】
+- 当前工作目录：%s
+
+请按以下顺序执行：
+1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
+2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
+3. 基于需求与验收标准完成实现
+4. 运行必要的校验命令
+5. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
+6. 推送代码：git push origin feature/%s
+7. 创建 PR 或输出 PR 信息
+`, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
+			project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), workspacePath,
+			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
+			requirement.ID().String(), requirement.ID().String())
+	} else {
+		initSteps := project.InitSteps()
+		initStepsText := "无"
+		if len(initSteps) > 0 {
+			initStepsText = strings.Join(initSteps, "\n")
+		}
+		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
 
 【需求信息】
 - 需求ID：%s
@@ -326,12 +364,19 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 要求：必须在该目录内完成代码操作
 
 请按以下顺序执行：
-1. 在当前工作目录准备代码仓库并切换到默认分支
-2. 严格执行初始化步骤
-3. 基于需求与验收标准完成实现
-4. 运行必要的校验命令
-5. 准备提交分支与 PR 信息（若当前环境无法直接创建 PR，请输出建议的 PR 标题与描述）
+1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
+2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
+3. 严格执行初始化步骤
+4. 基于需求与验收标准完成实现
+5. 运行必要的校验命令
+6. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
+7. 推送代码：git push origin feature/%s
+8. 创建 PR 或输出 PR 信息
 `, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
-		firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
-		project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath)
+			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
+			project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
+			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
+			requirement.ID().String(), requirement.ID().String())
+	}
+	return prompt
 }
