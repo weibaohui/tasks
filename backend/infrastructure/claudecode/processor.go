@@ -118,12 +118,13 @@ func boolPtr(b bool) *bool {
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger         *zap.Logger
-	hookManager    *hook.Manager
-	providerRepo   domain.LLMProviderRepository
-	idGenerator    domain.IDGenerator
-	requirementRepo domain.RequirementRepository
-	hookExecutor   *domain.ConfigurableHookExecutor
+	logger             *zap.Logger
+	hookManager        *hook.Manager
+	providerRepo       domain.LLMProviderRepository
+	idGenerator        domain.IDGenerator
+	requirementRepo    domain.RequirementRepository
+	hookExecutor       *domain.ConfigurableHookExecutor
+	replicaAgentManager *domain.ReplicaAgentManager
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -146,14 +147,16 @@ func NewClaudeCodeProcessor(
 	idGenerator domain.IDGenerator,
 	requirementRepo domain.RequirementRepository,
 	hookExecutor *domain.ConfigurableHookExecutor,
+	replicaAgentManager *domain.ReplicaAgentManager,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:         logger,
-		hookManager:    hookManager,
-		providerRepo:   providerRepo,
-		idGenerator:    idGenerator,
-		requirementRepo: requirementRepo,
-		hookExecutor:   hookExecutor,
+		logger:             logger,
+		hookManager:        hookManager,
+		providerRepo:       providerRepo,
+		idGenerator:        idGenerator,
+		requirementRepo:    requirementRepo,
+		hookExecutor:       hookExecutor,
+		replicaAgentManager: replicaAgentManager,
 	}
 }
 
@@ -938,6 +941,12 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	p.logger.Info("Claude Code 完成，触发 claude_code_finished hook",
 		zap.String("requirement_id", requirementIDStr),
 		zap.String("requirement_title", requirement.Title()))
+
+	// **立即清理分身**（代码约束，不是 Hook）
+	// 在触发任何 hook 之前清理分身，确保清理一定会执行
+	if p.replicaAgentManager != nil {
+		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentID(), requirement.WorkspacePath())
+	}
 
 	// 创建 StateChange
 	change := &domain.StateChange{

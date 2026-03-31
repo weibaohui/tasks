@@ -202,23 +202,26 @@ func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 
 // MessageProcessor 处理来自渠道的消息
 type MessageProcessor struct {
-	bus                 *bus.MessageBus
-	logger              *zap.Logger
-	sessionManager      *SessionManager
-	agentConfigCache    *AgentConfigCache
-	agentRepo           domain.AgentRepository
-	providerRepo        domain.LLMProviderRepository
-	taskService         *application.TaskApplicationService
-	sessionService      *application.SessionApplicationService
-	workerPool          *application.WorkerPool
-	idGenerator         domain.IDGenerator
-	toolRegistry        *llm.ToolRegistry
-	hookManager         *hook.Manager
-	factory             domain.LLMProviderFactory
-	mcpService          *application.MCPApplicationService
-	skillsLoader        *skill.SkillsLoader
-	claudeCodeProcessor claudecode.ClaudeCodeProcessorInterface
-	commandProcessor    *CommandProcessor
+	bus                  *bus.MessageBus
+	logger               *zap.Logger
+	sessionManager       *SessionManager
+	agentConfigCache     *AgentConfigCache
+	agentRepo            domain.AgentRepository
+	providerRepo         domain.LLMProviderRepository
+	taskService          *application.TaskApplicationService
+	sessionService       *application.SessionApplicationService
+	workerPool           *application.WorkerPool
+	idGenerator          domain.IDGenerator
+	toolRegistry         *llm.ToolRegistry
+	hookManager          *hook.Manager
+	factory              domain.LLMProviderFactory
+	mcpService           *application.MCPApplicationService
+	skillsLoader         *skill.SkillsLoader
+	requirementRepo      domain.RequirementRepository
+	hookExecutor         *domain.ConfigurableHookExecutor
+	replicaAgentManager  *domain.ReplicaAgentManager
+	claudeCodeProcessor  claudecode.ClaudeCodeProcessorInterface
+	commandProcessor     *CommandProcessor
 }
 
 // NewMessageProcessor 创建消息处理器
@@ -238,6 +241,7 @@ func NewMessageProcessor(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	hookExecutor *domain.ConfigurableHookExecutor,
+	replicaAgentManager *domain.ReplicaAgentManager,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
@@ -247,23 +251,26 @@ func NewMessageProcessor(
 	SetSessionManager(sessionManager)
 
 	return &MessageProcessor{
-		bus:                 messageBus,
-		logger:              logger,
-		sessionManager:      sessionManager,
-		agentConfigCache:    NewAgentConfigCache(),
-		agentRepo:           agentRepo,
-		providerRepo:        providerRepo,
-		taskService:         taskService,
-		sessionService:      sessionService,
-		workerPool:          workerPool,
-		idGenerator:         idGenerator,
-		toolRegistry:        registry,
-		hookManager:         hookManager,
-		factory:             factory,
-		mcpService:          mcpService,
-		skillsLoader:        skillsLoader,
-		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor),
-		commandProcessor:    commandProcessor,
+		bus:                  messageBus,
+		logger:               logger,
+		sessionManager:       sessionManager,
+		agentConfigCache:     NewAgentConfigCache(),
+		agentRepo:            agentRepo,
+		providerRepo:         providerRepo,
+		taskService:          taskService,
+		sessionService:       sessionService,
+		workerPool:           workerPool,
+		idGenerator:          idGenerator,
+		toolRegistry:         registry,
+		hookManager:          hookManager,
+		factory:              factory,
+		mcpService:           mcpService,
+		skillsLoader:         skillsLoader,
+		requirementRepo:      requirementRepo,
+		hookExecutor:         hookExecutor,
+		replicaAgentManager:  replicaAgentManager,
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor, replicaAgentManager),
+		commandProcessor:     commandProcessor,
 	}
 }
 
