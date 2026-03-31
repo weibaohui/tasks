@@ -99,6 +99,7 @@ export interface Agent {
   is_active: boolean;
   is_default: boolean;
   enable_thinking_process: boolean;
+  shadow_from?: string; // 分身来源：如果不为空，则表示是某 Agent 的分身
   claude_code_config?: ClaudeCodeConfig;
   created_at: number;
   updated_at: number;

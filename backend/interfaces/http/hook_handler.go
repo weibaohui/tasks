@@ -31,6 +31,7 @@ func NewHookHandler(
 }
 
 type CreateHookConfigRequest struct {
+	ProjectID    string `json:"project_id"`
 	Name         string `json:"name"`
 	TriggerPoint string `json:"trigger_point"`
 	ActionType  string `json:"action_type"`
@@ -41,6 +42,7 @@ type CreateHookConfigRequest struct {
 
 type UpdateHookConfigRequest struct {
 	ID           string `json:"id"`
+	ProjectID    string `json:"project_id"`
 	Name         string `json:"name"`
 	TriggerPoint string `json:"trigger_point"`
 	ActionType  string `json:"action_type"`
@@ -61,6 +63,7 @@ func (h *HookHandler) CreateHookConfig(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	config := &domain.RequirementHookConfig{
 		ID:           h.idGen.Generate(),
+		ProjectID:    req.ProjectID,
 		Name:         req.Name,
 		TriggerPoint: req.TriggerPoint,
 		ActionType:  req.ActionType,
@@ -108,15 +111,18 @@ func (h *HookHandler) GetHookConfig(w http.ResponseWriter, r *http.Request) {
 // ListHookConfigs 获取所有 Hook 配置
 func (h *HookHandler) ListHookConfigs(w http.ResponseWriter, r *http.Request) {
 	triggerPoint := r.URL.Query().Get("trigger_point")
+	projectID := r.URL.Query().Get("project_id")
 
 	var configs []*domain.RequirementHookConfig
 	var err error
 
-	if triggerPoint != "" {
+	if projectID != "" {
+		configs, err = h.configRepo.FindByProjectID(r.Context(), projectID)
+	} else if triggerPoint != "" {
 		configs, err = h.configRepo.FindByTriggerPoint(r.Context(), triggerPoint)
 	} else {
 		// 获取所有配置（需要添加 FindAll 方法到接口，暂时用 FindByTriggerPoint 遍历）
-		triggerPoints := []string{"start_dispatch", "mark_coding", "mark_failed", "mark_pr_opened"}
+		triggerPoints := []string{"start_dispatch", "mark_coding", "claude_code_finished", "mark_failed", "mark_pr_opened"}
 		for _, tp := range triggerPoints {
 			tpConfigs, tpErr := h.configRepo.FindByTriggerPoint(r.Context(), tp)
 			if tpErr != nil {
@@ -162,6 +168,7 @@ func (h *HookHandler) UpdateHookConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing.Name = req.Name
+	existing.ProjectID = req.ProjectID
 	existing.TriggerPoint = req.TriggerPoint
 	existing.ActionType = req.ActionType
 	existing.ActionConfig = req.ActionConfig

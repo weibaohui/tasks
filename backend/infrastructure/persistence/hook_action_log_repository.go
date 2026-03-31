@@ -71,6 +71,19 @@ func (r *SQLiteRequirementHookActionLogRepository) FindByHookConfigID(ctx contex
 	return scanHookActionLogs(rows)
 }
 
+func (r *SQLiteRequirementHookActionLogRepository) FindByHookConfigAndRequirement(ctx context.Context, hookConfigID, requirementID string) (*domain.RequirementHookActionLog, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, hook_config_id, requirement_id, trigger_point, action_type, status, input_context, result, error, started_at, completed_at
+		FROM requirement_hook_action_logs
+		WHERE hook_config_id = ? AND requirement_id = ?
+		ORDER BY started_at DESC LIMIT 1`, hookConfigID, requirementID)
+	log, err := scanHookActionLog(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return log, err
+}
+
 func scanHookActionLogs(rows *sql.Rows) ([]*domain.RequirementHookActionLog, error) {
 	logs := make([]*domain.RequirementHookActionLog, 0)
 	for rows.Next() {

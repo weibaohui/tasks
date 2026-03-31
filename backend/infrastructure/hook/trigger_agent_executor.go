@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,7 +38,7 @@ func NewTriggerAgentExecutor(
 
 // Supports 返回支持的动作类型
 func (e *TriggerAgentExecutor) Supports(actionType string) bool {
-	return actionType == "trigger_agent"
+	return actionType == "coding_agent"
 }
 
 // Execute 执行触发 Agent 动作
@@ -49,11 +48,15 @@ func (e *TriggerAgentExecutor) Execute(
 	req *domain.Requirement,
 	change *domain.StateChange,
 ) (*domain.ActionResult, error) {
+	fmt.Printf("[DEBUG] TriggerAgentExecutor.Execute: config=%s, actionType=%s, requirement=%s\n", config.Name, config.ActionType, req.ID())
+
 	// 1. 解析配置
 	var actionConfig domain.TriggerAgentActionConfig
 	if err := json.Unmarshal([]byte(config.ActionConfig), &actionConfig); err != nil {
 		return nil, fmt.Errorf("invalid action config: %w", err)
 	}
+
+	fmt.Printf("[DEBUG] TriggerAgentExecutor: agentID=%s, promptTemplate=%s\n", actionConfig.AgentID, actionConfig.PromptTemplate)
 
 	// 2. 获取目标 Agent
 	baseAgent, err := e.agentRepo.FindByID(ctx, domain.NewAgentID(actionConfig.AgentID))
@@ -79,11 +82,29 @@ func (e *TriggerAgentExecutor) Execute(
 	// 5. 构建 Prompt
 	prompt := e.renderPrompt(actionConfig.PromptTemplate, req, change)
 
-	// 6. 发送任务消息
+	// 6. 解析 session_key 获取 channel 和 chat_id
+	// session_key 格式: "feishu:ou_xxx" 或 "internal:xxx"
+	sessionKey := req.DispatchSessionKey()
+	var channel, chatID string
+	if sessionKey != "" {
+		parts := strings.SplitN(sessionKey, ":", 2)
+		if len(parts) == 2 {
+			channel = parts[0]
+			chatID = parts[1]
+		} else {
+			channel = "internal"
+			chatID = sessionKey
+		}
+	} else {
+		channel = "internal"
+		chatID = replicaAgent.ID().String()
+	}
+
+	// 7. 发送任务消息
 	e.publisher.PublishInbound(&channelBus.InboundMessage{
-		Channel:   "internal",
+		Channel:   channel,
 		SenderID:  "hook_system",
-		ChatID:    replicaAgent.ID().String(),
+		ChatID:    chatID,
 		Content:   prompt,
 		Timestamp: time.Now(),
 		Media:     []string{},
@@ -111,6 +132,7 @@ func (e *TriggerAgentExecutor) createReplicaAgent(ctx context.Context, baseAgent
 	snap.IsDefault = false
 	snap.IsActive = true
 	snap.AgentType = domain.AgentTypeCoding
+	snap.ShadowFrom = baseAgent.AgentCode().String() // 记录分身来源
 	snap.CreatedAt = now
 	snap.UpdatedAt = now
 
@@ -143,6 +165,7 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 	result = strings.ReplaceAll(result, "${requirement.title}", req.Title())
 	result = strings.ReplaceAll(result, "${requirement.description}", req.Description())
 	result = strings.ReplaceAll(result, "${requirement.acceptance_criteria}", req.AcceptanceCriteria())
+	result = strings.ReplaceAll(result, "${requirement.temp_workspace_root}", req.TempWorkspaceRoot())
 
 	// 替换项目相关变量（需要获取项目信息，这里暂时用占位符）
 	result = strings.ReplaceAll(result, "${project.id}", req.ProjectID().String())
@@ -150,6 +173,9 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 
 	// 替换工作目录变量
 	result = strings.ReplaceAll(result, "${workspace.path}", req.WorkspacePath())
+
+	// 替换分支变量
+	result = strings.ReplaceAll(result, "${branch_name}", req.BranchName())
 
 	// 替换 Agent 相关变量
 	result = strings.ReplaceAll(result, "${agent.id}", req.ReplicaAgentID())
@@ -164,8 +190,9 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 }
 
 func (e *TriggerAgentExecutor) renderWorkspace(template string, req *domain.Requirement) string {
+	// 如果模板为空，使用需求已有的工作目录
 	if template == "" {
-		return filepath.Join("/tmp", "hook-workspace", req.ID().String())
+		return req.WorkspacePath()
 	}
 
 	result := template

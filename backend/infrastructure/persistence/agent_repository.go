@@ -38,10 +38,10 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
 			user_content, tools_content, model, provider_key, max_tokens, temperature, max_iterations, history_messages,
-			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, shadow_from, created_at, updated_at,
 			claude_code_config
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -62,6 +62,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 			is_default=excluded.is_default,
 			enable_thinking_process=excluded.enable_thinking_process,
 			agent_type=excluded.agent_type,
+			shadow_from=excluded.shadow_from,
 			updated_at=excluded.updated_at,
 			claude_code_config=excluded.claude_code_config
 	`
@@ -91,6 +92,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		boolToInt(snap.IsDefault),
 		boolToInt(snap.EnableThinkingProcess),
 		snap.AgentType.String(),
+		snap.ShadowFrom,
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
 		string(configJSON),
@@ -111,7 +113,9 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		is_active, is_default, enable_thinking_process, agent_type,
+		COALESCE(shadow_from, '') as shadow_from,
+		created_at, updated_at,
 		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE id = ?`, id.String())
 	return scanAgent(row)
@@ -130,7 +134,9 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		is_active, is_default, enable_thinking_process, agent_type,
+		COALESCE(shadow_from, '') as shadow_from,
+		created_at, updated_at,
 		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE agent_code = ?`, code.String())
 	return scanAgent(row)
@@ -149,7 +155,9 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		is_active, is_default, enable_thinking_process, agent_type,
+		COALESCE(shadow_from, '') as shadow_from,
+		created_at, updated_at,
 		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
 	if err != nil {
@@ -172,7 +180,9 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
-		is_active, is_default, enable_thinking_process, agent_type, created_at, updated_at,
+		is_active, is_default, enable_thinking_process, agent_type,
+		COALESCE(shadow_from, '') as shadow_from,
+		created_at, updated_at,
 		COALESCE(claude_code_config, '{}') as claude_code_config
 		FROM agents ORDER BY created_at DESC`)
 	if err != nil {
@@ -225,6 +235,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		isDefaultInt        int
 		enableThinkingInt   int
 		agentTypeStr        string
+		shadowFrom          string
 		createdAtUnix       int64
 		updatedAtUnix       int64
 		claudeCodeConfigJSON []byte
@@ -253,6 +264,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&isDefaultInt,
 		&enableThinkingInt,
 		&agentTypeStr,
+		&shadowFrom,
 		&createdAtUnix,
 		&updatedAtUnix,
 		&claudeCodeConfigJSON,
@@ -299,6 +311,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		IsActive:              isActiveInt == 1,
 		IsDefault:             isDefaultInt == 1,
 		EnableThinkingProcess: enableThinkingInt == 1,
+		ShadowFrom:            shadowFrom,
 		ClaudeCodeConfig:      claudeCodeConfig,
 		CreatedAt:             time.Unix(createdAtUnix, 0),
 		UpdatedAt:             time.Unix(updatedAtUnix, 0),

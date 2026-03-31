@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -150,6 +151,7 @@ func (r *Requirement) ClearStateChangeCallbacks() {
 
 // fireStateChange 触发状态变更回调
 func (r *Requirement) fireStateChange(change *StateChange) {
+	fmt.Printf("[DEBUG] fireStateChange: trigger=%s, callbacks=%d\n", change.Trigger, len(r.stateChangeCallbacks))
 	for _, cb := range r.stateChangeCallbacks {
 		cb(change)
 	}
@@ -203,6 +205,49 @@ func (r *Requirement) CanDispatch() bool {
 	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
 }
 
+// CanRedispatch 检查是否可以重新派发
+// 只要需求不是初始状态（todo + idle），就可以重新派发
+func (r *Requirement) CanRedispatch() bool {
+	// 初始状态：todo + idle -> 不需要重新派发
+	// 其他状态都可以重新派发
+	return !(r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle)
+}
+
+// Redispatch 重置需求状态，允许重新派发
+func (r *Requirement) Redispatch() error {
+	if !r.CanRedispatch() {
+		return ErrRequirementCannotDispatch
+	}
+
+	fromStatus := r.status
+	fromDevState := r.devState
+
+	now := time.Now()
+	r.status = RequirementStatusTodo
+	r.devState = RequirementDevStateIdle
+	r.assigneeAgentID = ""
+	r.replicaAgentID = ""
+	r.workspacePath = ""
+	r.branchName = ""
+	r.prURL = ""
+	r.lastError = ""
+	r.startedAt = nil
+	r.completedAt = nil
+	r.updatedAt = now
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "redispatch",
+		Reason:       "manual redispatch",
+		Timestamp:    now,
+	})
+
+	return nil
+}
+
 func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, tempWorkspaceRoot string) error {
 	if strings.TrimSpace(title) == "" {
 		return ErrRequirementTitleRequired
@@ -236,7 +281,7 @@ func (r *Requirement) StartDispatch(assigneeAgentID string) error {
 		ToStatus:     r.status,
 		FromDevState: fromDevState,
 		ToDevState:   r.devState,
-		Trigger:      "StartDispatch",
+		Trigger:      "start_dispatch",
 		Reason:       "",
 		Timestamp:    now,
 	})
@@ -263,7 +308,7 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentID, branchName strin
 		ToStatus:     r.status,
 		FromDevState: fromDevState,
 		ToDevState:   r.devState,
-		Trigger:      "MarkCoding",
+		Trigger:      "mark_coding",
 		Reason:       "",
 		Timestamp:    now,
 	})
@@ -286,12 +331,23 @@ func (r *Requirement) MarkPROpened(prURL, branchName string) {
 	r.completedAt = &now
 	r.updatedAt = now
 
+	// Claude Code 结束 - 成功
 	r.fireStateChange(&StateChange{
 		FromStatus:   fromStatus,
 		ToStatus:     r.status,
 		FromDevState: fromDevState,
 		ToDevState:   r.devState,
-		Trigger:      "MarkPROpened",
+		Trigger:      "claude_code_finished",
+		Reason:       "",
+		Timestamp:    now,
+	})
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_pr_opened",
 		Reason:       "",
 		Timestamp:    now,
 	})
@@ -312,12 +368,23 @@ func (r *Requirement) MarkFailed(lastError string) {
 	now := time.Now()
 	r.updatedAt = now
 
+	// Claude Code 结束 - 失败
 	r.fireStateChange(&StateChange{
 		FromStatus:   fromStatus,
 		ToStatus:     r.status,
 		FromDevState: fromDevState,
 		ToDevState:   r.devState,
-		Trigger:      "MarkFailed",
+		Trigger:      "claude_code_finished",
+		Reason:       lastError,
+		Timestamp:    now,
+	})
+
+	r.fireStateChange(&StateChange{
+		FromStatus:   fromStatus,
+		ToStatus:     r.status,
+		FromDevState: fromDevState,
+		ToDevState:   r.devState,
+		Trigger:      "mark_failed",
 		Reason:       lastError,
 		Timestamp:    now,
 	})

@@ -580,9 +580,10 @@ func (e *RequirementStateHookExecutor) sortByPriority(hooks []RequirementStateHo
 // RequirementHookConfig Hook 配置
 type RequirementHookConfig struct {
 	ID           string    `json:"id"`
+	ProjectID    string    `json:"project_id"`     // 关联的项目ID，空表示全局Hook
 	Name         string    `json:"name"`
 	TriggerPoint string    `json:"trigger_point"` // start_dispatch, mark_coding, mark_failed, mark_pr_opened
-	ActionType   string    `json:"action_type"`   // trigger_agent, notification, webhook
+	ActionType   string    `json:"action_type"`   // coding_agent, notification, webhook
 	ActionConfig string    `json:"action_config"` // JSON 配置
 	Enabled      bool      `json:"enabled"`
 	Priority     int       `json:"priority"`
@@ -610,6 +611,7 @@ type RequirementHookConfigRepository interface {
 	Save(ctx context.Context, config *RequirementHookConfig) error
 	FindByID(ctx context.Context, id string) (*RequirementHookConfig, error)
 	FindByTriggerPoint(ctx context.Context, triggerPoint string) ([]*RequirementHookConfig, error)
+	FindByProjectID(ctx context.Context, projectID string) ([]*RequirementHookConfig, error)
 	FindEnabledByTriggerPoint(ctx context.Context, triggerPoint string) ([]*RequirementHookConfig, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -619,6 +621,7 @@ type RequirementHookActionLogRepository interface {
 	Save(ctx context.Context, log *RequirementHookActionLog) error
 	FindByRequirementID(ctx context.Context, requirementID string) ([]*RequirementHookActionLog, error)
 	FindByHookConfigID(ctx context.Context, hookConfigID string, limit int) ([]*RequirementHookActionLog, error)
+	FindByHookConfigAndRequirement(ctx context.Context, hookConfigID, requirementID string) (*RequirementHookActionLog, error)
 }
 
 // TriggerAgentActionConfig 触发 Agent 动作配置
@@ -666,10 +669,11 @@ type ConfigurableHookLogger interface {
 // ConfigurableHookExecutor 可配置 Hook 执行器
 // 从数据库加载配置，按配置执行动作
 type ConfigurableHookExecutor struct {
-	configRepo RequirementHookConfigRepository
-	logRepo    RequirementHookActionLogRepository
-	executors  []ActionExecutor
-	logger     ConfigurableHookLogger
+	configRepo  RequirementHookConfigRepository
+	logRepo     RequirementHookActionLogRepository
+	executors   []ActionExecutor
+	logger      ConfigurableHookLogger
+	idGenerator IDGenerator
 }
 
 // NewConfigurableHookExecutor 创建执行器
@@ -678,12 +682,14 @@ func NewConfigurableHookExecutor(
 	logRepo RequirementHookActionLogRepository,
 	executors []ActionExecutor,
 	logger ConfigurableHookLogger,
+	idGenerator IDGenerator,
 ) *ConfigurableHookExecutor {
 	return &ConfigurableHookExecutor{
-		configRepo: configRepo,
-		logRepo:    logRepo,
-		executors: executors,
-		logger:    logger,
+		configRepo:  configRepo,
+		logRepo:     logRepo,
+		executors:   executors,
+		logger:      logger,
+		idGenerator: idGenerator,
 	}
 }
 
@@ -696,8 +702,11 @@ func (e *ConfigurableHookExecutor) Execute(
 ) {
 	// 如果没有配置仓储，跳过执行
 	if e.configRepo == nil {
+		fmt.Printf("[DEBUG] ConfigurableHookExecutor.Execute: configRepo is NIL\n")
 		return
 	}
+
+	fmt.Printf("[DEBUG] ConfigurableHookExecutor.Execute: trigger=%s, requirement=%s\n", triggerPoint, req.ID())
 
 	// 1. 从数据库加载该触发点的配置
 	configs, err := e.configRepo.FindEnabledByTriggerPoint(ctx, triggerPoint)
@@ -710,8 +719,11 @@ func (e *ConfigurableHookExecutor) Execute(
 	}
 
 	if len(configs) == 0 {
+		fmt.Printf("[DEBUG] No configs found for trigger: %s\n", triggerPoint)
 		return
 	}
+
+	fmt.Printf("[DEBUG] Found %d configs for trigger: %s\n", len(configs), triggerPoint)
 
 	// 2. 按优先级排序
 	sorted := make([]*RequirementHookConfig, len(configs))
@@ -732,8 +744,24 @@ func (e *ConfigurableHookExecutor) executeConfig(
 	req *Requirement,
 	change *StateChange,
 ) {
+	fmt.Printf("[DEBUG] executeConfig: configID=%s, actionType=%s\n", config.ID, config.ActionType)
+
+	// 0. 检查是否已经执行过（避免重复触发）
+	if e.logRepo != nil {
+		existingLog, err := e.logRepo.FindByHookConfigAndRequirement(ctx, config.ID, req.ID().String())
+		if err == nil && existingLog != nil && existingLog.Status == "success" {
+			fmt.Printf("[DEBUG] Hook already executed successfully for this requirement, skipping: configID=%s, requirement=%s\n", config.ID, req.ID())
+			return
+		}
+	}
+
 	// 1. 创建执行日志
+	logID := ""
+	if e.idGenerator != nil {
+		logID = e.idGenerator.Generate()
+	}
 	log := &RequirementHookActionLog{
+		ID:            logID,
 		HookConfigID:  config.ID,
 		RequirementID: req.ID().String(),
 		TriggerPoint:  change.Trigger,
@@ -741,17 +769,28 @@ func (e *ConfigurableHookExecutor) executeConfig(
 		Status:        "pending",
 		StartedAt:     time.Now(),
 	}
-	_ = e.logRepo.Save(ctx, log)
+	if err := e.logRepo.Save(ctx, log); err != nil {
+		e.logger.Error("failed to save hook action log",
+			String("config_id", config.ID),
+			String("requirement_id", req.ID().String()),
+			Any("error", err),
+		)
+	}
 
 	// 2. 查找对应的动作执行器
 	var executor ActionExecutor
 	for _, ae := range e.executors {
 		if ae.Supports(config.ActionType) {
 			executor = ae
+			fmt.Printf("[DEBUG] Found executor for actionType: %s\n", config.ActionType)
 			break
 		}
 	}
 	if executor == nil {
+		fmt.Printf("[DEBUG] No executor found for actionType: %s (registered executors: %d)\n", config.ActionType, len(e.executors))
+		for i, ae := range e.executors {
+			fmt.Printf("[DEBUG] Executor %d supports: %s\n", i, ae.Supports("test"))
+		}
 		log.Status = "failed"
 		log.Error = fmt.Sprintf("no executor for action type: %s", config.ActionType)
 		_ = e.logRepo.Save(ctx, log)

@@ -444,6 +444,13 @@ func SetupRoutesWithManagement(
 			}
 			requirementHandler.ReportRequirementPROpened(w, r)
 		}))
+		mux.HandleFunc("/api/v1/requirements/redispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.RedispatchRequirement(w, r)
+		}))
 		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:

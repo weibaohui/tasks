@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS agents (
     is_default INTEGER NOT NULL,
     enable_thinking_process INTEGER NOT NULL,
     agent_type TEXT NOT NULL DEFAULT 'BareLLM',
+    shadow_from TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -326,6 +327,7 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_created_at ON mcp_tool_logs(created
 
 CREATE TABLE IF NOT EXISTS requirement_hook_configs (
     id TEXT PRIMARY KEY,
+    project_id TEXT,
     name TEXT NOT NULL,
     trigger_point TEXT NOT NULL,
     action_type TEXT NOT NULL,
@@ -385,6 +387,12 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	if err := migrateRequirementsNewColumns(db); err != nil {
+		return err
+	}
+	if err := migrateAgentShadowFrom(db); err != nil {
+		return err
+	}
+	if err := migrateHookConfigProjectID(db); err != nil {
 		return err
 	}
 	return migrateConversationRecordsTimestampToMillis(db)
@@ -552,6 +560,34 @@ func migrateLLMProviderTypeColumn(db *sql.DB) error {
 	}
 	if !hasColumn {
 		if _, err := db.Exec("ALTER TABLE llm_providers ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateAgentShadowFrom 迁移 agents 表新增 shadow_from 字段
+func migrateAgentShadowFrom(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "shadow_from")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN shadow_from TEXT"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateHookConfigProjectID 迁移 requirement_hook_configs 表新增 project_id 字段
+func migrateHookConfigProjectID(db *sql.DB) error {
+	has, err := tableHasColumn(db, "requirement_hook_configs", "project_id")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE requirement_hook_configs ADD COLUMN project_id TEXT"); err != nil {
 			return err
 		}
 	}

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/weibh/taskmanager/domain"
@@ -34,17 +35,28 @@ type ReportRequirementPRCommand struct {
 	BranchName string
 }
 
+type RedispatchRequirementCommand struct {
+	ID domain.RequirementID
+}
+
 type RequirementApplicationService struct {
 	requirementRepo domain.RequirementRepository
 	projectRepo     domain.ProjectRepository
 	idGenerator     domain.IDGenerator
+	hookExecutor   *domain.ConfigurableHookExecutor
 }
 
-func NewRequirementApplicationService(requirementRepo domain.RequirementRepository, projectRepo domain.ProjectRepository, idGenerator domain.IDGenerator) *RequirementApplicationService {
+func NewRequirementApplicationService(
+	requirementRepo domain.RequirementRepository,
+	projectRepo domain.ProjectRepository,
+	idGenerator domain.IDGenerator,
+	hookExecutor *domain.ConfigurableHookExecutor,
+) *RequirementApplicationService {
 	return &RequirementApplicationService{
 		requirementRepo: requirementRepo,
 		projectRepo:     projectRepo,
 		idGenerator:     idGenerator,
+		hookExecutor:   hookExecutor,
 	}
 }
 
@@ -109,6 +121,7 @@ func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, c
 }
 
 func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Context, cmd ReportRequirementPRCommand) (*domain.Requirement, error) {
+	fmt.Printf("[DEBUG] ReportRequirementPROpened CALLED: id=%s\n", cmd.ID)
 	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
 	if err != nil {
 		return nil, err
@@ -116,12 +129,44 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 	if requirement == nil {
 		return nil, ErrRequirementNotFound
 	}
+
+	// 设置状态变更回调
+	requirement.ClearStateChangeCallbacks()
+	if s.hookExecutor != nil {
+		requirement.SetStateChangeCallback(func(change *domain.StateChange) {
+			fmt.Printf("[DEBUG] Hook callback triggered: trigger=%s, requirement=%s\n", change.Trigger, requirement.ID())
+			s.hookExecutor.Execute(ctx, change.Trigger, requirement, change)
+		})
+		fmt.Println("[DEBUG] Hook executor available, callback set")
+	} else {
+		fmt.Println("[DEBUG] Hook executor is NIL!")
+	}
+
 	if requirement.WorkspacePath() != "" {
 		if err := os.RemoveAll(requirement.WorkspacePath()); err != nil {
 			return nil, err
 		}
 	}
 	requirement.MarkPROpened(cmd.PRURL, cmd.BranchName)
+	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
+		return nil, err
+	}
+	return requirement, nil
+}
+
+// RedispatchRequirement 重新派发需求
+func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Context, cmd RedispatchRequirementCommand) (*domain.Requirement, error) {
+	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return nil, err
+	}
+	if requirement == nil {
+		return nil, ErrRequirementNotFound
+	}
+
+	if err := requirement.Redispatch(); err != nil {
+		return nil, err
+	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}

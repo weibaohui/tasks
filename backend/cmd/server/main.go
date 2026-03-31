@@ -47,7 +47,8 @@ type Gateway struct {
 }
 
 func main() {
-	logger, _ := zap.NewProduction()
+	// 使用 Development 模式，输出 Debug 级别日志
+	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 
 	if runAdminSubcommandIfMatched(logger) {
@@ -158,11 +159,6 @@ func main() {
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
-	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator)
-
-	// 初始化 ReplicaAgentManager（强制销毁分身）
-	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
-	logger.Info("ReplicaAgentManager 初始化完成")
 
 	// 初始化 Hook 配置仓储
 	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
@@ -177,8 +173,16 @@ func main() {
 		hookLogRepo,
 		nil, // 暂不设置 executors
 		hookLogger,
+		idGenerator,
 	)
 	logger.Info("ConfigurableHookExecutor 初始化完成")
+
+	// 初始化 RequirementApplicationService（需要在 hookExecutor 之后）
+	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, hookExecutor)
+
+	// 初始化 ReplicaAgentManager（强制销毁分身）
+	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
+	logger.Info("ReplicaAgentManager 初始化完成")
 
 	requirementDispatchService := application.NewRequirementDispatchService(
 		requirementRepo,
@@ -231,12 +235,13 @@ func main() {
 	})
 
 	// 9. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
 	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
 	hookExecutor.AddExecutor(triggerAgentExecutor)
+	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
 	logger.Info("TriggerAgentExecutor 注册完成")
 
 	// 10. 创建 HTTP Server
@@ -430,6 +435,8 @@ func initGateway(
 	logger *zap.Logger,
 	mcpService *application.MCPApplicationService,
 	skillsLoader *skill.SkillsLoader,
+	requirementRepo domain.RequirementRepository,
+	hookExecutor *domain.ConfigurableHookExecutor,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,
@@ -444,7 +451,7 @@ func initGateway(
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
 	// 创建消息处理器
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, hookExecutor)
 
 	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)

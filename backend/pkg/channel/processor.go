@@ -236,6 +236,8 @@ func NewMessageProcessor(
 	factory domain.LLMProviderFactory,
 	mcpService *application.MCPApplicationService,
 	skillsLoader *skill.SkillsLoader,
+	requirementRepo domain.RequirementRepository,
+	hookExecutor *domain.ConfigurableHookExecutor,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
@@ -260,7 +262,7 @@ func NewMessageProcessor(
 		factory:             factory,
 		mcpService:          mcpService,
 		skillsLoader:        skillsLoader,
-		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator),
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor),
 		commandProcessor:    commandProcessor,
 	}
 }

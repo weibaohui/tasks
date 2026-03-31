@@ -69,3 +69,10 @@ export async function reportRequirementPROpened(requirementId: string, prUrl: st
   });
   return response.data;
 }
+
+export async function redispatchRequirement(requirementId: string): Promise<Requirement> {
+  const response = await apiClient.post<Requirement>('/requirements/redispatch', {
+    requirement_id: requirementId,
+  });
+  return response.data;
+}
