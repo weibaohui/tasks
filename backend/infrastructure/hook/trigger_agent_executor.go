@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -201,7 +202,6 @@ func (e *TriggerAgentExecutor) renderWorkspace(template string, req *domain.Requ
 	return result
 }
 
-func mkdirAll(path string, perm uint32) error {
-	// 这里简化处理，实际应该用 os.MkdirAll
-	return nil
+func mkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
 }

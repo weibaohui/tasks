@@ -238,6 +238,12 @@ type TokenResponse struct {
 
 // CreateToken 创建新的长期Token
 func (h *AuthHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
+	if h.userTokenRepo == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		return
+	}
+
 	user, err := h.Authorize(r)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -309,6 +315,12 @@ func (h *AuthHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 
 // ListTokens 列出用户的所有Token
 func (h *AuthHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
+	if h.userTokenRepo == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		return
+	}
+
 	user, err := h.Authorize(r)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -345,6 +357,12 @@ func (h *AuthHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
 
 // DeleteToken 删除Token
 func (h *AuthHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
+	if h.userTokenRepo == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		return
+	}
+
 	user, err := h.Authorize(r)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)

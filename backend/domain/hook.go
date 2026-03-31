@@ -769,12 +769,14 @@ func (e *ConfigurableHookExecutor) executeConfig(
 		Status:        "pending",
 		StartedAt:     time.Now(),
 	}
-	if err := e.logRepo.Save(ctx, log); err != nil {
-		e.logger.Error("failed to save hook action log",
-			String("config_id", config.ID),
-			String("requirement_id", req.ID().String()),
-			Any("error", err),
-		)
+	if e.logRepo != nil {
+		if err := e.logRepo.Save(ctx, log); err != nil {
+			e.logger.Error("failed to save hook action log",
+				String("config_id", config.ID),
+				String("requirement_id", req.ID().String()),
+				Any("error", err),
+			)
+		}
 	}
 
 	// 2. 查找对应的动作执行器
@@ -793,13 +795,17 @@ func (e *ConfigurableHookExecutor) executeConfig(
 		}
 		log.Status = "failed"
 		log.Error = fmt.Sprintf("no executor for action type: %s", config.ActionType)
-		_ = e.logRepo.Save(ctx, log)
+		if e.logRepo != nil {
+			_ = e.logRepo.Save(ctx, log)
+		}
 		return
 	}
 
 	// 3. 执行动作
 	log.Status = "running"
-	_ = e.logRepo.Save(ctx, log)
+	if e.logRepo != nil {
+		_ = e.logRepo.Save(ctx, log)
+	}
 
 	result, err := executor.Execute(ctx, config, req, change)
 
@@ -813,7 +819,9 @@ func (e *ConfigurableHookExecutor) executeConfig(
 		log.Status = "success"
 		log.Result = result.Output
 	}
-	_ = e.logRepo.Save(ctx, log)
+	if e.logRepo != nil {
+		_ = e.logRepo.Save(ctx, log)
+	}
 }
 
 // AddExecutor 添加动作执行器
