@@ -121,16 +121,6 @@ func applyEnvOverrides(cfg *Config) {
 		}
 	}
 
-	// DB_PATH 环境变量
-	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
-		cfg.Database.Path = dbPath
-	}
-
-	// DB_PATH 简写形式
-	if dbPath := os.Getenv("DB_PATH"); dbPath != "" && cfg.Database.Path == "" {
-		cfg.Database.Path = dbPath
-	}
-
 	// API_BASE_URL 环境变量
 	if baseURL := os.Getenv("TASKMANAGER_API_BASE_URL"); baseURL != "" {
 		cfg.API.BaseURL = baseURL
@@ -142,12 +132,14 @@ func applyEnvOverrides(cfg *Config) {
 	}
 }
 
-// GetDatabasePath 获取数据库路径（兼容旧接口）
+// GetDatabasePath 获取数据库路径
+// 使用配置文件中指定的路径，不再支持环境变量覆盖
 func GetDatabasePath() string {
 	cfg, err := Load()
 	if err != nil {
-		// 回退到旧逻辑
-		return ExpandPath(getLegacyDBPath())
+		// 如果加载失败，使用默认值 ~/.taskmanager/data.db
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".taskmanager", "data.db")
 	}
 	return ExpandPath(cfg.Database.Path)
 }
@@ -170,24 +162,6 @@ func GetAPIToken() string {
 	return cfg.API.Token
 }
 
-// getLegacyDBPath 回退到旧的路径逻辑
-func getLegacyDBPath() string {
-	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
-		return p
-	}
-	if p := os.Getenv("DB_PATH"); p != "" {
-		return p
-	}
-	cwd, _ := os.Getwd()
-	if st, err := os.Stat(filepath.Join(cwd, "backend")); err == nil && st.IsDir() {
-		return filepath.Join(cwd, "backend", "tasks.db")
-	}
-	if _, err := os.Stat("./tasks.db"); err == nil {
-		return "./tasks.db"
-	}
-	return "./backend/tasks.db"
-}
-
 // EnsureConfigDir 确保配置目录存在
 func EnsureConfigDir() error {
 	home, _ := os.UserHomeDir()
@@ -202,7 +176,7 @@ func WriteDefaultConfig(path string) error {
 			Port: 8888,
 		},
 		Database: DatabaseConfig{
-			Path: getLegacyDBPath(),
+			Path: filepath.Join("~", ".taskmanager", "data.db"),
 		},
 		API: APIConfig{
 			BaseURL: "http://localhost:8888/api/v1",

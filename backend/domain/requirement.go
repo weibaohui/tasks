@@ -103,6 +103,7 @@ type Requirement struct {
 	claudeRuntimeEndedAt  *time.Time
 	claudeRuntimeError    string
 	claudeRuntimeResult   string        // Claude Code 执行结果摘要
+	claudeRuntimePrompt   string        // Claude Code 执行提示词
 
 	// stateChangeCallbacks 状态变更回调列表（不持久化）
 	stateChangeCallbacks []StateChangeCallback
@@ -231,10 +232,16 @@ func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time { return copyTimePtr(r
 func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time  { return copyTimePtr(r.claudeRuntimeEndedAt) }
 func (r *Requirement) ClaudeRuntimeError() string       { return r.claudeRuntimeError }
 func (r *Requirement) ClaudeRuntimeResult() string      { return r.claudeRuntimeResult }
+func (r *Requirement) ClaudeRuntimePrompt() string      { return r.claudeRuntimePrompt }
 
 // SetClaudeRuntimeResult 设置 Claude Code 执行结果
 func (r *Requirement) SetClaudeRuntimeResult(result string) {
 	r.claudeRuntimeResult = result
+}
+
+// SetClaudeRuntimePrompt 设置 Claude Code 执行提示词
+func (r *Requirement) SetClaudeRuntimePrompt(prompt string) {
+	r.claudeRuntimePrompt = prompt
 }
 
 // SetRequirementType 设置需求类型
@@ -520,6 +527,7 @@ type RequirementSnapshot struct {
 	ClaudeRuntimeEndedAt   *time.Time
 	ClaudeRuntimeError     string
 	ClaudeRuntimeResult    string
+	ClaudeRuntimePrompt    string
 }
 
 func (r *Requirement) ToSnapshot() RequirementSnapshot {
@@ -549,6 +557,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		ClaudeRuntimeEndedAt:   copyTimePtr(r.claudeRuntimeEndedAt),
 		ClaudeRuntimeError:     r.claudeRuntimeError,
 		ClaudeRuntimeResult:    r.claudeRuntimeResult,
+		ClaudeRuntimePrompt:    r.claudeRuntimePrompt,
 	}
 }
 
@@ -584,6 +593,7 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.claudeRuntimeEndedAt = copyTimePtr(s.ClaudeRuntimeEndedAt)
 	r.claudeRuntimeError = s.ClaudeRuntimeError
 	r.claudeRuntimeResult = s.ClaudeRuntimeResult
+	r.claudeRuntimePrompt = s.ClaudeRuntimePrompt
 	return nil
 }
 

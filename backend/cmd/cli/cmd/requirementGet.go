@@ -67,6 +67,12 @@ func printRequirementDetail(r *domain.Requirement) {
 		fmt.Printf("完成时间:        %s\n", r.CompletedAt().Format("2006-01-02 15:04:05"))
 	}
 	fmt.Println("===================================== Claude 执行状态 =====================================")
+	if r.ClaudeRuntimePrompt() != "" {
+		fmt.Println("-----------------------------------------------------------------------------------------------")
+		fmt.Println("Claude执行提示词:")
+		fmt.Println("-----------------------------------------------------------------------------------------------")
+		fmt.Println(r.ClaudeRuntimePrompt())
+	}
 	fmt.Printf("Runtime状态:     %s\n", r.ClaudeRuntimeStatus())
 	if r.ClaudeRuntimeStartedAt() != nil {
 		fmt.Printf("Runtime开始:     %s\n", r.ClaudeRuntimeStartedAt().Format("2006-01-02 15:04:05"))
@@ -86,7 +92,7 @@ func printRequirementDetail(r *domain.Requirement) {
 	if r.LastError() != "" {
 		fmt.Printf("最近错误:        %s\n", r.LastError())
 	}
-	fmt.Println("===============================================================================================\n")
+	fmt.Println("===============================================================================================")
 }
 
 func init() {

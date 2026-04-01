@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	defaultAdminUsername = "admin"
-	defaultAdminPassword = "admin123"
+	defaultAdminUsername = "test"
+	defaultAdminPassword = "test"
 )
 
 var createAdminCmd = &cobra.Command{
