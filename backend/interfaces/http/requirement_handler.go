@@ -231,24 +231,35 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 }
 
 func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// 从 requirement 直接获取 prompt 和 result
+	result["prompt"] = requirement.ClaudeRuntimePrompt()
+	result["result"] = requirement.ClaudeRuntimeResult()
+	result["status"] = requirement.ClaudeRuntimeStatus()
+
 	if h.sessionService == nil || requirement == nil {
-		return nil
+		return result
 	}
 	sessionKey := requirement.DispatchSessionKey()
 	if sessionKey == "" {
-		return nil
+		return result
 	}
 	metadata, err := h.sessionService.GetSessionMetadata(r.Context(), sessionKey)
 	if err != nil {
-		return nil
+		return result
 	}
 	rawRuntime, ok := metadata["claude_code_runtime"]
 	if !ok {
-		return nil
+		return result
 	}
 	runtime, ok := rawRuntime.(map[string]interface{})
 	if !ok {
-		return nil
+		return result
 	}
-	return runtime
+	// 合并 session metadata 中的运行时信息
+	for k, v := range runtime {
+		result[k] = v
+	}
+	return result
 }
