@@ -68,8 +68,8 @@ cd frontend && pnpm run dev
 PW_SESSION="${PILOT_SESSION_ID:-default}"
 playwright-cli -s="$PW_SESSION" open http://localhost:3000
 
-# 数据库
-sqlite3 backend/tasks.db
+# 数据库（位置在 ~/.taskmanager/config.yaml 中配置）
+sqlite3 ~/.taskmanager/data.db
 ```
 
 ## 调试与日志
