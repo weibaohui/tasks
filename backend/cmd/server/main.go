@@ -261,7 +261,7 @@ func main() {
 	)
 
 	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
-	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, idGenerator, gateway.messageBus)
+	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, requirementRepo, idGenerator, gateway.messageBus)
 	hookExecutor.AddExecutor(triggerAgentExecutor)
 	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
 	logger.Info("TriggerAgentExecutor 注册完成")

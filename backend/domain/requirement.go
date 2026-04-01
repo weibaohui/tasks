@@ -133,9 +133,9 @@ func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentCo
 
 	// 2. 删除分身 Agent
 	if err := m.agentRepo.Delete(ctx, agent.ID()); err != nil {
-		log.Printf("failed to delete replica agent %s: %v", agent.ID(), err)
+		log.Printf("failed to delete replica agent %s: %v", agent.AgentCode().String(), err)
 	} else {
-		log.Printf("replica agent %s disposed", agent.ID())
+		log.Printf("replica agent %s disposed", agent.AgentCode().String())
 	}
 
 	// 3. 清理工作目录
@@ -408,6 +408,8 @@ func (r *Requirement) MarkPROpened() {
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
 		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
+		r.replicaAgentCode = ""
+		r.workspacePath = ""
 	}
 }
 
@@ -439,6 +441,8 @@ func (r *Requirement) MarkFailed(lastError string) {
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
 		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
+		r.replicaAgentCode = ""
+		r.workspacePath = ""
 	}
 }
 
@@ -465,11 +469,23 @@ func (r *Requirement) MarkCompleted() {
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
 		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
+		r.replicaAgentCode = ""
+		r.workspacePath = ""
 	}
 }
 
 func (r *Requirement) SetDispatchSessionKey(sessionKey string) {
 	r.dispatchSessionKey = strings.TrimSpace(sessionKey)
+	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) SetReplicaAgentCode(code string) {
+	r.replicaAgentCode = code
+	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) SetWorkspacePath(path string) {
+	r.workspacePath = path
 	r.updatedAt = time.Now()
 }
 

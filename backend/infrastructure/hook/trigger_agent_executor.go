@@ -14,9 +14,10 @@ import (
 
 // TriggerAgentExecutor 触发 Agent 动作执行器
 type TriggerAgentExecutor struct {
-	agentRepo  domain.AgentRepository
-	idGenerator domain.IDGenerator
-	publisher   MessagePublisher
+	agentRepo       domain.AgentRepository
+	requirementRepo domain.RequirementRepository
+	idGenerator     domain.IDGenerator
+	publisher       MessagePublisher
 }
 
 // MessagePublisher 消息发布接口
@@ -27,13 +28,15 @@ type MessagePublisher interface {
 // NewTriggerAgentExecutor 创建执行器
 func NewTriggerAgentExecutor(
 	agentRepo domain.AgentRepository,
+	requirementRepo domain.RequirementRepository,
 	idGenerator domain.IDGenerator,
 	publisher MessagePublisher,
 ) *TriggerAgentExecutor {
 	return &TriggerAgentExecutor{
-		agentRepo:  agentRepo,
-		idGenerator: idGenerator,
-		publisher:   publisher,
+		agentRepo:       agentRepo,
+		requirementRepo: requirementRepo,
+		idGenerator:     idGenerator,
+		publisher:       publisher,
 	}
 }
 
@@ -80,10 +83,19 @@ func (e *TriggerAgentExecutor) Execute(
 		return nil, fmt.Errorf("failed to create replica agent: %w", err)
 	}
 
-	// 5. 构建 Prompt
+	// 5. 更新需求的 replica_agent_code，确保后续清理能正确追踪新分身
+	req.SetReplicaAgentCode(replicaAgent.AgentCode().String())
+	req.SetWorkspacePath(workspacePath)
+	if e.requirementRepo != nil {
+		if err := e.requirementRepo.Save(ctx, req); err != nil {
+			return nil, fmt.Errorf("failed to save requirement replica info: %w", err)
+		}
+	}
+
+	// 6. 构建 Prompt
 	prompt := e.renderPrompt(actionConfig.PromptTemplate, req, change)
 
-	// 6. 解析 session_key 获取 channel 和 chat_id
+	// 7. 解析 session_key 获取 channel 和 chat_id
 	// session_key 格式: "feishu:ou_xxx" 或 "internal:xxx"
 	sessionKey := req.DispatchSessionKey()
 	var channel, chatID string
@@ -101,7 +113,7 @@ func (e *TriggerAgentExecutor) Execute(
 		chatID = replicaAgent.ID().String()
 	}
 
-	// 7. 发送任务消息
+	// 8. 发送任务消息
 	e.publisher.PublishInbound(&channelBus.InboundMessage{
 		Channel:   channel,
 		SenderID:  "hook_system",
@@ -188,9 +200,12 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 }
 
 func (e *TriggerAgentExecutor) renderWorkspace(template string, req *domain.Requirement) string {
-	// 如果模板为空，使用需求已有的工作目录
 	if template == "" {
-		return req.WorkspacePath()
+		if req.WorkspacePath() != "" {
+			return req.WorkspacePath()
+		}
+		// 兜底：使用默认工作目录（与需求派发时保持一致）
+		return fmt.Sprintf("/tmp/ai-devops/%s/%s", req.ProjectID().String(), req.ID().String())
 	}
 
 	result := template

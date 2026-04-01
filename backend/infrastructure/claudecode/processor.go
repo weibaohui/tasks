@@ -952,6 +952,14 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	// 在触发任何 hook 之前清理分身，确保清理一定会执行
 	if p.replicaAgentManager != nil {
 		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
+		requirement.SetReplicaAgentCode("")
+		requirement.SetWorkspacePath("")
+		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+			p.logger.Error("Claude Code 完成，保存 requirement 失败",
+				zap.String("requirement_id", requirementIDStr),
+				zap.Error(err))
+			return
+		}
 	}
 
 	// 成功完成时，标记需求为 completed 状态并保存执行结果
