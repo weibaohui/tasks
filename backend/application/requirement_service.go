@@ -152,7 +152,7 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 	return requirement, nil
 }
 
-// RedispatchRequirement 重新派发需求
+// RedispatchRequirement 重新派发需求（重置当前需求状态）
 func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Context, cmd RedispatchRequirementCommand) (*domain.Requirement, error) {
 	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
 	if err != nil {
@@ -169,4 +169,72 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 		return nil, err
 	}
 	return requirement, nil
+}
+
+// CopyAndDispatchRequirementCommand 复制并派发需求命令
+type CopyAndDispatchRequirementCommand struct {
+	ID domain.RequirementID
+}
+
+// CopyAndDispatchRequirement 复制需求并派发新副本
+// 创建一个新需求，复制原需求内容，标题增加"[重新派发]"标记，然后派发
+func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.Context, cmd CopyAndDispatchRequirementCommand, dispatchService *RequirementDispatchService) (*domain.Requirement, error) {
+	// 1. 查找原需求
+	originalReq, err := s.requirementRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return nil, err
+	}
+	if originalReq == nil {
+		return nil, ErrRequirementNotFound
+	}
+
+	// 2. 查找项目获取派发配置
+	project, err := s.projectRepo.FindByID(ctx, originalReq.ProjectID())
+	if err != nil {
+		return nil, err
+	}
+	if project == nil {
+		return nil, ErrProjectNotFound
+	}
+
+	// 3. 创建新需求（使用领域工厂方法）
+	newID := domain.NewRequirementID(s.idGenerator.Generate())
+	newReq, err := domain.NewRedispatchedRequirement(newID, originalReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 保存新需求
+	if err := s.requirementRepo.Save(ctx, newReq); err != nil {
+		return nil, err
+	}
+
+	// 5. 派发新需求
+	agentCode := project.AgentCode()
+	channelCode := project.DispatchChannelCode()
+	sessionKey := project.DispatchSessionKey()
+
+	if channelCode == "" {
+		channelCode = "feishu"
+	}
+
+	_, err = dispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
+		RequirementID: newReq.ID(),
+		AgentCode:    agentCode,
+		ChannelCode:  channelCode,
+		SessionKey:   sessionKey,
+	})
+	if err != nil {
+		// 派发失败，删除已保存的需求以保持一致性
+		_ = s.requirementRepo.Delete(ctx, newReq.ID())
+		return nil, err
+	}
+
+	// 6. 返回新需求（重新从数据库获取以获得派发后的状态）
+	newReq, err = s.requirementRepo.FindByID(ctx, newReq.ID())
+	if err != nil {
+		return nil, err
+	}
+
+	return newReq, nil
 }

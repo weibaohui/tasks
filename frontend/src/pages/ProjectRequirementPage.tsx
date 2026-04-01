@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert } from 'antd';
-import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { copyAndDispatchRequirement, createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
@@ -297,13 +297,14 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const handleRedispatch = async (item: Requirement) => {
+  // 复制需求并派发新副本
+  const handleCopyAndDispatch = async (item: Requirement) => {
     try {
-      await redispatchRequirement(item.id);
-      message.success('重新派发成功');
+      const newReq = await copyAndDispatchRequirement(item.id);
+      message.success(`已创建新需求并派发: ${newReq.title}`);
       await fetchRequirements(selectedProjectId);
     } catch (_error) {
-      message.error('重新派发失败');
+      message.error('复制并派发失败');
     }
   };
 
@@ -563,8 +564,8 @@ export const ProjectRequirementPage: React.FC = () => {
           <Button type="link" disabled={item.status !== 'todo'} onClick={() => openDispatchModal(item)}>
             派发
           </Button>
-          <Button type="link" disabled={item.status === 'todo'} onClick={() => handleRedispatch(item)}>
-            重新派发
+          <Button type="link" disabled={item.status === 'todo'} onClick={() => handleCopyAndDispatch(item)}>
+            复制并派发
           </Button>
         </Space>
       ),

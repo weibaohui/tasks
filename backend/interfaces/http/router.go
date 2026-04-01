@@ -470,6 +470,14 @@ func SetupRoutesWithManagement(
 			}
 			requirementHandler.RedispatchRequirement(w, r)
 		}))
+		// 复制需求并派发新副本
+		mux.HandleFunc("/api/v1/requirements/copy-and-dispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.CopyAndDispatchRequirement(w, r)
+		}))
 		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:

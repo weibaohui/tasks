@@ -174,6 +174,23 @@ func (r *Requirement) fireStateChange(change *StateChange) {
 	}
 }
 
+// NewRedispatchedRequirement 创建重新派发的需求副本
+// 标题会增加 "[重新派发]" 前缀
+func NewRedispatchedRequirement(id RequirementID, original *Requirement) (*Requirement, error) {
+	if original == nil {
+		return nil, ErrRequirementProjectIDRequired
+	}
+	title := fmt.Sprintf("[重新派发] %s", original.Title())
+	return NewRequirement(
+		id,
+		original.ProjectID(),
+		title,
+		original.Description(),
+		original.AcceptanceCriteria(),
+		original.TempWorkspaceRoot(),
+	)
+}
+
 func NewRequirement(id RequirementID, projectID ProjectID, title, description, acceptanceCriteria, tempWorkspaceRoot string) (*Requirement, error) {
 	if id.String() == "" {
 		return nil, ErrRequirementIDRequired
