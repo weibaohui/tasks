@@ -21,11 +21,11 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 	query := `
 		INSERT INTO requirements (
 			id, project_id, title, description, acceptance_criteria, status, dev_state,
-			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, branch_name, pr_url, last_error,
+			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, last_error,
 			started_at, completed_at, created_at, updated_at,
 			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -37,8 +37,6 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			replica_agent_code=excluded.replica_agent_code,
 			dispatch_session_key=excluded.dispatch_session_key,
 			workspace_path=excluded.workspace_path,
-			branch_name=excluded.branch_name,
-			pr_url=excluded.pr_url,
 			last_error=excluded.last_error,
 			started_at=excluded.started_at,
 			completed_at=excluded.completed_at,
@@ -66,8 +64,6 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		snap.ReplicaAgentCode,
 		snap.DispatchSessionKey,
 		snap.WorkspacePath,
-		snap.BranchName,
-		snap.PRURL,
 		snap.LastError,
 		timePtrToUnix(snap.StartedAt),
 		timePtrToUnix(snap.CompletedAt),
@@ -88,7 +84,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
-		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
+		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
 		FROM requirements WHERE id = ?`, id.String())
@@ -99,7 +95,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
-		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
+		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
 		FROM requirements WHERE project_id = ? ORDER BY created_at DESC`, projectID.String())
@@ -114,7 +110,7 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
 		       status, dev_state, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
-		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''), COALESCE(branch_name, ''), COALESCE(pr_url, ''),
+		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
 		FROM requirements ORDER BY created_at DESC`)
@@ -158,8 +154,6 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		replicaAgentCode         string
 		dispatchSessionKey       string
 		workspacePath            string
-		branchName               string
-		prURL                    string
 		lastError                string
 		startedAtUnix            sql.NullInt64
 		completedAtUnix          sql.NullInt64
@@ -186,8 +180,6 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&replicaAgentCode,
 		&dispatchSessionKey,
 		&workspacePath,
-		&branchName,
-		&prURL,
 		&lastError,
 		&startedAtUnix,
 		&completedAtUnix,
@@ -221,8 +213,6 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		ReplicaAgentCode:        replicaAgentCode,
 		DispatchSessionKey:      dispatchSessionKey,
 		WorkspacePath:           workspacePath,
-		BranchName:              branchName,
-		PRURL:                   prURL,
 		LastError:               lastError,
 		StartedAt:               unixToTimePtr(startedAtUnix),
 		CompletedAt:             unixToTimePtr(completedAtUnix),

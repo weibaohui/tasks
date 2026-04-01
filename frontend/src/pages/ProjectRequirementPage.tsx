@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert } from 'antd';
-import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
@@ -54,12 +54,9 @@ export const ProjectRequirementPage: React.FC = () => {
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [dispatchRequirementItem, setDispatchRequirementItem] = useState<Requirement | null>(null);
-  const [prModalOpen, setPrModalOpen] = useState(false);
-  const [prRequirementItem, setPrRequirementItem] = useState<Requirement | null>(null);
   const [projectForm] = Form.useForm();
   const [requirementForm] = Form.useForm();
   const [dispatchForm] = Form.useForm();
-  const [prForm] = Form.useForm();
 
   // 项目配置抽屉状态
   const [projectConfigDrawerOpen, setProjectConfigDrawerOpen] = useState(false);
@@ -301,36 +298,6 @@ export const ProjectRequirementPage: React.FC = () => {
       await fetchRequirements(selectedProjectId);
     } catch (_error) {
       message.error('派发需求失败');
-    }
-  };
-
-  const openReportPRModal = (item: Requirement) => {
-    console.log('[DEBUG] openReportPRModal called:', item.id, item.status, item.dev_state);
-    setPrRequirementItem(item);
-    prForm.setFieldsValue({
-      pr_url: item.pr_url || '',
-      branch_name: item.branch_name || '',
-    });
-    setPrModalOpen(true);
-  };
-
-  const submitReportPR = async (values: { pr_url: string; branch_name: string }) => {
-    console.log('[DEBUG] submitReportPR function entered');
-    if (!prRequirementItem) {
-      console.log('[DEBUG] prRequirementItem is null, returning');
-      return;
-    }
-    console.log('[DEBUG] submitReportPR called:', prRequirementItem.id, values.pr_url, values.branch_name);
-    try {
-      console.log('[DEBUG] calling API...');
-      await reportRequirementPROpened(prRequirementItem.id, values.pr_url, values.branch_name || '');
-      console.log('[DEBUG] API call success');
-      message.success('PR 状态更新成功');
-      setPrModalOpen(false);
-      await fetchRequirements(selectedProjectId);
-    } catch (_error) {
-      console.error('[DEBUG] API error:', _error);
-      message.error('PR 状态更新失败');
     }
   };
 
@@ -587,8 +554,6 @@ export const ProjectRequirementPage: React.FC = () => {
         );
       },
     },
-    { title: '分支', dataIndex: 'branch_name', key: 'branch_name' },
-    { title: 'PR', dataIndex: 'pr_url', key: 'pr_url', ellipsis: true },
     {
       title: '操作',
       key: 'action',
@@ -602,9 +567,6 @@ export const ProjectRequirementPage: React.FC = () => {
           </Button>
           <Button type="link" disabled={!(item.status === 'todo' && item.dev_state === 'idle')} onClick={() => openDispatchModal(item)}>
             派发
-          </Button>
-          <Button type="link" onClick={() => openReportPRModal(item)}>
-            更新PR
           </Button>
           <Button type="link" disabled={item.status === 'todo' && item.dev_state === 'idle'} onClick={() => handleRedispatch(item)}>
             重新派发
@@ -757,20 +719,6 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             确认派发
-          </Button>
-        </Form>
-      </Modal>
-
-      <Modal title="更新 PR 状态" open={prModalOpen} footer={null} onCancel={() => setPrModalOpen(false)}>
-        <Form layout="vertical" form={prForm} onFinish={submitReportPR}>
-          <Form.Item label="PR 链接" name="pr_url" rules={[{ required: true, message: '请输入 PR 链接' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="分支名" name="branch_name">
-            <Input />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block>
-            更新状态
           </Button>
         </Form>
       </Modal>
@@ -1012,7 +960,6 @@ export const ProjectRequirementPage: React.FC = () => {
 \${project.id}               - 项目ID
 \${project.name}         - 项目名称
 \${workspace.path}        - 工作目录路径
-\${branch_name}           - 分支名
 \${change.trigger}        - 触发事件名称
 \${change.reason}        - 状态变更原因`}
                           </pre>
@@ -1020,7 +967,7 @@ export const ProjectRequirementPage: React.FC = () => {
                             完成后请执行以下 CLI 命令标记需求完成：
                           </div>
                           <pre style={{ fontSize: 11, background: '#f0f8ff', padding: 8, borderRadius: 4 }}>
-{`taskmanager requirement complete --id \${requirement.id} --pr-url <PR_URL> [--branch \${branch_name}]`}
+{`taskmanager requirement complete --id \${requirement.id}`}
                           </pre>
                         </div>
                       }
@@ -1149,14 +1096,6 @@ export const ProjectRequirementPage: React.FC = () => {
                     <div style={{ gridColumn: '1 / -1' }}>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>工作目录</div>
                       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.workspace_path || '-'}</div>
-                    </div>
-                    <div>
-                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分支</div>
-                      <div style={{ fontFamily: 'monospace' }}>{detailRequirement.branch_name || '-'}</div>
-                    </div>
-                    <div>
-                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>PR URL</div>
-                      <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{detailRequirement.pr_url || '-'}</div>
                     </div>
                   </div>
                 ),

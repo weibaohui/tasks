@@ -88,8 +88,6 @@ type Requirement struct {
 	replicaAgentCode    string
 	dispatchSessionKey  string
 	workspacePath       string
-	branchName          string
-	prURL               string
 	lastError           string
 	startedAt           *time.Time
 	completedAt         *time.Time
@@ -219,8 +217,6 @@ func (r *Requirement) AssigneeAgentCode() string      { return r.assigneeAgentCo
 func (r *Requirement) ReplicaAgentCode() string       { return r.replicaAgentCode }
 func (r *Requirement) DispatchSessionKey() string     { return r.dispatchSessionKey }
 func (r *Requirement) WorkspacePath() string          { return r.workspacePath }
-func (r *Requirement) BranchName() string             { return r.branchName }
-func (r *Requirement) PRURL() string                  { return r.prURL }
 func (r *Requirement) LastError() string              { return r.lastError }
 func (r *Requirement) StartedAt() *time.Time          { return copyTimePtr(r.startedAt) }
 func (r *Requirement) CompletedAt() *time.Time        { return copyTimePtr(r.completedAt) }
@@ -299,8 +295,6 @@ func (r *Requirement) Redispatch() error {
 	r.assigneeAgentCode = ""
 	r.replicaAgentCode = ""
 	r.workspacePath = ""
-	r.branchName = ""
-	r.prURL = ""
 	r.lastError = ""
 	r.startedAt = nil
 	r.completedAt = nil
@@ -361,7 +355,7 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	return nil
 }
 
-func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode, branchName string) error {
+func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 	if r.status != RequirementStatusInProgress {
 		return ErrRequirementCannotDispatch
 	}
@@ -371,7 +365,6 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode, branchName str
 	r.devState = RequirementDevStateCoding
 	r.workspacePath = workspacePath
 	r.replicaAgentCode = replicaAgentCode
-	r.branchName = branchName
 	now := time.Now()
 	r.updatedAt = now
 
@@ -388,17 +381,13 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode, branchName str
 	return nil
 }
 
-func (r *Requirement) MarkPROpened(prURL, branchName string) {
+func (r *Requirement) MarkPROpened() {
 	fromStatus := r.status
 	fromDevState := r.devState
 
 	now := time.Now()
 	r.status = RequirementStatusDone
 	r.devState = RequirementDevStatePROpened
-	r.prURL = prURL
-	if branchName != "" {
-		r.branchName = branchName
-	}
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
@@ -515,8 +504,6 @@ type RequirementSnapshot struct {
 	ReplicaAgentCode       string
 	DispatchSessionKey     string
 	WorkspacePath          string
-	BranchName             string
-	PRURL                  string
 	LastError              string
 	StartedAt              *time.Time
 	CompletedAt            *time.Time
@@ -545,8 +532,6 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		ReplicaAgentCode:       r.replicaAgentCode,
 		DispatchSessionKey:     r.dispatchSessionKey,
 		WorkspacePath:          r.workspacePath,
-		BranchName:             r.branchName,
-		PRURL:                  r.prURL,
 		LastError:              r.lastError,
 		StartedAt:              copyTimePtr(r.startedAt),
 		CompletedAt:            copyTimePtr(r.completedAt),
@@ -581,8 +566,6 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.replicaAgentCode = s.ReplicaAgentCode
 	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)
 	r.workspacePath = s.WorkspacePath
-	r.branchName = s.BranchName
-	r.prURL = s.PRURL
 	r.lastError = s.LastError
 	r.startedAt = copyTimePtr(s.StartedAt)
 	r.completedAt = copyTimePtr(s.CompletedAt)

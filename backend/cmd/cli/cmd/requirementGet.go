@@ -55,8 +55,6 @@ func printRequirementDetail(r *domain.Requirement) {
 	fmt.Printf("工作目录:        %s\n", r.WorkspacePath())
 	fmt.Printf("分身Agent:       %s\n", r.ReplicaAgentCode())
 	fmt.Printf("派发SessionKey:  %s\n", r.DispatchSessionKey())
-	fmt.Printf("分支:            %s\n", r.BranchName())
-	fmt.Printf("PR URL:          %s\n", r.PRURL())
 	fmt.Println("===================================== 时间信息 =====================================")
 	fmt.Printf("创建时间:        %s\n", r.CreatedAt().Format("2006-01-02 15:04:05"))
 	fmt.Printf("更新时间:        %s\n", r.UpdatedAt().Format("2006-01-02 15:04:05"))

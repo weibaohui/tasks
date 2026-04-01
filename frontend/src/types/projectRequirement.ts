@@ -26,8 +26,6 @@ export interface Requirement {
   assignee_agent_code: string;
   replica_agent_code: string;
   workspace_path: string;
-  branch_name: string;
-  pr_url: string;
   last_error: string;
   dispatch_session_key: string;
   claude_runtime?: {

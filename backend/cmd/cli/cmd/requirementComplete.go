@@ -13,16 +13,13 @@ import (
 
 var requirementCompleteCmd = &cobra.Command{
 	Use:   "complete",
-	Short: "完成需求（创建 PR 后调用）",
-	Example: `  taskmanager requirement complete --id <id> --pr-url <url>
-  taskmanager requirement complete -i <id> -u <pr_url> -b <branch>`,
+	Short: "完成需求",
+	Example: `  taskmanager requirement complete --id <id>`,
 	Run: func(cmd *cobra.Command, args []string) {
 		id, _ := cmd.Flags().GetString("id")
-		prURL, _ := cmd.Flags().GetString("pr-url")
-		branch, _ := cmd.Flags().GetString("branch")
 
-		if id == "" || prURL == "" {
-			fmt.Println("错误: --id 和 --pr-url 是必填参数")
+		if id == "" {
+			fmt.Println("错误: --id 是必填参数")
 			cmd.Usage()
 			return
 		}
@@ -35,8 +32,6 @@ var requirementCompleteCmd = &cobra.Command{
 
 		reqBody := map[string]string{
 			"requirement_id": id,
-			"pr_url":        prURL,
-			"branch_name":   branch,
 		}
 		reqJSON, _ := json.Marshal(reqBody)
 
@@ -64,15 +59,13 @@ var requirementCompleteCmd = &cobra.Command{
 
 		var result struct {
 			RequirementID string `json:"id"`
-			PRURL        string `json:"pr_url"`
-			BranchName   string `json:"branch_name"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			fmt.Printf("解析响应失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("需求 %s 已标记为完成，PR: %s\n", result.RequirementID, result.PRURL)
+		fmt.Printf("需求 %s 已标记为完成\n", result.RequirementID)
 	},
 }
 

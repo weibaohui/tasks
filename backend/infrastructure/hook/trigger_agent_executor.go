@@ -175,9 +175,6 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 	// 替换工作目录变量
 	result = strings.ReplaceAll(result, "${workspace.path}", req.WorkspacePath())
 
-	// 替换分支变量
-	result = strings.ReplaceAll(result, "${branch_name}", req.BranchName())
-
 	// 替换 Agent 相关变量
 	result = strings.ReplaceAll(result, "${agent.id}", req.ReplicaAgentCode())
 

@@ -126,8 +126,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
-	branchName := fmt.Sprintf("feature/%s", requirement.ID().String())
-	if err := requirement.MarkCoding(workspacePath, replicaAgent.AgentCode().String(), branchName); err != nil {
+	if err := requirement.MarkCoding(workspacePath, replicaAgent.AgentCode().String()); err != nil {
 		return nil, err
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {

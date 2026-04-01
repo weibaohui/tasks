@@ -200,8 +200,6 @@ CREATE TABLE IF NOT EXISTS requirements (
     replica_agent_code TEXT,
     dispatch_session_key TEXT,
     workspace_path TEXT,
-    branch_name TEXT,
-    pr_url TEXT,
     last_error TEXT,
     started_at INTEGER,
     completed_at INTEGER,

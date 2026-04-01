@@ -47,8 +47,6 @@ type DispatchRequirementRequest struct {
 
 type ReportRequirementPRRequest struct {
 	RequirementID string `json:"requirement_id"`
-	PRURL         string `json:"pr_url"`
-	BranchName    string `json:"branch_name"`
 }
 
 func (h *RequirementHandler) CreateRequirement(w http.ResponseWriter, r *http.Request) {
@@ -161,9 +159,7 @@ func (h *RequirementHandler) ReportRequirementPROpened(w http.ResponseWriter, r 
 		return
 	}
 	requirement, err := h.requirementService.ReportRequirementPROpened(r.Context(), application.ReportRequirementPRCommand{
-		ID:         domain.NewRequirementID(req.RequirementID),
-		PRURL:      req.PRURL,
-		BranchName: req.BranchName,
+		ID: domain.NewRequirementID(req.RequirementID),
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -217,8 +213,6 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 		"replica_agent_code":    requirement.ReplicaAgentCode(),
 		"dispatch_session_key":   requirement.DispatchSessionKey(),
 		"workspace_path":        requirement.WorkspacePath(),
-		"branch_name":           requirement.BranchName(),
-		"pr_url":                requirement.PRURL(),
 		"last_error":            requirement.LastError(),
 		"started_at":            startedAt,
 		"completed_at":          completedAt,
