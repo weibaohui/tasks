@@ -200,9 +200,12 @@ func (e *TriggerAgentExecutor) renderPrompt(template string, req *domain.Require
 }
 
 func (e *TriggerAgentExecutor) renderWorkspace(template string, req *domain.Requirement) string {
-	// 如果模板为空，使用需求已有的工作目录
 	if template == "" {
-		return req.WorkspacePath()
+		if req.WorkspacePath() != "" {
+			return req.WorkspacePath()
+		}
+		// 兜底：使用默认工作目录（与需求派发时保持一致）
+		return fmt.Sprintf("/tmp/ai-devops/%s/%s", req.ProjectID().String(), req.ID().String())
 	}
 
 	result := template
