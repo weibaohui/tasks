@@ -153,6 +153,13 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, err
 	}
 	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath)
+
+	// 保存 Claude Runtime 执行提示词
+	requirement.SetClaudeRuntimePrompt(dispatchPrompt)
+	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
+		return nil, err
+	}
+
 	s.inboundPublisher.PublishInbound(&channelBus.InboundMessage{
 		Channel:   channelType,
 		SenderID:  "requirement_dispatch",
