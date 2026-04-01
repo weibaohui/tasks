@@ -13,11 +13,11 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
-var requirementRedispatchCmd = &cobra.Command{
-	Use:   "redispatch <requirement_id>",
-	Short: "复制需求并重新派发",
+var requirementCopyDispatchCmd = &cobra.Command{
+	Use:   "copy-dispatch <requirement_id>",
+	Short: "复制需求并派发",
 	Args:  cobra.ExactArgs(1),
-	Example: `  taskmanager requirement redispatch <requirement_id>`,
+	Example: `  taskmanager requirement copy-dispatch <requirement_id>`,
 	Long: `复制一份新需求（新 ID），标题增加"[重新派发]"标记，
 重置所有状态为新建状态，然后派发新的这份需求。`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -72,5 +72,5 @@ var requirementRedispatchCmd = &cobra.Command{
 }
 
 func init() {
-	requirementCmd.AddCommand(requirementRedispatchCmd)
+	requirementCmd.AddCommand(requirementCopyDispatchCmd)
 }
