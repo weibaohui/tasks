@@ -972,13 +972,11 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	// 触发 hook
 	if p.hookExecutor != nil {
 		change := &domain.StateChange{
-			FromStatus:   requirement.Status(),
-			ToStatus:     requirement.Status(),
-			FromDevState: requirement.DevState(),
-			ToDevState:   requirement.DevState(),
-			Trigger:      "claude_code_finished",
-			Reason:       "Claude Code 对话结束",
-			Timestamp:    time.Now(),
+			FromStatus: requirement.Status(),
+			ToStatus:   requirement.Status(),
+			Trigger:    "claude_code_finished",
+			Reason:     "Claude Code 对话结束",
+			Timestamp:  time.Now(),
 		}
 		p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
 	}

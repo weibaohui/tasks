@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -22,8 +23,7 @@ var requirementCreateCmd = &cobra.Command{
 		tempWorkspace, _ := cmd.Flags().GetString("temp-workspace-root")
 
 		if projectID == "" || title == "" {
-			fmt.Println("错误: --project-id 和 --title 是必填参数")
-			cmd.Usage()
+			fmt.Print(`{"error":"--project-id and --title are required"}`)
 			return
 		}
 
@@ -40,11 +40,18 @@ var requirementCreateCmd = &cobra.Command{
 			TempWorkspaceRoot:  tempWorkspace,
 		})
 		if err != nil {
-			fmt.Printf("创建需求失败: %v\n", err)
+			fmt.Printf(`{"error":"create requirement failed: %v"}`, err)
 			return
 		}
 
-		fmt.Printf("需求创建成功！\nID: %s\n标题: %s\n", requirement.ID().String(), requirement.Title())
+		result := map[string]string{
+			"id":      requirement.ID().String(),
+			"title":   requirement.Title(),
+			"status":  string(requirement.Status()),
+			"message": "created",
+		}
+		jsonBytes, _ := json.Marshal(result)
+		fmt.Print(string(jsonBytes))
 	},
 }
 

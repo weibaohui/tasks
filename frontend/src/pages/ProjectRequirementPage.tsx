@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert } from 'antd';
-import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, reportRequirementPROpened, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, redispatchRequirement, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
@@ -18,16 +18,12 @@ const joinLines = (items: string[]): string => items.join('\n');
 
 const statusColorMap: Record<string, string> = {
   todo: 'default',
-  in_progress: 'processing',
-  done: 'success',
-};
-
-const devStateColorMap: Record<string, string> = {
-  idle: 'default',
   preparing: 'gold',
   coding: 'blue',
   pr_opened: 'green',
   failed: 'red',
+  completed: 'success',
+  done: 'success',
 };
 
 const claudeRuntimeColorMap: Record<string, string> = {
@@ -54,12 +50,9 @@ export const ProjectRequirementPage: React.FC = () => {
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [dispatchRequirementItem, setDispatchRequirementItem] = useState<Requirement | null>(null);
-  const [prModalOpen, setPrModalOpen] = useState(false);
-  const [prRequirementItem, setPrRequirementItem] = useState<Requirement | null>(null);
   const [projectForm] = Form.useForm();
   const [requirementForm] = Form.useForm();
   const [dispatchForm] = Form.useForm();
-  const [prForm] = Form.useForm();
 
   // 项目配置抽屉状态
   const [projectConfigDrawerOpen, setProjectConfigDrawerOpen] = useState(false);
@@ -74,6 +67,10 @@ export const ProjectRequirementPage: React.FC = () => {
   // 心跳配置相关状态
   const [heartbeatForm] = Form.useForm();
   const [savingHeartbeat, setSavingHeartbeat] = useState(false);
+
+  // 需求详情抽屉状态
+  const [requirementDetailDrawerOpen, setRequirementDetailDrawerOpen] = useState(false);
+  const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null);
 
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
@@ -300,36 +297,6 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const openReportPRModal = (item: Requirement) => {
-    console.log('[DEBUG] openReportPRModal called:', item.id, item.status, item.dev_state);
-    setPrRequirementItem(item);
-    prForm.setFieldsValue({
-      pr_url: item.pr_url || '',
-      branch_name: item.branch_name || '',
-    });
-    setPrModalOpen(true);
-  };
-
-  const submitReportPR = async (values: { pr_url: string; branch_name: string }) => {
-    console.log('[DEBUG] submitReportPR function entered');
-    if (!prRequirementItem) {
-      console.log('[DEBUG] prRequirementItem is null, returning');
-      return;
-    }
-    console.log('[DEBUG] submitReportPR called:', prRequirementItem.id, values.pr_url, values.branch_name);
-    try {
-      console.log('[DEBUG] calling API...');
-      await reportRequirementPROpened(prRequirementItem.id, values.pr_url, values.branch_name || '');
-      console.log('[DEBUG] API call success');
-      message.success('PR 状态更新成功');
-      setPrModalOpen(false);
-      await fetchRequirements(selectedProjectId);
-    } catch (_error) {
-      console.error('[DEBUG] API error:', _error);
-      message.error('PR 状态更新失败');
-    }
-  };
-
   const handleRedispatch = async (item: Requirement) => {
     try {
       await redispatchRequirement(item.id);
@@ -338,6 +305,11 @@ export const ProjectRequirementPage: React.FC = () => {
     } catch (_error) {
       message.error('重新派发失败');
     }
+  };
+
+  const openRequirementDetail = (item: Requirement) => {
+    setDetailRequirement(item);
+    setRequirementDetailDrawerOpen(true);
   };
 
   // 项目配置相关处理
@@ -558,7 +530,6 @@ export const ProjectRequirementPage: React.FC = () => {
       render: (_: unknown, item: Requirement) => (
         <Space>
           <Tag color={statusColorMap[item.status] || 'default'}>{item.status}</Tag>
-          <Tag color={devStateColorMap[item.dev_state] || 'default'}>{item.dev_state}</Tag>
         </Space>
       ),
     },
@@ -578,23 +549,21 @@ export const ProjectRequirementPage: React.FC = () => {
         );
       },
     },
-    { title: '分支', dataIndex: 'branch_name', key: 'branch_name' },
-    { title: 'PR', dataIndex: 'pr_url', key: 'pr_url', ellipsis: true },
     {
       title: '操作',
       key: 'action',
       render: (_: unknown, item: Requirement) => (
         <Space>
+          <Button type="link" onClick={() => openRequirementDetail(item)}>
+            详情
+          </Button>
           <Button type="link" onClick={() => openEditRequirement(item)}>
             编辑
           </Button>
-          <Button type="link" disabled={!(item.status === 'todo' && item.dev_state === 'idle')} onClick={() => openDispatchModal(item)}>
+          <Button type="link" disabled={item.status !== 'todo'} onClick={() => openDispatchModal(item)}>
             派发
           </Button>
-          <Button type="link" onClick={() => openReportPRModal(item)}>
-            更新PR
-          </Button>
-          <Button type="link" disabled={item.status === 'todo' && item.dev_state === 'idle'} onClick={() => handleRedispatch(item)}>
+          <Button type="link" disabled={item.status === 'todo'} onClick={() => handleRedispatch(item)}>
             重新派发
           </Button>
         </Space>
@@ -745,20 +714,6 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             确认派发
-          </Button>
-        </Form>
-      </Modal>
-
-      <Modal title="更新 PR 状态" open={prModalOpen} footer={null} onCancel={() => setPrModalOpen(false)}>
-        <Form layout="vertical" form={prForm} onFinish={submitReportPR}>
-          <Form.Item label="PR 链接" name="pr_url" rules={[{ required: true, message: '请输入 PR 链接' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="分支名" name="branch_name">
-            <Input />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block>
-            更新状态
           </Button>
         </Form>
       </Modal>
@@ -994,13 +949,11 @@ export const ProjectRequirementPage: React.FC = () => {
 {`\${requirement.id}           - 需求ID
 \${requirement.title}         - 需求标题
 \${requirement.description}     - 需求描述
-\${requirement.status}          - 需求状态 (todo/in_progress/done)
-\${requirement.dev_state}      - 开发状态 (idle/preparing/coding/pr_opened/failed)
+\${requirement.status}          - 需求状态 (todo/preparing/coding/pr_opened/failed/completed/done)
 \${requirement.temp_workspace_root} - 临时工作目录根路径
 \${project.id}               - 项目ID
 \${project.name}         - 项目名称
 \${workspace.path}        - 工作目录路径
-\${branch_name}           - 分支名
 \${change.trigger}        - 触发事件名称
 \${change.reason}        - 状态变更原因`}
                           </pre>
@@ -1008,7 +961,7 @@ export const ProjectRequirementPage: React.FC = () => {
                             完成后请执行以下 CLI 命令标记需求完成：
                           </div>
                           <pre style={{ fontSize: 11, background: '#f0f8ff', padding: 8, borderRadius: 4 }}>
-{`taskmanager requirement complete --id \${requirement.id} --pr-url <PR_URL> [--branch \${branch_name}]`}
+{`taskmanager requirement complete --id \${requirement.id}`}
                           </pre>
                         </div>
                       }
@@ -1046,6 +999,233 @@ export const ProjectRequirementPage: React.FC = () => {
           </Button>
         </Form>
       </Modal>
+
+      {/* 需求详情抽屉 */}
+      <Drawer
+        title={`需求详情 - ${detailRequirement?.title || ''}`}
+        placement="right"
+        width={900}
+        onClose={() => setRequirementDetailDrawerOpen(false)}
+        open={requirementDetailDrawerOpen}
+      >
+        {detailRequirement && (
+          <Tabs
+            items={[
+              {
+                key: 'basic',
+                label: '基础信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>需求ID</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.id}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>项目ID</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.project_id}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>状态</div>
+                      <div>
+                        <Tag color={statusColorMap[detailRequirement.status] || 'default'}>{detailRequirement.status}</Tag>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>需求类型</div>
+                      <div>{detailRequirement.requirement_type || 'normal'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>创建时间</div>
+                      <div>{detailRequirement.created_at ? new Date(detailRequirement.created_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>更新时间</div>
+                      <div>{detailRequirement.updated_at ? new Date(detailRequirement.updated_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>开始时间</div>
+                      <div>{detailRequirement.started_at ? new Date(detailRequirement.started_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>完成时间</div>
+                      <div>{detailRequirement.completed_at ? new Date(detailRequirement.completed_at).toLocaleString() : '-'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'content',
+                label: '需求内容',
+                children: (
+                  <div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>标题</div>
+                      <div style={{ fontSize: 16, fontWeight: 500 }}>{detailRequirement.title}</div>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>描述</div>
+                      <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {detailRequirement.description || '无'}
+                      </pre>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>验收标准</div>
+                      <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {detailRequirement.acceptance_criteria || '无'}
+                      </pre>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'workspace',
+                label: '工作区信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>临时工作目录根路径</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.temp_workspace_root || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>工作目录</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.workspace_path || '-'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'dispatch',
+                label: '派发信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>派发SessionKey</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.dispatch_session_key || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分配Agent</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.assignee_agent_code || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分身Agent</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.replica_agent_code || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>最近错误</div>
+                      <div style={{ color: '#ff4d4f' }}>{detailRequirement.last_error || '无'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'claude',
+                label: 'Claude执行',
+                children: (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行状态</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.status ? (
+                            <Tag color={claudeRuntimeColorMap[detailRequirement.claude_runtime.status] || 'default'}>
+                              {detailRequirement.claude_runtime.status}
+                            </Tag>
+                          ) : (
+                            '-'
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>运行状态</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.is_running !== undefined ? (
+                            <Tag color={detailRequirement.claude_runtime.is_running ? 'processing' : 'default'}>
+                              {detailRequirement.claude_runtime.is_running ? '运行中' : '已停止'}
+                            </Tag>
+                          ) : (
+                            '-'
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>开始时间</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.started_at
+                            ? new Date(detailRequirement.claude_runtime.started_at).toLocaleString()
+                            : '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>结束时间</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.ended_at
+                            ? new Date(detailRequirement.claude_runtime.ended_at).toLocaleString()
+                            : '-'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行提示词</div>
+                      <pre
+                        style={{
+                          background: '#f0f5ff',
+                          padding: 12,
+                          borderRadius: 4,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          maxHeight: 300,
+                          overflow: 'auto',
+                          border: '1px solid #adc6ff',
+                        }}
+                      >
+                        {detailRequirement.claude_runtime?.prompt || '无'}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行结果</div>
+                      <pre
+                        style={{
+                          background: '#f6ffed',
+                          padding: 12,
+                          borderRadius: 4,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          maxHeight: 300,
+                          overflow: 'auto',
+                          border: '1px solid #b7eb8f',
+                        }}
+                      >
+                        {detailRequirement.claude_runtime?.result || '无'}
+                      </pre>
+                    </div>
+
+                    {detailRequirement.claude_runtime?.last_error && (
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行错误</div>
+                        <pre
+                          style={{
+                            background: '#fff2f0',
+                            padding: 12,
+                            borderRadius: 4,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            border: '1px solid #ffccc7',
+                            color: '#ff4d4f',
+                          }}
+                        >
+                          {detailRequirement.claude_runtime.last_error}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };

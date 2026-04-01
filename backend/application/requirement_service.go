@@ -29,9 +29,7 @@ type UpdateRequirementCommand struct {
 }
 
 type ReportRequirementPRCommand struct {
-	ID         domain.RequirementID
-	PRURL      string
-	BranchName string
+	ID domain.RequirementID
 }
 
 type RedispatchRequirementCommand struct {
@@ -147,7 +145,7 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 		fmt.Println("[DEBUG] Hook executor is NIL!")
 	}
 
-	requirement.MarkPROpened(cmd.PRURL, cmd.BranchName)
+	requirement.MarkPROpened()
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}

@@ -372,13 +372,11 @@ const (
 
 // StateChange 状态变更信息
 type StateChange struct {
-	FromStatus   RequirementStatus
-	ToStatus     RequirementStatus
-	FromDevState RequirementDevState
-	ToDevState   RequirementDevState
-	Trigger      string
-	Reason       string
-	Timestamp    time.Time
+	FromStatus RequirementStatus
+	ToStatus   RequirementStatus
+	Trigger    string
+	Reason     string
+	Timestamp  time.Time
 }
 
 // RequirementStateHook 需求状态变更钩子接口

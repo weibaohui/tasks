@@ -21,8 +21,7 @@ var requirementReviewCmd = &cobra.Command{
   taskmanager requirement review owner/repo 123 prj_xxx --title '修复登录bug'`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 2 {
-			fmt.Println("错误: 缺少必填参数")
-			cmd.Usage()
+			fmt.Print(`{"error":"missing required arguments"}`)
 			return
 		}
 
@@ -38,7 +37,7 @@ var requirementReviewCmd = &cobra.Command{
 			parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
 			// URL格式: https://github.com/owner/repo/pull/123
 			if len(parts) < 5 {
-				fmt.Println("错误: URL 格式不正确")
+				fmt.Print(`{"error":"invalid URL format"}`)
 				return
 			}
 			owner = parts[len(parts)-4]
@@ -46,14 +45,13 @@ var requirementReviewCmd = &cobra.Command{
 			// 提取 prNumber
 			prNumStr := parts[len(parts)-1]
 			if _, err := fmt.Sscanf(prNumStr, "%d", &prNumber); err != nil {
-				fmt.Printf("错误: 无法解析 PR 编号: %s\n", prNumStr)
+				fmt.Printf(`{"error":"invalid PR number: %s"}`, prNumStr)
 				return
 			}
 		} else {
 			// owner/repo 格式
 			if len(args) < 3 {
-				fmt.Println("错误: owner/repo 格式需要至少 3 个参数")
-				cmd.Usage()
+				fmt.Print(`{"error":"owner/repo format requires at least 3 arguments"}`)
 				return
 			}
 			ownerRepo := args[0]
@@ -61,14 +59,14 @@ var requirementReviewCmd = &cobra.Command{
 
 			parts := strings.Split(ownerRepo, "/")
 			if len(parts) != 2 {
-				fmt.Println("错误: owner/repo 格式不正确")
+				fmt.Print(`{"error":"invalid owner/repo format"}`)
 				return
 			}
 			owner = parts[0]
 			repo = parts[1]
 
 			if _, err := fmt.Sscanf(prNumberStr, "%d", &prNumber); err != nil {
-				fmt.Printf("错误: PR 编号必须是数字: %s\n", prNumberStr)
+				fmt.Printf(`{"error":"PR number must be numeric: %s"}`, prNumberStr)
 				return
 			}
 			prURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber)
@@ -76,24 +74,23 @@ var requirementReviewCmd = &cobra.Command{
 
 		projectID := args[len(args)-1]
 
-		// 登录获取 token
-		token, err := login(defaultAdminUsername, defaultAdminPassword)
-		if err != nil {
-			fmt.Printf("登录失败: %v\n", err)
+		// 从配置文件获取 token
+		token := config.GetAPIToken()
+		if token == "" {
+			fmt.Print(`{"error":"API token not configured, please set api.token in ~/.taskmanager/config.yaml"}`)
 			return
 		}
 
 		// 获取PR信息
 		prInfo, err := fetchPRInfo(owner, repo, prNumber)
 		if err != nil {
-			fmt.Printf("获取PR信息失败: %v\n", err)
+			fmt.Printf(`{"error":"fetch PR info failed: %v"}`, err)
 			return
 		}
 
 		// 获取PR评论
 		comments, err := fetchPRComments(owner, repo, prNumber)
 		if err != nil {
-			fmt.Printf("获取PR评论失败: %v\n", err)
 			comments = []PRComment{}
 		}
 
@@ -120,16 +117,16 @@ var requirementReviewCmd = &cobra.Command{
 
 		// 调用创建需求 API
 		reqBody := map[string]string{
-			"project_id":           projectID,
-			"title":                generatedTitle,
-			"description":          description,
-			"acceptance_criteria":  "根据PR评论内容确定验收标准",
+			"project_id":          projectID,
+			"title":               generatedTitle,
+			"description":         description,
+			"acceptance_criteria": "根据PR评论内容确定验收标准",
 		}
 		reqJSON, _ := json.Marshal(reqBody)
 
 		req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements", bytes.NewBuffer(reqJSON))
 		if err != nil {
-			fmt.Printf("创建请求失败: %v\n", err)
+			fmt.Printf(`{"error":"create request failed: %v"}`, err)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -138,26 +135,19 @@ var requirementReviewCmd = &cobra.Command{
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("创建需求请求失败: %v\n", err)
+			fmt.Printf(`{"error":"create requirement request failed: %v"}`, err)
 			return
 		}
 		defer resp.Body.Close()
 
+		body, _ := io.ReadAll(resp.Body)
+
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-			body, _ := io.ReadAll(resp.Body)
-			fmt.Printf("创建需求失败: %s\n%s\n", resp.Status, string(body))
+			fmt.Printf(`{"error":"create requirement failed: %s","detail":%s}`, resp.Status, string(body))
 			return
 		}
 
-		var result struct {
-			ID string `json:"id"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			fmt.Printf("解析响应失败: %v\n", err)
-			return
-		}
-
-		fmt.Printf("需求 %s 已创建 (来源: PR %s)\n", result.ID, prURL)
+		fmt.Print(string(body))
 	},
 }
 

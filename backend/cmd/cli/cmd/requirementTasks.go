@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -16,8 +17,7 @@ var requirementTasksCmd = &cobra.Command{
 		id, _ := cmd.Flags().GetString("id")
 
 		if id == "" {
-			fmt.Println("错误: --id 是必填参数")
-			cmd.Usage()
+			fmt.Print(`{"error":"--id is required"}`)
 			return
 		}
 
@@ -32,37 +32,25 @@ var requirementTasksCmd = &cobra.Command{
 		// 查找需求
 		requirement, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
 		if err != nil {
-			fmt.Printf("查找需求失败: %v\n", err)
+			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
 			return
 		}
 		if requirement == nil {
-			fmt.Printf("需求不存在: %s\n", id)
+			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
 			return
 		}
-
-		// 显示需求基本信息
-		fmt.Println("\n需求信息:")
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("ID: %s\n", requirement.ID().String())
-		fmt.Printf("标题: %s\n", requirement.Title())
-		fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
-		fmt.Printf("SessionKey: %s\n", requirement.DispatchSessionKey())
-		fmt.Printf("工作目录: %s\n", requirement.WorkspacePath())
-		fmt.Printf("分身Agent: %s\n", requirement.ReplicaAgentCode())
-		fmt.Println()
 
 		// 尝试通过 session_key 查找相关任务
 		sessionKey := requirement.DispatchSessionKey()
 		if sessionKey == "" {
-			fmt.Println("提示: 该需求尚未派发，没有关联的 session_key")
-			fmt.Println()
+			fmt.Printf(`{"requirement_id":"%s","message":"not dispatched yet"}`, id)
 			return
 		}
 
 		// 查找所有任务，然后筛选
 		allTasks, err := taskRepo.FindAll(ctx)
 		if err != nil {
-			fmt.Printf("查找任务失败: %v\n", err)
+			fmt.Printf(`{"error":"find tasks failed: %v"}`, err)
 			return
 		}
 
@@ -75,65 +63,44 @@ var requirementTasksCmd = &cobra.Command{
 		}
 
 		if len(relatedTasks) == 0 {
-			fmt.Println("子任务: 无")
-			fmt.Println()
+			fmt.Printf(`{"requirement_id":"%s","tasks":[]}`)
 			return
 		}
 
-		// 显示子任务列表
-		fmt.Printf("子任务 (共 %d 个):\n", len(relatedTasks))
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("%-20s %-10s %-10s %s\n", "ID", "状态", "进度", "任务名称")
-		fmt.Println("--------------------------------------------------------------------------------")
+		// 构建 JSON 输出
+		type TaskInfo struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Status   string `json:"status"`
+			Progress int    `json:"progress"`
+			ParentID string `json:"parent_id,omitempty"`
+			Type     string `json:"type"`
+		}
 
+		tasks := make([]TaskInfo, 0, len(relatedTasks))
 		for _, task := range relatedTasks {
-			taskID := task.ID().String()
-			if len(taskID) > 16 {
-				taskID = taskID[:16] + "..."
+			var parentID string
+			if task.ParentID() != nil {
+				parentID = task.ParentID().String()
 			}
-			fmt.Printf("%-20s %-10s %-10d %s\n",
-				taskID,
-				task.Status(),
-				task.Progress().Value(),
-				task.Name())
-		}
-		fmt.Println()
-
-		// 显示顶层任务（有 parent_id 的为子任务，没有的为顶层任务）
-		var topLevelTasks []*domain.Task
-		for _, task := range relatedTasks {
-			if task.ParentID() == nil {
-				topLevelTasks = append(topLevelTasks, task)
-			}
+			tasks = append(tasks, TaskInfo{
+				ID:       task.ID().String(),
+				Name:     task.Name(),
+				Status:   task.Status().String(),
+				Progress: task.Progress().Value(),
+				ParentID: parentID,
+				Type:     task.Type().String(),
+			})
 		}
 
-		if len(topLevelTasks) > 0 {
-			fmt.Printf("顶层任务 (共 %d 个):\n", len(topLevelTasks))
-			fmt.Println("--------------------------------------------------------------------------------")
-
-			for _, task := range topLevelTasks {
-				// 查找该顶层任务的子任务
-				var childTasks []*domain.Task
-				for _, t := range relatedTasks {
-					if t.ParentID() != nil && t.ParentID().String() == task.ID().String() {
-						childTasks = append(childTasks, t)
-					}
-				}
-
-				fmt.Printf("\n任务: %s\n", task.Name())
-				fmt.Printf("  ID: %s\n", task.ID().String())
-				fmt.Printf("  状态: %s | 进度: %d%%\n", task.Status(), task.Progress().Value())
-				fmt.Printf("  类型: %s\n", task.Type())
-
-				if len(childTasks) > 0 {
-					fmt.Printf("  子任务 (%d个):\n", len(childTasks))
-					for _, child := range childTasks {
-						fmt.Printf("    - %s [%s, %d%%]\n", child.Name(), child.Status(), child.Progress().Value())
-					}
-				}
-			}
-			fmt.Println()
+		result := map[string]interface{}{
+			"requirement_id": id,
+			"session_key":    sessionKey,
+			"tasks":          tasks,
 		}
+
+		jsonBytes, _ := json.Marshal(result)
+		fmt.Print(string(jsonBytes))
 	},
 }
 

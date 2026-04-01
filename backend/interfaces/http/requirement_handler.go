@@ -47,8 +47,6 @@ type DispatchRequirementRequest struct {
 
 type ReportRequirementPRRequest struct {
 	RequirementID string `json:"requirement_id"`
-	PRURL         string `json:"pr_url"`
-	BranchName    string `json:"branch_name"`
 }
 
 func (h *RequirementHandler) CreateRequirement(w http.ResponseWriter, r *http.Request) {
@@ -161,9 +159,7 @@ func (h *RequirementHandler) ReportRequirementPROpened(w http.ResponseWriter, r 
 		return
 	}
 	requirement, err := h.requirementService.ReportRequirementPROpened(r.Context(), application.ReportRequirementPRCommand{
-		ID:         domain.NewRequirementID(req.RequirementID),
-		PRURL:      req.PRURL,
-		BranchName: req.BranchName,
+		ID: domain.NewRequirementID(req.RequirementID),
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -212,13 +208,10 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 		"acceptance_criteria":   requirement.AcceptanceCriteria(),
 		"temp_workspace_root":   requirement.TempWorkspaceRoot(),
 		"status":                requirement.Status(),
-		"dev_state":             requirement.DevState(),
 		"assignee_agent_code":   requirement.AssigneeAgentCode(),
 		"replica_agent_code":    requirement.ReplicaAgentCode(),
 		"dispatch_session_key":   requirement.DispatchSessionKey(),
 		"workspace_path":        requirement.WorkspacePath(),
-		"branch_name":           requirement.BranchName(),
-		"pr_url":                requirement.PRURL(),
 		"last_error":            requirement.LastError(),
 		"started_at":            startedAt,
 		"completed_at":          completedAt,
@@ -231,24 +224,35 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 }
 
 func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// 从 requirement 直接获取 prompt 和 result
+	result["prompt"] = requirement.ClaudeRuntimePrompt()
+	result["result"] = requirement.ClaudeRuntimeResult()
+	result["status"] = requirement.ClaudeRuntimeStatus()
+
 	if h.sessionService == nil || requirement == nil {
-		return nil
+		return result
 	}
 	sessionKey := requirement.DispatchSessionKey()
 	if sessionKey == "" {
-		return nil
+		return result
 	}
 	metadata, err := h.sessionService.GetSessionMetadata(r.Context(), sessionKey)
 	if err != nil {
-		return nil
+		return result
 	}
 	rawRuntime, ok := metadata["claude_code_runtime"]
 	if !ok {
-		return nil
+		return result
 	}
 	runtime, ok := rawRuntime.(map[string]interface{})
 	if !ok {
-		return nil
+		return result
 	}
-	return runtime
+	// 合并 session metadata 中的运行时信息
+	for k, v := range runtime {
+		result[k] = v
+	}
+	return result
 }

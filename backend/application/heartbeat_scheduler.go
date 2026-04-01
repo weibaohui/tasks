@@ -94,7 +94,7 @@ func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
 	staleCount := 0
 	for _, req := range requirements {
 		// 检查是否处于 coding 状态
-		if string(req.Status()) == "in_progress" && string(req.DevState()) == "coding" {
+		if string(req.Status()) == "coding" {
 			updatedAt := req.UpdatedAt()
 			shouldCleanup := false
 			reason := ""

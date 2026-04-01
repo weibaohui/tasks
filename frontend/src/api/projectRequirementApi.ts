@@ -47,7 +47,6 @@ export async function updateRequirement(payload: UpdateRequirementRequest): Prom
 export async function dispatchRequirement(requirementId: string, agentCode: string, channelCode: string, sessionKey: string): Promise<{
   requirement_id: string;
   status: string;
-  dev_state: string;
   workspace_path: string;
   replica_agent_code: string;
   task_id: string;
@@ -61,11 +60,9 @@ export async function dispatchRequirement(requirementId: string, agentCode: stri
   return response.data;
 }
 
-export async function reportRequirementPROpened(requirementId: string, prUrl: string, branchName: string): Promise<Requirement> {
+export async function reportRequirementPROpened(requirementId: string): Promise<Requirement> {
   const response = await apiClient.post<Requirement>('/requirements/pr', {
     requirement_id: requirementId,
-    pr_url: prUrl,
-    branch_name: branchName,
   });
   return response.data;
 }
