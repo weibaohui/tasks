@@ -146,7 +146,6 @@ export const HookEditDrawer: React.FC<HookEditDrawerProps> = ({
                 <li><code>{'{{requirement_title}}'}</code> - 需求标题</li>
                 <li><code>{'{{requirement_description}}'}</code> - 需求描述</li>
                 <li><code>{'{{requirement_status}}'}</code> - 需求状态</li>
-                <li><code>{'{{requirement_dev_state}}'}</code> - 开发状态</li>
                 <li><code>{'{{project_id}}'}</code> - 项目 ID</li>
                 <li><code>{'{{project_name}}'}</code> - 项目名称</li>
               </ul>

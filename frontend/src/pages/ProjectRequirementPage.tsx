@@ -18,16 +18,12 @@ const joinLines = (items: string[]): string => items.join('\n');
 
 const statusColorMap: Record<string, string> = {
   todo: 'default',
-  in_progress: 'processing',
-  done: 'success',
-};
-
-const devStateColorMap: Record<string, string> = {
-  idle: 'default',
   preparing: 'gold',
   coding: 'blue',
   pr_opened: 'green',
   failed: 'red',
+  completed: 'success',
+  done: 'success',
 };
 
 const claudeRuntimeColorMap: Record<string, string> = {
@@ -534,7 +530,6 @@ export const ProjectRequirementPage: React.FC = () => {
       render: (_: unknown, item: Requirement) => (
         <Space>
           <Tag color={statusColorMap[item.status] || 'default'}>{item.status}</Tag>
-          <Tag color={devStateColorMap[item.dev_state] || 'default'}>{item.dev_state}</Tag>
         </Space>
       ),
     },
@@ -565,10 +560,10 @@ export const ProjectRequirementPage: React.FC = () => {
           <Button type="link" onClick={() => openEditRequirement(item)}>
             编辑
           </Button>
-          <Button type="link" disabled={!(item.status === 'todo' && item.dev_state === 'idle')} onClick={() => openDispatchModal(item)}>
+          <Button type="link" disabled={item.status !== 'todo'} onClick={() => openDispatchModal(item)}>
             派发
           </Button>
-          <Button type="link" disabled={item.status === 'todo' && item.dev_state === 'idle'} onClick={() => handleRedispatch(item)}>
+          <Button type="link" disabled={item.status === 'todo'} onClick={() => handleRedispatch(item)}>
             重新派发
           </Button>
         </Space>
@@ -954,8 +949,7 @@ export const ProjectRequirementPage: React.FC = () => {
 {`\${requirement.id}           - 需求ID
 \${requirement.title}         - 需求标题
 \${requirement.description}     - 需求描述
-\${requirement.status}          - 需求状态 (todo/in_progress/done)
-\${requirement.dev_state}      - 开发状态 (idle/preparing/coding/pr_opened/failed)
+\${requirement.status}          - 需求状态 (todo/preparing/coding/pr_opened/failed/completed/done)
 \${requirement.temp_workspace_root} - 临时工作目录根路径
 \${project.id}               - 项目ID
 \${project.name}         - 项目名称
@@ -1034,7 +1028,6 @@ export const ProjectRequirementPage: React.FC = () => {
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>状态</div>
                       <div>
                         <Tag color={statusColorMap[detailRequirement.status] || 'default'}>{detailRequirement.status}</Tag>
-                        <Tag color={devStateColorMap[detailRequirement.dev_state] || 'default'}>{detailRequirement.dev_state}</Tag>
                       </div>
                     </div>
                     <div>

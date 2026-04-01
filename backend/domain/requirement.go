@@ -15,7 +15,6 @@ var (
 	ErrRequirementProjectIDRequired = errors.New("requirement project id is required")
 	ErrRequirementTitleRequired     = errors.New("requirement title is required")
 	ErrRequirementInvalidStatus     = errors.New("requirement status is invalid")
-	ErrRequirementInvalidDevState   = errors.New("requirement dev state is invalid")
 	ErrRequirementCannotDispatch    = errors.New("requirement cannot be dispatched in current state")
 )
 
@@ -34,37 +33,34 @@ func (id RequirementID) String() string {
 type RequirementStatus string
 
 const (
-	RequirementStatusTodo       RequirementStatus = "todo"
-	RequirementStatusInProgress RequirementStatus = "in_progress"
+	RequirementStatusTodo        RequirementStatus = "todo"
+	RequirementStatusPreparing  RequirementStatus = "preparing"
+	RequirementStatusCoding     RequirementStatus = "coding"
+	RequirementStatusPROpened  RequirementStatus = "pr_opened"
+	RequirementStatusFailed     RequirementStatus = "failed"
+	RequirementStatusCompleted  RequirementStatus = "completed"
 	RequirementStatusDone       RequirementStatus = "done"
 )
 
 func (s RequirementStatus) IsValid() bool {
 	switch s {
-	case RequirementStatusTodo, RequirementStatusInProgress, RequirementStatusDone:
+	case RequirementStatusTodo, RequirementStatusPreparing, RequirementStatusCoding, RequirementStatusPROpened, RequirementStatusFailed, RequirementStatusCompleted, RequirementStatusDone:
+		return true
+	// 兼容旧状态值
+	case "in_progress":
 		return true
 	default:
 		return false
 	}
 }
 
-type RequirementDevState string
-
-const (
-	RequirementDevStateIdle       RequirementDevState = "idle"
-	RequirementDevStatePreparing  RequirementDevState = "preparing"
-	RequirementDevStateCoding    RequirementDevState = "coding"
-	RequirementDevStatePROpened  RequirementDevState = "pr_opened"
-	RequirementDevStateFailed    RequirementDevState = "failed"
-	RequirementDevStateCompleted  RequirementDevState = "completed"
-)
-
-func (s RequirementDevState) IsValid() bool {
+// Normalize 规范化状态值，将旧值转换为新值
+func (s RequirementStatus) Normalize() RequirementStatus {
 	switch s {
-	case RequirementDevStateIdle, RequirementDevStatePreparing, RequirementDevStateCoding, RequirementDevStatePROpened, RequirementDevStateFailed, RequirementDevStateCompleted:
-		return true
+	case "in_progress":
+		return RequirementStatusPreparing
 	default:
-		return false
+		return s
 	}
 }
 
@@ -83,7 +79,6 @@ type Requirement struct {
 	acceptanceCriteria  string
 	tempWorkspaceRoot   string
 	status              RequirementStatus
-	devState            RequirementDevState
 	assigneeAgentCode   string
 	replicaAgentCode    string
 	dispatchSessionKey  string
@@ -198,7 +193,6 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 		acceptanceCriteria: acceptanceCriteria,
 		tempWorkspaceRoot:  strings.TrimSpace(tempWorkspaceRoot),
 		status:             RequirementStatusTodo,
-		devState:           RequirementDevStateIdle,
 		requirementType:    RequirementTypeNormal,
 		createdAt:          now,
 		updatedAt:          now,
@@ -211,8 +205,7 @@ func (r *Requirement) Title() string                  { return r.title }
 func (r *Requirement) Description() string            { return r.description }
 func (r *Requirement) AcceptanceCriteria() string     { return r.acceptanceCriteria }
 func (r *Requirement) TempWorkspaceRoot() string      { return r.tempWorkspaceRoot }
-func (r *Requirement) Status() RequirementStatus      { return r.status }
-func (r *Requirement) DevState() RequirementDevState  { return r.devState }
+func (r *Requirement) Status() RequirementStatus { return r.status }
 func (r *Requirement) AssigneeAgentCode() string      { return r.assigneeAgentCode }
 func (r *Requirement) ReplicaAgentCode() string       { return r.replicaAgentCode }
 func (r *Requirement) DispatchSessionKey() string     { return r.dispatchSessionKey }
@@ -246,15 +239,15 @@ func (r *Requirement) SetRequirementType(t RequirementType) {
 }
 
 func (r *Requirement) CanDispatch() bool {
-	return r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle
+	return r.status == RequirementStatusTodo
 }
 
 // CanRedispatch 检查是否可以重新派发
-// 只要需求不是初始状态（todo + idle），就可以重新派发
+// 只要需求不是初始状态（todo），就可以重新派发
 func (r *Requirement) CanRedispatch() bool {
-	// 初始状态：todo + idle -> 不需要重新派发
+	// 初始状态：todo -> 不需要重新派发
 	// 其他状态都可以重新派发
-	return !(r.status == RequirementStatusTodo && r.devState == RequirementDevStateIdle)
+	return r.status != RequirementStatusTodo
 }
 
 // StartClaudeRuntime 开始 Claude Runtime
@@ -287,11 +280,9 @@ func (r *Requirement) Redispatch() error {
 	}
 
 	fromStatus := r.status
-	fromDevState := r.devState
 
 	now := time.Now()
 	r.status = RequirementStatusTodo
-	r.devState = RequirementDevStateIdle
 	r.assigneeAgentCode = ""
 	r.replicaAgentCode = ""
 	r.workspacePath = ""
@@ -302,13 +293,11 @@ func (r *Requirement) Redispatch() error {
 	r.updatedAt = now
 
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "redispatch",
-		Reason:       "manual redispatch",
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "redispatch",
+		Reason:     "manual redispatch",
+		Timestamp:  now,
 	})
 
 	return nil
@@ -332,50 +321,42 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	}
 
 	fromStatus := r.status
-	fromDevState := r.devState
 
 	now := time.Now()
-	r.status = RequirementStatusInProgress
-	r.devState = RequirementDevStatePreparing
+	r.status = RequirementStatusPreparing
 	r.assigneeAgentCode = assigneeAgentCode
 	r.startedAt = &now
 	r.lastError = ""
 	r.updatedAt = now
 
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "start_dispatch",
-		Reason:       "",
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "start_dispatch",
+		Reason:     "",
+		Timestamp:  now,
 	})
 
 	return nil
 }
 
 func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
-	if r.status != RequirementStatusInProgress {
+	if r.status != RequirementStatusPreparing {
 		return ErrRequirementCannotDispatch
 	}
 
-	fromDevState := r.devState
-
-	r.devState = RequirementDevStateCoding
+	r.status = RequirementStatusCoding
 	r.workspacePath = workspacePath
 	r.replicaAgentCode = replicaAgentCode
 	now := time.Now()
 	r.updatedAt = now
 
 	r.fireStateChange(&StateChange{
-		FromStatus:   r.status,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "mark_coding",
-		Reason:       "",
-		Timestamp:    now,
+		FromStatus: RequirementStatusPreparing,
+		ToStatus:   r.status,
+		Trigger:    "mark_coding",
+		Reason:     "",
+		Timestamp:  now,
 	})
 
 	return nil
@@ -383,34 +364,28 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 
 func (r *Requirement) MarkPROpened() {
 	fromStatus := r.status
-	fromDevState := r.devState
 
 	now := time.Now()
-	r.status = RequirementStatusDone
-	r.devState = RequirementDevStatePROpened
+	r.status = RequirementStatusPROpened
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
 
 	// Claude Code 结束 - 成功
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "claude_code_finished",
-		Reason:       "",
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "claude_code_finished",
+		Reason:     "",
+		Timestamp:  now,
 	})
 
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "mark_pr_opened",
-		Reason:       "",
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "mark_pr_opened",
+		Reason:     "",
+		Timestamp:  now,
 	})
 
 	// 强制销毁分身（代码约束）
@@ -421,33 +396,27 @@ func (r *Requirement) MarkPROpened() {
 
 func (r *Requirement) MarkFailed(lastError string) {
 	fromStatus := r.status
-	fromDevState := r.devState
 
-	r.status = RequirementStatusInProgress
-	r.devState = RequirementDevStateFailed
+	r.status = RequirementStatusFailed
 	r.lastError = lastError
 	now := time.Now()
 	r.updatedAt = now
 
 	// Claude Code 结束 - 失败
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "claude_code_finished",
-		Reason:       lastError,
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "claude_code_finished",
+		Reason:     lastError,
+		Timestamp:  now,
 	})
 
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "mark_failed",
-		Reason:       lastError,
-		Timestamp:    now,
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "mark_failed",
+		Reason:     lastError,
+		Timestamp:  now,
 	})
 
 	// 强制销毁分身（代码约束）
@@ -461,23 +430,19 @@ func (r *Requirement) MarkFailed(lastError string) {
 // 因为 claude_code_finished 会触发新的 coding agent，而完成状态不需要再启动新的 agent
 func (r *Requirement) MarkCompleted() {
 	fromStatus := r.status
-	fromDevState := r.devState
 
-	r.status = RequirementStatusInProgress
-	r.devState = RequirementDevStateCompleted
+	r.status = RequirementStatusCompleted
 	now := time.Now()
 	r.completedAt = &now
 	r.updatedAt = now
 
 	// 只触发 mark_completed 事件，不触发 claude_code_finished
 	r.fireStateChange(&StateChange{
-		FromStatus:   fromStatus,
-		ToStatus:     r.status,
-		FromDevState: fromDevState,
-		ToDevState:   r.devState,
-		Trigger:      "mark_completed",
-		Reason:       "Claude Code 执行完成",
-		Timestamp:    time.Now(),
+		FromStatus: fromStatus,
+		ToStatus:   r.status,
+		Trigger:    "mark_completed",
+		Reason:     "Claude Code 执行完成",
+		Timestamp:  time.Now(),
 	})
 
 	// 强制销毁分身（代码约束）
@@ -499,7 +464,6 @@ type RequirementSnapshot struct {
 	AcceptanceCriteria     string
 	TempWorkspaceRoot      string
 	Status                 RequirementStatus
-	DevState               RequirementDevState
 	AssigneeAgentCode      string
 	ReplicaAgentCode       string
 	DispatchSessionKey     string
@@ -527,7 +491,6 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		AcceptanceCriteria:    r.acceptanceCriteria,
 		TempWorkspaceRoot:     r.tempWorkspaceRoot,
 		Status:                 r.status,
-		DevState:              r.devState,
 		AssigneeAgentCode:      r.assigneeAgentCode,
 		ReplicaAgentCode:       r.replicaAgentCode,
 		DispatchSessionKey:     r.dispatchSessionKey,
@@ -551,17 +514,13 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	if !s.Status.IsValid() {
 		return ErrRequirementInvalidStatus
 	}
-	if !s.DevState.IsValid() {
-		return ErrRequirementInvalidDevState
-	}
 	r.id = s.ID
 	r.projectID = s.ProjectID
 	r.title = s.Title
 	r.description = s.Description
 	r.acceptanceCriteria = s.AcceptanceCriteria
 	r.tempWorkspaceRoot = strings.TrimSpace(s.TempWorkspaceRoot)
-	r.status = s.Status
-	r.devState = s.DevState
+	r.status = s.Status.Normalize() // 规范化状态值，兼容旧数据
 	r.assigneeAgentCode = s.AssigneeAgentCode
 	r.replicaAgentCode = s.ReplicaAgentCode
 	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)

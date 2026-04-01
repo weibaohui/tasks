@@ -194,7 +194,6 @@ CREATE TABLE IF NOT EXISTS requirements (
     description TEXT,
     acceptance_criteria TEXT,
     status TEXT NOT NULL DEFAULT 'todo',
-    dev_state TEXT NOT NULL DEFAULT 'idle',
     temp_workspace_root TEXT,
     assignee_agent_code TEXT,
     replica_agent_code TEXT,
@@ -215,7 +214,7 @@ CREATE TABLE IF NOT EXISTS requirements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_requirements_project_id ON requirements(project_id);
-CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status, dev_state);
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status);
 
 CREATE TABLE IF NOT EXISTS cron_jobs (
     id TEXT PRIMARY KEY,

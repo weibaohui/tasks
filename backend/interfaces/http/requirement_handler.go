@@ -208,7 +208,6 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 		"acceptance_criteria":   requirement.AcceptanceCriteria(),
 		"temp_workspace_root":   requirement.TempWorkspaceRoot(),
 		"status":                requirement.Status(),
-		"dev_state":             requirement.DevState(),
 		"assignee_agent_code":   requirement.AssigneeAgentCode(),
 		"replica_agent_code":    requirement.ReplicaAgentCode(),
 		"dispatch_session_key":   requirement.DispatchSessionKey(),

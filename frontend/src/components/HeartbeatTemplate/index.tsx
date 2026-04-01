@@ -7,133 +7,42 @@ import { CopyOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icon
 
 const { TextArea } = Input;
 
-export const DEFAULT_HEARTBEAT_TEMPLATE = `# 心跳模板：PR 审查与需求生成
+export const DEFAULT_HEARTBEAT_TEMPLATE = `你是一个心跳，你有两个任务：
+1. 需求派发。
+2. 处理PR。
 
-## 任务目标
+# 任务一：派发需求
+## 1.1 查看需求列表
+使用taskmanager requirement list命令查看当前未处理的需求列表，找到状态为status=todo，requirement_type=normal的需求，并按创建时间排序。
+## 1.2 派发需求
+派发第一个待处理的需求。
 
-检查项目的待处理 PR，分析评论内容，判断是否需要生成新的项目需求。
+## 1.3. 派发注意事项
+- 只派发 todo 状态的需求
+- 已完成、进行中、失败的需求不要派发
+- 每次心跳最多派发一个需求
+- 优先派发最早创建的需求
 
----
 
-## 执行步骤
+# 任务二：处理PR
 
-### 1. 获取待合并的 PR 列表
-
-\`\`\`bash
-# 查看所有待合并的PR
+## 1. 获取待合并的PR列表
 gh pr list --state open --mergeable non-conflicting --json number,title,author,body,url
 
-# 查看PR详情和评论
-gh pr view <PR_NUMBER> --json title,body,author,state,comments
-\`\`\`
+## 2. 分析每个PR
+对于每个待合并的PR：
+1. 对于所有评论已解决、CI通过、代码审查通过的PR，可以评论 /lgtm。使用gh pr comment <PR_NUMBER> --body "/lgtm"。
+2. 对于已经有 /lgtm 的评论，可以直接合并到main分支，并删除源分支
+3. 你判断reviewer提出的评论建议是否需要修复，如需修复，请创建需求让另一AI执行修复；如不需要修复，直接评论 /lgtm。注意你不要自己修复。
+4. 创建代码修复需求
+使用taskmanager requirement create --project-id <PROJECT_ID> --title "[修复] <修复标题>" --description "## 背景来源：PR #<PR号> https://github.com/owner/repo/pull/<PR号> 评论：<reviewer评论内容及摘要> ## 修复分支 请进入<branch_name>进行修复，修复完成后提交并推送该分支。" --acceptance "具体验收标准"
 
-### 2. 分析每个 PR
-
-对于每个待合并的 PR：
-
-1. **检查 PR 描述**：确认是否包含明确的实施意图
-2. **分析评论**：特别是代码审查评论，判断是否有以下情况：
-   - reviewer 提出了明确的修改建议且开发者已确认
-   - 有明确的 blocker 或 blocking 标记
-   - reviewer 建议需要单独跟踪问题
-
-### 3. 判断是否需要生成需求
-
-**需要生成新需求的情况**：
-- reviewer 提出的问题需要解决
-- 需要请专业领域代码评审（如数据库设计、算法优化等）
-
-**需求颗粒度**
-- 一个需求为一个AI在本需求的描述下就可以独立完成的任务。拆分的需求之间不能产生互相的依赖。
-
-**可以直接合并的情况**：
-- 所有评论都已解决
-- 没有需要进一步讨论的话题
-- CI/CD 检查全部通过
-- 代码审查已通过
-
-### 4. 创建需求（如需要）
-
-#### 4.1 代码修复需求
-
-如果 PR 评论中要求代码修改，创建需求让另一 AI 执行修复：
-
-\`\`\`bash
-taskmanager requirement create \\
-  --project-id <PROJECT_ID> \\
-  --title "[修复] <修复标题>" \\
-  --description "## 背景
-来源：PR #<PR号> https://github.com/owner/repo/pull/<PR号>
-评论：<reviewer评论摘要>
-
-## 修复分支
-<branch_name>
-
-## 修复文件
-<文件路径>
-
-## 修复内容
-<reviewer要求的代码修改详情>
-
-## 修复步骤
-<reviewer建议的修复步骤>
-
-## 验收标准
-1. <明确可测试的验收条件>
-2. <修复后PR可合并>" \\
-  --acceptance "1. <具体验收条件>"
-\`\`\`
-
-#### 4.2 新功能需求
-
-\`\`\`bash
-taskmanager requirement create \\
-  --project-id <PROJECT_ID> \\
-  --title "[功能] <功能标题>" \\
-  --description "## 背景
-来源：PR #<PR号> reviewer建议
-
-## 任务
-<reviewer建议的功能描述>
-
-## 技术要求
-<具体技术实现要求>
-
-## 验收标准
-<明确可测试的条件>" \\
-  --acceptance "<具体验收条件>"
-\`\`\`
-
-### 5. 处理无需创建需求的 PR
-
-如果 PR 可以合并，直接评论 \`/lgtm\`：
-
-\`\`\`bash
-# 评论 lgtm
-gh pr comment <PR_NUMBER> --body "/lgtm"
-\`\`\`
-
-## 模板变量
-
-| 变量 | 说明 |
-|------|------|
-| \`\${project.id}\` | 项目ID |
-| \`\${project.name}\` | 项目名称 |
-| \`\${project.git_repo_url}\` | Git仓库URL |
-| \`\${project.default_branch}\` | 默认分支 |
-| \`\${timestamp}\` | 执行时间戳 |
-
----
-
-## 重要原则
-
-1. **需求独立性**：每个需求必须能独立完成，不能依赖其他需求的结果
-2. **描述完整性**：需求描述要让下一个AI无需再看PR就能开始工作
-3. **代码修复要详细**：必须写清在哪个分支、哪个文件、哪行、具体修改什么
-4. **验收明确**：每个需求必须有明确可测试的验收标准
-5. **最小粒度**：如果一个PR涉及多个独立任务，创建多个需求
-6. **仅在必要时创建**：不是所有PR评论都需要创建需求，只有需要后续跟踪的才创建
-7. **没问题的PR**：直接评论 \`/lgtm\`，无需创建任何需求`;
+## 3.PR处理重要原则
+1. 需求必须独立可完成
+2. 描述要让AI无需再看PR就能工作
+3. 代码修复要写清在哪个分支、哪个文件、具体修复内容
+4. 仅在必要时创建需求
+5. 没问题的PR写 /lgtm`;
 
 interface HeartbeatTemplateEditorProps {
   value?: string;

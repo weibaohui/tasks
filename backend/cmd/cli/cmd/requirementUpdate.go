@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -20,8 +21,7 @@ var requirementUpdateCmd = &cobra.Command{
 		acceptance, _ := cmd.Flags().GetString("acceptance-criteria")
 
 		if id == "" {
-			fmt.Println("错误: --id 是必填参数")
-			cmd.Usage()
+			fmt.Print(`{"error":"--id is required"}`)
 			return
 		}
 
@@ -32,11 +32,11 @@ var requirementUpdateCmd = &cobra.Command{
 
 		req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
 		if err != nil {
-			fmt.Printf("查找需求失败: %v\n", err)
+			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
 			return
 		}
 		if req == nil {
-			fmt.Printf("需求不存在: %s\n", id)
+			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
 			return
 		}
 
@@ -54,15 +54,22 @@ var requirementUpdateCmd = &cobra.Command{
 		}
 
 		if err := req.UpdateContent(newTitle, newDesc, newCriteria, req.TempWorkspaceRoot()); err != nil {
-			fmt.Printf("更新需求失败: %v\n", err)
+			fmt.Printf(`{"error":"update requirement failed: %v"}`, err)
 			return
 		}
 		if err := requirementRepo.Save(ctx, req); err != nil {
-			fmt.Printf("保存需求失败: %v\n", err)
+			fmt.Printf(`{"error":"save requirement failed: %v"}`, err)
 			return
 		}
 
-		fmt.Printf("需求更新成功！\nID: %s\n标题: %s\n", req.ID().String(), req.Title())
+		result := map[string]string{
+			"id":      req.ID().String(),
+			"title":   req.Title(),
+			"status":  string(req.Status()),
+			"message": "updated",
+		}
+		jsonBytes, _ := json.Marshal(result)
+		fmt.Print(string(jsonBytes))
 	},
 }
 

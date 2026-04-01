@@ -31,22 +31,22 @@ var requirementDispatchCmd = &cobra.Command{
 		// 查找需求
 		req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 		if err != nil {
-			fmt.Printf("查找需求失败: %v\n", err)
+			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
 			return
 		}
 		if req == nil {
-			fmt.Printf("需求不存在: %s\n", requirementID)
+			fmt.Printf(`{"error":"requirement not found: %s"}`, requirementID)
 			return
 		}
 
 		// 查找项目获取派发配置
 		project, err := projectRepo.FindByID(ctx, req.ProjectID())
 		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
+			fmt.Printf(`{"error":"find project failed: %v"}`, err)
 			return
 		}
 		if project == nil {
-			fmt.Printf("项目不存在: %s\n", req.ProjectID().String())
+			fmt.Printf(`{"error":"project not found: %s"}`, req.ProjectID().String())
 			return
 		}
 
@@ -55,11 +55,14 @@ var requirementDispatchCmd = &cobra.Command{
 		sessionKey := project.DispatchSessionKey()
 
 		if agentCode == "" || sessionKey == "" {
-			fmt.Printf("项目未配置派发信息\n")
-			fmt.Printf("  项目ID: %s\n", project.ID().String())
-			fmt.Printf("  项目名称: %s\n", project.Name())
-			fmt.Printf("  AgentCode: %s\n", agentCode)
-			fmt.Printf("  SessionKey: %s\n", sessionKey)
+			result, _ := json.Marshal(map[string]string{
+				"error":       "project dispatch not configured",
+				"project_id":  project.ID().String(),
+				"project":     project.Name(),
+				"agent_code":  agentCode,
+				"session_key": sessionKey,
+			})
+			fmt.Print(string(result))
 			return
 		}
 
@@ -70,22 +73,22 @@ var requirementDispatchCmd = &cobra.Command{
 		// 登录获取 token
 		token, err := login(defaultAdminUsername, defaultAdminPassword)
 		if err != nil {
-			fmt.Printf("登录失败: %v\n", err)
+			fmt.Printf(`{"error":"login failed: %v"}`, err)
 			return
 		}
 
 		// 调用派发 API
 		reqBody := map[string]string{
 			"requirement_id": requirementID,
-			"agent_code":    agentCode,
-			"channel_code":  channelCode,
-			"session_key":   sessionKey,
+			"agent_code":     agentCode,
+			"channel_code":   channelCode,
+			"session_key":    sessionKey,
 		}
 		reqJSON, _ := json.Marshal(reqBody)
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
 		if err != nil {
-			fmt.Printf("创建请求失败: %v\n", err)
+			fmt.Printf(`{"error":"create request failed: %v"}`, err)
 			return
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
@@ -94,30 +97,19 @@ var requirementDispatchCmd = &cobra.Command{
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(httpReq)
 		if err != nil {
-			fmt.Printf("派发请求失败: %v\n", err)
+			fmt.Printf(`{"error":"dispatch request failed: %v"}`, err)
 			return
 		}
 		defer resp.Body.Close()
 
+		body, _ := io.ReadAll(resp.Body)
+
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			fmt.Printf("派发需求失败: %s\n%s\n", resp.Status, string(body))
+			fmt.Printf(`{"error":"dispatch failed: %s","detail":%s}`, resp.Status, string(body))
 			return
 		}
 
-		var result struct {
-			RequirementID   string `json:"requirement_id"`
-			TaskID         string `json:"task_id"`
-			WorkspacePath  string `json:"workspace_path"`
-			ReplicaAgentCode string `json:"replica_agent_code"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			fmt.Printf("解析响应失败: %v\n", err)
-			return
-		}
-
-		fmt.Printf("需求派发成功！\n需求ID: %s\n任务ID: %s\n工作空间: %s\n分身AgentCode: %s\n",
-			result.RequirementID, result.TaskID, result.WorkspacePath, result.ReplicaAgentCode)
+		fmt.Print(string(body))
 	},
 }
 

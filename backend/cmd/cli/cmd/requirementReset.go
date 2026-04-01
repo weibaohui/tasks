@@ -16,8 +16,7 @@ var requirementResetCmd = &cobra.Command{
 		id, _ := cmd.Flags().GetString("id")
 
 		if id == "" {
-			fmt.Println("错误: --id 是必填参数")
-			cmd.Usage()
+			fmt.Print(`{"error":"--id is required"}`)
 			return
 		}
 
@@ -28,27 +27,26 @@ var requirementResetCmd = &cobra.Command{
 
 		requirement, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
 		if err != nil {
-			fmt.Printf("查找需求失败: %v\n", err)
+			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
 			return
 		}
 		if requirement == nil {
-			fmt.Printf("需求不存在: %s\n", id)
+			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
 			return
 		}
 
 		// 重置需求状态
 		if err := requirement.Redispatch(); err != nil {
-			fmt.Printf("重置需求失败: %v\n", err)
+			fmt.Printf(`{"error":"reset requirement failed: %v"}`, err)
 			return
 		}
 
 		if err := requirementRepo.Save(ctx, requirement); err != nil {
-			fmt.Printf("保存需求失败: %v\n", err)
+			fmt.Printf(`{"error":"save requirement failed: %v"}`, err)
 			return
 		}
 
-		fmt.Printf("需求 %s 已重置，可以重新派发\n", id)
-		fmt.Printf("状态: %s / %s\n", requirement.Status(), requirement.DevState())
+		fmt.Printf(`{"id":"%s","status":"%s","message":"reset successfully"}`, id, requirement.Status())
 	},
 }
 

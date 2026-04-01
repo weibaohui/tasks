@@ -47,7 +47,6 @@ export async function updateRequirement(payload: UpdateRequirementRequest): Prom
 export async function dispatchRequirement(requirementId: string, agentCode: string, channelCode: string, sessionKey: string): Promise<{
   requirement_id: string;
   status: string;
-  dev_state: string;
   workspace_path: string;
   replica_agent_code: string;
   task_id: string;

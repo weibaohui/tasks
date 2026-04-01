@@ -29,7 +29,6 @@ type DispatchRequirementCommand struct {
 type DispatchRequirementResult struct {
 	RequirementID   string `json:"requirement_id"`
 	Status          string `json:"status"`
-	DevState        string `json:"dev_state"`
 	WorkspacePath   string `json:"workspace_path"`
 	ReplicaAgentCode string `json:"replica_agent_code"`
 	TaskID          string `json:"task_id"`
@@ -179,7 +178,6 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	return &DispatchRequirementResult{
 		RequirementID:   requirement.ID().String(),
 		Status:          string(requirement.Status()),
-		DevState:        string(requirement.DevState()),
 		WorkspacePath:   requirement.WorkspacePath(),
 		ReplicaAgentCode: requirement.ReplicaAgentCode(),
 		TaskID:          dispatchID,
