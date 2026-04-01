@@ -103,6 +103,16 @@ func getConfigPath() string {
 	return ""
 }
 
+// LoadFromPath 从指定路径加载配置
+func LoadFromPath(path string) (*Config, error) {
+	cfg := defaultConfig()
+	if err := loadFromFile(path, cfg); err != nil {
+		return nil, err
+	}
+	applyEnvOverrides(cfg)
+	return cfg, nil
+}
+
 // loadFromFile 从文件加载配置
 func loadFromFile(path string, cfg *Config) error {
 	data, err := os.ReadFile(path)
@@ -240,5 +250,11 @@ func SaveConfig(path string, cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	// 确保目录存在
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	// 使用 0600 权限保护 API Token
+	return os.WriteFile(path, data, 0600)
 }

@@ -31,31 +31,25 @@ var configInitCmd = &cobra.Command{
 			configPath = filepath.Join(home, ".taskmanager", "config.yaml")
 		}
 
-		// 检查配置文件是否已存在
-		existingCfg, _ := config.Load()
-		if existingCfg != nil && existingCfg.API.Token != "" {
-			fmt.Printf("配置文件已存在: %s\n", configPath)
-			fmt.Printf("API Token 已配置: %s...\n", existingCfg.API.Token[:min(8, len(existingCfg.API.Token))])
-			fmt.Println("\n如需重新初始化，请先删除现有配置文件:")
-			fmt.Printf("  rm %s\n", configPath)
-			return
-		}
+		// 从指定路径加载现有配置（如果存在）
+		existingCfg, _ := config.LoadFromPath(configPath)
+		hasExistingToken := existingCfg != nil && existingCfg.API.Token != ""
 
+		// 创建/覆盖默认配置
 		if err := config.WriteDefaultConfig(configPath); err != nil {
 			fmt.Printf("创建配置文件失败: %v\n", err)
 			return
 		}
 
 		// 如果之前有 token，恢复它
-		if existingCfg != nil && existingCfg.API.Token != "" {
-			cfg, _ := config.Load()
+		if hasExistingToken {
+			cfg, _ := config.LoadFromPath(configPath)
 			if cfg != nil {
-				// 重新加载并合并配置
 				cfg.API.Token = existingCfg.API.Token
 				config.SaveConfig(configPath, cfg)
 			}
 			fmt.Printf("配置文件已更新: %s\n", configPath)
-			fmt.Println("原有 API Token 已保留")
+			fmt.Printf("API Token 已保留: %s...\n", existingCfg.API.Token[:min(8, len(existingCfg.API.Token))])
 		} else {
 			fmt.Printf("配置文件已创建: %s\n", configPath)
 			fmt.Println("")
