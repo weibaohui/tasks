@@ -219,7 +219,7 @@ func main() {
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
 	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
-	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, sessionService)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 	authSecret := os.Getenv("AUTH_SECRET")
 	if authSecret == "" {

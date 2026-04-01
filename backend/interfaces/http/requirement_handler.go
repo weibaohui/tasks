@@ -11,14 +11,12 @@ import (
 type RequirementHandler struct {
 	requirementService *application.RequirementApplicationService
 	dispatchService    *application.RequirementDispatchService
-	sessionService     *application.SessionApplicationService
 }
 
-func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService, sessionService *application.SessionApplicationService) *RequirementHandler {
+func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService) *RequirementHandler {
 	return &RequirementHandler{
 		requirementService: requirementService,
 		dispatchService:    dispatchService,
-		sessionService:     sessionService,
 	}
 }
 
