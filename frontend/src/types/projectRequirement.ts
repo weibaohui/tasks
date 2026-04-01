@@ -29,11 +29,9 @@ export interface Requirement {
   dispatch_session_key: string;
   claude_runtime?: {
     status?: string;
-    is_running?: boolean;
     last_error?: string;
     started_at?: number | null;
     ended_at?: number | null;
-    updated_at?: number | null;
     prompt?: string;
     result?: string;
   } | null;

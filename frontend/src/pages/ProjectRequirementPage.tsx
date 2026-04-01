@@ -542,10 +542,12 @@ export const ProjectRequirementPage: React.FC = () => {
         if (!runtimeStatus) {
           return <span>-</span>;
         }
+        // 根据 status 字段计算 is_running
+        const isRunning = runtimeStatus === 'running';
         return (
           <Space>
             <Tag color={claudeRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
-            {item.claude_runtime?.is_running ? <Tag color="processing">运行中</Tag> : <Tag>已停止</Tag>}
+            {isRunning ? <Tag color="processing">运行中</Tag> : <Tag>已停止</Tag>}
           </Space>
         );
       },
@@ -1139,9 +1141,9 @@ export const ProjectRequirementPage: React.FC = () => {
                       <div>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>运行状态</div>
                         <div>
-                          {detailRequirement.claude_runtime?.is_running !== undefined ? (
-                            <Tag color={detailRequirement.claude_runtime.is_running ? 'processing' : 'default'}>
-                              {detailRequirement.claude_runtime.is_running ? '运行中' : '已停止'}
+                          {detailRequirement.claude_runtime?.status ? (
+                            <Tag color={detailRequirement.claude_runtime.status === 'running' ? 'processing' : 'default'}>
+                              {detailRequirement.claude_runtime.status === 'running' ? '运行中' : '已停止'}
                             </Tag>
                           ) : (
                             '-'
