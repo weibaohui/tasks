@@ -478,6 +478,14 @@ func SetupRoutesWithManagement(
 			}
 			requirementHandler.CopyAndDispatchRequirement(w, r)
 		}))
+		// 重置需求
+		mux.HandleFunc("/api/v1/requirements/reset", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.ResetRequirement(w, r)
+		}))
 		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:

@@ -20,13 +20,16 @@ var configInitCmd = &cobra.Command{
 	Short: "初始化配置文件",
 	Example: `  taskmanager config init`,
 	Run: func(cmd *cobra.Command, args []string) {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Printf("获取 home 目录失败: %v\n", err)
-			return
+		// 优先使用环境变量指定的配置路径
+		configPath := os.Getenv("TASKMANAGER_CONFIG")
+		if configPath == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Printf("获取 home 目录失败: %v\n", err)
+				return
+			}
+			configPath = filepath.Join(home, ".taskmanager", "config.yaml")
 		}
-
-		configPath := filepath.Join(home, ".taskmanager", "config.yaml")
 
 		if err := config.WriteDefaultConfig(configPath); err != nil {
 			fmt.Printf("创建配置文件失败: %v\n", err)
@@ -35,8 +38,13 @@ var configInitCmd = &cobra.Command{
 
 		fmt.Printf("配置文件已创建: %s\n", configPath)
 		fmt.Println("")
-		fmt.Println("请编辑配置文件设置数据库路径:")
+		fmt.Println("请编辑配置文件设置 API Token:")
 		fmt.Printf("  vim %s\n", configPath)
+		fmt.Println("")
+		fmt.Println("获取 Token:")
+		fmt.Println("  1. 启动 server: cd backend && go run cmd/server/main.go create-admin")
+		fmt.Println("  2. 登录 Web UI，在 Personal Access Token 页面生成 Token")
+		fmt.Println("  3. 将 Token 填入配置文件的 api.token 字段")
 	},
 }
 
@@ -55,6 +63,11 @@ var configShowCmd = &cobra.Command{
 		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Printf("Database Path: %s\n", cfg.Database.Path)
 		fmt.Printf("API Base URL: %s\n", cfg.API.BaseURL)
+		if cfg.API.Token != "" {
+			fmt.Printf("API Token: %s...\n", cfg.API.Token[:min(8, len(cfg.API.Token))])
+		} else {
+			fmt.Println("API Token: (未配置)")
+		}
 		fmt.Printf("Log Level: %s\n", cfg.Logging.Level)
 		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Println("")
@@ -89,4 +102,11 @@ var configShowCmd = &cobra.Command{
 func init() {
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configShowCmd)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

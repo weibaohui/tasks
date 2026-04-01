@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
@@ -22,43 +22,33 @@ var requirementDispatchCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		requirementID := args[0]
 
-		requirementRepo, projectRepo, _, _, cleanup := getRequirementRepos()
-		defer cleanup()
-
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// 查找需求
-		req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
+		// 获取需求详情
+		c := client.New()
+		req, err := c.GetRequirement(ctx, requirementID)
 		if err != nil {
 			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
 			return
 		}
-		if req == nil {
-			fmt.Printf(`{"error":"requirement not found: %s"}`, requirementID)
-			return
-		}
 
 		// 查找项目获取派发配置
-		project, err := projectRepo.FindByID(ctx, req.ProjectID())
+		project, err := c.GetProject(ctx, req.ProjectID)
 		if err != nil {
 			fmt.Printf(`{"error":"find project failed: %v"}`, err)
 			return
 		}
-		if project == nil {
-			fmt.Printf(`{"error":"project not found: %s"}`, req.ProjectID().String())
-			return
-		}
 
-		agentCode := project.AgentCode()
-		channelCode := project.DispatchChannelCode()
-		sessionKey := project.DispatchSessionKey()
+		agentCode := project.AgentCode
+		channelCode := project.DispatchChannelCode
+		sessionKey := project.DispatchSessionKey
 
 		if agentCode == "" || sessionKey == "" {
 			result, _ := json.Marshal(map[string]string{
 				"error":       "project dispatch not configured",
-				"project_id":  project.ID().String(),
-				"project":     project.Name(),
+				"project_id":  project.ID,
+				"project":     project.Name,
 				"agent_code":  agentCode,
 				"session_key": sessionKey,
 			})

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var requirementGetCmd = &cobra.Command{
@@ -21,18 +21,12 @@ var requirementGetCmd = &cobra.Command{
 			return
 		}
 
-		requirementRepo, _, _, _, cleanup := getRequirementRepos()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		requirement, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
+		requirement, err := c.GetRequirement(ctx, id)
 		if err != nil {
 			printJSONError("find requirement failed: %v", err)
-			return
-		}
-		if requirement == nil {
-			printJSONError("requirement not found: %s", id)
 			return
 		}
 
@@ -40,73 +34,73 @@ var requirementGetCmd = &cobra.Command{
 	},
 }
 
-func printRequirementJSON(r *domain.Requirement) {
+func printRequirementJSON(r *client.Requirement) {
 	type RequirementDetail struct {
-		ID                    string  `json:"id"`
-		ProjectID             string  `json:"project_id"`
-		Title                 string  `json:"title"`
-		Description           string  `json:"description"`
-		AcceptanceCriteria    string  `json:"acceptance_criteria"`
-		Status                string  `json:"status"`
-		RequirementType       string  `json:"requirement_type"`
-		AssigneeAgentCode     string  `json:"assignee_agent_code,omitempty"`
-		ReplicaAgentCode      string  `json:"replica_agent_code,omitempty"`
-		WorkspacePath         string  `json:"workspace_path,omitempty"`
-		DispatchSessionKey    string  `json:"dispatch_session_key,omitempty"`
-		LastError             string  `json:"last_error,omitempty"`
-		CreatedAt             int64   `json:"created_at"`
-		UpdatedAt             int64   `json:"updated_at"`
-		StartedAt            *int64  `json:"started_at,omitempty"`
-		CompletedAt          *int64  `json:"completed_at,omitempty"`
-		ClaudeRuntimeStatus   string  `json:"claude_runtime_status,omitempty"`
-		ClaudeRuntimePrompt   string  `json:"claude_runtime_prompt,omitempty"`
-		ClaudeRuntimeResult   string  `json:"claude_runtime_result,omitempty"`
-		ClaudeRuntimeError    string  `json:"claude_runtime_error,omitempty"`
+		ID                     string `json:"id"`
+		ProjectID              string `json:"project_id"`
+		Title                  string `json:"title"`
+		Description            string `json:"description"`
+		AcceptanceCriteria     string `json:"acceptance_criteria"`
+		Status                 string `json:"status"`
+		RequirementType        string `json:"requirement_type"`
+		AssigneeAgentCode      string `json:"assignee_agent_code,omitempty"`
+		ReplicaAgentCode       string `json:"replica_agent_code,omitempty"`
+		WorkspacePath          string `json:"workspace_path,omitempty"`
+		DispatchSessionKey     string `json:"dispatch_session_key,omitempty"`
+		LastError              string `json:"last_error,omitempty"`
+		CreatedAt              int64  `json:"created_at"`
+		UpdatedAt              int64  `json:"updated_at"`
+		StartedAt              *int64 `json:"started_at,omitempty"`
+		CompletedAt            *int64 `json:"completed_at,omitempty"`
+		ClaudeRuntimeStatus    string `json:"claude_runtime_status,omitempty"`
+		ClaudeRuntimePrompt    string `json:"claude_runtime_prompt,omitempty"`
+		ClaudeRuntimeResult    string `json:"claude_runtime_result,omitempty"`
+		ClaudeRuntimeError     string `json:"claude_runtime_error,omitempty"`
 		ClaudeRuntimeStartedAt *int64 `json:"claude_runtime_started_at,omitempty"`
 		ClaudeRuntimeEndedAt   *int64 `json:"claude_runtime_ended_at,omitempty"`
 	}
 
-	var startedAt, completedAt, rtStartedAt, rtEndedAt *int64
-	if r.StartedAt() != nil {
-		t := r.StartedAt().Unix()
-		startedAt = &t
-	}
-	if r.CompletedAt() != nil {
-		t := r.CompletedAt().Unix()
-		completedAt = &t
-	}
-	if r.ClaudeRuntimeStartedAt() != nil {
-		t := r.ClaudeRuntimeStartedAt().Unix()
-		rtStartedAt = &t
-	}
-	if r.ClaudeRuntimeEndedAt() != nil {
-		t := r.ClaudeRuntimeEndedAt().Unix()
-		rtEndedAt = &t
+	detail := RequirementDetail{
+		ID:                 r.ID,
+		ProjectID:          r.ProjectID,
+		Title:              r.Title,
+		Description:        r.Description,
+		AcceptanceCriteria: r.AcceptanceCriteria,
+		Status:             r.Status,
+		RequirementType:    r.RequirementType,
+		AssigneeAgentCode:  r.AssigneeAgentCode,
+		ReplicaAgentCode:   r.ReplicaAgentCode,
+		WorkspacePath:      r.WorkspacePath,
+		DispatchSessionKey: r.DispatchSessionKey,
+		LastError:          r.LastError,
+		CreatedAt:          r.CreatedAt,
+		UpdatedAt:          r.UpdatedAt,
+		StartedAt:          r.StartedAt,
+		CompletedAt:        r.CompletedAt,
 	}
 
-	detail := RequirementDetail{
-		ID:                   r.ID().String(),
-		ProjectID:            r.ProjectID().String(),
-		Title:                r.Title(),
-		Description:          r.Description(),
-		AcceptanceCriteria:   r.AcceptanceCriteria(),
-		Status:               string(r.Status()),
-		RequirementType:      string(r.RequirementType()),
-		AssigneeAgentCode:    r.AssigneeAgentCode(),
-		ReplicaAgentCode:     r.ReplicaAgentCode(),
-		WorkspacePath:        r.WorkspacePath(),
-		DispatchSessionKey:   r.DispatchSessionKey(),
-		LastError:            r.LastError(),
-		CreatedAt:            r.CreatedAt().Unix(),
-		UpdatedAt:            r.UpdatedAt().Unix(),
-		StartedAt:            startedAt,
-		CompletedAt:          completedAt,
-		ClaudeRuntimeStatus:  r.ClaudeRuntimeStatus(),
-		ClaudeRuntimePrompt:  r.ClaudeRuntimePrompt(),
-		ClaudeRuntimeResult:  r.ClaudeRuntimeResult(),
-		ClaudeRuntimeError:   r.ClaudeRuntimeError(),
-		ClaudeRuntimeStartedAt: rtStartedAt,
-		ClaudeRuntimeEndedAt:   rtEndedAt,
+	// 填充 ClaudeRuntime 字段
+	if r.ClaudeRuntime != nil {
+		if v, ok := r.ClaudeRuntime["status"].(string); ok {
+			detail.ClaudeRuntimeStatus = v
+		}
+		if v, ok := r.ClaudeRuntime["prompt"].(string); ok {
+			detail.ClaudeRuntimePrompt = v
+		}
+		if v, ok := r.ClaudeRuntime["result"].(string); ok {
+			detail.ClaudeRuntimeResult = v
+		}
+		if v, ok := r.ClaudeRuntime["last_error"].(string); ok {
+			detail.ClaudeRuntimeError = v
+		}
+		if v, ok := r.ClaudeRuntime["started_at"].(float64); ok {
+			t := int64(v)
+			detail.ClaudeRuntimeStartedAt = &t
+		}
+		if v, ok := r.ClaudeRuntime["ended_at"].(float64); ok {
+			t := int64(v)
+			detail.ClaudeRuntimeEndedAt = &t
+		}
 	}
 
 	jsonBytes, _ := json.Marshal(detail)

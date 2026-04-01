@@ -6,8 +6,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/application"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var requirementCreateCmd = &cobra.Command{
@@ -27,13 +26,11 @@ var requirementCreateCmd = &cobra.Command{
 			return
 		}
 
-		_, _, appService, _, cleanup := getRequirementRepos()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		requirement, err := appService.CreateRequirement(ctx, application.CreateRequirementCommand{
-			ProjectID:          domain.NewProjectID(projectID),
+		requirement, err := c.CreateRequirement(ctx, client.CreateRequirementRequest{
+			ProjectID:          projectID,
 			Title:              title,
 			Description:        description,
 			AcceptanceCriteria: acceptance,
@@ -45,9 +42,9 @@ var requirementCreateCmd = &cobra.Command{
 		}
 
 		result := map[string]string{
-			"id":      requirement.ID().String(),
-			"title":   requirement.Title(),
-			"status":  string(requirement.Status()),
+			"id":      requirement.ID,
+			"title":   requirement.Title,
+			"status":  requirement.Status,
 			"message": "created",
 		}
 		jsonBytes, _ := json.Marshal(result)

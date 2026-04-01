@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var requirementListCmd = &cobra.Command{
@@ -24,104 +24,78 @@ var requirementListCmd = &cobra.Command{
 		todoOnly, _ := cmd.Flags().GetBool("todo")
 		statusFilter, _ := cmd.Flags().GetString("status")
 
-		requirementRepo, _, _, _, cleanup := getRequirementRepos()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		var requirements []*domain.Requirement
-		var err error
-
-		if projectID != "" {
-			requirements, err = requirementRepo.FindByProjectID(ctx, domain.NewProjectID(projectID))
-		} else {
-			requirements, err = requirementRepo.FindAll(ctx)
-		}
-
+		requirements, err := c.ListRequirements(ctx, projectID)
 		if err != nil {
 			printJSONError("列出需求失败: %v", err)
 			return
 		}
 
-		// 如果不是 --all，过滤掉心跳需求
-		if !showAll {
-			filtered := make([]*domain.Requirement, 0)
-			for _, req := range requirements {
-				if req.RequirementType() == domain.RequirementTypeHeartbeat {
+		// 过滤逻辑
+		var filtered []client.Requirement
+		for _, req := range *requirements {
+			// 如果不是 --all，过滤掉心跳需求
+			if !showAll {
+				if req.RequirementType == "heartbeat" {
 					continue
 				}
 				// 兼容旧数据：标题以[心跳]开头也算心跳需求
-				if strings.HasPrefix(req.Title(), "[心跳]") {
+				if strings.HasPrefix(req.Title, "[心跳]") {
 					continue
 				}
-				filtered = append(filtered, req)
 			}
-			requirements = filtered
-		}
 
-		// 过滤状态：--todo 优先于 --status
-		if todoOnly {
-			filtered := make([]*domain.Requirement, 0)
-			for _, req := range requirements {
-				if req.Status() == domain.RequirementStatusTodo {
-					filtered = append(filtered, req)
+			// 过滤状态：--todo 优先于 --status
+			if todoOnly {
+				if req.Status != "todo" {
+					continue
+				}
+			} else if statusFilter != "" {
+				if req.Status != statusFilter {
+					continue
 				}
 			}
-			requirements = filtered
-		} else if statusFilter != "" {
-			filtered := make([]*domain.Requirement, 0)
-			for _, req := range requirements {
-				if string(req.Status()) == statusFilter {
-					filtered = append(filtered, req)
-				}
-			}
-			requirements = filtered
+
+			filtered = append(filtered, req)
 		}
 
 		// 输出 JSON 格式（紧凑）
 		type RequirementInfo struct {
-			ID                  string `json:"id"`
-			ProjectID           string `json:"project_id"`
-			Title               string `json:"title"`
-			Status              string `json:"status"`
-			RequirementType     string `json:"requirement_type"`
-			AssigneeAgentCode   string `json:"assignee_agent_code,omitempty"`
-			ReplicaAgentCode    string `json:"replica_agent_code,omitempty"`
-			WorkspacePath       string `json:"workspace_path,omitempty"`
-			DispatchSessionKey  string `json:"dispatch_session_key,omitempty"`
-			CreatedAt           int64  `json:"created_at"`
-			UpdatedAt           int64  `json:"updated_at"`
-			StartedAt           *int64 `json:"started_at,omitempty"`
-			CompletedAt         *int64 `json:"completed_at,omitempty"`
-			LastError           string `json:"last_error,omitempty"`
+			ID                 string `json:"id"`
+			ProjectID          string `json:"project_id"`
+			Title              string `json:"title"`
+			Status             string `json:"status"`
+			RequirementType    string `json:"requirement_type"`
+			AssigneeAgentCode  string `json:"assignee_agent_code,omitempty"`
+			ReplicaAgentCode   string `json:"replica_agent_code,omitempty"`
+			WorkspacePath      string `json:"workspace_path,omitempty"`
+			DispatchSessionKey string `json:"dispatch_session_key,omitempty"`
+			CreatedAt          int64  `json:"created_at"`
+			UpdatedAt          int64  `json:"updated_at"`
+			StartedAt          *int64 `json:"started_at,omitempty"`
+			CompletedAt        *int64 `json:"completed_at,omitempty"`
+			LastError          string `json:"last_error,omitempty"`
 		}
 
-		items := make([]RequirementInfo, 0, len(requirements))
-		for _, req := range requirements {
-			var startedAt, completedAt *int64
-			if req.StartedAt() != nil {
-				t := req.StartedAt().Unix()
-				startedAt = &t
-			}
-			if req.CompletedAt() != nil {
-				t := req.CompletedAt().Unix()
-				completedAt = &t
-			}
+		items := make([]RequirementInfo, 0, len(filtered))
+		for _, req := range filtered {
 			items = append(items, RequirementInfo{
-				ID:                 req.ID().String(),
-				ProjectID:          req.ProjectID().String(),
-				Title:              req.Title(),
-				Status:             string(req.Status()),
-				RequirementType:    string(req.RequirementType()),
-				AssigneeAgentCode:  req.AssigneeAgentCode(),
-				ReplicaAgentCode:   req.ReplicaAgentCode(),
-				WorkspacePath:      req.WorkspacePath(),
-				DispatchSessionKey: req.DispatchSessionKey(),
-				CreatedAt:          req.CreatedAt().Unix(),
-				UpdatedAt:          req.UpdatedAt().Unix(),
-				StartedAt:          startedAt,
-				CompletedAt:        completedAt,
-				LastError:          req.LastError(),
+				ID:                 req.ID,
+				ProjectID:          req.ProjectID,
+				Title:              req.Title,
+				Status:             req.Status,
+				RequirementType:    req.RequirementType,
+				AssigneeAgentCode:  req.AssigneeAgentCode,
+				ReplicaAgentCode:   req.ReplicaAgentCode,
+				WorkspacePath:      req.WorkspacePath,
+				DispatchSessionKey: req.DispatchSessionKey,
+				CreatedAt:          req.CreatedAt,
+				UpdatedAt:          req.UpdatedAt,
+				StartedAt:          req.StartedAt,
+				CompletedAt:        req.CompletedAt,
+				LastError:          req.LastError,
 			})
 		}
 

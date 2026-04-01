@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var agentCmd = &cobra.Command{
@@ -19,12 +19,10 @@ var agentListCmd = &cobra.Command{
 	Short: "列出所有 Agent",
 	Example: `  taskmanager agent list`,
 	Run: func(cmd *cobra.Command, args []string) {
-		agentRepo, cleanup := getAgentRepo()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		agents, err := agentRepo.FindAll(ctx)
+		agents, err := c.ListAgents(ctx)
 		if err != nil {
 			fmt.Printf("列出 Agent 失败: %v\n", err)
 			return
@@ -36,23 +34,23 @@ var agentListCmd = &cobra.Command{
 		fmt.Println("--------------------------------------------------------------------------------")
 		for _, agent := range agents {
 			agentType := "Unknown"
-			if agent.AgentType() == domain.AgentTypeCoding {
+			if agent.AgentType == "coding" {
 				agentType = "CodingAgent"
-			} else if agent.AgentType() == domain.AgentTypeBareLLM {
+			} else if agent.AgentType == "bare_llm" {
 				agentType = "BareLLM"
 			}
 
 			status := "禁用"
-			if agent.IsActive() {
+			if agent.IsActive {
 				status = "启用"
 			}
 
-			name := agent.Name()
+			name := agent.Name
 			if name == "" {
 				name = "(无名称)"
 			}
 
-			idStr := agent.ID().String()
+			idStr := agent.ID
 			if len(idStr) > 16 {
 				idStr = idStr[:16] + "..."
 			}

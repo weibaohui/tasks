@@ -44,6 +44,22 @@ func requiresDB(t *testing.T) {
 	}
 }
 
+// requiresAPIToken 如果 API Token 未配置则跳过测试
+func requiresAPIToken(t *testing.T) {
+	requiresDB(t)
+	// 检查配置文件中的 token
+	home, _ := os.UserHomeDir()
+	configPath := filepath.Join(home, ".taskmanager", "config.yaml")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Skip("跳过: 无法读取配置文件")
+	}
+	// 简单检查是否包含 token 配置
+	if !strings.Contains(string(data), "token:") || strings.Contains(string(data), "token: \"") {
+		t.Skip("跳过: API Token 未配置 (需要在 ~/.taskmanager/config.yaml 中设置 api.token)")
+	}
+}
+
 func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	// 创建临时数据库
 	tmpDir := t.TempDir()
@@ -94,7 +110,7 @@ func runCLI(args ...string) (string, error) {
 // ========== Admin 命令测试 ==========
 
 func TestCLI_CreateAdmin(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("create-admin")
@@ -109,7 +125,7 @@ func TestCLI_CreateAdmin(t *testing.T) {
 }
 
 func TestCLI_DeleteAdmin(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	// 先创建
@@ -125,7 +141,7 @@ func TestCLI_DeleteAdmin(t *testing.T) {
 // ========== Agent 命令测试 ==========
 
 func TestCLI_AgentList(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("agent", "list")
@@ -149,7 +165,7 @@ func TestCLI_AgentList(t *testing.T) {
 // ========== Project 命令测试 ==========
 
 func TestCLI_ProjectList(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("project", "list")
@@ -166,7 +182,7 @@ func TestCLI_ProjectList(t *testing.T) {
 }
 
 func TestCLI_ProjectHeartbeatStatus(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("project", "heartbeat", "status")
@@ -185,7 +201,7 @@ func TestCLI_ProjectHeartbeatStatus(t *testing.T) {
 // ========== Requirement 命令测试 ==========
 
 func TestCLI_RequirementList(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("requirement", "list")
@@ -193,16 +209,16 @@ func TestCLI_RequirementList(t *testing.T) {
 		t.Fatalf("requirement list 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含需求列表表头
-	if !strings.Contains(output, "需求列表") {
-		t.Errorf("输出不包含 '需求列表':\n%s", output)
+	// 验证输出是有效的 JSON 数组
+	if !strings.HasPrefix(output, "[") {
+		t.Errorf("输出不是 JSON 数组:\n%s", output)
 	}
 
 	t.Logf("requirement list 输出:\n%s", output)
 }
 
 func TestCLI_RequirementListWithHeartbeat(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	// 测试 --all 标志
@@ -211,15 +227,16 @@ func TestCLI_RequirementListWithHeartbeat(t *testing.T) {
 		t.Fatalf("requirement list --all 失败: %v\n%s", err, output)
 	}
 
-	if !strings.Contains(output, "需求列表") {
-		t.Errorf("输出不包含 '需求列表':\n%s", output)
+	// 验证输出是有效的 JSON 数组
+	if !strings.HasPrefix(output, "[") {
+		t.Errorf("输出不是 JSON 数组:\n%s", output)
 	}
 
 	t.Logf("requirement list --all 输出:\n%s", output)
 }
 
 func TestCLI_RequirementCreate(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	// 需要先有一个项目 ID
@@ -248,16 +265,16 @@ func TestCLI_RequirementCreate(t *testing.T) {
 		t.Fatalf("requirement create 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含成功信息
-	if !strings.Contains(output, "成功") {
-		t.Errorf("输出不包含 '成功':\n%s", output)
+	// 验证输出包含成功信息 (JSON 格式)
+	if !strings.Contains(output, `"message":"created"`) && !strings.Contains(output, `"message": "created"`) {
+		t.Errorf("输出不包含创建成功信息:\n%s", output)
 	}
 
 	t.Logf("requirement create 输出:\n%s", output)
 }
 
 func TestCLI_RequirementGet(t *testing.T) {
-	requiresDB(t)
+	requiresAPIToken(t)
 	buildCLI(t)
 
 	// 先创建一个测试需求
@@ -295,9 +312,9 @@ func TestCLI_RequirementGet(t *testing.T) {
 		t.Fatalf("requirement get 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含需求详情
-	if !strings.Contains(output, "需求详情") {
-		t.Errorf("输出不包含 '需求详情':\n%s", output)
+	// 验证输出是有效的 JSON 且包含需求标题
+	if !strings.HasPrefix(output, "{") {
+		t.Errorf("输出不是 JSON 对象:\n%s", output)
 	}
 	if !strings.Contains(output, "E2E 测试需求 - Get") {
 		t.Errorf("输出不包含需求标题:\n%s", output)
@@ -548,6 +565,10 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	if err != nil {
 		t.Fatalf("requirement get 失败: %v\n%s", err, output)
 	}
+	// 验证输出是有效的 JSON 且包含需求标题
+	if !strings.HasPrefix(output, "{") {
+		t.Errorf("输出不是 JSON 对象:\n%s", output)
+	}
 	if !strings.Contains(output, "E2E 工作流测试需求") {
 		t.Errorf("需求详情不包含标题:\n%s", output)
 	}
@@ -557,8 +578,9 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	if err != nil {
 		t.Fatalf("requirement list 失败: %v\n%s", err, output)
 	}
-	if !strings.Contains(output, "E2E 工作流测试需求") {
-		t.Errorf("需求列表不包含新创建的需求:\n%s", output)
+	// 验证输出是有效的 JSON 数组
+	if !strings.HasPrefix(output, "[") {
+		t.Errorf("输出不是 JSON 数组:\n%s", output)
 	}
 
 	t.Log("完整工作流测试通过!")

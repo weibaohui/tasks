@@ -304,10 +304,10 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 
-	// 心跳需求不需要初始化步骤
+	// 心跳需求：调度员角色，不直接修改代码
 	var prompt string
 	if isHeartbeat {
-		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
+		prompt = fmt.Sprintf(`你是当前项目的调度员心跳（Heartbeat Agent），职责是 orchestrate 任务而非直接写代码。
 
 【需求信息】
 - 需求ID：%s
@@ -329,16 +329,14 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 请按以下顺序执行：
 1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
 2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
-3. 基于需求与验收标准完成实现
-4. 运行必要的校验命令
-5. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
-6. 推送代码：git push origin feature/%s
-7. 创建 PR 或输出 PR 信息
+3. 基于需求与验收标准，使用 taskmanager / gh 等 CLI 工具完成调度工作
+4. **严禁**修改任何源代码、**严禁**执行 git commit、**严禁**执行 git push、**严禁**创建 PR
+5. 所有需要代码改动的事项，必须使用 taskmanager requirement create 生成新需求，让其他 CodingAgent 完成
+6. 工作完成后，直接输出本次心跳的执行结果摘要
 `, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
-			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
+			firstNonEmpty(requirement.AcceptanceCriteria(), "完成调度工作"),
 			project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), workspacePath,
-			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
-			requirement.ID().String(), requirement.ID().String())
+			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch())
 	} else {
 		initSteps := project.InitSteps()
 		initStepsText := "无"

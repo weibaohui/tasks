@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var projectCmd = &cobra.Command{
@@ -19,12 +19,10 @@ var projectListCmd = &cobra.Command{
 	Short: "列出所有项目",
 	Example: `  taskmanager project list`,
 	Run: func(cmd *cobra.Command, args []string) {
-		projectRepo, cleanup := getProjectRepo()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		projects, err := projectRepo.FindAll(ctx)
+		projects, err := c.ListProjects(ctx)
 		if err != nil {
 			fmt.Printf("列出项目失败: %v\n", err)
 			return
@@ -35,11 +33,11 @@ var projectListCmd = &cobra.Command{
 		fmt.Printf("%-20s %s\n", "ID", "名称")
 		fmt.Println("--------------------------------------------------------------------------------")
 		for _, project := range projects {
-			idStr := project.ID().String()
+			idStr := project.ID
 			if len(idStr) > 16 {
 				idStr = idStr[:16] + "..."
 			}
-			fmt.Printf("%-20s %s\n", idStr, project.Name())
+			fmt.Printf("%-20s %s\n", idStr, project.Name)
 		}
 		fmt.Println()
 	},
@@ -58,27 +56,21 @@ var heartbeatStatusCmd = &cobra.Command{
 	Example: `  taskmanager project heartbeat status
   taskmanager project heartbeat status <project_id>`,
 	Run: func(cmd *cobra.Command, args []string) {
-		projectRepo, cleanup := getProjectRepo()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		var projects []*domain.Project
+		var projects []client.Project
 		var err error
 
 		if len(args) >= 1 {
-			project, err := projectRepo.FindByID(ctx, domain.NewProjectID(args[0]))
+			project, err := c.GetProject(ctx, args[0])
 			if err != nil {
 				fmt.Printf("查找项目失败: %v\n", err)
 				return
 			}
-			if project == nil {
-				fmt.Printf("项目不存在: %s\n", args[0])
-				return
-			}
-			projects = []*domain.Project{project}
+			projects = []client.Project{*project}
 		} else {
-			projects, err = projectRepo.FindAll(ctx)
+			projects, err = c.ListProjects(ctx)
 			if err != nil {
 				fmt.Printf("列出项目失败: %v\n", err)
 				return
@@ -91,18 +83,18 @@ var heartbeatStatusCmd = &cobra.Command{
 		fmt.Println("--------------------------------------------------------------------------------")
 		for _, project := range projects {
 			status := "关闭"
-			if project.HeartbeatEnabled() {
+			if project.HeartbeatEnabled {
 				status = "开启"
 			}
-			idStr := project.ID().String()
+			idStr := project.ID
 			if len(idStr) > 16 {
 				idStr = idStr[:16] + "..."
 			}
 			fmt.Printf("%-20s %-10s %-10d %s\n",
 				idStr,
 				status,
-				project.HeartbeatIntervalMinutes(),
-				project.Name())
+				project.HeartbeatIntervalMinutes,
+				project.Name)
 		}
 		fmt.Println()
 	},
@@ -120,31 +112,27 @@ var heartbeatEnableCmd = &cobra.Command{
 		}
 		projectID := args[0]
 
-		projectRepo, cleanup := getProjectRepo()
-		defer cleanup()
-
 		ctx := context.Background()
-		project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+		c := client.New()
+
+		project, err := c.GetProject(ctx, projectID)
 		if err != nil {
 			fmt.Printf("查找项目失败: %v\n", err)
 			return
 		}
-		if project == nil {
-			fmt.Printf("项目不存在: %s\n", projectID)
-			return
-		}
 
-		interval := project.HeartbeatIntervalMinutes()
+		interval := project.HeartbeatIntervalMinutes
 		if interval < 1 {
 			interval = 30
 		}
-		project.UpdateHeartbeatConfig(true, interval, project.HeartbeatMDContent(), project.AgentCode())
-		if err := projectRepo.Save(ctx, project); err != nil {
+
+		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, true, interval, project.HeartbeatMDContent, project.AgentCode)
+		if err != nil {
 			fmt.Printf("保存项目失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("心跳已开启，项目: %s，间隔: %d 分钟\n", project.Name(), interval)
+		fmt.Printf("心跳已开启，项目: %s，间隔: %d 分钟\n", updatedProject.Name, updatedProject.HeartbeatIntervalMinutes)
 	},
 }
 
@@ -160,27 +148,22 @@ var heartbeatDisableCmd = &cobra.Command{
 		}
 		projectID := args[0]
 
-		projectRepo, cleanup := getProjectRepo()
-		defer cleanup()
-
 		ctx := context.Background()
-		project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+		c := client.New()
+
+		project, err := c.GetProject(ctx, projectID)
 		if err != nil {
 			fmt.Printf("查找项目失败: %v\n", err)
 			return
 		}
-		if project == nil {
-			fmt.Printf("项目不存在: %s\n", projectID)
-			return
-		}
 
-		project.UpdateHeartbeatConfig(false, project.HeartbeatIntervalMinutes(), project.HeartbeatMDContent(), project.AgentCode())
-		if err := projectRepo.Save(ctx, project); err != nil {
+		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, false, project.HeartbeatIntervalMinutes, project.HeartbeatMDContent, project.AgentCode)
+		if err != nil {
 			fmt.Printf("保存项目失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("心跳已关闭，项目: %s\n", project.Name())
+		fmt.Printf("心跳已关闭，项目: %s\n", updatedProject.Name)
 	},
 }
 
@@ -202,27 +185,22 @@ var heartbeatSetIntervalCmd = &cobra.Command{
 			return
 		}
 
-		projectRepo, cleanup := getProjectRepo()
-		defer cleanup()
-
 		ctx := context.Background()
-		project, err := projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+		c := client.New()
+
+		project, err := c.GetProject(ctx, projectID)
 		if err != nil {
 			fmt.Printf("查找项目失败: %v\n", err)
 			return
 		}
-		if project == nil {
-			fmt.Printf("项目不存在: %s\n", projectID)
-			return
-		}
 
-		project.UpdateHeartbeatConfig(project.HeartbeatEnabled(), minutes, project.HeartbeatMDContent(), project.AgentCode())
-		if err := projectRepo.Save(ctx, project); err != nil {
+		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, project.HeartbeatEnabled, minutes, project.HeartbeatMDContent, project.AgentCode)
+		if err != nil {
 			fmt.Printf("保存项目失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, project.Name())
+		fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, updatedProject.Name)
 	},
 }
 
