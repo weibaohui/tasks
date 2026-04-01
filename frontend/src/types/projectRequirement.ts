@@ -37,11 +37,14 @@ export interface Requirement {
     started_at?: number | null;
     ended_at?: number | null;
     updated_at?: number | null;
+    prompt?: string;
+    result?: string;
   } | null;
   started_at: number | null;
   completed_at: number | null;
   created_at: number;
   updated_at: number;
+  requirement_type?: string;
 }
 
 export interface CreateProjectRequest {

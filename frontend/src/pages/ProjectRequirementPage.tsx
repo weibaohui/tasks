@@ -75,6 +75,10 @@ export const ProjectRequirementPage: React.FC = () => {
   const [heartbeatForm] = Form.useForm();
   const [savingHeartbeat, setSavingHeartbeat] = useState(false);
 
+  // 需求详情抽屉状态
+  const [requirementDetailDrawerOpen, setRequirementDetailDrawerOpen] = useState(false);
+  const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null);
+
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
     [projects],
@@ -340,6 +344,11 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
+  const openRequirementDetail = (item: Requirement) => {
+    setDetailRequirement(item);
+    setRequirementDetailDrawerOpen(true);
+  };
+
   // 项目配置相关处理
   const openProjectConfig = async (project: Project) => {
     setConfigProject(project);
@@ -585,6 +594,9 @@ export const ProjectRequirementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, item: Requirement) => (
         <Space>
+          <Button type="link" onClick={() => openRequirementDetail(item)}>
+            详情
+          </Button>
           <Button type="link" onClick={() => openEditRequirement(item)}>
             编辑
           </Button>
@@ -1046,6 +1058,242 @@ export const ProjectRequirementPage: React.FC = () => {
           </Button>
         </Form>
       </Modal>
+
+      {/* 需求详情抽屉 */}
+      <Drawer
+        title={`需求详情 - ${detailRequirement?.title || ''}`}
+        placement="right"
+        width={900}
+        onClose={() => setRequirementDetailDrawerOpen(false)}
+        open={requirementDetailDrawerOpen}
+      >
+        {detailRequirement && (
+          <Tabs
+            items={[
+              {
+                key: 'basic',
+                label: '基础信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>需求ID</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.id}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>项目ID</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.project_id}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>状态</div>
+                      <div>
+                        <Tag color={statusColorMap[detailRequirement.status] || 'default'}>{detailRequirement.status}</Tag>
+                        <Tag color={devStateColorMap[detailRequirement.dev_state] || 'default'}>{detailRequirement.dev_state}</Tag>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>需求类型</div>
+                      <div>{detailRequirement.requirement_type || 'normal'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>创建时间</div>
+                      <div>{detailRequirement.created_at ? new Date(detailRequirement.created_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>更新时间</div>
+                      <div>{detailRequirement.updated_at ? new Date(detailRequirement.updated_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>开始时间</div>
+                      <div>{detailRequirement.started_at ? new Date(detailRequirement.started_at).toLocaleString() : '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>完成时间</div>
+                      <div>{detailRequirement.completed_at ? new Date(detailRequirement.completed_at).toLocaleString() : '-'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'content',
+                label: '需求内容',
+                children: (
+                  <div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>标题</div>
+                      <div style={{ fontSize: 16, fontWeight: 500 }}>{detailRequirement.title}</div>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>描述</div>
+                      <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {detailRequirement.description || '无'}
+                      </pre>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>验收标准</div>
+                      <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {detailRequirement.acceptance_criteria || '无'}
+                      </pre>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'workspace',
+                label: '工作区信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>临时工作目录根路径</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.temp_workspace_root || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>工作目录</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.workspace_path || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分支</div>
+                      <div style={{ fontFamily: 'monospace' }}>{detailRequirement.branch_name || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>PR URL</div>
+                      <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{detailRequirement.pr_url || '-'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'dispatch',
+                label: '派发信息',
+                children: (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>派发SessionKey</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.dispatch_session_key || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分配Agent</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.assignee_agent_code || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分身Agent</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.replica_agent_code || '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>最近错误</div>
+                      <div style={{ color: '#ff4d4f' }}>{detailRequirement.last_error || '无'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'claude',
+                label: 'Claude执行',
+                children: (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行状态</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.status ? (
+                            <Tag color={claudeRuntimeColorMap[detailRequirement.claude_runtime.status] || 'default'}>
+                              {detailRequirement.claude_runtime.status}
+                            </Tag>
+                          ) : (
+                            '-'
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>运行状态</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.is_running !== undefined ? (
+                            <Tag color={detailRequirement.claude_runtime.is_running ? 'processing' : 'default'}>
+                              {detailRequirement.claude_runtime.is_running ? '运行中' : '已停止'}
+                            </Tag>
+                          ) : (
+                            '-'
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>开始时间</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.started_at
+                            ? new Date(detailRequirement.claude_runtime.started_at).toLocaleString()
+                            : '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>结束时间</div>
+                        <div>
+                          {detailRequirement.claude_runtime?.ended_at
+                            ? new Date(detailRequirement.claude_runtime.ended_at).toLocaleString()
+                            : '-'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行提示词</div>
+                      <pre
+                        style={{
+                          background: '#f0f5ff',
+                          padding: 12,
+                          borderRadius: 4,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          maxHeight: 300,
+                          overflow: 'auto',
+                          border: '1px solid #adc6ff',
+                        }}
+                      >
+                        {detailRequirement.claude_runtime?.prompt || '无'}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行结果</div>
+                      <pre
+                        style={{
+                          background: '#f6ffed',
+                          padding: 12,
+                          borderRadius: 4,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          maxHeight: 300,
+                          overflow: 'auto',
+                          border: '1px solid #b7eb8f',
+                        }}
+                      >
+                        {detailRequirement.claude_runtime?.result || '无'}
+                      </pre>
+                    </div>
+
+                    {detailRequirement.claude_runtime?.last_error && (
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行错误</div>
+                        <pre
+                          style={{
+                            background: '#fff2f0',
+                            padding: 12,
+                            borderRadius: 4,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            border: '1px solid #ffccc7',
+                            color: '#ff4d4f',
+                          }}
+                        >
+                          {detailRequirement.claude_runtime.last_error}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };
