@@ -251,33 +251,23 @@ func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requ
 		return result
 	}
 
-	// 从 requirement 直接获取 prompt 和 result
+	// 从 requirement 直接获取所有 Claude Runtime 状态字段（已持久化到数据库）
 	result["prompt"] = requirement.ClaudeRuntimePrompt()
 	result["result"] = requirement.ClaudeRuntimeResult()
 	result["status"] = requirement.ClaudeRuntimeStatus()
+	result["last_error"] = requirement.ClaudeRuntimeError()
 
-	if h.sessionService == nil {
-		return result
+	if startedAt := requirement.ClaudeRuntimeStartedAt(); startedAt != nil {
+		result["started_at"] = startedAt.UnixMilli()
+	} else {
+		result["started_at"] = nil
 	}
-	sessionKey := requirement.DispatchSessionKey()
-	if sessionKey == "" {
-		return result
+
+	if endedAt := requirement.ClaudeRuntimeEndedAt(); endedAt != nil {
+		result["ended_at"] = endedAt.UnixMilli()
+	} else {
+		result["ended_at"] = nil
 	}
-	metadata, err := h.sessionService.GetSessionMetadata(r.Context(), sessionKey)
-	if err != nil {
-		return result
-	}
-	rawRuntime, ok := metadata["claude_code_runtime"]
-	if !ok {
-		return result
-	}
-	runtime, ok := rawRuntime.(map[string]interface{})
-	if !ok {
-		return result
-	}
-	// 合并 session metadata 中的运行时信息
-	for k, v := range runtime {
-		result[k] = v
-	}
+
 	return result
 }
