@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "taskmanager",
 	Short: "TaskManager CLI - 管理任务和需求",
-	Long: `TaskManager CLI 是一个用于管理任务和需求 команд-line 工具。
+	Long: `TaskManager CLI 是一个用于管理任务和需求 command-line 工具。
 
 常用命令:
   taskmanager requirement create  创建新需求
@@ -22,7 +22,6 @@ var rootCmd = &cobra.Command{
 配置:
   配置文件路径: ~/.taskmanager/config.yaml
   环境变量: TASKMANAGER_CONFIG (配置文件路径)
-  环境变量: TASKMANAGER_DB_PATH (数据库路径)
   环境变量: TASKMANAGER_API_BASE_URL (API 地址)`,
 }
 

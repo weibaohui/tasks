@@ -74,11 +74,14 @@ var configShowCmd = &cobra.Command{
 		fmt.Printf("  %s\n", configPath)
 		fmt.Println("")
 		fmt.Println("环境变量覆盖:")
-		if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
-			fmt.Printf("  TASKMANAGER_DB_PATH=%s\n", dbPath)
-		}
 		if apiURL := os.Getenv("TASKMANAGER_API_BASE_URL"); apiURL != "" {
 			fmt.Printf("  TASKMANAGER_API_BASE_URL=%s\n", apiURL)
+		}
+		if apiURL := os.Getenv("API_BASE_URL"); apiURL != "" {
+			fmt.Printf("  API_BASE_URL=%s\n", apiURL)
+		}
+		if port := os.Getenv("TASKMANAGER_SERVER_PORT"); port != "" {
+			fmt.Printf("  TASKMANAGER_SERVER_PORT=%s\n", port)
 		}
 	},
 }

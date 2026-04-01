@@ -36,12 +36,26 @@ var requirementReviewCmd = &cobra.Command{
 			// 完整URL格式
 			prURL = args[0]
 			parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
-			if len(parts) >= 2 {
-				owner = parts[len(parts)-4]
-				repo = parts[len(parts)-3]
+			// URL格式: https://github.com/owner/repo/pull/123
+			if len(parts) < 5 {
+				fmt.Println("错误: URL 格式不正确")
+				return
+			}
+			owner = parts[len(parts)-4]
+			repo = parts[len(parts)-3]
+			// 提取 prNumber
+			prNumStr := parts[len(parts)-1]
+			if _, err := fmt.Sscanf(prNumStr, "%d", &prNumber); err != nil {
+				fmt.Printf("错误: 无法解析 PR 编号: %s\n", prNumStr)
+				return
 			}
 		} else {
 			// owner/repo 格式
+			if len(args) < 3 {
+				fmt.Println("错误: owner/repo 格式需要至少 3 个参数")
+				cmd.Usage()
+				return
+			}
 			ownerRepo := args[0]
 			prNumberStr := args[1]
 
@@ -53,14 +67,17 @@ var requirementReviewCmd = &cobra.Command{
 			owner = parts[0]
 			repo = parts[1]
 
-			fmt.Sscanf(prNumberStr, "%d", &prNumber)
+			if _, err := fmt.Sscanf(prNumberStr, "%d", &prNumber); err != nil {
+				fmt.Printf("错误: PR 编号必须是数字: %s\n", prNumberStr)
+				return
+			}
 			prURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber)
 		}
 
 		projectID := args[len(args)-1]
 
 		// 登录获取 token
-		token, err := login()
+		token, err := login(defaultAdminUsername, defaultAdminPassword)
 		if err != nil {
 			fmt.Printf("登录失败: %v\n", err)
 			return
@@ -89,7 +106,7 @@ var requirementReviewCmd = &cobra.Command{
 		description := "## PR 信息\n\n"
 		description += fmt.Sprintf("- PR: %s\n", prURL)
 		description += fmt.Sprintf("- 标题: %s\n", prInfo.Title)
-		description += fmt.Sprintf("- 作者: %s\n", prInfo.Author)
+		description += fmt.Sprintf("- 作者: %s\n", prInfo.Author.Login)
 		description += fmt.Sprintf("- 状态: %s\n", prInfo.State)
 		description += fmt.Sprintf("- 创建时间: %s\n", prInfo.CreatedAt)
 		description += "\n## PR 描述\n\n" + prInfo.Body + "\n\n"
@@ -148,7 +165,7 @@ var requirementReviewCmd = &cobra.Command{
 type PRInfo struct {
 	Title     string
 	Body      string
-	Author    string
+	Author    struct{ Login string }
 	State     string
 	CreatedAt string
 }
@@ -179,7 +196,7 @@ func fetchPRInfo(owner, repo string, prNumber int) (*PRInfo, error) {
 // fetchPRComments 获取PR评论
 func fetchPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
 	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, prNumber),
-		"--jq", ".[] | {author: .user.login, body: .body, createdAt: .created_at}")
+		"--jq", ".[] | {author: .user.login, body: .body, createdAt: .created_at}", "-s")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch PR comments: %w", err)

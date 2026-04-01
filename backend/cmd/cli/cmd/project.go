@@ -72,9 +72,11 @@ var heartbeatStatusCmd = &cobra.Command{
 				fmt.Printf("查找项目失败: %v\n", err)
 				return
 			}
-			if project != nil {
-				projects = []*domain.Project{project}
+			if project == nil {
+				fmt.Printf("项目不存在: %s\n", args[0])
+				return
 			}
+			projects = []*domain.Project{project}
 		} else {
 			projects, err = projectRepo.FindAll(ctx)
 			if err != nil {

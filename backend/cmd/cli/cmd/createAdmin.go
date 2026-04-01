@@ -15,7 +15,7 @@ const (
 
 var createAdminCmd = &cobra.Command{
 	Use:   "create-admin",
-	Short: "创建默认管理员用户 (admin/admin123)",
+	Short: "创建默认管理员用户 (test/test)",
 	Run: func(cmd *cobra.Command, args []string) {
 		userRepo, idGen, cleanup := getUserRepos()
 		defer cleanup()

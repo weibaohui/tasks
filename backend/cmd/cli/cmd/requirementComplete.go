@@ -27,7 +27,7 @@ var requirementCompleteCmd = &cobra.Command{
 			return
 		}
 
-		token, err := login()
+		token, err := login(defaultAdminUsername, defaultAdminPassword)
 		if err != nil {
 			fmt.Printf("登录失败: %v\n", err)
 			return
@@ -63,7 +63,7 @@ var requirementCompleteCmd = &cobra.Command{
 		}
 
 		var result struct {
-			RequirementID string `json:"requirement_id"`
+			RequirementID string `json:"id"`
 			PRURL        string `json:"pr_url"`
 			BranchName   string `json:"branch_name"`
 		}

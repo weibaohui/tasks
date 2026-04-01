@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
@@ -16,14 +17,25 @@ import (
 )
 
 var logger *zap.Logger
+var (
+	sharedDB   *sql.DB
+	sharedDBMu sync.Mutex
+)
 
 func init() {
 	logger, _ = zap.NewDevelopment()
 }
 
 func getDB() (*sql.DB, func()) {
+	sharedDBMu.Lock()
+	defer sharedDBMu.Unlock()
+
+	if sharedDB != nil {
+		return sharedDB, func() {}
+	}
+
 	dbPath := config.GetDatabasePath()
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		fmt.Printf("Failed to open database: %v\n", err)
 		os.Exit(1)
@@ -34,11 +46,8 @@ func getDB() (*sql.DB, func()) {
 		os.Exit(1)
 	}
 
-	cleanup := func() {
-		db.Close()
-	}
-
-	return db, cleanup
+	sharedDB = db
+	return db, func() {}
 }
 
 func getUserRepos() (domain.UserRepository, domain.IDGenerator, func()) {

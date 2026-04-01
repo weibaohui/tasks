@@ -205,17 +205,17 @@ func TestCLI_RequirementListWithHeartbeat(t *testing.T) {
 	requiresDB(t)
 	buildCLI(t)
 
-	// 测试 --include-heartbeat 标志
-	output, err := runCLI("requirement", "list", "--include-heartbeat")
+	// 测试 --all 标志
+	output, err := runCLI("requirement", "list", "--all")
 	if err != nil {
-		t.Fatalf("requirement list --include-heartbeat 失败: %v\n%s", err, output)
+		t.Fatalf("requirement list --all 失败: %v\n%s", err, output)
 	}
 
 	if !strings.Contains(output, "需求列表") {
 		t.Errorf("输出不包含 '需求列表':\n%s", output)
 	}
 
-	t.Logf("requirement list --include-heartbeat 输出:\n%s", output)
+	t.Logf("requirement list --all 输出:\n%s", output)
 }
 
 func TestCLI_RequirementCreate(t *testing.T) {

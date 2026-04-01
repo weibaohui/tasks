@@ -304,6 +304,7 @@ func (r *Requirement) Redispatch() error {
 	r.lastError = ""
 	r.startedAt = nil
 	r.completedAt = nil
+	r.claudeRuntimePrompt = ""
 	r.updatedAt = now
 
 	r.fireStateChange(&StateChange{

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/weibh/taskmanager/domain"
@@ -24,7 +25,8 @@ var requirementDispatchCmd = &cobra.Command{
 		requirementRepo, projectRepo, _, _, cleanup := getRequirementRepos()
 		defer cleanup()
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
 		// 查找需求
 		req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
@@ -66,7 +68,7 @@ var requirementDispatchCmd = &cobra.Command{
 		}
 
 		// 登录获取 token
-		token, err := login()
+		token, err := login(defaultAdminUsername, defaultAdminPassword)
 		if err != nil {
 			fmt.Printf("登录失败: %v\n", err)
 			return
@@ -81,7 +83,7 @@ var requirementDispatchCmd = &cobra.Command{
 		}
 		reqJSON, _ := json.Marshal(reqBody)
 
-		httpReq, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", config.GetAPIBaseURL()+"/requirements/dispatch", bytes.NewBuffer(reqJSON))
 		if err != nil {
 			fmt.Printf("创建请求失败: %v\n", err)
 			return
@@ -89,7 +91,7 @@ var requirementDispatchCmd = &cobra.Command{
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+token)
 
-		client := &http.Client{}
+		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(httpReq)
 		if err != nil {
 			fmt.Printf("派发请求失败: %v\n", err)
@@ -119,20 +121,23 @@ var requirementDispatchCmd = &cobra.Command{
 	},
 }
 
-func login() (string, error) {
+func login(username, password string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	reqBody := map[string]string{
-		"username": defaultAdminUsername,
-		"password": defaultAdminPassword,
+		"username": username,
+		"password": password,
 	}
 	reqJSON, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/auth/login", bytes.NewBuffer(reqJSON))
+	req, err := http.NewRequestWithContext(ctx, "POST", config.GetAPIBaseURL()+"/auth/login", bytes.NewBuffer(reqJSON))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -151,4 +156,9 @@ func login() (string, error) {
 		return "", err
 	}
 	return result.Token, nil
+}
+
+func init() {
+	requirementDispatchCmd.Flags().StringP("username", "u", defaultAdminUsername, "用户名")
+	requirementDispatchCmd.Flags().StringP("password", "p", defaultAdminPassword, "密码")
 }
