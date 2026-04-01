@@ -152,7 +152,7 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 	return requirement, nil
 }
 
-// RedispatchRequirement 重新派发需求
+// RedispatchRequirement 重新派发需求（重置当前需求状态）
 func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Context, cmd RedispatchRequirementCommand) (*domain.Requirement, error) {
 	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
 	if err != nil {
@@ -169,4 +169,60 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 		return nil, err
 	}
 	return requirement, nil
+}
+
+// CopyAndDispatchRequirementCommand 复制并派发需求命令
+type CopyAndDispatchRequirementCommand struct {
+	ID domain.RequirementID
+}
+
+// CopyAndDispatchRequirement 复制需求并派发新副本
+// 创建一个新需求，复制原需求内容，标题增加"[重新派发]"标记，然后派发
+func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.Context, cmd CopyAndDispatchRequirementCommand, dispatchService *RequirementDispatchService) (*domain.Requirement, error) {
+	// 1. 查找原需求
+	originalReq, err := s.requirementRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return nil, err
+	}
+	if originalReq == nil {
+		return nil, ErrRequirementNotFound
+	}
+
+	// 2. 创建新需求（复制内容，新 ID，标题增加标记）
+	newID := domain.NewRequirementID(s.idGenerator.Generate())
+	newTitle := fmt.Sprintf("[重新派发] %s", originalReq.Title())
+
+	newReq, err := domain.NewRequirement(
+		newID,
+		originalReq.ProjectID(),
+		newTitle,
+		originalReq.Description(),
+		originalReq.AcceptanceCriteria(),
+		originalReq.TempWorkspaceRoot(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 保存新需求
+	if err := s.requirementRepo.Save(ctx, newReq); err != nil {
+		return nil, err
+	}
+
+	// 4. 派发新需求
+	dispatchResult, err := dispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
+		RequirementID: newReq.ID(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回新需求（重新从数据库获取以获得派发后的状态）
+	newReq, err = s.requirementRepo.FindByID(ctx, newReq.ID())
+	if err != nil {
+		return nil, err
+	}
+
+	_ = dispatchResult // 避免未使用变量警告
+	return newReq, nil
 }

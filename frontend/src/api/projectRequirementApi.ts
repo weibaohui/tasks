@@ -73,3 +73,12 @@ export async function redispatchRequirement(requirementId: string): Promise<Requ
   });
   return response.data;
 }
+
+// copyAndDispatchRequirement 复制需求并派发新副本
+// 创建一个新需求（复制原需求内容，标题增加"[重新派发]"标记），然后派发
+export async function copyAndDispatchRequirement(requirementId: string): Promise<Requirement> {
+  const response = await apiClient.post<Requirement>('/requirements/copy-and-dispatch', {
+    requirement_id: requirementId,
+  });
+  return response.data;
+}

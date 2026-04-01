@@ -191,6 +191,26 @@ func (h *RequirementHandler) RedispatchRequirement(w http.ResponseWriter, r *htt
 	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
+// CopyAndDispatchRequirement 复制需求并派发新副本
+func (h *RequirementHandler) CopyAndDispatchRequirement(w http.ResponseWriter, r *http.Request) {
+	var req RedispatchRequirementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+
+	requirement, err := h.requirementService.CopyAndDispatchRequirement(r.Context(), application.CopyAndDispatchRequirementCommand{
+		ID: domain.NewRequirementID(req.RequirementID),
+	}, h.dispatchService)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
+}
+
 func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
 	startedAt := interface{}(nil)
 	if requirement.StartedAt() != nil {
