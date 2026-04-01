@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/cmd/cli/client"
 )
 
 var requirementResetCmd = &cobra.Command{
@@ -20,33 +20,16 @@ var requirementResetCmd = &cobra.Command{
 			return
 		}
 
-		requirementRepo, _, _, _, cleanup := getRequirementRepos()
-		defer cleanup()
-
 		ctx := context.Background()
+		c := client.New()
 
-		requirement, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
+		requirement, err := c.ResetRequirement(ctx, id)
 		if err != nil {
-			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
-			return
-		}
-		if requirement == nil {
-			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
-			return
-		}
-
-		// 重置需求状态
-		if err := requirement.Redispatch(); err != nil {
 			fmt.Printf(`{"error":"reset requirement failed: %v"}`, err)
 			return
 		}
 
-		if err := requirementRepo.Save(ctx, requirement); err != nil {
-			fmt.Printf(`{"error":"save requirement failed: %v"}`, err)
-			return
-		}
-
-		fmt.Printf(`{"id":"%s","status":"%s","message":"reset successfully"}`, id, requirement.Status())
+		fmt.Printf(`{"id":"%s","status":"%s","message":"reset successfully"}`, id, requirement.Status)
 	},
 }
 
