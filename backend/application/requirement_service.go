@@ -188,41 +188,53 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 		return nil, ErrRequirementNotFound
 	}
 
-	// 2. 创建新需求（复制内容，新 ID，标题增加标记）
-	newID := domain.NewRequirementID(s.idGenerator.Generate())
-	newTitle := fmt.Sprintf("[重新派发] %s", originalReq.Title())
+	// 2. 查找项目获取派发配置
+	project, err := s.projectRepo.FindByID(ctx, originalReq.ProjectID())
+	if err != nil {
+		return nil, err
+	}
+	if project == nil {
+		return nil, ErrProjectNotFound
+	}
 
-	newReq, err := domain.NewRequirement(
-		newID,
-		originalReq.ProjectID(),
-		newTitle,
-		originalReq.Description(),
-		originalReq.AcceptanceCriteria(),
-		originalReq.TempWorkspaceRoot(),
-	)
+	// 3. 创建新需求（使用领域工厂方法）
+	newID := domain.NewRequirementID(s.idGenerator.Generate())
+	newReq, err := domain.NewRedispatchedRequirement(newID, originalReq)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. 保存新需求
+	// 4. 保存新需求
 	if err := s.requirementRepo.Save(ctx, newReq); err != nil {
 		return nil, err
 	}
 
-	// 4. 派发新需求
-	dispatchResult, err := dispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
+	// 5. 派发新需求
+	agentCode := project.AgentCode()
+	channelCode := project.DispatchChannelCode()
+	sessionKey := project.DispatchSessionKey()
+
+	if channelCode == "" {
+		channelCode = "feishu"
+	}
+
+	_, err = dispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 		RequirementID: newReq.ID(),
+		AgentCode:    agentCode,
+		ChannelCode:  channelCode,
+		SessionKey:   sessionKey,
 	})
 	if err != nil {
+		// 派发失败，删除已保存的需求以保持一致性
+		_ = s.requirementRepo.Delete(ctx, newReq.ID())
 		return nil, err
 	}
 
-	// 返回新需求（重新从数据库获取以获得派发后的状态）
+	// 6. 返回新需求（重新从数据库获取以获得派发后的状态）
 	newReq, err = s.requirementRepo.FindByID(ctx, newReq.ID())
 	if err != nil {
 		return nil, err
 	}
 
-	_ = dispatchResult // 避免未使用变量警告
 	return newReq, nil
 }

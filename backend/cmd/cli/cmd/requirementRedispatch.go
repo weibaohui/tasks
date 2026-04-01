@@ -34,7 +34,11 @@ var requirementCopyDispatchCmd = &cobra.Command{
 		reqBody := map[string]string{
 			"requirement_id": requirementID,
 		}
-		reqJSON, _ := json.Marshal(reqBody)
+		reqJSON, err := json.Marshal(reqBody)
+		if err != nil {
+			printJSONError("marshal request failed: %v", err)
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -50,19 +54,27 @@ var requirementCopyDispatchCmd = &cobra.Command{
 		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(httpReq)
 		if err != nil {
-			printJSONError("redispatch request failed: %v", err)
+			printJSONError("copy-dispatch request failed: %v", err)
 			return
 		}
 		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			printJSONError("read response body failed: %v", err)
+			return
+		}
 
 		if resp.StatusCode != http.StatusOK {
 			errResult := map[string]interface{}{
-				"error":  fmt.Sprintf("redispatch failed: %s", resp.Status),
+				"error":  fmt.Sprintf("copy-dispatch failed: %s", resp.Status),
 				"detail": string(body),
 			}
-			jsonBytes, _ := json.Marshal(errResult)
+			jsonBytes, err := json.Marshal(errResult)
+			if err != nil {
+				printJSONError("marshal error response failed: %v", err)
+				return
+			}
 			fmt.Print(string(jsonBytes))
 			return
 		}
