@@ -39,7 +39,7 @@ var requirementListCmd = &cobra.Command{
 		}
 
 		if err != nil {
-			fmt.Printf(`{"error":"列出需求失败: %v"}`, err)
+			printJSONError("列出需求失败: %v", err)
 			return
 		}
 

@@ -45,7 +45,7 @@ var requirementReviewCmd = &cobra.Command{
 			// 提取 prNumber
 			prNumStr := parts[len(parts)-1]
 			if _, err := fmt.Sscanf(prNumStr, "%d", &prNumber); err != nil {
-				fmt.Printf(`{"error":"invalid PR number: %s"}`, prNumStr)
+				printJSONError("invalid PR number: %s", prNumStr)
 				return
 			}
 		} else {
@@ -66,7 +66,7 @@ var requirementReviewCmd = &cobra.Command{
 			repo = parts[1]
 
 			if _, err := fmt.Sscanf(prNumberStr, "%d", &prNumber); err != nil {
-				fmt.Printf(`{"error":"PR number must be numeric: %s"}`, prNumberStr)
+				printJSONError("PR number must be numeric: %s", prNumberStr)
 				return
 			}
 			prURL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber)
@@ -84,7 +84,7 @@ var requirementReviewCmd = &cobra.Command{
 		// 获取PR信息
 		prInfo, err := fetchPRInfo(owner, repo, prNumber)
 		if err != nil {
-			fmt.Printf(`{"error":"fetch PR info failed: %v"}`, err)
+			printJSONError("fetch PR info failed: %v", err)
 			return
 		}
 
@@ -126,7 +126,7 @@ var requirementReviewCmd = &cobra.Command{
 
 		req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements", bytes.NewBuffer(reqJSON))
 		if err != nil {
-			fmt.Printf(`{"error":"create request failed: %v"}`, err)
+			printJSONError("create request failed: %v", err)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -135,7 +135,7 @@ var requirementReviewCmd = &cobra.Command{
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf(`{"error":"create requirement request failed: %v"}`, err)
+			printJSONError("create requirement request failed: %v", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -143,7 +143,12 @@ var requirementReviewCmd = &cobra.Command{
 		body, _ := io.ReadAll(resp.Body)
 
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-			fmt.Printf(`{"error":"create requirement failed: %s","detail":%s}`, resp.Status, string(body))
+			errResult := map[string]interface{}{
+				"error":  fmt.Sprintf("create requirement failed: %s", resp.Status),
+				"detail": string(body),
+			}
+			jsonBytes, _ := json.Marshal(errResult)
+			fmt.Print(string(jsonBytes))
 			return
 		}
 

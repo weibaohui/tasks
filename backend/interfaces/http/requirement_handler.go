@@ -226,12 +226,17 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requirement *domain.Requirement) map[string]interface{} {
 	result := make(map[string]interface{})
 
+	// 先检查 nil，避免空指针
+	if requirement == nil {
+		return result
+	}
+
 	// 从 requirement 直接获取 prompt 和 result
 	result["prompt"] = requirement.ClaudeRuntimePrompt()
 	result["result"] = requirement.ClaudeRuntimeResult()
 	result["status"] = requirement.ClaudeRuntimeStatus()
 
-	if h.sessionService == nil || requirement == nil {
+	if h.sessionService == nil {
 		return result
 	}
 	sessionKey := requirement.DispatchSessionKey()

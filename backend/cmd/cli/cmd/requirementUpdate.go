@@ -32,11 +32,11 @@ var requirementUpdateCmd = &cobra.Command{
 
 		req, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
 		if err != nil {
-			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
+			printJSONError("find requirement failed: %v", err)
 			return
 		}
 		if req == nil {
-			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
+			printJSONError("requirement not found: %s", id)
 			return
 		}
 
@@ -54,11 +54,11 @@ var requirementUpdateCmd = &cobra.Command{
 		}
 
 		if err := req.UpdateContent(newTitle, newDesc, newCriteria, req.TempWorkspaceRoot()); err != nil {
-			fmt.Printf(`{"error":"update requirement failed: %v"}`, err)
+			printJSONError("update requirement failed: %v", err)
 			return
 		}
 		if err := requirementRepo.Save(ctx, req); err != nil {
-			fmt.Printf(`{"error":"save requirement failed: %v"}`, err)
+			printJSONError("save requirement failed: %v", err)
 			return
 		}
 
