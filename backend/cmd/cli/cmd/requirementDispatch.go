@@ -84,8 +84,8 @@ var requirementDispatchCmd = &cobra.Command{
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+token)
 
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Do(httpReq)
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		resp, err := httpClient.Do(httpReq)
 		if err != nil {
 			fmt.Printf(`{"error":"dispatch request failed: %v"}`, err)
 			return

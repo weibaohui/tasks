@@ -25,6 +25,7 @@ var rootCmd = &cobra.Command{
   环境变量: TASKMANAGER_API_BASE_URL (API 地址)`,
 }
 
+// Execute 执行根命令并处理错误
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -32,6 +33,7 @@ func Execute() {
 	}
 }
 
+// GetRootCmd 获取根命令实例（用于测试）
 func GetRootCmd() *cobra.Command {
 	return rootCmd
 }

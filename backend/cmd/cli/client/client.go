@@ -39,7 +39,8 @@ func (c *Client) SetTimeout(timeout time.Duration) {
 	c.http.Timeout = timeout
 }
 
-// doRequest 执行 HTTP 请求
+// doRequest 执行带认证的 HTTP 请求
+// 会自动添加 Bearer Token 到请求头
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
 	if c.token == "" {
 		return nil, fmt.Errorf("API token not configured, please set api.token in ~/.taskmanager/config.yaml")

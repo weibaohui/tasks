@@ -110,7 +110,6 @@ func runCLI(args ...string) (string, error) {
 // ========== Admin 命令测试 ==========
 
 func TestCLI_CreateAdmin(t *testing.T) {
-	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("create-admin")
@@ -118,23 +117,23 @@ func TestCLI_CreateAdmin(t *testing.T) {
 		t.Fatalf("create-admin 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含成功信息
-	if !strings.Contains(output, "成功") && !strings.Contains(output, "success") {
-		t.Logf("输出: %s", output)
+	// 验证输出包含弃用提示
+	if !strings.Contains(output, "请在 server 端执行") {
+		t.Errorf("输出不包含弃用提示 '请在 server 端执行':\n%s", output)
 	}
 }
 
 func TestCLI_DeleteAdmin(t *testing.T) {
-	requiresAPIToken(t)
 	buildCLI(t)
 
-	// 先创建
-	runCLI("create-admin")
-
-	// 再删除
 	output, err := runCLI("delete-admin")
 	if err != nil {
 		t.Fatalf("delete-admin 失败: %v\n%s", err, output)
+	}
+
+	// 验证输出包含弃用提示
+	if !strings.Contains(output, "请在 server 端执行") {
+		t.Errorf("输出不包含弃用提示 '请在 server 端执行':\n%s", output)
 	}
 }
 
