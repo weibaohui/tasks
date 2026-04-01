@@ -26,3 +26,5 @@ backend/gateway
 .cc-connect
 backend/cli
 myenv
+backend/coverage.out
+coverage.out
