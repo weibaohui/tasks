@@ -40,7 +40,7 @@ var requirementCreateCmd = &cobra.Command{
 			TempWorkspaceRoot:  tempWorkspace,
 		})
 		if err != nil {
-			fmt.Printf(`{"error":"create requirement failed: %v"}`, err)
+			printJSONError("create requirement failed: %v", err)
 			return
 		}
 

@@ -63,7 +63,7 @@ var requirementTasksCmd = &cobra.Command{
 		}
 
 		if len(relatedTasks) == 0 {
-			fmt.Printf(`{"requirement_id":"%s","tasks":[]}`)
+			fmt.Printf(`{"requirement_id":"%s","tasks":[]}`, id)
 			return
 		}
 

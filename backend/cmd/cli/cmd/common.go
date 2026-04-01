@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -15,6 +16,15 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	"go.uber.org/zap"
 )
+
+// printJSONError 安全地输出 JSON 格式的错误信息
+func printJSONError(format string, args ...interface{}) {
+	errResult := map[string]string{
+		"error": fmt.Sprintf(format, args...),
+	}
+	jsonBytes, _ := json.Marshal(errResult)
+	fmt.Print(string(jsonBytes))
+}
 
 var logger *zap.Logger
 var (

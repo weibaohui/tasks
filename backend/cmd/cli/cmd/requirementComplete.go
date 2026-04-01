@@ -37,7 +37,7 @@ var requirementCompleteCmd = &cobra.Command{
 
 		req, err := http.NewRequest("POST", config.GetAPIBaseURL()+"/requirements/pr", bytes.NewBuffer(reqJSON))
 		if err != nil {
-			fmt.Printf(`{"error":"create request failed: %v"}`, err)
+			printJSONError("create request failed: %v", err)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -46,7 +46,7 @@ var requirementCompleteCmd = &cobra.Command{
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf(`{"error":"complete request failed: %v"}`, err)
+			printJSONError("complete request failed: %v", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -54,7 +54,12 @@ var requirementCompleteCmd = &cobra.Command{
 		body, _ := io.ReadAll(resp.Body)
 
 		if resp.StatusCode != http.StatusOK {
-			fmt.Printf(`{"error":"complete failed: %s","detail":%s}`, resp.Status, string(body))
+			errResult := map[string]interface{}{
+				"error":  fmt.Sprintf("complete failed: %s", resp.Status),
+				"detail": string(body),
+			}
+			jsonBytes, _ := json.Marshal(errResult)
+			fmt.Print(string(jsonBytes))
 			return
 		}
 

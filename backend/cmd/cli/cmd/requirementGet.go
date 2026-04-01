@@ -28,11 +28,11 @@ var requirementGetCmd = &cobra.Command{
 
 		requirement, err := requirementRepo.FindByID(ctx, domain.NewRequirementID(id))
 		if err != nil {
-			fmt.Printf(`{"error":"find requirement failed: %v"}`, err)
+			printJSONError("find requirement failed: %v", err)
 			return
 		}
 		if requirement == nil {
-			fmt.Printf(`{"error":"requirement not found: %s"}`, id)
+			printJSONError("requirement not found: %s", id)
 			return
 		}
 
