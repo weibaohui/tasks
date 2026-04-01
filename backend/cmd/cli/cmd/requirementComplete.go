@@ -23,9 +23,10 @@ var requirementCompleteCmd = &cobra.Command{
 			return
 		}
 
-		token, err := login(defaultAdminUsername, defaultAdminPassword)
-		if err != nil {
-			fmt.Printf(`{"error":"login failed: %v"}`, err)
+		// 从配置文件获取 token
+		token := config.GetAPIToken()
+		if token == "" {
+			fmt.Print(`{"error":"API token not configured, please set api.token in ~/.taskmanager/config.yaml"}`)
 			return
 		}
 

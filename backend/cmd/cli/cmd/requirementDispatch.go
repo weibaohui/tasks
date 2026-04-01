@@ -70,10 +70,10 @@ var requirementDispatchCmd = &cobra.Command{
 			channelCode = "feishu"
 		}
 
-		// 登录获取 token
-		token, err := login(defaultAdminUsername, defaultAdminPassword)
-		if err != nil {
-			fmt.Printf(`{"error":"login failed: %v"}`, err)
+		// 从配置文件获取 token
+		token := config.GetAPIToken()
+		if token == "" {
+			fmt.Print(`{"error":"API token not configured, please set api.token in ~/.taskmanager/config.yaml"}`)
 			return
 		}
 
@@ -113,44 +113,6 @@ var requirementDispatchCmd = &cobra.Command{
 	},
 }
 
-func login(username, password string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	reqBody := map[string]string{
-		"username": username,
-		"password": password,
-	}
-	reqJSON, _ := json.Marshal(reqBody)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.GetAPIBaseURL()+"/auth/login", bytes.NewBuffer(reqJSON))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("login failed: %s", string(body))
-	}
-
-	var result struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-	return result.Token, nil
-}
-
 func init() {
-	requirementDispatchCmd.Flags().StringP("username", "u", defaultAdminUsername, "用户名")
-	requirementDispatchCmd.Flags().StringP("password", "p", defaultAdminPassword, "密码")
+	// 不再需要 username/password 参数，使用配置文件中的 token
 }
