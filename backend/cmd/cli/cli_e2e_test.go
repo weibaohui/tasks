@@ -24,6 +24,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 )
@@ -46,16 +47,12 @@ func requiresDB(t *testing.T) {
 
 // requiresAPIToken 如果 API Token 未配置则跳过测试
 func requiresAPIToken(t *testing.T) {
-	requiresDB(t)
-	// 检查配置文件中的 token
-	home, _ := os.UserHomeDir()
-	configPath := filepath.Join(home, ".taskmanager", "config.yaml")
-	data, err := os.ReadFile(configPath)
+	// 使用项目配置加载器读取配置
+	cfg, err := config.Load()
 	if err != nil {
-		t.Skip("跳过: 无法读取配置文件")
+		t.Skip("跳过: 无法加载配置")
 	}
-	// 简单检查是否包含 token 配置
-	if !strings.Contains(string(data), "token:") || strings.Contains(string(data), "token: \"") {
+	if cfg.API.Token == "" {
 		t.Skip("跳过: API Token 未配置 (需要在 ~/.taskmanager/config.yaml 中设置 api.token)")
 	}
 }
