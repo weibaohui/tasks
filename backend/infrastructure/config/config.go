@@ -234,3 +234,11 @@ func ExpandPath(path string) string {
 	}
 	return os.ExpandEnv(path)
 }
+// SaveConfig 保存配置到文件
+func SaveConfig(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}

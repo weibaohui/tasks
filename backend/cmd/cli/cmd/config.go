@@ -31,20 +31,42 @@ var configInitCmd = &cobra.Command{
 			configPath = filepath.Join(home, ".taskmanager", "config.yaml")
 		}
 
+		// 检查配置文件是否已存在
+		existingCfg, _ := config.Load()
+		if existingCfg != nil && existingCfg.API.Token != "" {
+			fmt.Printf("配置文件已存在: %s\n", configPath)
+			fmt.Printf("API Token 已配置: %s...\n", existingCfg.API.Token[:min(8, len(existingCfg.API.Token))])
+			fmt.Println("\n如需重新初始化，请先删除现有配置文件:")
+			fmt.Printf("  rm %s\n", configPath)
+			return
+		}
+
 		if err := config.WriteDefaultConfig(configPath); err != nil {
 			fmt.Printf("创建配置文件失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("配置文件已创建: %s\n", configPath)
-		fmt.Println("")
-		fmt.Println("请编辑配置文件设置 API Token:")
-		fmt.Printf("  vim %s\n", configPath)
-		fmt.Println("")
-		fmt.Println("获取 Token:")
-		fmt.Println("  1. 启动 server: cd backend && go run cmd/server/main.go create-admin")
-		fmt.Println("  2. 登录 Web UI，在 Personal Access Token 页面生成 Token")
-		fmt.Println("  3. 将 Token 填入配置文件的 api.token 字段")
+		// 如果之前有 token，恢复它
+		if existingCfg != nil && existingCfg.API.Token != "" {
+			cfg, _ := config.Load()
+			if cfg != nil {
+				// 重新加载并合并配置
+				cfg.API.Token = existingCfg.API.Token
+				config.SaveConfig(configPath, cfg)
+			}
+			fmt.Printf("配置文件已更新: %s\n", configPath)
+			fmt.Println("原有 API Token 已保留")
+		} else {
+			fmt.Printf("配置文件已创建: %s\n", configPath)
+			fmt.Println("")
+			fmt.Println("请编辑配置文件设置 API Token:")
+			fmt.Printf("  vim %s\n", configPath)
+			fmt.Println("")
+			fmt.Println("获取 Token:")
+			fmt.Println("  1. 启动 server: cd backend && go run cmd/server/main.go create-admin")
+			fmt.Println("  2. 登录 Web UI，在 Personal Access Token 页面生成 Token")
+			fmt.Println("  3. 将 Token 填入配置文件的 api.token 字段")
+		}
 	},
 }
 
