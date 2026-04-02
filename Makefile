@@ -83,42 +83,33 @@ clean:
 	@touch backend/internal/embed/ui/dist/.keep
 	cd frontend && rm -rf dist/ node_modules/.vite
 
-# 开发模式 - 同时启动所有服务
-# 现在需要同时运行 server（核心业务）和 web（HTTP API）
+# 开发模式 - 启动合并后的完整服务（包含核心业务 + HTTP API + 前端）
 dev:
 	@echo "========================================="
 	@echo "  启动 TaskManager 开发环境"
 	@echo "========================================="
-	@echo "  核心服务: taskmanager server"
-	@echo "  Web 服务: http://localhost:8888"
-	@echo "  前端界面: http://localhost:3000"
+	@echo "  服务地址: http://localhost:13618"
+	@echo "  前端界面: http://localhost:13618"
 	@echo "  日志文件: backend/logs/air.log"
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@mkdir -p backend/logs
 	@(trap 'kill 0' INT; \
 		set -a; source backend/.env; set +a; \
-		echo "启动核心服务 (server)..."; \
+		echo "启动服务..."; \
 		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log & \
-		echo "启动 Web 服务 (web)..."; \
-		cd backend && air --build.cmd "go build -o bin/taskmanager-web ./cmd/web" --build.bin "./bin/taskmanager-web" -p 8889 2>&1 | tee -a logs/air.log & \
-		echo "启动前端开发服务器..."; \
-		cd frontend && pnpm run dev 2>&1 & \
 		wait)
 
-# 启动核心服务开发模式 (air 热重载)
+# 启动核心服务开发模式 (air 热重载) - 已合并为单一服务
 dev-server:
 	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
-	@echo "启动核心服务 (server) - air 热重载..."
+	@echo "启动服务 (server) - air 热重载..."
 	@mkdir -p backend/logs
 	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log
 
-# 启动 Web 服务开发模式 (air 热重载)
+# 启动 Web 服务开发模式 (air 热重载) - 已废弃，请使用 dev-server
 dev-web:
-	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
-	@echo "启动 Web 服务 (web) - air 热重载..."
-	@mkdir -p backend/logs
-	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-web ./cmd/web" --build.bin "./bin/taskmanager-web" 2>&1 | tee logs/air.log
+	@echo "dev-web 已废弃，服务已合并到 server，使用 make dev-server 启动"
 
 # 启动前端开发服务器 (Vite)
 dev-frontend:
@@ -146,7 +137,7 @@ dev-api:
 # 停止所有 TaskManager 相关进程
 stop:
 	@echo "正在停止 TaskManager 进程..."
-	@-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti :13618 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
 	@sleep 1
 	@echo "已停止 TaskManager 进程"

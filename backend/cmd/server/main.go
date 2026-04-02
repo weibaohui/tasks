@@ -1,6 +1,6 @@
 /**
  * 服务端入口 - 核心业务服务
- * 不包含 HTTP 服务，仅运行网关、调度器、任务处理等核心业务
+ * 包含 HTTP API、渠道网关、调度器、任务处理等所有功能
  */
 package main
 
@@ -8,10 +8,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
@@ -24,6 +27,9 @@ import (
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/utils"
+	httpHandler "github.com/weibh/taskmanager/interfaces/http"
+	ws "github.com/weibh/taskmanager/interfaces/ws"
+	"github.com/weibh/taskmanager/internal/embed"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 	"github.com/weibh/taskmanager/pkg/channel"
 	"go.uber.org/zap"
@@ -87,6 +93,8 @@ func main() {
 
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
+	userRepo := _persistence.NewSQLiteUserRepository(db)
+	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
@@ -222,12 +230,98 @@ func main() {
 		zap.Int("channels", gateway.ChannelCount()),
 	)
 
-	// 10. 等待中断信号优雅关闭
+	// 10. 初始化 HTTP API Handler
+	userService := application.NewUserApplicationService(userRepo, idGenerator)
+	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
+	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
+	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
+	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
+	queryService := application.NewQueryService(taskRepo)
+
+	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
+	userHandler := httpHandler.NewUserHandler(userService)
+	agentHandler := httpHandler.NewAgentHandler(agentService)
+	providerHandler := httpHandler.NewLLMProviderHandler(providerService)
+	channelHandler := httpHandler.NewChannelHandler(channelService)
+	sessionHandler := httpHandler.NewSessionHandler(sessionService)
+	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
+	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
+	requirementService := application.NewRequirementApplicationService(
+		requirementRepo,
+		projectRepo,
+		idGenerator,
+		hookExecutor,
+		replicaAgentManager,
+	)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
+	mcpHandler := httpHandler.NewMCPHandler(mcpService)
+
+	authSecret := os.Getenv("AUTH_SECRET")
+	if authSecret == "" {
+		authSecret = "taskmanager-dev-secret"
+	}
+	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
+	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
+	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
+
+	mux := httpHandler.SetupRoutesWithManagement(
+		taskHandler, userHandler, agentHandler, providerHandler,
+		channelHandler, sessionHandler, conversationRecordHandler,
+		authHandler, mcpHandler, skillHandler, projectHandler,
+		requirementHandler, hookHandler,
+	)
+
+	// 11. 初始化 WebSocket（用于前端实时通知）
+	wsHandler := ws.NewWebSocketHandler(eventBus)
+	wsHandler.SubscribeToEvents()
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		wsHandler.HandleWebSocket(w, r)
+	})
+
+	// 12. 添加前端静态文件路由（SPA）
+	frontendHandler := embed.SetupFrontendRoutes()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		// API 路由和 WebSocket 路由不走前端
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
+			http.NotFound(w, r)
+			return
+		}
+		frontendHandler.ServeHTTP(w, r)
+	})
+
+	// 13. 启动 HTTP Server
+	webPort := cfg.Server.Port
+	addr := fmt.Sprintf(":%d", webPort)
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	go func() {
+		logger.Info("HTTP API Server 启动", zap.String("addr", addr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
+		}
+	}()
+
+	logger.Info("HTTP API 服务已启动", zap.String("addr", addr))
+
+	// 14. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("正在关闭核心服务...")
+
+	// 关闭 HTTP Server
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("HTTP Server 关闭失败", zap.Error(err))
+	}
 
 	// 关闭心跳调度器
 	heartbeatScheduler.Stop()
