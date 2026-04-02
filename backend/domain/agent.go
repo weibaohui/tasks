@@ -143,7 +143,8 @@ type Agent struct {
 	userContent           string
 	toolsContent          string
 	model                 string
-	providerKey           string // LLM Provider 的 provider_key，用于动态查找
+	providerKey           string // LLM Provider 的 provider_key，用于动态查找（已废弃，使用 llmProviderID）
+	llmProviderID         LLMProviderID // 关联的 LLM Provider ID
 	maxTokens             int
 	temperature           float64
 	maxIterations         int
@@ -218,6 +219,7 @@ func (a *Agent) UserContent() string         { return a.userContent }
 func (a *Agent) ToolsContent() string        { return a.toolsContent }
 func (a *Agent) Model() string               { return a.model }
 func (a *Agent) ProviderKey() string       { return a.providerKey }
+func (a *Agent) LLMProviderID() LLMProviderID { return a.llmProviderID }
 func (a *Agent) MaxTokens() int              { return a.maxTokens }
 func (a *Agent) Temperature() float64        { return a.temperature }
 func (a *Agent) MaxIterations() int          { return a.maxIterations }
@@ -326,6 +328,11 @@ func (a *Agent) SetClaudeCodeConfig(config *ClaudeCodeConfig) {
 	a.updatedAt = time.Now()
 }
 
+func (a *Agent) SetLLMProviderID(id LLMProviderID) {
+	a.llmProviderID = id
+	a.updatedAt = time.Now()
+}
+
 type AgentSnapshot struct {
 	ID                    AgentID
 	AgentCode             AgentCode
@@ -340,6 +347,7 @@ type AgentSnapshot struct {
 	ToolsContent          string
 	Model                 string
 	ProviderKey           string
+	LLMProviderID         LLMProviderID
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -370,6 +378,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		ToolsContent:          a.toolsContent,
 		Model:                 a.model,
 		ProviderKey:           a.providerKey,
+		LLMProviderID:         a.llmProviderID,
 		MaxTokens:             a.maxTokens,
 		Temperature:           a.temperature,
 		MaxIterations:         a.maxIterations,
@@ -400,6 +409,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.toolsContent = snap.ToolsContent
 	a.model = snap.Model
 	a.providerKey = snap.ProviderKey
+	a.llmProviderID = snap.LLMProviderID
 	a.maxTokens = snap.MaxTokens
 	a.temperature = snap.Temperature
 	a.maxIterations = snap.MaxIterations

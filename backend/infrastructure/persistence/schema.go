@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS agents (
     tools_content TEXT,
     model TEXT,
     provider_key TEXT NOT NULL DEFAULT '',
+    llm_provider_id TEXT REFERENCES llm_providers(id),
     max_tokens INTEGER NOT NULL,
     temperature REAL NOT NULL,
     max_iterations INTEGER NOT NULL,
@@ -432,7 +433,10 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateRequirementType(db); err != nil {
 		return err
 	}
-	return migrateConversationRecordsTimestampToMillis(db)
+	if err := migrateConversationRecordsTimestampToMillis(db); err != nil {
+		return err
+	}
+	return migrateAgentLLMProviderID(db)
 }
 
 // migrateTasksNewColumns 迁移 tasks 表新增字段
@@ -785,6 +789,20 @@ func migrateConversationRecordsTimestampToMillis(db *sql.DB) error {
 	// 执行转换：秒级 * 1000 = 毫秒级
 	_, err = db.Exec(`UPDATE conversation_records SET timestamp = timestamp * 1000, created_at = created_at * 1000 WHERE timestamp < 1000000000000`)
 	return err
+}
+
+// migrateAgentLLMProviderID 迁移 agents 表新增 llm_provider_id 字段
+func migrateAgentLLMProviderID(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "llm_provider_id")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN llm_provider_id TEXT REFERENCES llm_providers(id)"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {
