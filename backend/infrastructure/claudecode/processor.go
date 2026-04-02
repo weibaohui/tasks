@@ -119,12 +119,12 @@ func boolPtr(b bool) *bool {
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger             *zap.Logger
-	hookManager        *hook.Manager
-	providerRepo       domain.LLMProviderRepository
-	idGenerator        domain.IDGenerator
-	requirementRepo    domain.RequirementRepository
-	hookExecutor       *domain.ConfigurableHookExecutor
+	logger              *zap.Logger
+	hookManager         *hook.Manager
+	providerRepo        domain.LLMProviderRepository
+	idGenerator         domain.IDGenerator
+	requirementRepo     domain.RequirementRepository
+	hookExecutor        *domain.ConfigurableHookExecutor
 	replicaAgentManager *domain.ReplicaAgentManager
 }
 
@@ -151,12 +151,12 @@ func NewClaudeCodeProcessor(
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:             logger,
-		hookManager:        hookManager,
-		providerRepo:       providerRepo,
-		idGenerator:        idGenerator,
-		requirementRepo:    requirementRepo,
-		hookExecutor:       hookExecutor,
+		logger:              logger,
+		hookManager:         hookManager,
+		providerRepo:        providerRepo,
+		idGenerator:         idGenerator,
+		requirementRepo:     requirementRepo,
+		hookExecutor:        hookExecutor,
 		replicaAgentManager: replicaAgentManager,
 	}
 }
@@ -711,12 +711,7 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 		env = make(map[string]string)
 	}
 	// 如果配置中没有 API Key，使用默认的 MiniMax 配置
-	if env["ANTHROPIC_API_KEY"] == "" {
-		env["ANTHROPIC_API_KEY"] = "sk-4e7ehiWvl3EDNcwsZ4ul8mR9AjLGH1DNBqInGlBHyD2ZkIwB"
-	}
-	if env["ANTHROPIC_BASE_URL"] == "" {
-		env["ANTHROPIC_BASE_URL"] = "https://minimax.a7m.com.cn"
-	}
+
 	opts = append(opts, claudecode.WithEnv(env))
 
 	// 设置模型

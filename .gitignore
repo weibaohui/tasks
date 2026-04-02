@@ -31,3 +31,5 @@ coverage.out
 backend/bin/taskmanager-server
 backend/bin/taskmanager-web
 backend/web
+backend/internal/embed/ui/dist/assets
+backend/internal/embed/ui/dist/index.html

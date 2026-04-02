@@ -90,7 +90,6 @@ func main() {
 	// 3. 初始化依赖
 	idGenerator := utils.NewNanoIDGenerator(21)
 
-
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
 	userRepo := _persistence.NewSQLiteUserRepository(db)
@@ -300,14 +299,13 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+	logger.Info("HTTP API 服务启动", zap.String("addr", addr))
+
 	go func() {
-		logger.Info("HTTP API Server 启动", zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
 		}
 	}()
-
-	logger.Info("HTTP API 服务已启动", zap.String("addr", addr))
 
 	// 14. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
@@ -425,7 +423,6 @@ func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGener
 		db.Close()
 		return nil, nil, nil, fmt.Errorf("初始化数据库结构失败(%s): %w", dbPath, err)
 	}
-
 
 	idGenerator := utils.NewNanoIDGenerator(21)
 

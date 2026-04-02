@@ -51,39 +51,36 @@
 ## 常用命令
 
 ```bash
-# 启动开发环境（后端 + 前端）
-make dev
+# 安装依赖并构建
+make install
 
-# 停止开发环境
-make stop
+# 重启服务（后台运行）
+taskmanager server restart
 
-# 后端编译和测试
-cd backend && go build ./cmd/server && go test ./...
-
-# 前端开发
-# 使用pnpm 代替 npm
+# 前端开发（使用pnpm）
 cd frontend && pnpm run dev
+
+# 后端编译
+cd backend && go build -o bin/taskmanager-server ./cmd/server
 
 # E2E（必须会话隔离）
 PW_SESSION="${PILOT_SESSION_ID:-default}"
-playwright-cli -s="$PW_SESSION" open http://localhost:3000
+playwright-cli -s="$PW_SESSION" open http://localhost:13618
 
-# 数据库（默认路径，实际路径在 ~/.taskmanager/config.yaml 中配置）
+# 数据库
 sqlite3 ~/.taskmanager/data.db
 ```
 
 ## 调试与日志
 
-**日志文件（开发环境）：**
+**日志文件（生产环境）：**
 | 文件 | 内容 |
 |------|------|
-| `backend/logs/air.log` | Air 运行日志 + 应用所有 stdout/stderr |
-| `backend/logs/air_build.log` | Air 构建日志 |
+| `~/.taskmanager/server.log` | 服务运行日志（含心跳、派发等所有业务日志） |
 
 **查看日志：**
 ```bash
-tail -f backend/logs/air.log          # 实时跟踪应用日志
-tail -f backend/logs/air_build.log   # 实时跟踪构建日志
+tail -f ~/.taskmanager/server.log     # 实时跟踪服务日志
 ```
 
 ## 详细文档
