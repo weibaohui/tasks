@@ -139,18 +139,15 @@ func (b *MessageBus) dispatchToSubscribers(msg *OutboundMessage) {
 
 	for _, callback := range subscribers {
 		if err := callback(msg); err != nil {
-			// Feishu cross-app open_id error is common and noisy - log at debug level
+			// Feishu cross-app open_id error is common - skip silently
 			if isFeishuCrossAppError(err) {
-				b.logger.Debug("Feishu dispatch skipped (cross-app open_id)",
-					zap.String("channel", msg.Channel),
-					zap.Error(err),
-				)
-			} else {
-				b.logger.Error("Failed to dispatch message to channel",
-					zap.String("channel", msg.Channel),
-					zap.Error(err),
-				)
+				// Silently skip cross-app errors
+				continue
 			}
+			b.logger.Error("Failed to dispatch message to channel",
+				zap.String("channel", msg.Channel),
+				zap.Error(err),
+			)
 		}
 	}
 }
@@ -172,6 +169,11 @@ func (b *MessageBus) dispatchStreamToSubscribers(chunk *StreamChunk) {
 
 	for _, callback := range subscribers {
 		if err := callback(chunk); err != nil {
+			// Feishu cross-app open_id error is common - skip silently
+			if isFeishuCrossAppError(err) {
+				// Silently skip cross-app errors
+				continue
+			}
 			b.logger.Error("Failed to dispatch stream message to channel",
 				zap.String("channel", chunk.Channel),
 				zap.Error(err),

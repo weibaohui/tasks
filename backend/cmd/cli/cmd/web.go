@@ -15,28 +15,28 @@ import (
 )
 
 const (
-	pidFileName = "server.pid"
-	logFileName = "server.log"
+	webPIDFileName = "web.pid"
+	webLogFileName = "web.log"
 )
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "服务器管理",
-	Long:  `在后台启动、停止、查看 TaskManager 服务器状态`,
+var webCmd = &cobra.Command{
+	Use:   "web",
+	Short: "Web 管理服务",
+	Long:  `在后台启动、停止、查看 TaskManager Web 管理服务（HTTP API + 前端）`,
 }
 
-var serverStartCmd = &cobra.Command{
+var webStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "在后台启动服务器",
-	Example: `  taskmanager server start
-  taskmanager server start --port 8888`,
+	Short: "在后台启动 Web 服务",
+	Example: `  taskmanager web start
+  taskmanager web start --port 8888`,
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
 
 		// 检查是否已在运行
-		if isRunning() {
-			fmt.Println("服务器已在运行中")
-			printStatus()
+		if isWebRunning() {
+			fmt.Println("Web 服务已在运行中")
+			printWebStatus()
 			return
 		}
 
@@ -54,10 +54,10 @@ var serverStartCmd = &cobra.Command{
 			return
 		}
 
-		// 找到真正的 server 可执行文件
-		serverExe := findServerExecutable(exePath)
-		if serverExe == "" {
-			fmt.Println("未找到 server 可执行文件，请确保已编译: make build")
+		// 找到真正的 web 可执行文件
+		webExe := findWebExecutable(exePath)
+		if webExe == "" {
+			fmt.Println("未找到 web 可执行文件，请确保已编译: make build")
 			return
 		}
 
@@ -68,7 +68,7 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		// 打开日志文件
-		logFile := filepath.Join(configDir, logFileName)
+		logFile := filepath.Join(configDir, webLogFileName)
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			fmt.Printf("打开日志文件失败: %v\n", err)
@@ -77,7 +77,7 @@ var serverStartCmd = &cobra.Command{
 		defer f.Close()
 
 		// 启动后台进程
-		command := exec.Command(serverExe)
+		command := exec.Command(webExe)
 		command.Env = env
 		command.Stdout = f
 		command.Stderr = f
@@ -86,12 +86,12 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		if err := command.Start(); err != nil {
-			fmt.Printf("启动服务器失败: %v\n", err)
+			fmt.Printf("启动 Web 服务失败: %v\n", err)
 			return
 		}
 
 		// 写入 PID 文件
-		pidFile := filepath.Join(configDir, pidFileName)
+		pidFile := filepath.Join(configDir, webPIDFileName)
 		if err := os.WriteFile(pidFile, []byte(strconv.Itoa(command.Process.Pid)), 0644); err != nil {
 			fmt.Printf("写入 PID 文件失败: %v\n", err)
 			// 尝试终止已启动的进程
@@ -102,26 +102,26 @@ var serverStartCmd = &cobra.Command{
 		// 等待一小段时间检查是否成功启动
 		time.Sleep(500 * time.Millisecond)
 
-		if isRunning() {
-			fmt.Println("服务器启动成功")
-			printStatus()
+		if isWebRunning() {
+			fmt.Println("Web 服务启动成功")
+			printWebStatus()
 		} else {
-			fmt.Println("服务器可能启动失败，请检查日志")
+			fmt.Println("Web 服务可能启动失败，请检查日志")
 			fmt.Printf("日志文件: %s\n", logFile)
 		}
 	},
 }
 
-var serverStopCmd = &cobra.Command{
+var webStopCmd = &cobra.Command{
 	Use:     "stop",
-	Short:   "停止后台服务器",
-	Example: `  taskmanager server stop`,
+	Short:   "停止后台 Web 服务",
+	Example: `  taskmanager web stop`,
 	Run: func(cmd *cobra.Command, args []string) {
 		force, _ := cmd.Flags().GetBool("force")
 
-		pid := getPID()
+		pid := getWebPID()
 		if pid == 0 {
-			fmt.Println("服务器未运行")
+			fmt.Println("Web 服务未运行")
 			return
 		}
 
@@ -137,17 +137,17 @@ var serverStopCmd = &cobra.Command{
 			fmt.Printf("发送终止信号失败: %v\n", err)
 			// 如果进程不存在，清理 PID 文件
 			if strings.Contains(err.Error(), "no such process") {
-				cleanupPIDFile()
-				fmt.Println("服务器已停止（PID 文件已清理）")
+				cleanupWebPIDFile()
+				fmt.Println("Web 服务已停止（PID 文件已清理）")
 			}
 			return
 		}
 
 		// 等待进程结束
 		if !force {
-			fmt.Println("正在优雅关闭服务器...")
+			fmt.Println("正在优雅关闭 Web 服务...")
 			for i := 0; i < 30; i++ {
-				if !isProcessRunning(pid) {
+				if !isWebProcessRunning(pid) {
 					break
 				}
 				time.Sleep(100 * time.Millisecond)
@@ -155,37 +155,37 @@ var serverStopCmd = &cobra.Command{
 		}
 
 		// 如果还在运行，强制终止
-		if isProcessRunning(pid) && !force {
-			fmt.Println("服务器未能及时关闭，强制终止...")
+		if isWebProcessRunning(pid) && !force {
+			fmt.Println("Web 服务未能及时关闭，强制终止...")
 			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}
 
-		cleanupPIDFile()
-		fmt.Println("服务器已停止")
+		cleanupWebPIDFile()
+		fmt.Println("Web 服务已停止")
 	},
 }
 
-var serverStatusCmd = &cobra.Command{
+var webStatusCmd = &cobra.Command{
 	Use:     "status",
-	Short:   "查看服务器状态",
-	Example: `  taskmanager server status`,
+	Short:   "查看 Web 服务状态",
+	Example: `  taskmanager web status`,
 	Run: func(cmd *cobra.Command, args []string) {
-		printStatus()
+		printWebStatus()
 	},
 }
 
-var serverLogsCmd = &cobra.Command{
+var webLogsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "查看服务器日志",
-	Example: `  taskmanager server logs
-  taskmanager server logs -f  # 实时跟踪日志
-  taskmanager server logs -n 100  # 查看最后 100 行`,
+	Short: "查看 Web 服务日志",
+	Example: `  taskmanager web logs
+  taskmanager web logs -f  # 实时跟踪日志
+  taskmanager web logs -n 100  # 查看最后 100 行`,
 	Run: func(cmd *cobra.Command, args []string) {
 		follow, _ := cmd.Flags().GetBool("follow")
 		lines, _ := cmd.Flags().GetInt("lines")
 
 		configDir := getConfigDir()
-		logFile := filepath.Join(configDir, logFileName)
+		logFile := filepath.Join(configDir, webLogFileName)
 
 		// 检查日志文件是否存在
 		if _, err := os.Stat(logFile); os.IsNotExist(err) {
@@ -227,52 +227,43 @@ var serverLogsCmd = &cobra.Command{
 	},
 }
 
-var serverRestartCmd = &cobra.Command{
+var webRestartCmd = &cobra.Command{
 	Use:     "restart",
-	Short:   "重启服务器",
-	Example: `  taskmanager server restart`,
+	Short:   "重启 Web 服务",
+	Example: `  taskmanager web restart`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 先停止
-		pid := getPID()
+		pid := getWebPID()
 		if pid != 0 {
-			fmt.Println("正在停止服务器...")
+			fmt.Println("正在停止 Web 服务...")
 			_ = syscall.Kill(pid, syscall.SIGTERM)
 			for i := 0; i < 30; i++ {
-				if !isProcessRunning(pid) {
+				if !isWebProcessRunning(pid) {
 					break
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
-			if isProcessRunning(pid) {
+			if isWebProcessRunning(pid) {
 				_ = syscall.Kill(pid, syscall.SIGKILL)
 			}
-			cleanupPIDFile()
-			fmt.Println("服务器已停止")
+			cleanupWebPIDFile()
+			fmt.Println("Web 服务已停止")
 		}
 
 		// 再启动
-		fmt.Println("正在启动服务器...")
-		serverStartCmd.Run(cmd, args)
+		fmt.Println("正在启动 Web 服务...")
+		webStartCmd.Run(cmd, args)
 	},
 }
 
-// getConfigDir 获取配置目录
-func getConfigDir() string {
-	if dir := os.Getenv("TASKMANAGER_CONFIG_DIR"); dir != "" {
-		return dir
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskmanager")
+// getWebPIDFilePath 获取 Web PID 文件路径
+func getWebPIDFilePath() string {
+	return filepath.Join(getConfigDir(), webPIDFileName)
 }
 
-// getPIDFilePath 获取 PID 文件路径
-func getPIDFilePath() string {
-	return filepath.Join(getConfigDir(), pidFileName)
-}
-
-// getPID 获取服务器进程 PID
-func getPID() int {
-	pidFile := getPIDFilePath()
+// getWebPID 获取 Web 进程 PID
+func getWebPID() int {
+	pidFile := getWebPIDFilePath()
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		return 0
@@ -284,8 +275,8 @@ func getPID() int {
 	return pid
 }
 
-// isProcessRunning 检查进程是否正在运行
-func isProcessRunning(pid int) bool {
+// isWebProcessRunning 检查 Web 进程是否正在运行
+func isWebProcessRunning(pid int) bool {
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return false
@@ -295,57 +286,57 @@ func isProcessRunning(pid int) bool {
 	return err == nil
 }
 
-// isRunning 检查服务器是否正在运行
-func isRunning() bool {
-	pid := getPID()
+// isWebRunning 检查 Web 服务是否正在运行
+func isWebRunning() bool {
+	pid := getWebPID()
 	if pid == 0 {
 		return false
 	}
-	return isProcessRunning(pid)
+	return isWebProcessRunning(pid)
 }
 
-// cleanupPIDFile 清理 PID 文件
-func cleanupPIDFile() {
-	pidFile := getPIDFilePath()
+// cleanupWebPIDFile 清理 Web PID 文件
+func cleanupWebPIDFile() {
+	pidFile := getWebPIDFilePath()
 	_ = os.Remove(pidFile)
 }
 
-// printStatus 打印服务器状态
-func printStatus() {
-	if !isRunning() {
-		fmt.Println("服务器状态: 未运行")
+// printWebStatus 打印 Web 服务状态
+func printWebStatus() {
+	if !isWebRunning() {
+		fmt.Println("Web 服务状态: 未运行")
 		return
 	}
 
-	pid := getPID()
-	fmt.Printf("服务器状态: 运行中\n")
+	pid := getWebPID()
+	fmt.Printf("Web 服务状态: 运行中\n")
 	fmt.Printf("PID: %d\n", pid)
 
 	// 尝试读取端口
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
-		port = "8888" // 默认端口
+		port = "13618" // 正式环境默认端口
 	}
-	fmt.Printf("API 地址: http://localhost:%s\n", port)
+	fmt.Printf("Web 地址: http://localhost:%s\n", port)
 
 	// 显示日志文件路径
-	logFile := filepath.Join(getConfigDir(), logFileName)
+	logFile := filepath.Join(getConfigDir(), webLogFileName)
 	fmt.Printf("日志文件: %s\n", logFile)
 }
 
-// findServerExecutable 查找 server 可执行文件
-func findServerExecutable(cliPath string) string {
-	// 可能的 server 可执行文件路径（按优先级）
+// findWebExecutable 查找 web 可执行文件
+func findWebExecutable(cliPath string) string {
+	// 可能的 web 可执行文件路径（按优先级）
 	possiblePaths := []string{
-		// 与 CLI 同目录下的 server
-		filepath.Join(filepath.Dir(cliPath), "taskmanager-server"),
+		// 与 CLI 同目录下的 web
+		filepath.Join(filepath.Dir(cliPath), "taskmanager-web"),
 		// 标准安装路径
-		"/usr/local/bin/taskmanager-server",
+		"/usr/local/bin/taskmanager-web",
 		// 开发环境路径
-		"./backend/bin/taskmanager-server",
-		"./bin/taskmanager-server",
+		"./backend/bin/taskmanager-web",
+		"./bin/taskmanager-web",
 		// 相对于 CLI 的上级目录
-		filepath.Join(filepath.Dir(cliPath), "..", "bin", "taskmanager-server"),
+		filepath.Join(filepath.Dir(cliPath), "..", "bin", "taskmanager-web"),
 	}
 
 	for _, path := range possiblePaths {
@@ -363,7 +354,7 @@ func findServerExecutable(cliPath string) string {
 	}
 
 	// 尝试使用 go run 直接运行（开发环境）
-	if _, err := os.Stat("./backend/cmd/server/main.go"); err == nil {
+	if _, err := os.Stat("./backend/cmd/web/main.go"); err == nil {
 		return "go"
 	}
 
@@ -371,16 +362,16 @@ func findServerExecutable(cliPath string) string {
 }
 
 func init() {
-	serverStartCmd.Flags().Int("port", 0, "服务器端口（默认 8888）")
-	serverStopCmd.Flags().Bool("force", false, "强制停止服务器")
-	serverLogsCmd.Flags().BoolP("follow", "f", false, "实时跟踪日志输出")
-	serverLogsCmd.Flags().IntP("lines", "n", 50, "显示最后 N 行日志")
+	webStartCmd.Flags().Int("port", 0, "Web 服务端口（默认 8888）")
+	webStopCmd.Flags().Bool("force", false, "强制停止 Web 服务")
+	webLogsCmd.Flags().BoolP("follow", "f", false, "实时跟踪日志输出")
+	webLogsCmd.Flags().IntP("lines", "n", 50, "显示最后 N 行日志")
 
-	serverCmd.AddCommand(serverStartCmd)
-	serverCmd.AddCommand(serverStopCmd)
-	serverCmd.AddCommand(serverStatusCmd)
-	serverCmd.AddCommand(serverLogsCmd)
-	serverCmd.AddCommand(serverRestartCmd)
+	webCmd.AddCommand(webStartCmd)
+	webCmd.AddCommand(webStopCmd)
+	webCmd.AddCommand(webStatusCmd)
+	webCmd.AddCommand(webLogsCmd)
+	webCmd.AddCommand(webRestartCmd)
 
-	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(webCmd)
 }

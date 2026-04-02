@@ -129,6 +129,7 @@ func (h *RequirementHandler) UpdateRequirement(w http.ResponseWriter, r *http.Re
 }
 
 func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.Request) {
+
 	var req DispatchRequirementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -137,9 +138,9 @@ func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.
 	}
 	result, err := h.dispatchService.DispatchRequirement(r.Context(), application.DispatchRequirementCommand{
 		RequirementID: domain.NewRequirementID(req.RequirementID),
-		AgentCode:    req.AgentCode,
-		ChannelCode:  req.ChannelCode,
-		SessionKey:   req.SessionKey,
+		AgentCode:     req.AgentCode,
+		ChannelCode:   req.ChannelCode,
+		SessionKey:    req.SessionKey,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -191,6 +192,7 @@ func (h *RequirementHandler) RedispatchRequirement(w http.ResponseWriter, r *htt
 
 // CopyAndDispatchRequirement 复制需求并派发新副本
 func (h *RequirementHandler) CopyAndDispatchRequirement(w http.ResponseWriter, r *http.Request) {
+
 	var req RedispatchRequirementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -221,21 +223,21 @@ func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *doma
 	resp := map[string]interface{}{
 		"id":                   requirement.ID().String(),
 		"project_id":           requirement.ProjectID().String(),
-		"title":                 requirement.Title(),
-		"description":           requirement.Description(),
-		"acceptance_criteria":   requirement.AcceptanceCriteria(),
-		"temp_workspace_root":   requirement.TempWorkspaceRoot(),
-		"status":                requirement.Status(),
-		"assignee_agent_code":   requirement.AssigneeAgentCode(),
-		"replica_agent_code":    requirement.ReplicaAgentCode(),
-		"dispatch_session_key":   requirement.DispatchSessionKey(),
-		"workspace_path":        requirement.WorkspacePath(),
-		"last_error":            requirement.LastError(),
-		"started_at":            startedAt,
-		"completed_at":          completedAt,
+		"title":                requirement.Title(),
+		"description":          requirement.Description(),
+		"acceptance_criteria":  requirement.AcceptanceCriteria(),
+		"temp_workspace_root":  requirement.TempWorkspaceRoot(),
+		"status":               requirement.Status(),
+		"assignee_agent_code":  requirement.AssigneeAgentCode(),
+		"replica_agent_code":   requirement.ReplicaAgentCode(),
+		"dispatch_session_key": requirement.DispatchSessionKey(),
+		"workspace_path":       requirement.WorkspacePath(),
+		"last_error":           requirement.LastError(),
+		"started_at":           startedAt,
+		"completed_at":         completedAt,
 		"created_at":           requirement.CreatedAt().UnixMilli(),
 		"updated_at":           requirement.UpdatedAt().UnixMilli(),
-		"requirement_type":      requirement.RequirementType(),
+		"requirement_type":     requirement.RequirementType(),
 	}
 	resp["claude_runtime"] = h.getClaudeRuntimeByRequirement(r, requirement)
 	return resp

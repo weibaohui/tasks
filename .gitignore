@@ -29,3 +29,5 @@ myenv
 backend/coverage.out
 coverage.out
 backend/bin/taskmanager-server
+backend/bin/taskmanager-web
+backend/web

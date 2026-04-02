@@ -65,13 +65,13 @@ func defaultConfig() *Config {
 
 	return &Config{
 		Server: ServerConfig{
-			Port: 8888,
+			Port: 13618, // 正式环境默认端口
 		},
 		Database: DatabaseConfig{
 			Path: defaultDBPath,
 		},
 		API: APIConfig{
-			BaseURL: "http://localhost:8888/api/v1",
+			BaseURL: "http://localhost:13618/api/v1",
 		},
 		Logging: LoggingConfig{
 			Level: "info",
@@ -158,7 +158,7 @@ func GetDatabasePath() string {
 func GetAPIBaseURL() string {
 	cfg, err := Load()
 	if err != nil {
-		return "http://localhost:8888/api/v1"
+		return "http://localhost:13618/api/v1"
 	}
 	return cfg.API.BaseURL
 }
@@ -183,13 +183,13 @@ func EnsureConfigDir() error {
 func WriteDefaultConfig(path string) error {
 	cfg := &Config{
 		Server: ServerConfig{
-			Port: 8888,
+			Port: 13618,
 		},
 		Database: DatabaseConfig{
 			Path: filepath.Join("~", ".taskmanager", "data.db"),
 		},
 		API: APIConfig{
-			BaseURL: "http://localhost:8888/api/v1",
+			BaseURL: "http://localhost:13618/api/v1",
 		},
 		Logging: LoggingConfig{
 			Level: "info",

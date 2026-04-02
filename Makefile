@@ -1,20 +1,22 @@
-.PHONY: help build clean dev dev-backend dev-web stop test fmt lint setup install
+.PHONY: help build clean dev dev-server dev-web dev-api dev-frontend stop test fmt lint setup install
 SHELL := /bin/bash
 
 # 默认目标
 help:
 	@echo "可用的命令:"
-	@echo "  make setup       - 安装依赖 (包括 air)"
-	@echo "  make build       - 构建后端和前端"
-	@echo "  make install     - 安装 taskmanager CLI 到 /usr/local/bin"
-	@echo "  make clean       - 清理构建产物"
-	@echo "  make dev         - 同时启动后端和前端开发服务器"
-	@echo "  make dev-backend - 仅启动后端开发服务器 (air 热重载)"
-	@echo "  make dev-web     - 仅启动前端开发服务器"
-	@echo "  make stop        - 停止所有 taskmanager 相关进程"
-	@echo "  make test        - 运行测试"
-	@echo "  make fmt         - 格式化代码"
-	@echo "  make lint        - 运行代码检查"
+	@echo "  make setup        - 安装依赖 (包括 air)"
+	@echo "  make build        - 构建后端和前端（含嵌入）"
+	@echo "  make install      - 安装 taskmanager CLI 到 /usr/local/bin"
+	@echo "  make clean        - 清理构建产物"
+	@echo "  make dev          - 启动完整开发环境（server + web + frontend）"
+	@echo "  make dev-server   - 仅启动核心服务 (air 热重载)"
+	@echo "  make dev-web      - 仅启动 Web 服务 (air 热重载)"
+	@echo "  make dev-api      - 仅启动 Web + 前端（不启动核心业务）"
+	@echo "  make dev-frontend - 仅启动前端开发服务器"
+	@echo "  make stop         - 停止所有 taskmanager 相关进程"
+	@echo "  make test         - 运行测试"
+	@echo "  make fmt          - 格式化代码"
+	@echo "  make lint         - 运行代码检查"
 
 # Setup - install dependencies
 setup:
@@ -25,43 +27,70 @@ setup:
 	@command -v air >/dev/null 2>&1 || { echo "Installing air..."; go install github.com/air-verse/air@latest; }
 
 # 构建
-build:
-	@echo "构建后端服务器..."
+build: build-frontend prepare-embed build-backend cleanup-embed
+	@echo "构建完成！"
+
+build-backend:
+	@echo "构建核心服务 (server)..."
 	cd backend && go build -o bin/taskmanager-server ./cmd/server
+	@echo "构建 Web 服务 (web)..."
+	cd backend && go build -o bin/taskmanager-web ./cmd/web
 	@echo "构建 CLI..."
 	cd backend && go build -o bin/taskmanager ./cmd/cli
+
+build-frontend:
 	@echo "构建前端..."
 	cd frontend && pnpm run build
 
-# 安装 CLI 和 Server 到 /usr/local/bin
-install:
+prepare-embed:
+	@echo "准备嵌入目录..."
+	@mkdir -p backend/internal/embed/ui/dist
+	@rm -rf backend/internal/embed/ui/dist/*
+	@cp -r frontend/dist/* backend/internal/embed/ui/dist/
+	@echo "前端文件已复制到 backend/internal/embed/ui/dist/"
+
+cleanup-embed:
+	@echo "清理嵌入目录..."
+	@rm -rf backend/internal/embed/ui/dist/*
+	@touch backend/internal/embed/ui/dist/.keep
+	@echo "嵌入目录已清理"
+
+# 安装 CLI、Server 和 Web 到 /usr/local/bin
+install: build
 	@echo "安装 taskmanager 到 /usr/local/bin..."
-	cd backend && go build -o taskmanager-server ./cmd/server
-	cd backend && go build -o taskmanager ./cmd/cli
-	@cp backend/taskmanager-server /usr/local/bin/taskmanager-server
-	@cp backend/taskmanager /usr/local/bin/taskmanager
-	@rm backend/taskmanager-server backend/taskmanager
+	@cp backend/bin/taskmanager-server /usr/local/bin/taskmanager-server
+	@cp backend/bin/taskmanager-web /usr/local/bin/taskmanager-web
+	@cp backend/bin/taskmanager /usr/local/bin/taskmanager
 	@echo "安装完成！"
 	@echo ""
 	@echo "用法:"
-	@echo "  taskmanager server start    启动后台服务"
-	@echo "  taskmanager server stop     停止后台服务"
-	@echo "  taskmanager server status   查看服务状态"
-	@echo "  taskmanager server logs     查看日志"
-	@echo "  taskmanager <command>       其他 CLI 命令"
+	@echo "  核心服务 (消息处理、任务调度):"
+	@echo "    taskmanager server start    启动核心服务"
+	@echo "    taskmanager server stop     停止核心服务"
+	@echo ""
+	@echo "  Web 服务 (HTTP API + 前端):"
+	@echo "    taskmanager web start       启动 Web 服务（包含前端）"
+	@echo "    taskmanager web stop        停止 Web 服务"
+	@echo ""
+	@echo "  其他 CLI 命令:"
+	@echo "    taskmanager <command>       查看所有命令"
 
 # 清理
 clean:
 	rm -rf backend/bin/
 	rm -f backend/*.log
+	rm -rf backend/internal/embed/ui/dist/*
+	@touch backend/internal/embed/ui/dist/.keep
 	cd frontend && rm -rf dist/ node_modules/.vite
 
-# 开发模式 - 同时启动后端和前端
+# 开发模式 - 同时启动所有服务
+# 现在需要同时运行 server（核心业务）和 web（HTTP API）
 dev:
 	@echo "========================================="
 	@echo "  启动 TaskManager 开发环境"
 	@echo "========================================="
-	@echo "  后端 API: http://localhost:8888"
+	@echo "  核心服务: taskmanager server"
+	@echo "  Web 服务: http://localhost:8888"
 	@echo "  前端界面: http://localhost:3000"
 	@echo "  日志文件: backend/logs/air.log"
 	@echo "  按 Ctrl+C 停止所有服务"
@@ -69,25 +98,55 @@ dev:
 	@mkdir -p backend/logs
 	@(trap 'kill 0' INT; \
 		set -a; source backend/.env; set +a; \
-		cd backend && air 2>&1 | tee logs/air.log & \
+		echo "启动核心服务 (server)..."; \
+		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log & \
+		echo "启动 Web 服务 (web)..."; \
+		cd backend && air --build.cmd "go build -o bin/taskmanager-web ./cmd/web" --build.bin "./bin/taskmanager-web" -p 8889 2>&1 | tee -a logs/air.log & \
+		echo "启动前端开发服务器..."; \
 		cd frontend && pnpm run dev 2>&1 & \
 		wait)
 
-# 启动后端开发服务器 (air 热重载)
-dev-backend:
+# 启动核心服务开发模式 (air 热重载)
+dev-server:
 	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
-	@echo "启动后端开发服务器 (air 热重载)..."
+	@echo "启动核心服务 (server) - air 热重载..."
 	@mkdir -p backend/logs
-	set -a; source backend/.env; set +a; cd backend && air 2>&1 | tee logs/air.log
+	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log
 
-# 启动前端开发服务器
+# 启动 Web 服务开发模式 (air 热重载)
 dev-web:
+	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
+	@echo "启动 Web 服务 (web) - air 热重载..."
+	@mkdir -p backend/logs
+	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-web ./cmd/web" --build.bin "./bin/taskmanager-web" 2>&1 | tee logs/air.log
+
+# 启动前端开发服务器 (Vite)
+dev-frontend:
 	cd frontend && pnpm run dev
+
+# 只启动前后端（Web API + 前端），不启动核心业务
+dev-api:
+	@echo "========================================="
+	@echo "  启动 Web + 前端开发环境"
+	@echo "========================================="
+	@echo "  Web 服务: http://localhost:8888"
+	@echo "  前端界面: http://localhost:3000"
+	@echo "  日志文件: backend/logs/air.log"
+	@echo "  按 Ctrl+C 停止所有服务"
+	@echo "========================================="
+	@mkdir -p backend/logs
+	@(trap 'kill 0' INT; \
+		set -a; source backend/.env; set +a; \
+		echo "启动 Web 服务 (web)..."; \
+		cd backend && SERVER_PORT=8888 air --build.cmd "go build -o bin/taskmanager-web ./cmd/web" --build.bin "SERVER_PORT=8888 ./bin/taskmanager-web" 2>&1 | tee logs/air.log & \
+		echo "启动前端开发服务器..."; \
+		cd frontend && pnpm run dev 2>&1 & \
+		wait)
 
 # 停止所有 TaskManager 相关进程
 stop:
 	@echo "正在停止 TaskManager 进程..."
-	@taskmanager server stop 2>/dev/null || true
+	@-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
 	@sleep 1
 	@echo "已停止 TaskManager 进程"

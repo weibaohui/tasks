@@ -1,5 +1,6 @@
 /**
- * 服务端入口
+ * 服务端入口 - 核心业务服务
+ * 不包含 HTTP 服务，仅运行网关、调度器、任务处理等核心业务
  */
 package main
 
@@ -7,12 +8,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
@@ -25,11 +24,10 @@ import (
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/utils"
-	httpHandler "github.com/weibh/taskmanager/interfaces/http"
-	ws "github.com/weibh/taskmanager/interfaces/ws"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 	"github.com/weibh/taskmanager/pkg/channel"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
 )
 
@@ -48,22 +46,26 @@ type Gateway struct {
 }
 
 func main() {
-	// 使用 Development 模式，输出 Debug 级别日志
-	logger, _ := zap.NewDevelopment()
+	// 1. 加载配置（先加载配置以获取日志级别）
+	cfg, err := config.Load()
+	if err != nil {
+		// 配置加载失败前，使用默认 logger
+		fallbackLogger, _ := zap.NewDevelopment()
+		defer fallbackLogger.Sync()
+		fallbackLogger.Fatal("加载配置失败", zap.Error(err))
+	}
+
+	// 2. 根据配置初始化日志
+	logger := initLogger(cfg.Logging.Level)
 	defer logger.Sync()
 
 	if runAdminSubcommandIfMatched(logger) {
 		return
 	}
 
-	logger.Info("启动任务管理服务...")
-
-	// 1. 加载配置
-	cfg, err := config.Load()
-	if err != nil {
-		logger.Fatal("加载配置失败", zap.Error(err))
-	}
-	logger.Info("配置加载完成", zap.Int("server_port", cfg.Server.Port), zap.String("api_base_url", cfg.API.BaseURL))
+	logger.Info("启动任务管理核心服务...")
+	logger.Info("配置加载完成", zap.String("api_base_url", cfg.API.BaseURL))
+	logger.Info("配置加载完成", zap.String("api_base_url", cfg.API.BaseURL))
 
 	// 2. 初始化数据库
 	dbPath := config.ExpandPath(cfg.Database.Path)
@@ -73,7 +75,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// 2. 初始化数据库 Schema
+	// 初始化数据库 Schema
 	if err := _persistence.InitSchema(db); err != nil {
 		logger.Fatal("Failed to init schema", zap.Error(err))
 	}
@@ -81,10 +83,10 @@ func main() {
 
 	// 3. 初始化依赖
 	idGenerator := utils.NewNanoIDGenerator(21)
+
+
 	eventBus := bus.NewEventBus()
 	taskRepo := _persistence.NewSQLiteTaskRepository(db)
-	userRepo := _persistence.NewSQLiteUserRepository(db)
-	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
 	providerRepo := _persistence.NewSQLiteLLMProviderRepository(db)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
@@ -102,7 +104,6 @@ func main() {
 	hookManager.Register(hooks.NewLoggingHook(logger))
 	hookManager.Register(hooks.NewMetricsHook(logger))
 	hookManager.Register(hooks.NewRateLimitHook(rate.Limit(60), 100, logger))
-	// 注册对话记录 Hook
 	convRecordHook := hooks.NewConversationRecordHook(conversationRecordRepo, idGenerator, logger, &hooks.ConversationRecordHookConfig{
 		SessionKeyExtractor: func(ctx *domain.HookContext) string {
 			return ctx.GetMetadata("session_key")
@@ -123,75 +124,55 @@ func main() {
 	hookManager.Register(convRecordHook)
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
-	// 5. 初始化任务执行器
+	// 5. 初始化任务执行器和工作池
 	executor := application.NewTaskExecutor()
 	executor.RegisterHandler(domain.TaskTypeAgent, application.AgentHandlerFunc)
 
-	// 6. 初始化工作池
 	workerPool := application.NewWorkerPool(3, logger)
 
-	// 6.1 初始化自动任务执行器
+	// 初始化自动任务执行器
 	autoExecutor := application.NewAutoTaskExecutor(taskRepo, eventBus, application.GetTaskRegistry(), workerPool, hookManager)
-	// 设置仓库用于动态 LLM 查找
 	llmFactory := llm.NewLLMProviderFactory()
 	autoExecutor.SetRepositories(agentRepo, providerRepo, channelRepo, llmFactory)
 
-	// 6.2 初始化任务总结器
+	// 初始化任务总结器
 	summarizer := application.NewTaskSummarizer(taskRepo, autoExecutor, eventBus)
 	summarizer.Start()
 
 	workerPool.SetExecuteFunc(func(ctx context.Context, task *domain.Task) {
-		// 所有任务都使用自动执行器，支持递归创建子任务
 		if err := autoExecutor.ExecuteAutoTask(ctx, task); err != nil {
 			if ctx.Err() != context.Canceled {
 				logger.Error("自动任务执行失败", zap.String("taskID", task.ID().String()), zap.Error(err))
 			}
 		}
-		// 确保任务状态被持久化
 		if err := taskRepo.Save(context.Background(), task); err != nil {
 			logger.Error("任务状态保存失败", zap.String("taskID", task.ID().String()), zap.Error(err))
 		}
 	})
 	workerPool.Start()
 
-	// 6. 初始化应用服务并连接工作池
-	taskService := application.NewTaskApplicationService(
-		taskRepo,
-		idGenerator,
-		eventBus,
-		logger,
-	)
-	userService := application.NewUserApplicationService(userRepo, idGenerator)
-	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
-	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
+	// 6. 初始化应用服务
+	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
-	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
-	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
 
 	// 初始化 Hook 配置仓储
 	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
 	hookLogRepo := _persistence.NewSQLiteRequirementHookActionLogRepository(db)
 	logger.Info("Hook 仓储初始化完成")
 
-	// 初始化 ConfigurableHookExecutor（数据库驱动的可配置 Hook）
-	// 注意：TriggerAgentExecutor 会在 gateway 初始化后添加
 	hookLogger := &zapRequirementLogger{logger: logger}
 	hookExecutor := domain.NewConfigurableHookExecutor(
 		hookConfigRepo,
 		hookLogRepo,
-		nil, // 暂不设置 executors
+		nil,
 		hookLogger,
 		idGenerator,
 	)
 	logger.Info("ConfigurableHookExecutor 初始化完成")
 
-	// 初始化 ReplicaAgentManager（强制销毁分身）
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
 	logger.Info("ReplicaAgentManager 初始化完成")
-
-	// 初始化 RequirementApplicationService（需要在 hookExecutor 之后）
-	requirementService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGenerator, hookExecutor, replicaAgentManager)
 
 	requirementDispatchService := application.NewRequirementDispatchService(
 		requirementRepo,
@@ -205,53 +186,16 @@ func main() {
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 	taskService.SetWorkerPool(workerPool)
-	queryService := application.NewQueryService(taskRepo)
 
-	// 6.3 初始化心跳调度器（延迟到 gateway 初始化之后）
-	var heartbeatScheduler *application.HeartbeatScheduler
-
-	// 7. 初始化 HTTP Handler
-	taskHandler := httpHandler.NewTaskHandler(taskService, queryService)
-	userHandler := httpHandler.NewUserHandler(userService)
-	agentHandler := httpHandler.NewAgentHandler(agentService)
-	providerHandler := httpHandler.NewLLMProviderHandler(providerService)
-	channelHandler := httpHandler.NewChannelHandler(channelService)
-	sessionHandler := httpHandler.NewSessionHandler(sessionService)
-	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
-	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
-	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
-	mcpHandler := httpHandler.NewMCPHandler(mcpService)
-	authSecret := os.Getenv("AUTH_SECRET")
-	if authSecret == "" {
-		authSecret = "taskmanager-dev-secret"
-	}
-	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
-
-	// 7.1 初始化技能加载器
+	// 7. 初始化技能加载器（gateway 需要）
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
-	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	// 7.2 初始化 Hook Handler
-	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
-	logger.Info("Hook Handler 初始化完成")
-
-	mux := httpHandler.SetupRoutesWithManagement(taskHandler, userHandler, agentHandler, providerHandler, channelHandler, sessionHandler, conversationRecordHandler, authHandler, mcpHandler, skillHandler, projectHandler, requirementHandler, hookHandler)
-
-	// 8. 初始化 WebSocket
-	wsHandler := ws.NewWebSocketHandler(eventBus)
-	wsHandler.SubscribeToEvents()
-
-	// 添加 WebSocket 路由
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler.HandleWebSocket(w, r)
-	})
-
-	// 9. 初始化渠道网关
+	// 8. 初始化渠道网关
 	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 9. 初始化心跳调度器
-	heartbeatScheduler = application.NewHeartbeatScheduler(
+	heartbeatScheduler := application.NewHeartbeatScheduler(
 		projectRepo,
 		agentRepo,
 		requirementRepo,
@@ -260,13 +204,13 @@ func main() {
 		requirementDispatchService,
 	)
 
-	// 9.1 添加 TriggerAgentExecutor 到 Hook 执行器
+	// 添加 TriggerAgentExecutor 到 Hook 执行器
 	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, requirementRepo, projectRepo, idGenerator, gateway.messageBus)
 	hookExecutor.AddExecutor(triggerAgentExecutor)
-	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成, executors count: (应该在 AddExecutor 后 > 0)\n")
+	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成\n")
 	logger.Info("TriggerAgentExecutor 注册完成")
 
-	// 9.2 启动心跳调度器
+	// 启动心跳调度器
 	heartbeatCtx := context.Background()
 	if err := heartbeatScheduler.Start(heartbeatCtx); err != nil {
 		logger.Error("心跳调度器启动失败", zap.Error(err))
@@ -274,34 +218,16 @@ func main() {
 		logger.Info("心跳调度器启动完成")
 	}
 
-	// 10. 创建 HTTP Server
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-
-	// 11. 启动服务器
-	go func() {
-		logger.Info("HTTP Server 启动", zap.String("addr", addr))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
-		}
-	}()
-
-	logger.Info("服务已启动",
+	logger.Info("核心服务已启动",
 		zap.Int("channels", gateway.ChannelCount()),
 	)
 
-	// 12. 等待中断信号优雅关闭
+	// 10. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("正在关闭服务器...")
+	logger.Info("正在关闭核心服务...")
 
 	// 关闭心跳调度器
 	heartbeatScheduler.Stop()
@@ -309,16 +235,9 @@ func main() {
 	// 关闭渠道网关
 	gateway.Shutdown()
 
-	ctx := context.Background()
-	err = server.Shutdown(ctx)
-	if err != nil {
-		logger.Fatal("服务器关闭失败", zap.Error(err))
-	}
-
-	logger.Info("服务器已关闭")
+	logger.Info("核心服务已关闭")
 }
 
-// runAdminSubcommandIfMatched 在以 taskmanager 方式运行时，优先处理管理员相关子命令，避免启动主服务。
 func runAdminSubcommandIfMatched(logger *zap.Logger) bool {
 	if len(os.Args) < 2 {
 		return false
@@ -340,7 +259,6 @@ func runAdminSubcommandIfMatched(logger *zap.Logger) bool {
 	}
 }
 
-// runCreateAdmin 创建默认管理员用户（admin/admin123），只执行一次性操作并退出进程。
 func runCreateAdmin(logger *zap.Logger) error {
 	userRepo, idGen, cleanup, err := getDBAndUserRepo(logger)
 	if err != nil {
@@ -377,7 +295,6 @@ func runCreateAdmin(logger *zap.Logger) error {
 	return nil
 }
 
-// runDeleteAdmin 删除默认管理员用户（admin），只执行一次性操作并退出进程。
 func runDeleteAdmin(logger *zap.Logger) error {
 	userRepo, _, cleanup, err := getDBAndUserRepo(logger)
 	if err != nil {
@@ -403,7 +320,6 @@ func runDeleteAdmin(logger *zap.Logger) error {
 	return nil
 }
 
-// getDBAndUserRepo 初始化数据库与用户仓库，并返回清理函数用于关闭数据库连接。
 func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func(), error) {
 	dbPath := resolveDBPath()
 	db, err := sql.Open("sqlite3", dbPath)
@@ -412,21 +328,21 @@ func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGener
 	}
 
 	if err := _persistence.InitSchema(db); err != nil {
-		_ = db.Close()
+		db.Close()
 		return nil, nil, nil, fmt.Errorf("初始化数据库结构失败(%s): %w", dbPath, err)
 	}
 
-	idGenerator := utils.NewNanoIDGenerator(21)
-	userRepo := _persistence.NewSQLiteUserRepository(db)
 
+	idGenerator := utils.NewNanoIDGenerator(21)
+
+	userRepo := _persistence.NewSQLiteUserRepository(db)
 	cleanup := func() {
-		_ = db.Close()
+		db.Close()
 	}
 
 	return userRepo, idGenerator, cleanup, nil
 }
 
-// resolveDBPath 解析数据库文件路径，支持通过环境变量配置，默认在后端目录下
 func resolveDBPath() string {
 	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
 		return p
@@ -434,34 +350,25 @@ func resolveDBPath() string {
 	if p := os.Getenv("DB_PATH"); p != "" {
 		return p
 	}
-	// 如果当前目录是 backend 目录（通过检查 cmd/server 是否存在来判断），
-	// 说明是从 backend 目录直接运行，使用 ./tasks.db
 	if st, err := os.Stat("./cmd/server"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./tasks.db")
 	}
-	// 如果当前目录存在 backend 目录，说明是从仓库根目录执行
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./backend/tasks.db")
 	}
-	// 否则使用当前工作目录
 	return filepath.FromSlash("./tasks.db")
 }
 
-// resolveWorkspace 解析工作区目录路径
 func resolveWorkspace() string {
 	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
 		return p
 	}
-	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
-	// 注意：这可能导致工作区技能与内置技能目录重叠
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
 		return filepath.FromSlash("./backend")
 	}
-	// 否则使用当前工作目录
 	return "."
 }
 
-// initGateway 初始化渠道网关
 func initGateway(
 	channelService *application.ChannelApplicationService,
 	sessionService *application.SessionApplicationService,
@@ -485,39 +392,28 @@ func initGateway(
 		channelManager: channel.NewManager(nil),
 	}
 
-	// 注册 FeishuThinkingProcessHook（需要 messageBus）
 	feishuThinkingHook := hooks.NewFeishuThinkingProcessHook(gw.messageBus, logger)
 	hookManager.Register(feishuThinkingHook)
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
-	// 创建消息处理器
 	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
-
-	// 初始化渠道管理器
 	gw.channelManager = channel.NewManager(gw.messageBus)
-
-	// 加载渠道配置
 	gw.loadChannels(channelService)
 
-	// 启动消息分发器
 	ctx, cancel := context.WithCancel(context.Background())
 	gw.messageBus.StartDispatcher(ctx)
-	_ = cancel // 保留 cancel 函数用于清理
+	_ = cancel
 
-	// 启动所有渠道
 	if err := gw.channelManager.StartAll(ctx); err != nil {
 		logger.Error("启动渠道失败", zap.Error(err))
 	}
 
-	// 启动消息处理循环
 	go gw.runMessageLoop(ctx, channelService)
-
 	logger.Info("渠道网关初始化完成", zap.Int("channels", gw.ChannelCount()))
 
 	return gw
 }
 
-// loadChannels 从数据库加载渠道
 func (g *Gateway) loadChannels(channelService *application.ChannelApplicationService) {
 	registry := channel.DefaultRegistry(g.messageBus, g.logger)
 
@@ -530,7 +426,6 @@ func (g *Gateway) loadChannels(channelService *application.ChannelApplicationSer
 
 	for _, ch := range channels {
 		chType := string(ch.Type())
-
 		chInstance, err := registry.CreateChannel(chType, ch.Config())
 		if err != nil {
 			g.logger.Warn("创建渠道实例失败",
@@ -540,7 +435,6 @@ func (g *Gateway) loadChannels(channelService *application.ChannelApplicationSer
 			)
 			continue
 		}
-
 		g.channelManager.Register(chInstance)
 		g.logger.Info("已注册渠道",
 			zap.String("name", ch.Name()),
@@ -549,7 +443,6 @@ func (g *Gateway) loadChannels(channelService *application.ChannelApplicationSer
 	}
 }
 
-// runMessageLoop 运行消息处理循环
 func (g *Gateway) runMessageLoop(ctx context.Context, channelService *application.ChannelApplicationService) {
 	g.logger.Info("消息处理循环已启动")
 	for {
@@ -580,7 +473,6 @@ func (g *Gateway) runMessageLoop(ctx context.Context, channelService *applicatio
 	}
 }
 
-// Shutdown 关闭渠道网关
 func (g *Gateway) Shutdown() {
 	g.logger.Info("正在关闭渠道网关...")
 	g.channelManager.StopAll()
@@ -588,12 +480,10 @@ func (g *Gateway) Shutdown() {
 	g.logger.Info("渠道网关已关闭")
 }
 
-// ChannelCount 返回已注册渠道数量
 func (g *Gateway) ChannelCount() int {
 	return len(g.channelManager.List())
 }
 
-// zapRequirementLogger zap.Logger 到 domain.RequirementStateHookLogger 的适配器
 type zapRequirementLogger struct {
 	logger *zap.Logger
 }
@@ -638,4 +528,53 @@ func (l *zapRequirementLogger) toZapField(f domain.RequirementStateHookLogField)
 		}
 		return zap.Any("unknown", f)
 	}
+}
+
+// initLogger 根据配置的日志级别初始化 zap logger
+func initLogger(level string) *zap.Logger {
+	// 解析日志级别
+	var zapLevel zapcore.Level
+	switch level {
+	case "debug":
+		zapLevel = zapcore.DebugLevel
+	case "info":
+		zapLevel = zapcore.InfoLevel
+	case "warn", "warning":
+		zapLevel = zapcore.WarnLevel
+	case "error":
+		zapLevel = zapcore.ErrorLevel
+	default:
+		zapLevel = zapcore.InfoLevel
+	}
+
+	// 创建自定义配置
+	config := zap.Config{
+		Level:       zap.NewAtomicLevelAt(zapLevel),
+		Development: true,
+		Encoding:    "console",
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "time",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			FunctionKey:    zapcore.OmitKey,
+			MessageKey:     "msg",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+			EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+
+	logger, err := config.Build()
+	if err != nil {
+		// 构建失败时返回默认开发模式 logger
+		fallback, _ := zap.NewDevelopment()
+		return fallback
+	}
+	return logger
 }

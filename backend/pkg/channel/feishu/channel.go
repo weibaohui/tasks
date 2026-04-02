@@ -3,6 +3,7 @@ package feishu
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
@@ -91,8 +92,12 @@ func (c *Channel) Start(ctx context.Context) error {
 			}
 		}
 		if err := c.Send(msg); err != nil {
-			c.logger.Error("Failed to send Feishu message", zap.Error(err))
-			return err
+			// Cross-app open_id error is common when bot and user are in different apps - skip silently
+			if !isCrossAppError(err) {
+				c.logger.Error("Failed to send Feishu message", zap.Error(err))
+				return err
+			}
+			// Silently skip cross-app errors
 		}
 
 		// Delete reaction after message is sent successfully
@@ -160,4 +165,13 @@ func (c *Channel) Stop() {
 // Config returns the channel configuration
 func (c *Channel) Config() *Config {
 	return c.config
+}
+
+// isCrossAppError checks if the error is a Feishu cross-app open_id error
+func isCrossAppError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "99992361") || strings.Contains(errStr, "open_id cross app")
 }
