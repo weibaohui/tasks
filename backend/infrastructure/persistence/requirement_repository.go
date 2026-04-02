@@ -23,9 +23,9 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			id, project_id, title, description, acceptance_criteria, status,
 			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, last_error,
 			started_at, completed_at, created_at, updated_at,
-			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt
+			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt, trace_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -46,7 +46,8 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			claude_runtime_ended_at=excluded.claude_runtime_ended_at,
 			claude_runtime_error=excluded.claude_runtime_error,
 			claude_runtime_result=excluded.claude_runtime_result,
-			claude_runtime_prompt=excluded.claude_runtime_prompt
+			claude_runtime_prompt=excluded.claude_runtime_prompt,
+		    trace_id=excluded.trace_id
 	`
 	_, err := r.db.ExecContext(
 		ctx,
@@ -74,6 +75,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		snap.ClaudeRuntimeError,
 		snap.ClaudeRuntimeResult,
 		snap.ClaudeRuntimePrompt,
+		snap.TraceID,
 	)
 	return err
 }
@@ -163,6 +165,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		claudeRuntimeError      string
 		claudeRuntimeResult     string
 		claudeRuntimePrompt     string
+		traceID                 string
 	)
 	err := scanner.Scan(
 		&idStr,
@@ -188,6 +191,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&claudeRuntimeError,
 		&claudeRuntimeResult,
 		&claudeRuntimePrompt,
+		&traceID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -220,6 +224,7 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		ClaudeRuntimeError:      claudeRuntimeError,
 		ClaudeRuntimeResult:    claudeRuntimeResult,
 		ClaudeRuntimePrompt:    claudeRuntimePrompt,
+		TraceID:                 traceID,
 	})
 	if err != nil {
 		return nil, err

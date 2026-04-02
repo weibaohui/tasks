@@ -185,6 +185,27 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		zap.String("内容", preview),
 	)
 
+	// 保存 trace_id 到需求表
+	if msg.Metadata != nil {
+		if requirementIDStr, ok := msg.Metadata["requirement_id"].(string); ok && requirementIDStr != "" {
+			requirementID := domain.NewRequirementID(requirementIDStr)
+			requirement, err := p.requirementRepo.FindByID(ctx, requirementID)
+			if err != nil {
+				p.logger.Warn("查找需求失败，无法保存 trace_id", zap.Error(err))
+			} else if requirement != nil {
+				requirement.SetTraceID(traceID)
+				if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+					p.logger.Warn("保存 trace_id 到需求表失败", zap.Error(err))
+				} else {
+					p.logger.Info("已保存 trace_id 到需求表",
+						zap.String("requirement_id", requirementIDStr),
+						zap.String("trace_id", traceID),
+					)
+				}
+			}
+		}
+	}
+
 	// 获取 Provider 配置（用于日志和配置）
 	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
 	if err != nil {
@@ -261,6 +282,27 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		zap.String("agent_code", agentCode),
 		zap.String("内容", preview),
 	)
+
+	// 保存 trace_id 到需求表
+	if msg.Metadata != nil {
+		if requirementIDStr, ok := msg.Metadata["requirement_id"].(string); ok && requirementIDStr != "" {
+			requirementID := domain.NewRequirementID(requirementIDStr)
+			requirement, err := p.requirementRepo.FindByID(ctx, requirementID)
+			if err != nil {
+				p.logger.Warn("查找需求失败，无法保存 trace_id", zap.Error(err))
+			} else if requirement != nil {
+				requirement.SetTraceID(traceID)
+				if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+					p.logger.Warn("保存 trace_id 到需求表失败", zap.Error(err))
+				} else {
+					p.logger.Info("已保存 trace_id 到需求表",
+						zap.String("requirement_id", requirementIDStr),
+						zap.String("trace_id", traceID),
+					)
+				}
+			}
+		}
+	}
 
 	// 获取 Provider 配置
 	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)

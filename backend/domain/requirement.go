@@ -97,6 +97,7 @@ type Requirement struct {
 	claudeRuntimeError    string
 	claudeRuntimeResult   string        // Claude Code 执行结果摘要
 	claudeRuntimePrompt   string        // Claude Code 执行提示词
+	traceId               string        // Claude Code 执行时的 trace_id，用于关联对话记录
 
 	// stateChangeCallbacks 状态变更回调列表（不持久化）
 	stateChangeCallbacks []StateChangeCallback
@@ -248,6 +249,13 @@ func (r *Requirement) SetClaudeRuntimeResult(result string) {
 // SetClaudeRuntimePrompt 设置 Claude Code 执行提示词
 func (r *Requirement) SetClaudeRuntimePrompt(prompt string) {
 	r.claudeRuntimePrompt = prompt
+}
+
+func (r *Requirement) TraceID() string { return r.traceId }
+
+func (r *Requirement) SetTraceID(traceId string) {
+	r.traceId = traceId
+	r.updatedAt = time.Now()
 }
 
 // SetRequirementType 设置需求类型
@@ -513,6 +521,7 @@ type RequirementSnapshot struct {
 	ClaudeRuntimeError     string
 	ClaudeRuntimeResult    string
 	ClaudeRuntimePrompt    string
+	TraceID                string
 }
 
 func (r *Requirement) ToSnapshot() RequirementSnapshot {
@@ -540,6 +549,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		ClaudeRuntimeError:     r.claudeRuntimeError,
 		ClaudeRuntimeResult:    r.claudeRuntimeResult,
 		ClaudeRuntimePrompt:    r.claudeRuntimePrompt,
+		TraceID:                r.traceId,
 	}
 }
 
@@ -570,6 +580,7 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.claudeRuntimeError = s.ClaudeRuntimeError
 	r.claudeRuntimeResult = s.ClaudeRuntimeResult
 	r.claudeRuntimePrompt = s.ClaudeRuntimePrompt
+	r.traceId = s.TraceID
 	return nil
 }
 
