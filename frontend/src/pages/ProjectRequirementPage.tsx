@@ -72,10 +72,32 @@ export const ProjectRequirementPage: React.FC = () => {
   const [requirementDetailDrawerOpen, setRequirementDetailDrawerOpen] = useState(false);
   const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null);
 
+  // 需求状态过滤
+  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // 根据状态过滤后的需求列表
+  const filteredRequirements = useMemo(() => {
+    if (!statusFilter) {
+      return requirements;
+    }
+    return requirements.filter((req) => req.status === statusFilter);
+  }, [requirements, statusFilter]);
+
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
     [projects],
   );
+
+  const statusOptions = [
+    { label: '全部状态', value: '' },
+    { label: '待处理 (todo)', value: 'todo' },
+    { label: '准备中 (preparing)', value: 'preparing' },
+    { label: '编码中 (coding)', value: 'coding' },
+    { label: 'PR已开 (pr_opened)', value: 'pr_opened' },
+    { label: '失败 (failed)', value: 'failed' },
+    { label: '已完成 (completed)', value: 'completed' },
+    { label: '完成 (done)', value: 'done' },
+  ];
 
   const fetchProjects = useCallback(async () => {
     setLoadingProjects(true);
@@ -600,7 +622,7 @@ export const ProjectRequirementPage: React.FC = () => {
             label: '需求管理',
             children: (
               <Card
-                title={`需求列表 (${requirements.length})`}
+                title={`需求列表 (${filteredRequirements.length})`}
                 extra={
                   <Space>
                     <Select
@@ -610,6 +632,14 @@ export const ProjectRequirementPage: React.FC = () => {
                       options={projectOptions}
                       onChange={(value) => setSelectedProjectId(value)}
                     />
+                    <Select
+                      style={{ width: 180 }}
+                      placeholder="按状态过滤"
+                      value={statusFilter || undefined}
+                      options={statusOptions}
+                      onChange={(value) => setStatusFilter(value || '')}
+                      allowClear
+                    />
                     <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
                     <Button type="primary" disabled={!selectedProjectId} onClick={openCreateRequirement}>
                       新建需求
@@ -617,7 +647,7 @@ export const ProjectRequirementPage: React.FC = () => {
                   </Space>
                 }
               >
-                <Table<Requirement> rowKey="id" loading={loadingRequirements} dataSource={requirements} columns={requirementColumns} />
+                <Table<Requirement> rowKey="id" loading={loadingRequirements} dataSource={filteredRequirements} columns={requirementColumns} />
               </Card>
             ),
           },
