@@ -371,10 +371,8 @@ export const ProjectRequirementPage: React.FC = () => {
     if (hook.action_type === 'coding_agent') {
       try {
         const config = JSON.parse(hook.action_config || '{}');
-        formValues.agent_id = config.agent_id || '';
         formValues.prompt_template = config.prompt_template || '';
       } catch {
-        formValues.agent_id = '';
         formValues.prompt_template = '';
       }
     } else {
@@ -385,19 +383,17 @@ export const ProjectRequirementPage: React.FC = () => {
     setHookModalOpen(true);
   };
 
-  const submitHook = async (values: CreateHookConfigRequest & { agent_id?: string; prompt_template?: string }) => {
+  const submitHook = async (values: CreateHookConfigRequest & { prompt_template?: string }) => {
     setSavingHook(true);
     try {
       const submitValues = { ...values };
 
-      // 如果是 coding_agent，将 agent_id 和 prompt_template 合并为 action_config
+      // 如果是 coding_agent，将 prompt_template 放入 action_config
       if (values.action_type === 'coding_agent') {
         const actionConfig = {
-          agent_id: values.agent_id || '',
           prompt_template: values.prompt_template || '',
         };
         submitValues.action_config = JSON.stringify(actionConfig);
-        delete submitValues.agent_id;
         delete submitValues.prompt_template;
       }
 
@@ -732,6 +728,86 @@ export const ProjectRequirementPage: React.FC = () => {
         <Tabs
           items={[
             {
+              key: 'basic',
+              label: '基本信息',
+              children: (
+                <>
+                  <Form
+                    layout="vertical"
+                    initialValues={{
+                      agent_code: configProject?.agent_code || '',
+                      dispatch_channel_code: configProject?.dispatch_channel_code || '',
+                      dispatch_session_key: configProject?.dispatch_session_key || '',
+                    }}
+                    onFinish={async (values) => {
+                      if (!configProject) return;
+                      try {
+                        await updateProject({
+                          id: configProject.id,
+                          name: configProject.name,
+                          git_repo_url: configProject.git_repo_url,
+                          default_branch: configProject.default_branch,
+                          init_steps: configProject.init_steps,
+                          heartbeat_enabled: configProject.heartbeat_enabled || false,
+                          heartbeat_interval_minutes: configProject.heartbeat_interval_minutes || 60,
+                          heartbeat_md_content: configProject.heartbeat_md_content || '',
+                          agent_code: values.agent_code,
+                          dispatch_channel_code: values.dispatch_channel_code,
+                          dispatch_session_key: values.dispatch_session_key,
+                        });
+                        message.success('基本信息保存成功');
+                        fetchProjects();
+                      } catch (_error) {
+                        message.error('保存失败');
+                      }
+                    }}
+                  >
+                    <Form.Item label="默认执行 Agent" name="agent_code">
+                      <Select
+                        options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
+                          label: `${a.name} (${a.agent_code})`,
+                          value: a.agent_code,
+                        }))}
+                        placeholder="选择用于执行需求、心跳和 Hook 的默认 Coding Agent"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="默认派发渠道" name="dispatch_channel_code">
+                      <Select
+                        options={channels.map((c) => ({
+                          label: `${c.name} (${c.type})`,
+                          value: c.channel_code,
+                        }))}
+                        placeholder="选择默认派发渠道"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Form.Item label="默认 SessionKey" name="dispatch_session_key">
+                      <Input placeholder="例如：feishu:ou_xxx" style={{ width: 400 }} />
+                    </Form.Item>
+
+                    <Form.Item>
+                      <Button type="primary" htmlType="submit">
+                        保存基本信息
+                      </Button>
+                    </Form.Item>
+                  </Form>
+
+                  <Alert
+                    message="提示"
+                    description="这些配置是项目的默认执行环境，用于需求派发、心跳任务和 Hook 触发。Hook 触发时将自动使用此处配置的 Agent、渠道和 SessionKey。"
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                </>
+              ),
+            },
+            {
               key: 'hooks',
               label: 'Hook 配置',
               children: (
@@ -795,9 +871,6 @@ export const ProjectRequirementPage: React.FC = () => {
                       heartbeat_enabled: configProject?.heartbeat_enabled || false,
                       heartbeat_interval_minutes: configProject?.heartbeat_interval_minutes || 60,
                       heartbeat_md_content: configProject?.heartbeat_md_content || '',
-                      agent_code: configProject?.agent_code || '',
-                      dispatch_channel_code: configProject?.dispatch_channel_code || '',
-                      dispatch_session_key: configProject?.dispatch_session_key || '',
                     }}
                   >
                     <Form.Item label="启用心跳" name="heartbeat_enabled" valuePropName="checked">
@@ -817,34 +890,6 @@ export const ProjectRequirementPage: React.FC = () => {
                         ]}
                         style={{ width: 200 }}
                       />
-                    </Form.Item>
-
-                    <Form.Item label="心跳执行 Agent" name="agent_code">
-                      <Select
-                        options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
-                          label: `${a.name} (${a.agent_code})`,
-                          value: a.agent_code,
-                        }))}
-                        placeholder="选择用于执行心跳的 Coding Agent"
-                        style={{ width: 300 }}
-                        allowClear
-                      />
-                    </Form.Item>
-
-                    <Form.Item label="派发渠道" name="dispatch_channel_code">
-                      <Select
-                        options={channels.map((c) => ({
-                          label: `${c.name} (${c.type})`,
-                          value: c.channel_code,
-                        }))}
-                        placeholder="选择派发渠道"
-                        style={{ width: 300 }}
-                        allowClear
-                      />
-                    </Form.Item>
-
-                    <Form.Item label="派发 SessionKey" name="dispatch_session_key">
-                      <Input placeholder="例如：feishu:ou_xxx" style={{ width: 400 }} />
                     </Form.Item>
 
                     <Form.Item
@@ -926,19 +971,13 @@ export const ProjectRequirementPage: React.FC = () => {
               if (actionType === 'coding_agent') {
                 return (
                   <>
-                    <Form.Item
-                      label="选择 Agent"
-                      name="agent_id"
-                      rules={[{ required: true, message: '请选择 Agent' }]}
-                    >
-                      <Select placeholder="选择 Coding Agent">
-                        {agents.map((agent) => (
-                          <Select.Option key={agent.id} value={agent.id}>
-                            {agent.name} ({agent.agent_code})
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
+                    <Alert
+                      message="使用项目默认配置"
+                      description="Hook 将使用【基本信息】Tab 中配置的默认 Agent、渠道和 SessionKey 执行。"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
                     <Form.Item
                       label="Prompt 模板"
                       name="prompt_template"
