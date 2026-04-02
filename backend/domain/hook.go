@@ -624,9 +624,8 @@ type RequirementHookActionLogRepository interface {
 
 // TriggerAgentActionConfig 触发 Agent 动作配置
 type TriggerAgentActionConfig struct {
-	AgentID          string `json:"agent_id"`
-	PromptTemplate   string `json:"prompt_template"`
-	TimeoutMinutes   int    `json:"timeout_minutes"`
+	PromptTemplate    string `json:"prompt_template"`
+	TimeoutMinutes    int    `json:"timeout_minutes"`
 	WorkspaceTemplate string `json:"workspace_template"`
 }
 

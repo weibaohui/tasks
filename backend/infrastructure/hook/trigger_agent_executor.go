@@ -16,6 +16,7 @@ import (
 type TriggerAgentExecutor struct {
 	agentRepo       domain.AgentRepository
 	requirementRepo domain.RequirementRepository
+	projectRepo     domain.ProjectRepository
 	idGenerator     domain.IDGenerator
 	publisher       MessagePublisher
 }
@@ -29,12 +30,14 @@ type MessagePublisher interface {
 func NewTriggerAgentExecutor(
 	agentRepo domain.AgentRepository,
 	requirementRepo domain.RequirementRepository,
+	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
 	publisher MessagePublisher,
 ) *TriggerAgentExecutor {
 	return &TriggerAgentExecutor{
 		agentRepo:       agentRepo,
 		requirementRepo: requirementRepo,
+		projectRepo:     projectRepo,
 		idGenerator:     idGenerator,
 		publisher:       publisher,
 	}
@@ -60,15 +63,29 @@ func (e *TriggerAgentExecutor) Execute(
 		return nil, fmt.Errorf("invalid action config: %w", err)
 	}
 
-	fmt.Printf("[DEBUG] TriggerAgentExecutor: agentID=%s, promptTemplate=%s\n", actionConfig.AgentID, actionConfig.PromptTemplate)
+	fmt.Printf("[DEBUG] TriggerAgentExecutor: promptTemplate=%s\n", actionConfig.PromptTemplate)
 
-	// 2. 获取目标 Agent
-	baseAgent, err := e.agentRepo.FindByID(ctx, domain.NewAgentID(actionConfig.AgentID))
+	// 2. 获取项目配置，使用项目默认 Agent
+	project, err := e.projectRepo.FindByID(ctx, req.ProjectID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project: %w", err)
+	}
+	if project == nil {
+		return nil, fmt.Errorf("project not found: %s", req.ProjectID())
+	}
+
+	// 使用项目默认 agent_code
+	agentCode := project.AgentCode()
+	if agentCode == "" {
+		return nil, fmt.Errorf("project %s has no default agent configured", project.Name())
+	}
+
+	baseAgent, err := e.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
 	if err != nil {
 		return nil, fmt.Errorf("failed to find base agent: %w", err)
 	}
 	if baseAgent == nil {
-		return nil, fmt.Errorf("base agent not found: %s", actionConfig.AgentID)
+		return nil, fmt.Errorf("base agent not found: %s", agentCode)
 	}
 
 	// 3. 创建工作目录
