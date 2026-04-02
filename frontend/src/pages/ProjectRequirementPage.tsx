@@ -43,6 +43,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [activeTabKey, setActiveTabKey] = useState<string>('projects');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -610,6 +611,23 @@ export const ProjectRequirementPage: React.FC = () => {
                       options={projectOptions}
                       onChange={(value) => setSelectedProjectId(value)}
                     />
+                    <Select
+                      style={{ width: 150 }}
+                      placeholder="按状态过滤"
+                      allowClear
+                      value={statusFilter || undefined}
+                      options={[
+                        { label: '全部', value: '' },
+                        { label: '待处理 (todo)', value: 'todo' },
+                        { label: '准备中 (preparing)', value: 'preparing' },
+                        { label: '编码中 (coding)', value: 'coding' },
+                        { label: 'PR已开 (pr_opened)', value: 'pr_opened' },
+                        { label: '失败 (failed)', value: 'failed' },
+                        { label: '已完成 (completed)', value: 'completed' },
+                        { label: '完成 (done)', value: 'done' },
+                      ]}
+                      onChange={(value) => setStatusFilter(value || '')}
+                    />
                     <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
                     <Button type="primary" disabled={!selectedProjectId} onClick={openCreateRequirement}>
                       新建需求
@@ -617,7 +635,12 @@ export const ProjectRequirementPage: React.FC = () => {
                   </Space>
                 }
               >
-                <Table<Requirement> rowKey="id" loading={loadingRequirements} dataSource={requirements} columns={requirementColumns} />
+                <Table<Requirement>
+                  rowKey="id"
+                  loading={loadingRequirements}
+                  dataSource={statusFilter ? requirements.filter((r) => r.status === statusFilter) : requirements}
+                  columns={requirementColumns}
+                />
               </Card>
             ),
           },
