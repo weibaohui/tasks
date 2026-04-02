@@ -28,6 +28,7 @@ type CreateAgentRequest struct {
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
 	ProviderKey           string   `json:"provider_key"`
+	LLMProviderID         string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`
@@ -49,6 +50,7 @@ type UpdateAgentRequest struct {
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
 	ProviderKey           string   `json:"provider_key"`
+	LLMProviderID         string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`
@@ -80,6 +82,7 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
 		ProviderKey:           req.ProviderKey,
+		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
 		MaxIterations:         req.MaxIterations,
@@ -166,6 +169,7 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
 		ProviderKey:           req.ProviderKey,
+		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
 		MaxIterations:         req.MaxIterations,
@@ -196,6 +200,7 @@ type PatchAgentRequest struct {
 	ToolsContent          *string                  `json:"tools_content"`
 	Model                 *string                  `json:"model"`
 	ProviderKey           *string                  `json:"provider_key"`
+	LLMProviderID         *string                  `json:"llm_provider_id"`
 	MaxTokens             *int                     `json:"max_tokens"`
 	Temperature           *float64                 `json:"temperature"`
 	MaxIterations         *int                     `json:"max_iterations"`
@@ -234,6 +239,7 @@ func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
 		ProviderKey:           req.ProviderKey,
+		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
 		MaxIterations:         req.MaxIterations,
@@ -282,6 +288,7 @@ func agentToMap(agent *domain.Agent) map[string]interface{} {
 		"user_content":            agent.UserContent(),
 		"tools_content":           agent.ToolsContent(),
 		"model":                   agent.Model(),
+		"llm_provider_id":         agent.LLMProviderID().String(),
 		"max_tokens":              agent.MaxTokens(),
 		"temperature":             agent.Temperature(),
 		"max_iterations":          agent.MaxIterations(),

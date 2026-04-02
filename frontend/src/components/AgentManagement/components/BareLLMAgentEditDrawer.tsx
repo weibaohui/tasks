@@ -22,6 +22,8 @@ interface BareLLMAgentEditDrawerProps {
   providersLoading: boolean;
   modelOptions: Array<{ value: string; label: string }>;
   providerOptions: Array<{ value: string; label: string }>;
+  llmProviderOptions: Array<{ value: string; label: string }>;
+  llmProvidersLoading: boolean;
   skillsOptions: any[];
   builtInTools: any[];
   mcpServers: any[];
@@ -52,6 +54,8 @@ export const BareLLMAgentEditDrawer: React.FC<BareLLMAgentEditDrawerProps> = ({
   providersLoading,
   modelOptions,
   providerOptions,
+  llmProviderOptions,
+  llmProvidersLoading,
   skillsOptions,
   builtInTools,
   mcpServers,
@@ -156,6 +160,8 @@ export const BareLLMAgentEditDrawer: React.FC<BareLLMAgentEditDrawerProps> = ({
                     modelOptions={modelOptions}
                     providerOptions={providerOptions}
                     providersLoading={providersLoading}
+                    llmProviderOptions={llmProviderOptions}
+                    llmProvidersLoading={llmProvidersLoading}
                   />
                 ),
               },

@@ -34,6 +34,7 @@ export type AgentFormValues = {
   tools_content: string;
   model: string;
   provider_key: string;
+  llm_provider_id: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -58,6 +59,7 @@ export function getDefaultAgentFormValues(defaultModel?: string, defaultProvider
     tools_content: DEFAULT_TOOLS_CONTENT,
     model: defaultModel || 'gpt-4',
     provider_key: defaultProviderKey || '',
+    llm_provider_id: '',
     max_tokens: 4096,
     temperature: 0.7,
     max_iterations: 15,
@@ -89,6 +91,7 @@ export interface UseAgentManagementReturn {
   modelOptions: Array<{ value: string; label: string }>;
   claudeCodeModelOptions: Array<{ value: string; label: string }>;
   providerOptions: Array<{ value: string; label: string }>;
+  llmProviderOptions: Array<{ value: string; label: string }>;
   watchedModel: string | undefined;
   activeTab: 'basic' | 'skills' | 'personality' | 'claudecode';
   mcpLoading: boolean;
@@ -225,11 +228,19 @@ export function useAgentManagement({
     return opts;
   }, [activeProviders]);
 
-  // Provider options for selection
+  // Provider options for selection (legacy, by provider_key)
   const providerOptions = useMemo(() => {
     return activeProviders.map((p) => ({
       value: p.provider_key,
       label: p.provider_name || p.provider_key,
+    }));
+  }, [activeProviders]);
+
+  // LLM Provider options for selection (by id)
+  const llmProviderOptions = useMemo(() => {
+    return activeProviders.map((p) => ({
+      value: p.id,
+      label: `${p.provider_name || p.provider_key} (${p.provider_key})`,
     }));
   }, [activeProviders]);
 
@@ -257,6 +268,7 @@ export function useAgentManagement({
     identity_content: agent.identity_content, soul_content: agent.soul_content,
     agents_content: agent.agents_content, user_content: agent.user_content,
     tools_content: agent.tools_content, model: agent.model, provider_key: agent.provider_key || '',
+    llm_provider_id: agent.llm_provider_id || '',
     max_tokens: agent.max_tokens, temperature: agent.temperature, max_iterations: agent.max_iterations,
     history_messages: agent.history_messages, skills_list: agent.skills_list || [],
     tools_list: agent.tools_list || [], is_active: agent.is_active,
@@ -291,7 +303,8 @@ export function useAgentManagement({
         description: agent.description, identity_content: agent.identity_content,
         soul_content: agent.soul_content, agents_content: agent.agents_content,
         user_content: agent.user_content, tools_content: agent.tools_content,
-        model: agent.model, max_tokens: agent.max_tokens, temperature: agent.temperature,
+        model: agent.model, provider_key: agent.provider_key || '', llm_provider_id: agent.llm_provider_id || '',
+        max_tokens: agent.max_tokens, temperature: agent.temperature,
         max_iterations: agent.max_iterations, history_messages: agent.history_messages,
         skills_list: agent.skills_list || [], tools_list: agent.tools_list || [],
         is_default: agent.is_default, is_active: agent.is_active,
@@ -338,7 +351,7 @@ export function useAgentManagement({
           description: found.description, identity_content: found.identity_content,
           soul_content: found.soul_content, agents_content: found.agents_content,
           user_content: found.user_content, tools_content: found.tools_content,
-          model: found.model, provider_key: found.provider_key || '',
+          model: found.model, provider_key: found.provider_key || '', llm_provider_id: found.llm_provider_id || '',
           max_tokens: found.max_tokens, temperature: found.temperature,
           max_iterations: found.max_iterations, history_messages: found.history_messages,
           skills_list: found.skills_list || [], tools_list: found.tools_list || [],
@@ -392,6 +405,7 @@ export function useAgentManagement({
           agents_content: values.agents_content || '', user_content: values.user_content || '',
           tools_content: values.tools_content || '', model: values.model,
           provider_key: values.provider_key,
+          llm_provider_id: values.llm_provider_id,
           max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
@@ -407,6 +421,7 @@ export function useAgentManagement({
           soul_content: values.soul_content, agents_content: values.agents_content,
           user_content: values.user_content, tools_content: values.tools_content,
           model: values.model, provider_key: values.provider_key,
+          llm_provider_id: values.llm_provider_id,
           max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
@@ -505,7 +520,7 @@ export function useAgentManagement({
 
   return {
     items, loading, saving, open, editing, providers, providersLoading,
-    activeProviders, modelOptions, claudeCodeModelOptions, providerOptions, watchedModel, activeTab,
+    activeProviders, modelOptions, claudeCodeModelOptions, providerOptions, llmProviderOptions, watchedModel, activeTab,
     mcpLoading, mcpServers, mcpBindings,
     toolsDrawerOpen, toolsDrawerLoading, toolsForServer, editingBinding,
     builtInTools, skillsOptions, editingSections, savingSections,

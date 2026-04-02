@@ -16,11 +16,14 @@ interface BasicInfoTabProps {
   modelOptions: Array<{ value: string; label: string }>;
   providerOptions: Array<{ value: string; label: string }>;
   providersLoading: boolean;
+  llmProviderOptions: Array<{ value: string; label: string }>;
+  llmProvidersLoading: boolean;
 }
 
 export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   form, editing, editingSections, screens,
   toggleSectionEdit, handlePatchSection, modelOptions, providerOptions, providersLoading,
+  llmProviderOptions, llmProvidersLoading,
 }) => {
   return (
     <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
@@ -29,6 +32,8 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
         screens={screens} modelOptions={modelOptions} providerOptions={providerOptions}
         providersLoading={providersLoading}
+        llmProviderOptions={llmProviderOptions}
+        llmProvidersLoading={llmProvidersLoading}
       />
     </div>
   );

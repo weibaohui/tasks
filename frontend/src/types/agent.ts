@@ -90,6 +90,7 @@ export interface Agent {
   tools_content: string;
   model: string;
   provider_key: string;
+  llm_provider_id: string; // 关联的 LLM Provider ID
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -117,6 +118,7 @@ export interface CreateAgentRequest {
   tools_content: string;
   model: string;
   provider_key: string;
+  llm_provider_id: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -139,6 +141,7 @@ export interface UpdateAgentRequest {
   tools_content: string;
   model: string;
   provider_key: string;
+  llm_provider_id: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -162,6 +165,7 @@ export interface PatchAgentRequest {
   tools_content?: string;
   model?: string;
   provider_key?: string;
+  llm_provider_id?: string;
   max_tokens?: number;
   temperature?: number;
   max_iterations?: number;

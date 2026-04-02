@@ -181,10 +181,8 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		preview = preview[:80] + "..."
 	}
 	agentCode := ""
-	userCode := ""
 	if agent != nil {
 		agentCode = agent.AgentCode().String()
-		userCode = agent.UserCode()
 	}
 	p.logger.Info("ClaudeCode 处理消息",
 		zap.String("trace_id", traceID),
@@ -215,8 +213,8 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 		}
 	}
 
-	// 获取 Provider 配置（用于日志和配置）
-	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
+	// 获取 Provider 配置（优先使用 Agent 指定的 Provider）
+	provider, err := p.resolveProvider(ctx, agent)
 	if err != nil {
 		p.logger.Warn("获取 LLM Provider 失败，使用默认配置", zap.Error(err))
 		provider = nil
@@ -285,10 +283,8 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		preview = preview[:80] + "..."
 	}
 	agentCode := ""
-	userCode := ""
 	if agent != nil {
 		agentCode = agent.AgentCode().String()
-		userCode = agent.UserCode()
 	}
 	p.logger.Info("ClaudeCode 流式处理消息",
 		zap.String("trace_id", traceID),
@@ -319,8 +315,8 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		}
 	}
 
-	// 获取 Provider 配置
-	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
+	// 获取 Provider 配置（优先使用 Agent 指定的 Provider）
+	provider, err := p.resolveProvider(ctx, agent)
 	if err != nil {
 		p.logger.Warn("获取 LLM Provider 失败，使用默认配置", zap.Error(err))
 		provider = nil
@@ -978,6 +974,45 @@ func getUsageInt(usage map[string]any, key string) int {
 		}
 	}
 	return 0
+}
+
+// resolveProvider 解析 Agent 使用的 LLM Provider
+// 优先级：1. Agent 指定的 Provider > 2. 用户默认 Provider
+func (p *ClaudeCodeProcessor) resolveProvider(ctx context.Context, agent *domain.Agent) (*domain.LLMProvider, error) {
+	if agent == nil {
+		return nil, fmt.Errorf("agent is nil")
+	}
+
+	// 1. 优先使用 Agent 指定的 Provider
+	llmProviderID := agent.LLMProviderID()
+	if llmProviderID.String() != "" {
+		provider, err := p.providerRepo.FindByID(ctx, llmProviderID)
+		if err != nil {
+			p.logger.Warn("获取 Agent 指定的 LLM Provider 失败，将使用用户默认 Provider",
+				zap.String("agent_code", agent.AgentCode().String()),
+				zap.String("llm_provider_id", llmProviderID.String()),
+				zap.Error(err))
+		} else if provider != nil {
+			p.logger.Info("使用 Agent 指定的 LLM Provider",
+				zap.String("agent_code", agent.AgentCode().String()),
+				zap.String("provider_key", provider.ProviderKey()),
+				zap.String("llm_provider_id", llmProviderID.String()))
+			return provider, nil
+		}
+	}
+
+	// 2. 使用用户默认 Provider
+	userCode := agent.UserCode()
+	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
+	if err != nil {
+		return nil, fmt.Errorf("获取用户默认 Provider 失败: %w", err)
+	}
+	if provider != nil {
+		p.logger.Info("使用用户默认 LLM Provider",
+			zap.String("user_code", userCode),
+			zap.String("provider_key", provider.ProviderKey()))
+	}
+	return provider, nil
 }
 
 // triggerClaudeCodeFinishedHook 触发 Claude Code 完成 hook

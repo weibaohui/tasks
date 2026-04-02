@@ -27,6 +27,7 @@ type CreateAgentCommand struct {
 	ToolsContent          string
 	Model                 string
 	ProviderKey           string
+	LLMProviderID         string
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -48,6 +49,7 @@ type UpdateAgentCommand struct {
 	ToolsContent          string
 	Model                 string
 	ProviderKey           string
+	LLMProviderID         string
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -170,6 +172,9 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		cmd.EnableThinkingProcess,
 	)
 	agent.SetDefault(cmd.IsDefault)
+	if cmd.LLMProviderID != "" {
+		agent.SetLLMProviderID(domain.NewLLMProviderID(cmd.LLMProviderID))
+	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)
@@ -247,6 +252,9 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 			return nil, err
 		}
 	}
+	if cmd.LLMProviderID != "" {
+		agent.SetLLMProviderID(domain.NewLLMProviderID(cmd.LLMProviderID))
+	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)
@@ -277,6 +285,7 @@ type PatchAgentCommand struct {
 	ToolsContent          *string
 	Model                 *string
 	ProviderKey           *string
+	LLMProviderID         *string
 	MaxTokens             *int
 	Temperature           *float64
 	MaxIterations         *int
@@ -407,6 +416,9 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 
 	if cmd.ClaudeCodeConfig != nil {
 		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
+	}
+	if cmd.LLMProviderID != nil {
+		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
 	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
