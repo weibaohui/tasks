@@ -28,3 +28,4 @@ backend/cli
 myenv
 backend/coverage.out
 coverage.out
+backend/bin/taskmanager-server

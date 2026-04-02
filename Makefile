@@ -26,19 +26,29 @@ setup:
 
 # 构建
 build:
-	@echo "构建后端..."
-	cd backend && go build -o bin/taskmanager ./cmd/server
+	@echo "构建后端服务器..."
+	cd backend && go build -o bin/taskmanager-server ./cmd/server
+	@echo "构建 CLI..."
+	cd backend && go build -o bin/taskmanager ./cmd/cli
 	@echo "构建前端..."
 	cd frontend && pnpm run build
 
-# 安装 CLI 到 /usr/local/bin
+# 安装 CLI 和 Server 到 /usr/local/bin
 install:
-	@echo "安装 taskmanager CLI 到 /usr/local/bin..."
+	@echo "安装 taskmanager 到 /usr/local/bin..."
+	cd backend && go build -o taskmanager-server ./cmd/server
 	cd backend && go build -o taskmanager ./cmd/cli
+	@cp backend/taskmanager-server /usr/local/bin/taskmanager-server
 	@cp backend/taskmanager /usr/local/bin/taskmanager
-	@rm backend/taskmanager
-	@echo "taskmanager CLI 安装完成！"
-	@echo "用法: taskmanager <command>"
+	@rm backend/taskmanager-server backend/taskmanager
+	@echo "安装完成！"
+	@echo ""
+	@echo "用法:"
+	@echo "  taskmanager server start    启动后台服务"
+	@echo "  taskmanager server stop     停止后台服务"
+	@echo "  taskmanager server status   查看服务状态"
+	@echo "  taskmanager server logs     查看日志"
+	@echo "  taskmanager <command>       其他 CLI 命令"
 
 # 清理
 clean:
@@ -74,10 +84,10 @@ dev-backend:
 dev-web:
 	cd frontend && pnpm run dev
 
-# 停止本项目相关进程（按端口精准kill，不误杀其他项目）
+# 停止所有 TaskManager 相关进程
 stop:
 	@echo "正在停止 TaskManager 进程..."
-	@-lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+	@taskmanager server stop 2>/dev/null || true
 	@-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
 	@sleep 1
 	@echo "已停止 TaskManager 进程"

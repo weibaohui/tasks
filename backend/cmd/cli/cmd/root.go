@@ -12,12 +12,19 @@ var rootCmd = &cobra.Command{
 	Short: "TaskManager CLI - 管理任务和需求",
 	Long: `TaskManager CLI 是一个用于管理任务和需求 command-line 工具。
 
+服务器管理:
+  taskmanager server start        在后台启动服务器
+  taskmanager server stop         停止服务器
+  taskmanager server restart      重启服务器
+  taskmanager server status       查看服务器状态
+  taskmanager server logs         查看服务器日志
+
 常用命令:
   taskmanager requirement create  创建新需求
   taskmanager requirement list    列出需求
   taskmanager requirement dispatch 派发需求
   taskmanager project list        列出项目
-  taskmanager agent list         列出 Agent
+  taskmanager agent list          列出 Agent
 
 配置:
   配置文件路径: ~/.taskmanager/config.yaml
