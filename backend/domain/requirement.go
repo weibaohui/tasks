@@ -98,6 +98,10 @@ type Requirement struct {
 	claudeRuntimeResult   string        // Claude Code 执行结果摘要
 	claudeRuntimePrompt   string        // Claude Code 执行提示词
 	traceId               string        // Claude Code 执行时的 trace_id，用于关联对话记录
+	// Token 消耗统计（从对话记录计算）
+	promptTokens     int
+	completionTokens int
+	totalTokens      int
 
 	// stateChangeCallbacks 状态变更回调列表（不持久化）
 	stateChangeCallbacks []StateChangeCallback
@@ -255,6 +259,17 @@ func (r *Requirement) TraceID() string { return r.traceId }
 
 func (r *Requirement) SetTraceID(traceId string) {
 	r.traceId = traceId
+	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) PromptTokens() int     { return r.promptTokens }
+func (r *Requirement) CompletionTokens() int { return r.completionTokens }
+func (r *Requirement) TotalTokens() int      { return r.totalTokens }
+
+func (r *Requirement) SetTokenUsage(promptTokens, completionTokens, totalTokens int) {
+	r.promptTokens = promptTokens
+	r.completionTokens = completionTokens
+	r.totalTokens = totalTokens
 	r.updatedAt = time.Now()
 }
 
@@ -522,6 +537,9 @@ type RequirementSnapshot struct {
 	ClaudeRuntimeResult    string
 	ClaudeRuntimePrompt    string
 	TraceID                string
+	PromptTokens           int
+	CompletionTokens       int
+	TotalTokens            int
 }
 
 func (r *Requirement) ToSnapshot() RequirementSnapshot {
@@ -550,6 +568,9 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		ClaudeRuntimeResult:    r.claudeRuntimeResult,
 		ClaudeRuntimePrompt:    r.claudeRuntimePrompt,
 		TraceID:                r.traceId,
+		PromptTokens:           r.promptTokens,
+		CompletionTokens:       r.completionTokens,
+		TotalTokens:            r.totalTokens,
 	}
 }
 
@@ -581,6 +602,9 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.claudeRuntimeResult = s.ClaudeRuntimeResult
 	r.claudeRuntimePrompt = s.ClaudeRuntimePrompt
 	r.traceId = s.TraceID
+	r.promptTokens = s.PromptTokens
+	r.completionTokens = s.CompletionTokens
+	r.totalTokens = s.TotalTokens
 	return nil
 }
 

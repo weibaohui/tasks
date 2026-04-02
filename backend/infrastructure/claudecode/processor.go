@@ -124,6 +124,7 @@ type ClaudeCodeProcessor struct {
 	providerRepo        domain.LLMProviderRepository
 	idGenerator         domain.IDGenerator
 	requirementRepo     domain.RequirementRepository
+	conversationRepo    domain.ConversationRecordRepository
 	hookExecutor        *domain.ConfigurableHookExecutor
 	replicaAgentManager *domain.ReplicaAgentManager
 }
@@ -149,6 +150,7 @@ func NewClaudeCodeProcessor(
 	requirementRepo domain.RequirementRepository,
 	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
+	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
 		logger:              logger,
@@ -156,6 +158,7 @@ func NewClaudeCodeProcessor(
 		providerRepo:        providerRepo,
 		idGenerator:         idGenerator,
 		requirementRepo:     requirementRepo,
+		conversationRepo:    conversationRepo,
 		hookExecutor:        hookExecutor,
 		replicaAgentManager: replicaAgentManager,
 	}
@@ -163,8 +166,14 @@ func NewClaudeCodeProcessor(
 
 // Process 处理 CodingAgent 消息
 func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent) (string, error) {
-	// 生成 trace 信息
-	ctx, traceID, spanID := trace.StartTrace(ctx)
+	// 优先从 context 获取已有的 trace_id，如果不存在则生成新的
+	traceID := trace.MustGetTraceID(ctx)
+	spanID := trace.MustGetSpanID(ctx)
+	if traceID == "" {
+		var newCtx context.Context
+		newCtx, traceID, spanID = trace.StartTrace(ctx)
+		ctx = newCtx
+	}
 	_ = spanID // 未使用
 
 	preview := msg.Content
@@ -261,8 +270,14 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 
 // ProcessWithStreaming 处理 CodingAgent 消息，带流式回调
 func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus.InboundMessage, session *ClaudeCodeSession, agent *domain.Agent, callback StreamingCallback) error {
-	// 生成 trace 信息
-	ctx, traceID, spanID := trace.StartTrace(ctx)
+	// 优先从 context 获取已有的 trace_id，如果不存在则生成新的
+	traceID := trace.MustGetTraceID(ctx)
+	spanID := trace.MustGetSpanID(ctx)
+	if traceID == "" {
+		var newCtx context.Context
+		newCtx, traceID, spanID = trace.StartTrace(ctx)
+		ctx = newCtx
+	}
 	_ = spanID // 未使用
 
 	preview := msg.Content
@@ -1029,6 +1044,35 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 		p.logger.Info("Claude Code 完成，requirement 已标记为 completed",
 			zap.String("requirement_id", requirementIDStr),
 			zap.Any("result_length", len(finalResult)))
+	}
+
+	// 按 trace_id 查询对话记录并计算 token
+	traceID := requirement.TraceID()
+	if traceID != "" && p.conversationRepo != nil {
+		records, err := p.conversationRepo.FindByTraceID(ctx, traceID, 1000) // 最多查询1000条
+		if err != nil {
+			p.logger.Warn("查询对话记录失败", zap.String("trace_id", traceID), zap.Error(err))
+		} else {
+			var totalPrompt, totalCompletion, totalTokens int
+			for _, record := range records {
+				totalPrompt += record.PromptTokens()
+				totalCompletion += record.CompletionTokens()
+				totalTokens += record.TotalTokens()
+			}
+			requirement.SetTokenUsage(totalPrompt, totalCompletion, totalTokens)
+			if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+				p.logger.Warn("保存 token 使用量到需求表失败", zap.Error(err))
+			} else {
+				p.logger.Info("已计算并保存 token 使用量",
+					zap.String("requirement_id", requirementIDStr),
+					zap.String("trace_id", traceID),
+					zap.Int("prompt_tokens", totalPrompt),
+					zap.Int("completion_tokens", totalCompletion),
+					zap.Int("total_tokens", totalTokens),
+					zap.Int("records_count", len(records)),
+				)
+			}
+		}
 	}
 
 	// 触发 hook

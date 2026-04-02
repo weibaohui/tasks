@@ -23,9 +23,10 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			id, project_id, title, description, acceptance_criteria, status,
 			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, last_error,
 			started_at, completed_at, created_at, updated_at,
-			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt, trace_id
+			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt, trace_id,
+			prompt_tokens, completion_tokens, total_tokens
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -47,7 +48,10 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			claude_runtime_error=excluded.claude_runtime_error,
 			claude_runtime_result=excluded.claude_runtime_result,
 			claude_runtime_prompt=excluded.claude_runtime_prompt,
-		    trace_id=excluded.trace_id
+		    trace_id=excluded.trace_id,
+			prompt_tokens=excluded.prompt_tokens,
+			completion_tokens=excluded.completion_tokens,
+			total_tokens=excluded.total_tokens
 	`
 	_, err := r.db.ExecContext(
 		ctx,
@@ -76,6 +80,9 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		snap.ClaudeRuntimeResult,
 		snap.ClaudeRuntimePrompt,
 		snap.TraceID,
+		snap.PromptTokens,
+		snap.CompletionTokens,
+		snap.TotalTokens,
 	)
 	return err
 }
@@ -86,7 +93,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements WHERE id = ?`, id.String())
 	return scanRequirement(row)
 }
@@ -97,7 +104,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements WHERE project_id = ? ORDER BY created_at DESC`, projectID.String())
 	if err != nil {
 		return nil, err
@@ -112,7 +119,7 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, '')
+		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -166,6 +173,9 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		claudeRuntimeResult     string
 		claudeRuntimePrompt     string
 		traceID                 string
+		promptTokens            int
+		completionTokens        int
+		totalTokens             int
 	)
 	err := scanner.Scan(
 		&idStr,
@@ -192,6 +202,9 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&claudeRuntimeResult,
 		&claudeRuntimePrompt,
 		&traceID,
+		&promptTokens,
+		&completionTokens,
+		&totalTokens,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -225,6 +238,9 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		ClaudeRuntimeResult:    claudeRuntimeResult,
 		ClaudeRuntimePrompt:    claudeRuntimePrompt,
 		TraceID:                 traceID,
+		PromptTokens:            promptTokens,
+		CompletionTokens:        completionTokens,
+		TotalTokens:             totalTokens,
 	})
 	if err != nil {
 		return nil, err

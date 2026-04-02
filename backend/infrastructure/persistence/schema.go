@@ -211,6 +211,9 @@ CREATE TABLE IF NOT EXISTS requirements (
     claude_runtime_result TEXT,
     claude_runtime_prompt TEXT,
     trace_id TEXT,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
@@ -631,6 +634,9 @@ func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 		{"claude_runtime_result", "TEXT"},
 		{"claude_runtime_prompt", "TEXT"},
 		{"trace_id", "TEXT"},
+		{"prompt_tokens", "INTEGER"},
+		{"completion_tokens", "INTEGER"},
+		{"total_tokens", "INTEGER"},
 	}
 
 	for _, col := range columns {

@@ -27,6 +27,10 @@ export interface Requirement {
   workspace_path: string;
   last_error: string;
   dispatch_session_key: string;
+  trace_id?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
   claude_runtime?: {
     status?: string;
     last_error?: string;
