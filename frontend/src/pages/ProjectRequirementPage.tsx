@@ -178,11 +178,14 @@ export const ProjectRequirementPage: React.FC = () => {
       git_repo_url: project.git_repo_url,
       default_branch: project.default_branch,
       init_steps_text: joinLines(project.init_steps || []),
+      agent_code: project.agent_code || '',
+      dispatch_channel_code: project.dispatch_channel_code || '',
+      dispatch_session_key: project.dispatch_session_key || '',
     });
     setProjectModalOpen(true);
   };
 
-  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string }) => {
+  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string; agent_code?: string; dispatch_channel_code?: string; dispatch_session_key?: string }) => {
     const payload: CreateProjectRequest = {
       name: values.name,
       git_repo_url: values.git_repo_url,
@@ -197,9 +200,9 @@ export const ProjectRequirementPage: React.FC = () => {
           heartbeat_enabled: editingProject.heartbeat_enabled || false,
           heartbeat_interval_minutes: editingProject.heartbeat_interval_minutes || 60,
           heartbeat_md_content: editingProject.heartbeat_md_content || '',
-          agent_code: editingProject.agent_code || '',
-          dispatch_channel_code: editingProject.dispatch_channel_code || '',
-          dispatch_session_key: editingProject.dispatch_session_key || '',
+          agent_code: values.agent_code || '',
+          dispatch_channel_code: values.dispatch_channel_code || '',
+          dispatch_session_key: values.dispatch_session_key || '',
         });
         message.success('更新项目成功');
       } else {
@@ -667,6 +670,29 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Form.Item label="初始化步骤（每行一个）" name="init_steps_text">
             <Input.TextArea rows={5} />
+          </Form.Item>
+          <Form.Item label="默认执行 Agent" name="agent_code">
+            <Select
+              options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
+                label: `${a.name} (${a.agent_code})`,
+                value: a.agent_code,
+              }))}
+              placeholder="选择默认执行 Agent"
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item label="默认派发渠道" name="dispatch_channel_code">
+            <Select
+              options={channels.map((c) => ({
+                label: `${c.name} (${c.type})`,
+                value: c.channel_code,
+              }))}
+              placeholder="选择默认派发渠道"
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item label="默认 SessionKey" name="dispatch_session_key">
+            <Input placeholder="例如：feishu:ou_xxx" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block>
             保存
