@@ -201,14 +201,13 @@ export function useAgentManagement({
     return [{ value: watchedModel, label: watchedModel }, ...modelOptionsFromProviders];
   }, [modelOptionsFromProviders, watchedModel]);
 
-  // ClaudeCode only uses Anthropic models
+  // ClaudeCode model options - use all active providers
   const claudeCodeModelOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: Array<{ value: string; label: string }> = [];
 
     for (const p of activeProviders) {
-      if (p.provider_type !== 'anthropic') continue;
-      const providerLabel = p.provider_name || p.provider_key || 'Anthropic';
+      const providerLabel = p.provider_name || p.provider_key || 'Provider';
       const candidates: string[] = [];
       if (p.default_model) candidates.push(p.default_model);
       for (const m of p.supported_models || []) {

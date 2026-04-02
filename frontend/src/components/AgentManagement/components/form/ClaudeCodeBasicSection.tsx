@@ -61,7 +61,7 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
             <Select
               showSearch
               allowClear
-              placeholder="选择 Anthropic 模型"
+              placeholder="选择模型"
               options={modelOptions}
               filterOption={(input, option) => {
                 const q = input.toLowerCase();

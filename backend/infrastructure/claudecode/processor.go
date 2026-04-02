@@ -710,15 +710,26 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	if env == nil {
 		env = make(map[string]string)
 	}
-	// 如果配置中没有 API Key，使用默认的 MiniMax 配置
-
-	opts = append(opts, claudecode.WithEnv(env))
 
 	// 设置模型
 	model := config.Model
 	if model == "" {
-		model = "MiniMax-M2.7-highspeed"
+		if provider != nil {
+			// 当模型为空时，从 provider 获取 API Key 和 Base URL
+			if provider.APIKey() != "" {
+				env["ANTHROPIC_API_KEY"] = provider.APIKey()
+			}
+			if provider.APIBase() != "" {
+				env["ANTHROPIC_BASE_URL"] = provider.APIBase()
+			}
+			// 模型保持为空，让 Claude Code 使用默认模型
+		} else {
+			// 没有 provider 时，使用默认模型
+			model = "MiniMax-M2.7-highspeed"
+		}
 	}
+
+	opts = append(opts, claudecode.WithEnv(env))
 	opts = append(opts, claudecode.WithModel(model))
 
 	// 设置系统提示词
@@ -871,6 +882,12 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 				return provider.ProviderKey()
 			}
 			return "default"
+		}()),
+		zap.String("api_base_url", func() string {
+			if provider != nil {
+				return provider.APIBase()
+			}
+			return ""
 		}()),
 		zap.String("cli_session_id", cliSessionID),
 		zap.String("model", model),
