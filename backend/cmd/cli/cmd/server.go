@@ -324,9 +324,9 @@ func printStatus() {
 	// 尝试读取端口
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
-		port = "8888" // 默认端口
+		port = "13618" // 默认端口
 	}
-	fmt.Printf("API 地址: http://localhost:%s\n", port)
+	fmt.Printf("服务地址: http://localhost:%s\n", port)
 
 	// 显示日志文件路径
 	logFile := filepath.Join(getConfigDir(), logFileName)
@@ -371,7 +371,7 @@ func findServerExecutable(cliPath string) string {
 }
 
 func init() {
-	serverStartCmd.Flags().Int("port", 0, "服务器端口（默认 8888）")
+	serverStartCmd.Flags().Int("port", 0, "服务器端口（默认 13618）")
 	serverStopCmd.Flags().Bool("force", false, "强制停止服务器")
 	serverLogsCmd.Flags().BoolP("follow", "f", false, "实时跟踪日志输出")
 	serverLogsCmd.Flags().IntP("lines", "n", 50, "显示最后 N 行日志")
