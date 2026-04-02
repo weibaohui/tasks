@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -22,12 +21,12 @@ import (
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/config"
-	"github.com/weibh/taskmanager/internal/embed"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
+	"github.com/weibh/taskmanager/internal/embed"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -192,13 +191,8 @@ func main() {
 	})
 
 	// 8. 创建 HTTP Server
-	// Web 服务使用独立端口（默认 Server.Port + 1，或从环境变量读取）
-	webPort := cfg.Server.Port + 1
-	if envPort := os.Getenv("WEB_PORT"); envPort != "" {
-		if p, err := strconv.Atoi(envPort); err == nil {
-			webPort = p
-		}
-	}
+	webPort := cfg.Server.Port
+
 	addr := fmt.Sprintf(":%d", webPort)
 	server := &http.Server{
 		Addr:         addr,
@@ -215,8 +209,6 @@ func main() {
 			logger.Fatal("HTTP Server 启动失败", zap.Error(err))
 		}
 	}()
-
-	logger.Info("Web 服务已启动", zap.String("addr", addr))
 
 	// 9. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
