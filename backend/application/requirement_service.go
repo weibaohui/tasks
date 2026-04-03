@@ -176,6 +176,16 @@ type CopyAndDispatchRequirementCommand struct {
 	ID domain.RequirementID
 }
 
+// DeleteRequirementCommand 删除需求命令
+type DeleteRequirementCommand struct {
+	ID domain.RequirementID
+}
+
+// BatchDeleteRequirementsCommand 批量删除需求命令
+type BatchDeleteRequirementsCommand struct {
+	IDs []domain.RequirementID
+}
+
 // CopyAndDispatchRequirement 复制需求并派发新副本
 // 创建一个新需求，复制原需求内容，标题增加"[重新派发]"标记，然后派发
 func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.Context, cmd CopyAndDispatchRequirementCommand, dispatchService *RequirementDispatchService) (*domain.Requirement, error) {
@@ -237,4 +247,27 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 	}
 
 	return newReq, nil
+}
+
+// DeleteRequirement 删除需求
+func (s *RequirementApplicationService) DeleteRequirement(ctx context.Context, cmd DeleteRequirementCommand) error {
+	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return err
+	}
+	if requirement == nil {
+		return ErrRequirementNotFound
+	}
+	return s.requirementRepo.Delete(ctx, cmd.ID)
+}
+
+// BatchDeleteRequirements 批量删除需求
+func (s *RequirementApplicationService) BatchDeleteRequirements(ctx context.Context, cmd BatchDeleteRequirementsCommand) error {
+	var lastErr error
+	for _, id := range cmd.IDs {
+		if err := s.DeleteRequirement(ctx, DeleteRequirementCommand{ID: id}); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }

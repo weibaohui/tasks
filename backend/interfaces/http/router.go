@@ -475,6 +475,14 @@ func SetupRoutesWithManagement(
 			}
 			requirementHandler.RedispatchRequirement(w, r)
 		}))
+		// 批量删除需求
+		mux.HandleFunc("/api/v1/requirements/batch-delete", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			requirementHandler.BatchDeleteRequirements(w, r)
+		}))
 		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
@@ -487,6 +495,8 @@ func SetupRoutesWithManagement(
 				requirementHandler.ListRequirements(w, r)
 			case http.MethodPut:
 				requirementHandler.UpdateRequirement(w, r)
+			case http.MethodDelete:
+				requirementHandler.DeleteRequirement(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
