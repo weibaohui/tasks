@@ -212,17 +212,6 @@ func TestProjectUpdate(t *testing.T) {
 }
 
 func TestProjectUpdateValidation(t *testing.T) {
-	project, err := NewProject(
-		NewProjectID("proj-001"),
-		"原名称",
-		"https://github.com/test/old.git",
-		"main",
-		[]string{},
-	)
-	if err != nil {
-		t.Fatalf("创建项目失败: %v", err)
-	}
-
 	tests := []struct {
 		name          string
 		projectName   string
@@ -269,7 +258,18 @@ func TestProjectUpdateValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := project.Update(tt.projectName, tt.gitRepoURL, tt.defaultBranch, []string{})
+			project, err := NewProject(
+				NewProjectID("proj-001"),
+				"原名称",
+				"https://github.com/test/old.git",
+				"main",
+				[]string{},
+			)
+			if err != nil {
+				t.Fatalf("创建项目失败: %v", err)
+			}
+
+			err = project.Update(tt.projectName, tt.gitRepoURL, tt.defaultBranch, []string{})
 			if err != tt.wantErr {
 				t.Errorf("期望错误 %v, 实际 %v", tt.wantErr, err)
 			}
