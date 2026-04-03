@@ -44,7 +44,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [activeTabKey, setActiveTabKey] = useState<string>('projects');
+  const [activeTabKey, setActiveTabKey] = useState<string>('requirements');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [requirementModalOpen, setRequirementModalOpen] = useState(false);
@@ -694,25 +694,6 @@ export const ProjectRequirementPage: React.FC = () => {
         onChange={(key) => setActiveTabKey(key)}
         items={[
           {
-            key: 'projects',
-            label: '项目管理',
-            children: (
-              <Card
-                title={`项目列表 (${projects.length})`}
-                extra={
-                  <Space>
-                    <Button onClick={() => fetchProjects()}>刷新</Button>
-                    <Button type="primary" onClick={openCreateProject}>
-                      新建项目
-                    </Button>
-                  </Space>
-                }
-              >
-                <Table<Project> rowKey="id" loading={loadingProjects} dataSource={projects} columns={projectColumns} />
-              </Card>
-            ),
-          },
-          {
             key: 'requirements',
             label: '需求管理',
             children: (
@@ -777,6 +758,25 @@ export const ProjectRequirementPage: React.FC = () => {
                     onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
                   }}
                 />
+              </Card>
+            ),
+          },
+          {
+            key: 'projects',
+            label: '项目管理',
+            children: (
+              <Card
+                title={`项目列表 (${projects.length})`}
+                extra={
+                  <Space>
+                    <Button onClick={() => fetchProjects()}>刷新</Button>
+                    <Button type="primary" onClick={openCreateProject}>
+                      新建项目
+                    </Button>
+                  </Space>
+                }
+              >
+                <Table<Project> rowKey="id" loading={loadingProjects} dataSource={projects} columns={projectColumns} />
               </Card>
             ),
           },
