@@ -68,6 +68,12 @@ export interface RoleDistribution {
   count: number;
 }
 
+export interface ProjectDistribution {
+  project_id: string;
+  name: string;
+  tokens: number;
+}
+
 export interface SessionStats {
   total_sessions: number;
   avg_messages_per_session: number;
@@ -79,5 +85,6 @@ export interface ConversationStats {
   agent_distribution: AgentDistribution[];
   channel_distribution: ChannelDistribution[];
   role_distribution: RoleDistribution[];
+  project_distribution: ProjectDistribution[];
   session_stats: SessionStats;
 }
