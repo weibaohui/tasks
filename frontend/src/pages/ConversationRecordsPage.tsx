@@ -1,7 +1,7 @@
 /**
  * 对话记录页面
  * 支持按条件查询对话记录，以对话形式展示会话记录，以及链路树可视化
- */
+import { TraceViewer } from '../components/TraceViewer'; */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
