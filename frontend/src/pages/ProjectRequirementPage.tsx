@@ -12,6 +12,7 @@ import type { HookConfig, CreateHookConfigRequest, UpdateHookConfigRequest } fro
 import { TRIGGER_POINTS, ACTION_TYPES } from '../types/hook';
 import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
+import { RequirementStatusStats } from '../components/RequirementStatusStats';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -697,9 +698,15 @@ export const ProjectRequirementPage: React.FC = () => {
             key: 'requirements',
             label: '需求管理',
             children: (
-              <Card
-                title={`需求列表 (${filteredRequirements.length})`}
-                extra={
+              <>
+                <RequirementStatusStats
+                  requirements={requirements}
+                  statusFilter={statusFilter}
+                  onStatusClick={(status) => setStatusFilter(status)}
+                />
+                <Card
+                  title={`需求列表 (${filteredRequirements.length})`}
+                  extra={
                   <Space>
                     <Select
                       style={{ width: 280 }}
@@ -759,6 +766,7 @@ export const ProjectRequirementPage: React.FC = () => {
                   }}
                 />
               </Card>
+              </>
             ),
           },
           {
