@@ -83,6 +83,7 @@ function getTraceStats(records: ConversationRecord[]) {
 }
 
 function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
+  console.log('buildTraceTree input:', records.map(r => ({ span_id: r.span_id, parent_span_id: r.parent_span_id, role: r.role })));
   const nodeMap = new Map<string, TraceNode>();
 
   const eventPriority: Record<string, number> = {
