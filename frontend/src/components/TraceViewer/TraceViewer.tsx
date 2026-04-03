@@ -2,7 +2,7 @@
  * TraceViewer - 对话链路查看组件
  * 可复用的对话链路显示组件，传入 traceId 即可显示该链路的所有对话记录
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -167,23 +167,36 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
   const [records, setRecords] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
+  const fetchIdRef = useRef(0);
 
   const fetchRecords = useCallback(async () => {
     if (!traceId) return;
+    const fetchId = ++fetchIdRef.current;
+    setRecords([]);
     setLoading(true);
     try {
       const data = await getConversationRecordsByTrace(traceId);
-      setRecords(data);
+      if (fetchId === fetchIdRef.current) {
+        setRecords(data);
+      }
     } catch {
-      message.error('获取对话链路数据失败');
+      if (fetchId === fetchIdRef.current) {
+        message.error('获取对话链路数据失败');
+      }
     } finally {
-      setLoading(false);
+      if (fetchId === fetchIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [traceId]);
 
   useEffect(() => {
     if (visible && traceId) {
       fetchRecords();
+    }
+    if (!visible) {
+      fetchIdRef.current++;
+      setRecords([]);
     }
   }, [visible, traceId, fetchRecords]);
 
