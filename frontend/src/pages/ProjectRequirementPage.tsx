@@ -80,13 +80,17 @@ export const ProjectRequirementPage: React.FC = () => {
   // 需求状态过滤
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  // 根据状态过滤后的需求列表
+  // 需求类型过滤
+  const [typeFilter, setTypeFilter] = useState<string>('');
+
+  // 根据状态和类型过滤后的需求列表
   const filteredRequirements = useMemo(() => {
-    if (!statusFilter) {
-      return requirements;
-    }
-    return requirements.filter((req) => req.status === statusFilter);
-  }, [requirements, statusFilter]);
+    return requirements.filter((req) => {
+      const matchStatus = !statusFilter || req.status === statusFilter;
+      const matchType = !typeFilter || req.requirement_type === typeFilter || (typeFilter === 'normal' && !req.requirement_type);
+      return matchStatus && matchType;
+    });
+  }, [requirements, statusFilter, typeFilter]);
 
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
@@ -552,6 +556,15 @@ export const ProjectRequirementPage: React.FC = () => {
   const requirementColumns = [
     { title: '标题', dataIndex: 'title', key: 'title' },
     {
+      title: '类型',
+      key: 'requirement_type',
+      render: (_: unknown, item: Requirement) => (
+        <Tag color={item.requirement_type === 'heartbeat' ? 'orange' : 'default'}>
+          {item.requirement_type === 'heartbeat' ? '心跳' : '普通'}
+        </Tag>
+      ),
+    },
+    {
       title: '状态',
       key: 'status',
       render: (_: unknown, item: Requirement) => (
@@ -666,6 +679,18 @@ export const ProjectRequirementPage: React.FC = () => {
                       value={statusFilter || undefined}
                       options={statusOptions}
                       onChange={(value) => setStatusFilter(value || '')}
+                      allowClear
+                    />
+                    <Select
+                      style={{ width: 150 }}
+                      placeholder="按类型过滤"
+                      value={typeFilter || undefined}
+                      options={[
+                        { label: '全部类型', value: '' },
+                        { label: '普通', value: 'normal' },
+                        { label: '心跳', value: 'heartbeat' },
+                      ]}
+                      onChange={(value) => setTypeFilter(value || '')}
                       allowClear
                     />
                     <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
