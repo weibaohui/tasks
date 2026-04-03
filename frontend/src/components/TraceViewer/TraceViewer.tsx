@@ -43,10 +43,6 @@ interface TraceNode {
   duration?: number;
 }
 
-function formatTime(ms: number): string {
-  return new Date(ms).toLocaleString();
-}
-
 function getRoleColor(role?: string): string {
   const colors: Record<string, string> = {
     user: 'blue',
@@ -83,7 +79,6 @@ function getTraceStats(records: ConversationRecord[]) {
 }
 
 function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
-  console.log('buildTraceTree input:', records.map(r => ({ span_id: r.span_id, parent_span_id: r.parent_span_id, role: r.role })));
   const nodeMap = new Map<string, TraceNode>();
 
   const eventPriority: Record<string, number> = {
@@ -108,10 +103,6 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
   };
 
   const sorted = [...records].sort(compareByOrder);
-  const indexById = new Map<string, number>();
-  sorted.forEach((record, index) => {
-    indexById.set(record.id, index);
-  });
 
   sorted.forEach((record, index) => {
     const nextRecord = sorted[index + 1];
@@ -130,35 +121,34 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
             <Tag color="blue">{record.total_tokens} tokens</Tag>
           )}
           {duration > 0 && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              +{duration}ms
+            <Text type="success" style={{ fontSize: 12 }}>
+              +{(duration / 1000).toFixed(1)}s
             </Text>
           )}
         </Space>
-        <Text style={{ fontSize: 12 }}>
-          {record.content?.slice(0, 60)}
-          {(record.content?.length || 0) > 60 ? '...' : ''}
-        </Text>
-        <Text type="secondary" style={{ fontSize: 11 }}>
-          {formatTime(record.timestamp || 0)}
+        <Text ellipsis style={{ maxWidth: 400, fontSize: 12 }}>
+          {record.content?.substring(0, 100)}
+          {record.content?.length > 100 ? '...' : ''}
         </Text>
       </Space>
     );
 
     nodeMap.set(record.span_id, {
-      key: record.id,
+      key: record.span_id,
       title,
       record,
       duration,
+      children: [],
     });
   });
 
   const roots: TraceNode[] = [];
   sorted.forEach((record) => {
-    const node = nodeMap.get(record.span_id)!;
+    const node = nodeMap.get(record.span_id);
+    if (!node) return;
     if (record.parent_span_id && record.parent_span_id !== '' && nodeMap.has(record.parent_span_id)) {
       const parent = nodeMap.get(record.parent_span_id)!;
-      if (!parent.children) parent.children = [];
+      parent.children = parent.children || [];
       parent.children.push(node);
     } else {
       roots.push(node);

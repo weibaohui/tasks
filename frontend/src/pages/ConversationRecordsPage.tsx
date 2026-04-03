@@ -1,7 +1,7 @@
 /**
  * 对话记录页面
  * 支持按条件查询对话记录，以对话形式展示会话记录，以及链路树可视化
-import { TraceViewer } from '../components/TraceViewer'; */
+ */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -13,34 +13,23 @@ import {
   Space,
   Table,
   Tag,
-  Typography,
   message,
-  Modal,
-  Tree,
-  Row,
-  Col,
-  Statistic,
-  Divider,
   DatePicker,
   Tooltip,
 } from 'antd';
 import {
   EyeOutlined,
-  MessageOutlined,
   FilterOutlined,
   ClearOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
-import type { DataNode } from 'antd/es/tree';
 import dayjs from 'dayjs';
 import {
   listConversationRecords,
-  getConversationRecordsByTrace,
 } from '../api/conversationRecordApi';
 import type { ConversationRecord, ListConversationRecordsQuery } from '../types/conversationRecord';
-
-const { Text } = Typography;
+import { TraceViewer } from '../components/TraceViewer';
 
 type QueryFormValues = {
   trace_id?: string;
@@ -59,31 +48,6 @@ function formatTime(ms: number): string {
   return new Date(ms).toLocaleString();
 }
 
-/**
- * 将角色映射为更易读的标签展示
- */
-function getRoleColor(role?: string): string {
-  const colors: Record<string, string> = {
-    user: 'blue',
-    assistant: 'green',
-    system: 'orange',
-    tool: 'purple',
-    tool_result: 'cyan',
-  };
-  return colors[role || ''] || 'default';
-}
-
-function getRoleLabel(role?: string): string {
-  const labels: Record<string, string> = {
-    user: '用户',
-    assistant: '助手',
-    system: '系统',
-    tool: '工具',
-    tool_result: '工具结果',
-  };
-  return labels[role || ''] || role || '';
-}
-
 function toRoleTag(role: string): React.ReactNode {
   const r = (role || '').toLowerCase();
   if (r === 'user') return <Tag color="blue">user</Tag>;
@@ -92,15 +56,6 @@ function toRoleTag(role: string): React.ReactNode {
   if (r === 'tool') return <Tag color="orange">tool</Tag>;
   if (r === 'tool_result') return <Tag color="cyan">tool_result</Tag>;
   return <Tag>{role || '-'}</Tag>;
-}
-
-// 链路树节点类型
-interface TraceNode {
-  key: string;
-  title: React.ReactNode;
-  children?: TraceNode[];
-  record: ConversationRecord;
-  duration?: number;
 }
 
 export const ConversationRecordsPage: React.FC = () => {
@@ -117,13 +72,7 @@ export const ConversationRecordsPage: React.FC = () => {
 
   // 链路可视化状态
   const [traceVisible, setTraceVisible] = useState(false);
-  const [traceRecords, setTraceRecords] = useState<ConversationRecord[]>([]);
-  const [traceLoading, setTraceLoading] = useState(false);
   const [currentTraceId, setCurrentTraceId] = useState('');
-
-  // 对话详情弹窗状态
-  const [chatVisible, setChatVisible] = useState(false);
-  const [chatRecords, setChatRecords] = useState<ConversationRecord[]>([]);
 
   // 筛选面板状态
   const [filterVisible, setFilterVisible] = useState(false);
@@ -187,173 +136,6 @@ export const ConversationRecordsPage: React.FC = () => {
       setLoading(false);
     }
   }, [form, pagination]);
-
-  /**
-   * 获取链路数据
-   */
-  const fetchTraceRecords = useCallback(async (traceId: string) => {
-    setTraceLoading(true);
-    try {
-      const data = await getConversationRecordsByTrace(traceId);
-      setTraceRecords(data);
-      return data;
-    } catch (_error) {
-      message.error('获取链路数据失败');
-      return [];
-    } finally {
-      setTraceLoading(false);
-    }
-  }, []);
-
-  // 构建链路树
-  const buildTraceTree = (records: ConversationRecord[]): TraceNode[] => {
-    const nodeMap = new Map<string, TraceNode>();
-
-    const eventPriority: Record<string, number> = {
-      llm_call_end: 10,
-      tool_completed: 20,
-    };
-    const rolePriority: Record<string, number> = {
-      tool: 10,
-      tool_result: 20,
-    };
-    const compareByOrder = (a: ConversationRecord, b: ConversationRecord) => {
-      const timeDiff = (a.timestamp || 0) - (b.timestamp || 0);
-      if (timeDiff !== 0) return timeDiff;
-      const eventDiff = (eventPriority[a.event_type || ''] || 1000) - (eventPriority[b.event_type || ''] || 1000);
-      if (eventDiff !== 0) return eventDiff;
-      const roleDiff = (rolePriority[a.role || ''] || 1000) - (rolePriority[b.role || ''] || 1000);
-      if (roleDiff !== 0) return roleDiff;
-      return a.id.localeCompare(b.id);
-    };
-
-    // 按时间排序
-    const sorted = [...records].sort(compareByOrder);
-    const indexById = new Map<string, number>();
-    sorted.forEach((record, index) => {
-      indexById.set(record.id, index);
-    });
-
-    // 创建所有节点
-    sorted.forEach((record, index) => {
-      const nextRecord = sorted[index + 1];
-      const duration = nextRecord
-        ? (nextRecord.timestamp || 0) - (record.timestamp || 0)
-        : 0;
-
-      const title = (
-        <Space direction="vertical" size={0} style={{ width: '100%' }}>
-          <Space>
-            <Tag color={getRoleColor(record.role)}>{getRoleLabel(record.role)}</Tag>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {record.event_type}
-            </Text>
-            {record.total_tokens > 0 && (
-              <Tag color="blue">{record.total_tokens} tokens</Tag>
-            )}
-            {duration > 0 && duration < 300000 && (
-              <Text type="success" style={{ fontSize: 12 }}>
-                +{duration}ms
-              </Text>
-            )}
-          </Space>
-          <Text ellipsis style={{ maxWidth: 400, fontSize: 12 }}>
-            {record.content?.substring(0, 100)}
-            {record.content?.length > 100 ? '...' : ''}
-          </Text>
-        </Space>
-      );
-
-      nodeMap.set(record.id, {
-        key: record.id,
-        title,
-        record,
-        duration,
-        children: [],
-      });
-    });
-
-    const roots = sorted
-      .map(record => nodeMap.get(record.id))
-      .filter((node): node is TraceNode => !!node);
-
-    const detachNode = (targetId: string) => {
-      const rootIndex = roots.findIndex(node => node.record.id === targetId);
-      if (rootIndex >= 0) {
-        roots.splice(rootIndex, 1);
-      }
-      nodeMap.forEach(node => {
-        if (!node.children || node.children.length === 0) return;
-        node.children = node.children.filter(child => child.record.id !== targetId);
-      });
-    };
-
-    sorted.forEach((record, index) => {
-      if (record.role !== 'tool_result') return;
-      const resultNode = nodeMap.get(record.id);
-      if (!resultNode) return;
-
-      let targetToolRecord: ConversationRecord | undefined;
-      for (let i = index - 1; i >= 0; i -= 1) {
-        const candidate = sorted[i];
-        if (candidate.role !== 'tool') continue;
-        if (record.parent_span_id && candidate.span_id === record.parent_span_id) {
-          targetToolRecord = candidate;
-          break;
-        }
-        if (record.span_id && candidate.span_id === record.span_id) {
-          targetToolRecord = candidate;
-          break;
-        }
-      }
-
-      if (!targetToolRecord) {
-        for (let i = index - 1; i >= 0; i -= 1) {
-          if (sorted[i].role === 'tool') {
-            targetToolRecord = sorted[i];
-            break;
-          }
-        }
-      }
-
-      if (!targetToolRecord) return;
-      const toolNode = nodeMap.get(targetToolRecord.id);
-      if (!toolNode) return;
-      const toolIndex = indexById.get(toolNode.record.id);
-      const resultIndex = indexById.get(resultNode.record.id);
-      if (toolIndex === undefined || resultIndex === undefined || toolIndex >= resultIndex) return;
-
-      detachNode(resultNode.record.id);
-      toolNode.children = toolNode.children || [];
-      if (!toolNode.children.some(child => child.record.id === resultNode.record.id)) {
-        toolNode.children.push(resultNode);
-      }
-    });
-
-    const sortTreeNodes = (nodes: TraceNode[]) => {
-      nodes.sort((a, b) => compareByOrder(a.record, b.record));
-      nodes.forEach(node => {
-        if (node.children && node.children.length > 0) {
-          sortTreeNodes(node.children);
-        }
-      });
-    };
-
-    sortTreeNodes(roots);
-    return roots;
-  };
-
-  // 计算链路统计
-  const getTraceStats = (records: ConversationRecord[]) => {
-    // 按时间排序
-    const sorted = [...records].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    const totalTokens = sorted.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
-    const startTime = sorted.length > 0 ? sorted[0].timestamp : null;
-    const endTime = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : null;
-    const duration = startTime && endTime ? (endTime - startTime) : 0;
-
-    return { totalTokens, duration, count: sorted.length };
-  };
 
   // 构建会话聊天消息
   const columns: ColumnsType<ConversationRecord> = useMemo(
@@ -439,32 +221,14 @@ export const ConversationRecordsPage: React.FC = () => {
         fixed: 'right' as const,
         render: (_: unknown, record: ConversationRecord) => (
           <Space size="small">
-            <Tooltip title="查看详情">
+            <Tooltip title="查看链路">
               <Button
                 type="text"
                 icon={<EyeOutlined />}
                 onClick={() => {
                   if (record.trace_id) {
                     setCurrentTraceId(record.trace_id);
-                    fetchTraceRecords(record.trace_id);
                     setTraceVisible(true);
-                  } else {
-                    message.warning('该记录没有 trace_id');
-                  }
-                }}
-              />
-            </Tooltip>
-            <Tooltip title="查看对话">
-              <Button
-                type="text"
-                icon={<MessageOutlined />}
-                onClick={() => {
-                  if (record.trace_id) {
-                    setCurrentTraceId(record.trace_id);
-                    fetchTraceRecords(record.trace_id).then(data => {
-                      setChatRecords(data);
-                      setChatVisible(true);
-                    });
                   } else {
                     message.warning('该记录没有 trace_id');
                   }
@@ -475,25 +239,8 @@ export const ConversationRecordsPage: React.FC = () => {
         ),
       },
     ],
-    [fetchTraceRecords, setChatRecords, setChatVisible, setCurrentTraceId],
+    [setCurrentTraceId],
   );
-
-  const traceStats = getTraceStats(traceRecords);
-  const traceTreeData = buildTraceTree(traceRecords);
-
-  // Convert TraceNode[] to DataNode[] for Ant Design Tree
-  const treeData: DataNode[] = traceTreeData.map(node => ({
-    key: node.key,
-    title: node.title,
-    children: node.children?.map(child => ({
-      key: child.key,
-      title: child.title,
-      children: child.children?.map(grandChild => ({
-        key: grandChild.key,
-        title: grandChild.title,
-      })),
-    })),
-  }));
 
   // 从 URL 参数读取 trace_id 并自动应用
   useEffect(() => {
@@ -611,112 +358,14 @@ export const ConversationRecordsPage: React.FC = () => {
       </Card>
 
       {/* 链路可视化弹窗 */}
-      <Modal
-        title={`对话链路 - ${currentTraceId.slice(0, 12)}...`}
-        open={traceVisible}
-        onCancel={() => {
+      <TraceViewer
+        traceId={currentTraceId}
+        visible={traceVisible}
+        onClose={() => {
           setTraceVisible(false);
-          setTraceRecords([]);
+          setCurrentTraceId('');
         }}
-        footer={null}
-        width={900}
-      >
-        {traceLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
-        ) : traceRecords.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
-        ) : (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Statistic title="总消息数" value={traceStats.count} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="总Token" value={traceStats.totalTokens} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="总耗时" value={`${traceStats.duration}ms`} />
-              </Col>
-            </Row>
-            <Divider />
-            <Tree
-              treeData={treeData}
-              showLine
-              defaultExpandAll
-              style={{ background: '#fafafa', padding: 16, borderRadius: 8 }}
-            />
-          </div>
-        )}
-      </Modal>
-
-      {/* 对话详情弹窗 */}
-      <Modal
-        title={`对话详情 - ${currentTraceId?.slice(0, 12) || ''}...`}
-        open={chatVisible}
-        onCancel={() => {
-          setChatVisible(false);
-          setChatRecords([]);
-        }}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setChatVisible(false)}>关闭</Button>
-          </div>
-        }
-        width={800}
-      >
-        {chatRecords.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
-        ) : (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Statistic title="消息数" value={chatRecords.length} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="总Token" value={chatRecords.reduce((sum, r) => sum + (r.total_tokens || 0), 0)} />
-              </Col>
-              <Col span={8}>
-                <Statistic title="时长" value={`${Math.round(((chatRecords[chatRecords.length - 1]?.timestamp || 0) - (chatRecords[0]?.timestamp || 0)) / 1000)}s`} />
-              </Col>
-            </Row>
-            <Divider />
-            <div style={{ maxHeight: 500, overflowY: 'auto', padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
-              {chatRecords.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).map((r) => (
-                <div
-                  key={r.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: r.role === 'user' ? 'row-reverse' : 'row',
-                    marginBottom: 16,
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div
-                    style={{
-                      maxWidth: '70%',
-                      padding: '12px 16px',
-                      borderRadius: r.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                      background: r.role === 'user' ? '#1890ff' : '#fff',
-                      color: r.role === 'user' ? '#fff' : '#333',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-                      {getRoleLabel(r.role)} · {r.total_tokens || 0} tokens
-                    </div>
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {r.content || ''}
-                    </div>
-                    <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
-                      {dayjs(r.timestamp).format('HH:mm:ss')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
+      />
     </div>
   );
 };
