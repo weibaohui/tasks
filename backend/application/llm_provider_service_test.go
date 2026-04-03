@@ -1222,7 +1222,18 @@ func TestLLMProviderService_TestConnection_Success(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	// 验证成功结果
+	// 验证传入 runner 的模型正确
+	if !mockRunner.called {
+		t.Error("期望 testRunner.RunTest 被调用")
+	}
+	if mockRunner.lastConfig == nil {
+		t.Fatal("期望 lastConfig 不为 nil")
+	}
+	if mockRunner.lastConfig.Model != "gpt-4" {
+		t.Errorf("期望传入 runner 的模型为 'gpt-4', 实际为 '%s'", mockRunner.lastConfig.Model)
+	}
+
+	// 验证返回结果
 	if result["success"] != true {
 		t.Errorf("期望 success 为 true, 实际为 %v", result["success"])
 	}
