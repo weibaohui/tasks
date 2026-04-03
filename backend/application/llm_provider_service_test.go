@@ -7,7 +7,21 @@ import (
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 )
+
+// mockTestConnectionRunner 用于测试的 fake runner
+type mockTestConnectionRunner struct {
+	returnErr   error
+	called      bool
+	lastConfig  *llm.Config
+}
+
+func (m *mockTestConnectionRunner) RunTest(ctx context.Context, config *llm.Config) error {
+	m.called = true
+	m.lastConfig = config
+	return m.returnErr
+}
 
 // mockLLMProviderRepoForService 模拟 LLMProviderRepository
 type mockLLMProviderRepoForService struct {
@@ -112,9 +126,18 @@ func (m *mockLLMProviderIDGen) Generate() string {
 }
 
 func setupTestLLMProviderSvc() (*LLMProviderApplicationService, *mockLLMProviderRepoForService, *mockLLMProviderIDGen) {
+	return setupTestLLMProviderSvcWithRunner(nil)
+}
+
+func setupTestLLMProviderSvcWithRunner(runner TestConnectionRunner) (*LLMProviderApplicationService, *mockLLMProviderRepoForService, *mockLLMProviderIDGen) {
 	repo := newMockLLMProviderRepoForService()
 	idGen := &mockLLMProviderIDGen{}
-	svc := NewLLMProviderApplicationService(repo, idGen)
+	var svc *LLMProviderApplicationService
+	if runner != nil {
+		svc = NewLLMProviderApplicationServiceWithRunner(repo, idGen, runner)
+	} else {
+		svc = NewLLMProviderApplicationService(repo, idGen)
+	}
 	return svc, repo, idGen
 }
 
@@ -1049,8 +1072,10 @@ func TestLLMProviderService_Update_SetDefaultFalse(t *testing.T) {
 	}
 }
 
+// TestLLMProviderService_TestConnection_WithSupportedModels 测试使用 SupportedModels[0] 作为模型
 func TestLLMProviderService_TestConnection_WithSupportedModels(t *testing.T) {
-	svc, repo, _ := setupTestLLMProviderSvc()
+	mockRunner := &mockTestConnectionRunner{returnErr: errors.New("connection failed")}
+	svc, repo, _ := setupTestLLMProviderSvcWithRunner(mockRunner)
 	ctx := context.Background()
 
 	// 创建一个带有 SupportedModels 但没有 DefaultModel 的 provider
@@ -1074,21 +1099,27 @@ func TestLLMProviderService_TestConnection_WithSupportedModels(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	// 由于没有真实的 API Key，测试会失败，但我们可以验证逻辑分支被覆盖
-	if result == nil {
-		t.Fatal("期望 result 不为 nil")
+	// 验证使用了正确的模型
+	if !mockRunner.called {
+		t.Error("期望 testRunner.RunTest 被调用")
+	}
+	if mockRunner.lastConfig == nil {
+		t.Fatal("期望 lastConfig 不为 nil")
+	}
+	if mockRunner.lastConfig.Model != "gpt-4" {
+		t.Errorf("期望模型为 'gpt-4', 实际为 '%s'", mockRunner.lastConfig.Model)
 	}
 
-	// 验证调用了测试连接（会因为无效 API Key 而失败）
-	// 模型选择逻辑已被覆盖
-	success, _ := result["success"].(bool)
-	if success {
-		t.Error("期望连接测试失败（因为 API Key 无效）")
+	// 验证返回结果
+	if result["success"] != false {
+		t.Errorf("期望 success 为 false, 实际为 %v", result["success"])
 	}
 }
 
+// TestLLMProviderService_TestConnection_WithDefaultModel 测试使用 DefaultModel 作为模型
 func TestLLMProviderService_TestConnection_WithDefaultModel(t *testing.T) {
-	svc, repo, _ := setupTestLLMProviderSvc()
+	mockRunner := &mockTestConnectionRunner{returnErr: errors.New("connection failed")}
+	svc, repo, _ := setupTestLLMProviderSvcWithRunner(mockRunner)
 	ctx := context.Background()
 
 	// 创建一个同时有 DefaultModel 和 SupportedModels 的 provider
@@ -1111,19 +1142,26 @@ func TestLLMProviderService_TestConnection_WithDefaultModel(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	if result == nil {
-		t.Fatal("期望 result 不为 nil")
+	// 验证使用了 DefaultModel 而不是 SupportedModels[0]
+	if !mockRunner.called {
+		t.Error("期望 testRunner.RunTest 被调用")
+	}
+	if mockRunner.lastConfig == nil {
+		t.Fatal("期望 lastConfig 不为 nil")
+	}
+	if mockRunner.lastConfig.Model != "gpt-4-turbo" {
+		t.Errorf("期望模型为 'gpt-4-turbo', 实际为 '%s'", mockRunner.lastConfig.Model)
 	}
 
-	// 由于 API Key 无效，测试会失败，但我们验证了使用 DefaultModel 的逻辑分支
-	success, _ := result["success"].(bool)
-	if success {
-		t.Error("期望连接测试失败（因为 API Key 无效）")
+	if result["success"] != false {
+		t.Errorf("期望 success 为 false, 实际为 %v", result["success"])
 	}
 }
 
+// TestLLMProviderService_TestConnection_FallbackModel 测试使用默认回退模型
 func TestLLMProviderService_TestConnection_FallbackModel(t *testing.T) {
-	svc, repo, _ := setupTestLLMProviderSvc()
+	mockRunner := &mockTestConnectionRunner{returnErr: errors.New("connection failed")}
+	svc, repo, _ := setupTestLLMProviderSvcWithRunner(mockRunner)
 	ctx := context.Background()
 
 	// 创建一个既没有 DefaultModel 也没有 SupportedModels 的 provider
@@ -1143,13 +1181,105 @@ func TestLLMProviderService_TestConnection_FallbackModel(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	if result == nil {
-		t.Fatal("期望 result 不为 nil")
+	// 验证使用了回退模型
+	if !mockRunner.called {
+		t.Error("期望 testRunner.RunTest 被调用")
+	}
+	if mockRunner.lastConfig == nil {
+		t.Fatal("期望 lastConfig 不为 nil")
+	}
+	if mockRunner.lastConfig.Model != "gpt-3.5-turbo" {
+		t.Errorf("期望模型为 'gpt-3.5-turbo', 实际为 '%s'", mockRunner.lastConfig.Model)
 	}
 
-	// 由于 API Key 无效，测试会失败，但我们验证了使用回退模型的逻辑分支
-	success, _ := result["success"].(bool)
-	if success {
-		t.Error("期望连接测试失败（因为 API Key 无效）")
+	if result["success"] != false {
+		t.Errorf("期望 success 为 false, 实际为 %v", result["success"])
+	}
+}
+
+// TestLLMProviderService_TestConnection_Success 测试连接成功场景
+func TestLLMProviderService_TestConnection_Success(t *testing.T) {
+	mockRunner := &mockTestConnectionRunner{returnErr: nil} // 成功场景
+	svc, repo, _ := setupTestLLMProviderSvcWithRunner(mockRunner)
+	ctx := context.Background()
+
+	provider, _ := domain.NewLLMProvider(
+		domain.NewLLMProviderID("provider-success"),
+		"user-001",
+		"openai",
+		"OpenAI",
+		"sk-test-key",
+		"https://api.openai.com",
+	)
+	provider.SetDefaultModel("gpt-4")
+	provider.SetSupportedModels([]domain.ModelInfo{
+		{ID: "gpt-4", Name: "GPT-4", MaxTokens: 8192},
+	})
+	repo.providers["provider-success"] = provider
+
+	result, err := svc.TestConnection(ctx, domain.NewLLMProviderID("provider-success"))
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	// 验证成功结果
+	if result["success"] != true {
+		t.Errorf("期望 success 为 true, 实际为 %v", result["success"])
+	}
+	if result["message"] != "连接测试成功" {
+		t.Errorf("期望 message 为 '连接测试成功', 实际为 '%v'", result["message"])
+	}
+	if result["model"] != "gpt-4" {
+		t.Errorf("期望 model 为 'gpt-4', 实际为 '%v'", result["model"])
+	}
+}
+
+// TestChooseModelForProvider 测试模型选择纯函数
+func TestChooseModelForProvider(t *testing.T) {
+	tests := []struct {
+		name            string
+		defaultModel    string
+		supportedModels []domain.ModelInfo
+		expected        string
+	}{
+		{
+			name:            "使用 DefaultModel 当存在时",
+			defaultModel:    "gpt-4-turbo",
+			supportedModels: []domain.ModelInfo{{ID: "gpt-3.5", Name: "GPT-3.5"}},
+			expected:        "gpt-4-turbo",
+		},
+		{
+			name:            "使用 SupportedModels[0] 当 DefaultModel 为空",
+			defaultModel:    "",
+			supportedModels: []domain.ModelInfo{{ID: "gpt-4", Name: "GPT-4"}, {ID: "gpt-3.5", Name: "GPT-3.5"}},
+			expected:        "gpt-4",
+		},
+		{
+			name:            "使用回退模型当两者都为空",
+			defaultModel:    "",
+			supportedModels: []domain.ModelInfo{},
+			expected:        "gpt-3.5-turbo",
+		},
+		{
+			name:            "使用回退模型当 SupportedModels 为 nil",
+			defaultModel:    "",
+			supportedModels: nil,
+			expected:        "gpt-3.5-turbo",
+		},
+		{
+			name:            "优先使用 DefaultModel 即使 SupportedModels 为空",
+			defaultModel:    "custom-model",
+			supportedModels: []domain.ModelInfo{},
+			expected:        "custom-model",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ChooseModelForProvider(tt.defaultModel, tt.supportedModels)
+			if result != tt.expected {
+				t.Errorf("期望模型为 '%s', 实际为 '%s'", tt.expected, result)
+			}
+		})
 	}
 }
