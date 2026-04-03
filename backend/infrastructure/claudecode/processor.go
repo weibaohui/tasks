@@ -10,6 +10,7 @@ import (
 	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -46,6 +47,15 @@ func (a *toolHookAdapter) preToolUseAdapter(ctx context.Context, input any, tool
 	if !ok {
 		a.logger.Warn("ClaudeCode PreToolUse: unexpected input type")
 		return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+	}
+
+	// 在 Claude Code SDK 路径中，PostLLMCall（会设置 ToolParentSpanKey）在工具调用之后才执行（defer）。
+	// 因此首次 PreToolCall 时 ToolParentSpanKey 还未设置，需要在这里主动设置，
+	// 确保连续工具调用共享同一个父级（llm_response_with_tools），而不是互相嵌套。
+	if a.hookCtx.Get(hooks.ToolParentSpanKey) == nil {
+		if currentSpan, ok := a.hookCtx.Get(hooks.SpanKey).(string); ok && currentSpan != "" {
+			a.hookCtx.WithValue(hooks.ToolParentSpanKey, currentSpan)
+		}
 	}
 
 	// Convert to domain.ToolCallContext
@@ -433,19 +443,16 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			llmCallCtx = modifiedCtx
 		}
 
-		// 确保 PostLLMCall 被调用
-		// 注意：流式查询可能需要较长时间，使用 background context 避免 context 超时
+		// 确保 PostLLMCall 和 OnToolExecutionComplete 被调用
+		// 使用 hookCtx（而非新建 context），确保 span 状态在 PreToolCall/PostToolCall 之间正确共享
 		defer func() {
 			resp := &domain.LLMResponse{Content: result, Usage: domain.Usage{}}
 			if llmUsage != nil {
 				resp.Usage = *llmUsage
 			}
-			// 使用 background context 创建新的 hook context
-			bgHookCtx := domain.NewHookContext(context.Background())
-			// 设置必要的 metadata
-			bgHookCtx.SetMetadata("session_key", sessionKey)
-			bgHookCtx.SetMetadata("trace_id", traceID)
-			p.hookManager.PostLLMCall(bgHookCtx, llmCallCtx, resp)
+			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
+			// 工具执行完成后，写入延迟的最终 llm_response
+			p.hookManager.OnToolExecutionComplete(hookCtx)
 		}()
 	}
 

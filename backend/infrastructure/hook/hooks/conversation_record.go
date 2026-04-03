@@ -63,10 +63,11 @@ func NewConversationRecordHook(
 type contextKey string
 
 const (
-	ScopeKey            contextKey = "conversation_scope"
-	spanKey             contextKey = "conversation_span"
-	promptKey           contextKey = "conversation_prompt"
-	deferredResponseKey contextKey = "conversation_deferred_response"
+	ScopeKey             contextKey = "conversation_scope"
+	SpanKey              contextKey = "conversation_span"
+	ToolParentSpanKey    contextKey = "conversation_tool_parent_span"
+	promptKey            contextKey = "conversation_prompt"
+	deferredResponseKey  contextKey = "conversation_deferred_response"
 )
 
 // ScopeInfo 存储对话范围信息 - 导出供其他包使用
@@ -131,7 +132,7 @@ func (h *ConversationRecordHook) PreLLMCall(ctx *domain.HookContext, callCtx *do
 	// 重新提取 scope，确保使用完整的 Metadata
 	scope = h.extractScope(ctx, callCtx)
 	ctx.WithValue(ScopeKey, scope)
-	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(SpanKey, spanID)
 	ctx.WithValue(promptKey, callCtx.Prompt)
 
 	// 记录用户输入（使用 UserInput 原始输入，不使用包含历史的 Prompt）
@@ -165,8 +166,8 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		return resp, nil
 	}
 
-	// 获取用户输入的 span_id 作为 parent（来自 PreLLMCall 存储的 spanKey）
-	parentSpanID, _ := ctx.Get(spanKey).(string)
+	// 获取用户输入的 span_id 作为 parent（来自 PreLLMCall 存储的 SpanKey）
+	parentSpanID, _ := ctx.Get(SpanKey).(string)
 	if parentSpanID == "" {
 		parentSpanID = trace.GetSpanID(ctx.Context)
 	}
@@ -178,7 +179,7 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 	spanID := h.idGenerator.Generate()
 
 	// 存储新的 span_id 到 HookContext.values，供后续 PreToolCall 使用
-	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(SpanKey, spanID)
 
 	traceID := callCtx.TraceID
 	if traceID == "" {
@@ -204,33 +205,41 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		channelType = callCtx.Metadata["channel_type"]
 	}
 
-	// 如果 LLM 决定调用工具，先记录中间响应（包含 tool_calls）
-	if hasToolCalls && resp.Content != "" {
+	// 如果 LLM 决定调用工具
+	if hasToolCalls {
 		toolCallsSpanID := h.idGenerator.Generate()
-		// 中间响应的 parent 是用户输入的 span
-		toolCallsRecord, err := h.createRecord(traceID, toolCallsSpanID, parentSpanID, "llm_response_with_tools", "assistant", resp.Content)
-		if err != nil {
-			h.logger.Error("Failed to create conversation record for LLM response with tools", zap.Error(err))
-		} else {
-			toolCallsRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
-			toolCallsRecord.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
-			if err := h.repo.Save(context.Background(), toolCallsRecord); err != nil {
-				h.logger.Error("Failed to save conversation record for LLM response with tools", zap.Error(err))
+
+		// 仅当有内容时记录中间响应
+		if resp.Content != "" {
+			// 中间响应的 parent 是用户输入的 span
+			toolCallsRecord, err := h.createRecord(traceID, toolCallsSpanID, parentSpanID, "llm_response_with_tools", "assistant", resp.Content)
+			if err != nil {
+				h.logger.Error("Failed to create conversation record for LLM response with tools", zap.Error(err))
+			} else {
+				toolCallsRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
+				toolCallsRecord.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
+				if err := h.repo.Save(context.Background(), toolCallsRecord); err != nil {
+					h.logger.Error("Failed to save conversation record for LLM response with tools", zap.Error(err))
+				}
+				h.logger.Debug("ConversationRecord: saved LLM response with tools",
+					zap.String("trace_id", traceID),
+					zap.String("span_id", toolCallsSpanID),
+					zap.String("parent_span_id", parentSpanID))
 			}
-			h.logger.Debug("ConversationRecord: saved LLM response with tools",
-				zap.String("trace_id", traceID),
-				zap.String("span_id", toolCallsSpanID),
-				zap.String("parent_span_id", parentSpanID))
 		}
 
-		// 更新 span 链：后续的 tool_call 应该以这个中间响应为 parent
-		ctx.WithValue(spanKey, toolCallsSpanID)
+		// 更新 span 链：后续的 tool_call 应以这个中间响应为 parent
+		// ToolParentSpanKey 存储固定的工具调用父级，不随每次 tool 调用更新
+		// SpanKey 仍更新为 toolCallsSpanID，供非工具场景使用
+		// 即使 resp.Content 为空也必须设置，否则连续工具调用的 parent 会断裂
+		ctx.WithValue(ToolParentSpanKey, toolCallsSpanID)
+		ctx.WithValue(SpanKey, toolCallsSpanID)
 
 		// 延迟记录最终的 llm_response：存储信息到 context，由 OnToolExecutionComplete 记录
 		ctx.WithValue(deferredResponseKey, &deferredLLMResponse{
 			TraceID:      traceID,
 			SpanID:       spanID,
-			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_call 的 span
+			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_result 的 span
 			Content:      resp.Content,
 			Usage:        resp.Usage,
 			Scope: ScopeInfo{
@@ -288,9 +297,13 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	// 生成新的 span_id 用于工具调用
 	spanID := h.idGenerator.Generate()
 
-	// 从 ctx 获取父 span_id（PostLLMCall 会存储新的 span）
+	// 从 ctx 获取父 span_id
+	// 优先使用 ToolParentSpanKey（PostLLMCall 存储的固定父级 span），
+	// 这样连续工具调用都有正确的共同父级（llm_response_with_tools），而不是互相嵌套
 	parentSpanID := ""
-	if p, ok := ctx.Get(spanKey).(string); ok {
+	if p, ok := ctx.Get(ToolParentSpanKey).(string); ok && p != "" {
+		parentSpanID = p
+	} else if p, ok := ctx.Get(SpanKey).(string); ok {
 		parentSpanID = p
 	}
 	if parentSpanID == "" {
@@ -316,7 +329,7 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 存储当前 span_id 供 PostToolCall 使用
-	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(SpanKey, spanID)
 
 	h.logger.Debug("ConversationRecord: saved tool call",
 		zap.String("trace_id", traceID),
@@ -338,7 +351,7 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 	}
 
 	// 从 ctx 获取 tool_call 的 span_id 作为 parent
-	toolCallSpanID, _ := ctx.Get(spanKey).(string)
+	toolCallSpanID, _ := ctx.Get(SpanKey).(string)
 	if toolCallSpanID == "" {
 		toolCallSpanID = h.idGenerator.Generate()
 	}
@@ -387,7 +400,7 @@ func (h *ConversationRecordHook) PostToolCall(ctx *domain.HookContext, callCtx *
 		zap.Bool("success", result.Success))
 
 	// 更新 ctx 中的 span_id 为新的 tool_result span_id，供后续调用使用
-	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(SpanKey, spanID)
 
 	return result, nil
 }
@@ -404,7 +417,7 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	}
 
 	// 从 ctx 获取 tool_call 的 span_id 作为 parent
-	toolCallSpanID, _ := ctx.Get(spanKey).(string)
+	toolCallSpanID, _ := ctx.Get(SpanKey).(string)
 	if toolCallSpanID == "" {
 		toolCallSpanID = h.idGenerator.Generate()
 	}
@@ -434,7 +447,7 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 		zap.Error(err))
 
 	// 更新 ctx 中的 span_id 为新的 tool_error span_id，供后续调用使用
-	ctx.WithValue(spanKey, spanID)
+	ctx.WithValue(SpanKey, spanID)
 
 	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
 }
@@ -451,7 +464,7 @@ func (h *ConversationRecordHook) OnLLMCalledWithTools(ctx *domain.HookContext, c
 }
 
 // OnToolExecutionComplete 当一轮工具调用完成后调用
-// 此时应该记录最终的 llm_response，parent 应为 tool_call 的 span
+// 此时应该记录最终的 llm_response，parent 应为 llm_response_with_tools 的 span
 func (h *ConversationRecordHook) OnToolExecutionComplete(ctx *domain.HookContext) {
 	// 获取延迟的 LLM 响应信息
 	deferredResp, ok := ctx.Get(deferredResponseKey).(*deferredLLMResponse)
@@ -459,9 +472,13 @@ func (h *ConversationRecordHook) OnToolExecutionComplete(ctx *domain.HookContext
 		return
 	}
 
-	// 获取 tool_call 的 span_id 作为 parent
-	// PostToolCall 会将 tool_call 的 span 存储到 spanKey
-	parentSpanID, _ := ctx.Get(spanKey).(string)
+	// 优先使用 ToolParentSpanKey（固定的 llm_response_with_tools span），
+	// 这样连续工具调用的结果和最终 llm_response 都以同一个 span 为 parent，
+	// 而不是互相嵌套（SpanKey 会被 PostToolCall 更新为最后一个 tool_result 的 span）
+	parentSpanID, _ := ctx.Get(ToolParentSpanKey).(string)
+	if parentSpanID == "" {
+		parentSpanID, _ = ctx.Get(SpanKey).(string)
+	}
 	if parentSpanID == "" {
 		h.logger.Warn("OnToolExecutionComplete: no parent span found, skipping deferred LLM response")
 		return
