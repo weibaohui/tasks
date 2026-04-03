@@ -260,11 +260,21 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		"total_sessions": stats.TotalSessions,
 	}
 
+	projectDist := make([]map[string]interface{}, 0, len(stats.ProjectDistribution))
+	for _, p := range stats.ProjectDistribution {
+		projectDist = append(projectDist, map[string]interface{}{
+			"project_id": p.ProjectID,
+			"name":       p.Name,
+			"tokens":     p.Tokens,
+		})
+	}
+
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"token_stats":          tokenStats,
 		"agent_distribution":   agentDist,
 		"channel_distribution": channelDist,
 		"role_distribution":    roleDist,
+		"project_distribution": projectDist,
 		"session_stats":        sessionStats,
 	})
 }

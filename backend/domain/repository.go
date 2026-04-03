@@ -116,6 +116,7 @@ type ConversationStats struct {
 	AgentDistribution     []AgentStats
 	ChannelDistribution   []ChannelStats
 	RoleDistribution      []RoleStats
+	ProjectDistribution   []ProjectStats
 	TotalSessions         int
 	TotalRecords          int
 }
@@ -135,6 +136,12 @@ type ChannelStats struct {
 type RoleStats struct {
 	Role  string
 	Count int
+}
+
+type ProjectStats struct {
+	ProjectID string
+	Name      string
+	Tokens    int
 }
 
 type ConversationRecordRepository interface {

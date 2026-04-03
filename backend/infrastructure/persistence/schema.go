@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS requirements (
 
 CREATE INDEX IF NOT EXISTS idx_requirements_project_id ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status);
+CREATE INDEX IF NOT EXISTS idx_requirements_trace_id ON requirements(trace_id);
 
 CREATE TABLE IF NOT EXISTS cron_jobs (
     id TEXT PRIMARY KEY,
@@ -430,7 +431,10 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateConversationRecordsTimestampToMillis(db); err != nil {
 		return err
 	}
-	return migrateAgentLLMProviderID(db)
+	if err := migrateAgentLLMProviderID(db); err != nil {
+		return err
+	}
+	return migrateRequirementsTraceIDIndex(db)
 }
 
 // migrateTasksNewColumns 迁移 tasks 表新增字段
@@ -790,6 +794,12 @@ func migrateAgentLLMProviderID(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateRequirementsTraceIDIndex 迁移 requirements 表新增 trace_id 索引
+func migrateRequirementsTraceIDIndex(db *sql.DB) error {
+	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_requirements_trace_id ON requirements(trace_id)")
+	return err
 }
 
 func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {

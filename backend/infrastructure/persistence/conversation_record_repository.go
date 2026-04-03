@@ -369,6 +369,21 @@ func (r *SQLiteConversationRecordRepository) GetStats(ctx context.Context, filte
 		roleDistribution = append(roleDistribution, rs)
 	}
 
+	projectRows, err := r.db.QueryContext(ctx, `SELECT r.project_id, p.name, COALESCE(SUM(cr.total_tokens), 0) FROM conversation_records cr JOIN requirements r ON cr.trace_id = r.trace_id JOIN projects p ON r.project_id = p.id`+whereClause+` GROUP BY r.project_id, p.name ORDER BY COALESCE(SUM(cr.total_tokens), 0) DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer projectRows.Close()
+
+	projectDistribution := make([]domain.ProjectStats, 0)
+	for projectRows.Next() {
+		var ps domain.ProjectStats
+		if err := projectRows.Scan(&ps.ProjectID, &ps.Name, &ps.Tokens); err != nil {
+			return nil, err
+		}
+		projectDistribution = append(projectDistribution, ps)
+	}
+
 	return &domain.ConversationStats{
 		TotalPromptTokens:     totalPromptTokens,
 		TotalCompletionTokens: totalCompletionTokens,
@@ -377,6 +392,7 @@ func (r *SQLiteConversationRecordRepository) GetStats(ctx context.Context, filte
 		AgentDistribution:     agentDistribution,
 		ChannelDistribution:   channelDistribution,
 		RoleDistribution:      roleDistribution,
+		ProjectDistribution:   projectDistribution,
 		TotalSessions:         totalSessions,
 		TotalRecords:          totalRecords,
 	}, nil
