@@ -57,7 +57,7 @@ func requiresAPIToken(t *testing.T) {
 	}
 }
 
-func setupTestDB(t *testing.T) (*sql.DB, func()) {
+func setupTestDB(t *testing.T) (*sql.DB, string, func()) {
 	// 创建临时数据库
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -77,7 +77,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		os.Remove(dbPath)
 	}
 
-	return db, cleanup
+	return db, dbPath, cleanup
 }
 
 func buildCLI(t *testing.T) {
@@ -96,12 +96,59 @@ func getGitRoot() string {
 }
 
 func runCLI(args ...string) (string, error) {
+	return runCLIWithEnv(nil, args...)
+}
+
+func runCLIWithEnv(env map[string]string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cliBinary, args...)
+	cmd.Env = os.Environ()
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+// useTestDB 使用指定数据库路径启动临时 server，测试结束后恢复默认 server
+// copyAuthDataToTestDB 将默认数据库中的认证数据复制到临时数据库，
+// 确保使用临时数据库的 server 能够验证现有 API Token。
+func copyAuthDataToTestDB(t *testing.T, testDBPath string) {
+	home, _ := os.UserHomeDir()
+	defaultDBPath := filepath.Join(home, ".taskmanager", "data.db")
+
+	queries := fmt.Sprintf(`
+ATTACH DATABASE '%s' AS src;
+INSERT OR REPLACE INTO users SELECT * FROM src.users;
+INSERT OR REPLACE INTO user_tokens SELECT * FROM src.user_tokens;
+DETACH DATABASE src;
+`, defaultDBPath)
+
+	cmd := exec.Command("sqlite3", testDBPath, queries)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 如果 sqlite3 不可用或复制失败，记录日志但不中断测试
+		t.Logf("复制认证数据到临时数据库失败: %v\n%s", err, string(output))
+	}
+}
+
+func useTestDB(t *testing.T, dbPath string) {
+	copyAuthDataToTestDB(t, dbPath)
+
+	output, err := runCLIWithEnv(map[string]string{"TASKMANAGER_DB_PATH": dbPath}, "server", "restart")
+	if err != nil {
+		t.Fatalf("启动临时 server 失败: %v\n%s", err, output)
+	}
+	// 等待 server 就绪
+	time.Sleep(1 * time.Second)
+
+	t.Cleanup(func() {
+		// 恢复默认数据库的 server
+		_, _ = runCLI("server", "restart")
+		time.Sleep(500 * time.Millisecond)
+	})
 }
 
 // ========== Admin 命令测试 ==========
@@ -237,7 +284,7 @@ func TestCLI_RequirementCreate(t *testing.T) {
 
 	// 需要先有一个项目 ID
 	// 创建测试项目
-	db, dbCleanup := setupTestDB(t)
+	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
 	idGen := utils.NewNanoIDGenerator(21)
@@ -252,8 +299,13 @@ func TestCLI_RequirementCreate(t *testing.T) {
 		t.Fatalf("创建测试项目失败: %v", err)
 	}
 
-	// 使用项目 ID 创建需求
-	output, err := runCLI("requirement", "create",
+	// 切换到临时数据库的 server
+	useTestDB(t, dbPath)
+
+	// 使用项目 ID 创建需求，注入临时数据库路径
+	output, err := runCLIWithEnv(
+		map[string]string{"TASKMANAGER_DB_PATH": dbPath},
+		"requirement", "create",
 		"--project-id", project.ID().String(),
 		"--title", "E2E 测试需求",
 		"--description", "这是一个 E2E 测试需求")
@@ -274,7 +326,7 @@ func TestCLI_RequirementGet(t *testing.T) {
 	buildCLI(t)
 
 	// 先创建一个测试需求
-	db, dbCleanup := setupTestDB(t)
+	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
 	idGen := utils.NewNanoIDGenerator(21)
@@ -302,8 +354,13 @@ func TestCLI_RequirementGet(t *testing.T) {
 		t.Fatalf("创建需求失败: %v", err)
 	}
 
-	// 使用 requirement get 获取详情
-	output, err := runCLI("requirement", "get", "--id", requirement.ID().String())
+	// 切换到临时数据库的 server
+	useTestDB(t, dbPath)
+
+	// 使用 requirement get 获取详情，注入临时数据库路径
+	output, err := runCLIWithEnv(
+		map[string]string{"TASKMANAGER_DB_PATH": dbPath},
+		"requirement", "get", "--id", requirement.ID().String())
 	if err != nil {
 		t.Fatalf("requirement get 失败: %v\n%s", err, output)
 	}
@@ -513,7 +570,7 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	buildCLI(t)
 
 	// 1. 创建项目
-	db, dbCleanup := setupTestDB(t)
+	db, _, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
 	idGen := utils.NewNanoIDGenerator(21)
@@ -582,14 +639,27 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	t.Log("完整工作流测试通过!")
 }
 
-// Helper: 确保 CLI 已编译
+// Helper: 确保 CLI 和 Server 已编译
 func TestMain(m *testing.M) {
+	gitRoot := getGitRoot()
+	backendDir := filepath.Join(gitRoot, "backend")
+
 	// 确保 CLI 可以编译
 	cmd := exec.Command("go", "build", "-o", cliBinary, "./cmd/cli")
-	cmd.Dir = filepath.Join(getGitRoot(), "backend")
+	cmd.Dir = backendDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("编译 CLI 失败: %v\n%s", err, string(output))
+		os.Exit(1)
+	}
+
+	// 将 server 编译到 CLI 同级目录，供 server restart 优先使用
+	serverBinary := filepath.Join(filepath.Dir(cliBinary), "taskmanager-server")
+	cmd = exec.Command("go", "build", "-o", serverBinary, "./cmd/server")
+	cmd.Dir = backendDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("编译 Server 失败: %v\n%s", err, string(output))
 		os.Exit(1)
 	}
 
