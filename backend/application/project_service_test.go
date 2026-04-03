@@ -8,42 +8,6 @@ import (
 	"github.com/weibh/taskmanager/domain"
 )
 
-type mockProjectRepo struct {
-	projects map[string]*domain.Project
-}
-
-func newMockProjectRepo() *mockProjectRepo {
-	return &mockProjectRepo{
-		projects: make(map[string]*domain.Project),
-	}
-}
-
-func (m *mockProjectRepo) Save(ctx context.Context, project *domain.Project) error {
-	m.projects[project.ID().String()] = project
-	return nil
-}
-
-func (m *mockProjectRepo) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
-	project, ok := m.projects[id.String()]
-	if !ok {
-		return nil, nil
-	}
-	return project, nil
-}
-
-func (m *mockProjectRepo) FindAll(ctx context.Context) ([]*domain.Project, error) {
-	var result []*domain.Project
-	for _, project := range m.projects {
-		result = append(result, project)
-	}
-	return result, nil
-}
-
-func (m *mockProjectRepo) Delete(ctx context.Context, id domain.ProjectID) error {
-	delete(m.projects, id.String())
-	return nil
-}
-
 type mockProjectIDGen struct {
 	count int
 }
@@ -54,7 +18,7 @@ func (m *mockProjectIDGen) Generate() string {
 }
 
 func setupTestProjectSvc() *ProjectApplicationService {
-	repo := newMockProjectRepo()
+	repo := newSharedMockProjectRepo()
 	idGen := &mockProjectIDGen{}
 	return NewProjectApplicationService(repo, idGen)
 }
