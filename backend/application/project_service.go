@@ -19,22 +19,22 @@ type CreateProjectCommand struct {
 }
 
 type UpdateProjectCommand struct {
-	ID                        domain.ProjectID
-	Name                      string
-	GitRepoURL                string
-	DefaultBranch             string
-	InitSteps                 []string
-	HeartbeatEnabled          *bool
-	HeartbeatIntervalMinutes  *int
-	HeartbeatMDContent        *string
-	AgentCode                 *string
-	DispatchChannelCode       *string
-	DispatchSessionKey        *string
+	ID                       domain.ProjectID
+	Name                     string
+	GitRepoURL               string
+	DefaultBranch            string
+	InitSteps                []string
+	HeartbeatEnabled         *bool
+	HeartbeatIntervalMinutes *int
+	HeartbeatMDContent       *string
+	AgentCode                *string
+	DispatchChannelCode      *string
+	DispatchSessionKey       *string
 }
 
 type ProjectApplicationService struct {
-	projectRepo  domain.ProjectRepository
-	idGenerator  domain.IDGenerator
+	projectRepo domain.ProjectRepository
+	idGenerator domain.IDGenerator
 }
 
 func NewProjectApplicationService(projectRepo domain.ProjectRepository, idGenerator domain.IDGenerator) *ProjectApplicationService {
@@ -87,7 +87,10 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	if cmd.HeartbeatEnabled != nil || cmd.HeartbeatIntervalMinutes != nil || cmd.HeartbeatMDContent != nil || cmd.AgentCode != nil {
 		project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
 	}
-	if cmd.DispatchChannelCode != nil || cmd.DispatchSessionKey != nil {
+	// 仅在提供了非空值时才更新派发配置
+	// 防止前端发送空字符串覆盖现有有效配置
+	if cmd.DispatchChannelCode != nil && *cmd.DispatchChannelCode != "" ||
+		cmd.DispatchSessionKey != nil && *cmd.DispatchSessionKey != "" {
 		project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
 	}
 	if err := s.projectRepo.Save(ctx, project); err != nil {

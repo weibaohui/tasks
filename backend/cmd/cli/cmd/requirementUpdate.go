@@ -29,18 +29,18 @@ var requirementUpdateCmd = &cobra.Command{
 		ctx := context.Background()
 		c := client.New()
 
-		// 仅传递用户提供的字段（指针为 nil 表示未提供，不会覆盖）
+		// 仅传递用户显式提供的字段（即使是空字符串）
 		var newTitle, newDesc, newAcceptance, newTempWorkspace *string
-		if title != "" {
+		if cmd.Flags().Changed("title") {
 			newTitle = &title
 		}
-		if description != "" {
+		if cmd.Flags().Changed("description") {
 			newDesc = &description
 		}
-		if acceptance != "" {
+		if cmd.Flags().Changed("acceptance-criteria") {
 			newAcceptance = &acceptance
 		}
-		if tempWorkspace != "" {
+		if cmd.Flags().Changed("temp-workspace-root") {
 			newTempWorkspace = &tempWorkspace
 		}
 

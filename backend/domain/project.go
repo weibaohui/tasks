@@ -31,7 +31,7 @@ type Project struct {
 	defaultBranch            string
 	initSteps                []string
 	heartbeatEnabled         bool
-	heartbeatIntervalMinutes  int
+	heartbeatIntervalMinutes int
 	heartbeatMDContent       string
 	agentCode                string
 	dispatchChannelCode      string
@@ -61,7 +61,7 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 		defaultBranch:            defaultBranch,
 		initSteps:                append([]string(nil), initSteps...),
 		heartbeatEnabled:         false,
-		heartbeatIntervalMinutes:  60,
+		heartbeatIntervalMinutes: 60,
 		heartbeatMDContent:       "",
 		agentCode:                "",
 		dispatchChannelCode:      "",
@@ -71,19 +71,19 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 	}, nil
 }
 
-func (p *Project) ID() ProjectID            { return p.id }
-func (p *Project) Name() string             { return p.name }
-func (p *Project) GitRepoURL() string       { return p.gitRepoURL }
-func (p *Project) DefaultBranch() string    { return p.defaultBranch }
-func (p *Project) InitSteps() []string      { return append([]string(nil), p.initSteps...) }
-func (p *Project) HeartbeatEnabled() bool    { return p.heartbeatEnabled }
+func (p *Project) ID() ProjectID                 { return p.id }
+func (p *Project) Name() string                  { return p.name }
+func (p *Project) GitRepoURL() string            { return p.gitRepoURL }
+func (p *Project) DefaultBranch() string         { return p.defaultBranch }
+func (p *Project) InitSteps() []string           { return append([]string(nil), p.initSteps...) }
+func (p *Project) HeartbeatEnabled() bool        { return p.heartbeatEnabled }
 func (p *Project) HeartbeatIntervalMinutes() int { return p.heartbeatIntervalMinutes }
-func (p *Project) HeartbeatMDContent() string { return p.heartbeatMDContent }
-func (p *Project) AgentCode() string          { return p.agentCode }
-func (p *Project) DispatchChannelCode() string { return p.dispatchChannelCode }
-func (p *Project) DispatchSessionKey() string { return p.dispatchSessionKey }
-func (p *Project) CreatedAt() time.Time       { return p.createdAt }
-func (p *Project) UpdatedAt() time.Time      { return p.updatedAt }
+func (p *Project) HeartbeatMDContent() string    { return p.heartbeatMDContent }
+func (p *Project) AgentCode() string             { return p.agentCode }
+func (p *Project) DispatchChannelCode() string   { return p.dispatchChannelCode }
+func (p *Project) DispatchSessionKey() string    { return p.dispatchSessionKey }
+func (p *Project) CreatedAt() time.Time          { return p.createdAt }
+func (p *Project) UpdatedAt() time.Time          { return p.updatedAt }
 
 func (p *Project) Update(name, gitRepoURL, defaultBranch string, initSteps []string) error {
 	if strings.TrimSpace(name) == "" {
@@ -120,48 +120,48 @@ func (p *Project) UpdateHeartbeatConfig(enabled *bool, intervalMinutes *int, mdC
 	p.updatedAt = time.Now()
 }
 
-// UpdateDispatchConfig 更新派发配置（仅更新非 nil 字段）
+// UpdateDispatchConfig 更新派发配置（仅更新非 nil 且非空字符串的字段）
 func (p *Project) UpdateDispatchConfig(channelCode, sessionKey *string) {
-	if channelCode != nil {
+	if channelCode != nil && *channelCode != "" {
 		p.dispatchChannelCode = *channelCode
 	}
-	if sessionKey != nil {
+	if sessionKey != nil && *sessionKey != "" {
 		p.dispatchSessionKey = *sessionKey
 	}
 	p.updatedAt = time.Now()
 }
 
 type ProjectSnapshot struct {
-	ID                        ProjectID
-	Name                      string
-	GitRepoURL                string
-	DefaultBranch             string
-	InitSteps                 []string
-	HeartbeatEnabled          bool
-	HeartbeatIntervalMinutes   int
-	HeartbeatMDContent        string
-	AgentCode                 string
-	DispatchChannelCode       string
-	DispatchSessionKey        string
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
+	ID                       ProjectID
+	Name                     string
+	GitRepoURL               string
+	DefaultBranch            string
+	InitSteps                []string
+	HeartbeatEnabled         bool
+	HeartbeatIntervalMinutes int
+	HeartbeatMDContent       string
+	AgentCode                string
+	DispatchChannelCode      string
+	DispatchSessionKey       string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
 }
 
 func (p *Project) ToSnapshot() ProjectSnapshot {
 	return ProjectSnapshot{
-		ID:                        p.id,
-		Name:                      p.name,
-		GitRepoURL:                p.gitRepoURL,
-		DefaultBranch:             p.defaultBranch,
-		InitSteps:                 append([]string(nil), p.initSteps...),
-		HeartbeatEnabled:          p.heartbeatEnabled,
-		HeartbeatIntervalMinutes:   p.heartbeatIntervalMinutes,
-		HeartbeatMDContent:        p.heartbeatMDContent,
-		AgentCode:                 p.agentCode,
-		DispatchChannelCode:       p.dispatchChannelCode,
-		DispatchSessionKey:        p.dispatchSessionKey,
-		CreatedAt:                 p.createdAt,
-		UpdatedAt:                 p.updatedAt,
+		ID:                       p.id,
+		Name:                     p.name,
+		GitRepoURL:               p.gitRepoURL,
+		DefaultBranch:            p.defaultBranch,
+		InitSteps:                append([]string(nil), p.initSteps...),
+		HeartbeatEnabled:         p.heartbeatEnabled,
+		HeartbeatIntervalMinutes: p.heartbeatIntervalMinutes,
+		HeartbeatMDContent:       p.heartbeatMDContent,
+		AgentCode:                p.agentCode,
+		DispatchChannelCode:      p.dispatchChannelCode,
+		DispatchSessionKey:       p.dispatchSessionKey,
+		CreatedAt:                p.createdAt,
+		UpdatedAt:                p.updatedAt,
 	}
 }
 

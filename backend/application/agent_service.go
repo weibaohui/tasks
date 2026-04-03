@@ -215,8 +215,8 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 		return nil, ErrAgentNotFound
 	}
 
-	// 按需更新 profile 字段
-	if cmd.Name != nil && strings.TrimSpace(*cmd.Name) != "" {
+	// 按需更新 profile 字段（仅检查 nil，空字符串由 domain 层校验）
+	if cmd.Name != nil {
 		desc := cmd.Description
 		if desc == nil {
 			d := agent.Description()
@@ -365,8 +365,8 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 		return nil, ErrAgentNotFound
 	}
 
-	// 按需更新 profile 字段
-	if cmd.Name != nil && strings.TrimSpace(*cmd.Name) != "" {
+	// 按需更新 profile 字段（仅检查 nil，空字符串由 domain 层校验）
+	if cmd.Name != nil {
 		desc := cmd.Description
 		if desc == nil {
 			d := agent.Description()

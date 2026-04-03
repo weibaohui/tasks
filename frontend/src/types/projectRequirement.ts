@@ -53,8 +53,12 @@ export interface CreateProjectRequest {
   init_steps: string[];
 }
 
-export interface UpdateProjectRequest extends CreateProjectRequest {
+export interface UpdateProjectRequest {
   id: string;
+  name?: string;
+  git_repo_url?: string;
+  default_branch?: string;
+  init_steps?: string[];
   heartbeat_enabled?: boolean;
   heartbeat_interval_minutes?: number;
   heartbeat_md_content?: string;
