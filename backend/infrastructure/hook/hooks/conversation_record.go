@@ -205,28 +205,33 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 		channelType = callCtx.Metadata["channel_type"]
 	}
 
-	// 如果 LLM 决定调用工具，先记录中间响应（包含 tool_calls）
-	if hasToolCalls && resp.Content != "" {
+	// 如果 LLM 决定调用工具
+	if hasToolCalls {
 		toolCallsSpanID := h.idGenerator.Generate()
-		// 中间响应的 parent 是用户输入的 span
-		toolCallsRecord, err := h.createRecord(traceID, toolCallsSpanID, parentSpanID, "llm_response_with_tools", "assistant", resp.Content)
-		if err != nil {
-			h.logger.Error("Failed to create conversation record for LLM response with tools", zap.Error(err))
-		} else {
-			toolCallsRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
-			toolCallsRecord.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
-			if err := h.repo.Save(context.Background(), toolCallsRecord); err != nil {
-				h.logger.Error("Failed to save conversation record for LLM response with tools", zap.Error(err))
+
+		// 仅当有内容时记录中间响应
+		if resp.Content != "" {
+			// 中间响应的 parent 是用户输入的 span
+			toolCallsRecord, err := h.createRecord(traceID, toolCallsSpanID, parentSpanID, "llm_response_with_tools", "assistant", resp.Content)
+			if err != nil {
+				h.logger.Error("Failed to create conversation record for LLM response with tools", zap.Error(err))
+			} else {
+				toolCallsRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
+				toolCallsRecord.SetTokenUsage(resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, 0, 0)
+				if err := h.repo.Save(context.Background(), toolCallsRecord); err != nil {
+					h.logger.Error("Failed to save conversation record for LLM response with tools", zap.Error(err))
+				}
+				h.logger.Debug("ConversationRecord: saved LLM response with tools",
+					zap.String("trace_id", traceID),
+					zap.String("span_id", toolCallsSpanID),
+					zap.String("parent_span_id", parentSpanID))
 			}
-			h.logger.Debug("ConversationRecord: saved LLM response with tools",
-				zap.String("trace_id", traceID),
-				zap.String("span_id", toolCallsSpanID),
-				zap.String("parent_span_id", parentSpanID))
 		}
 
 		// 更新 span 链：后续的 tool_call 应以这个中间响应为 parent
 		// ToolParentSpanKey 存储固定的工具调用父级，不随每次 tool 调用更新
 		// SpanKey 仍更新为 toolCallsSpanID，供非工具场景使用
+		// 即使 resp.Content 为空也必须设置，否则连续工具调用的 parent 会断裂
 		ctx.WithValue(ToolParentSpanKey, toolCallsSpanID)
 		ctx.WithValue(SpanKey, toolCallsSpanID)
 
