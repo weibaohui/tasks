@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,22 +117,120 @@ func runCLIWithEnv(env map[string]string, args ...string) (string, error) {
 // copyAuthDataToTestDB 将默认数据库中的认证数据复制到临时数据库，
 // 确保使用临时数据库的 server 能够验证现有 API Token。
 func copyAuthDataToTestDB(t *testing.T, testDBPath string) {
-	home, _ := os.UserHomeDir()
-	defaultDBPath := filepath.Join(home, ".taskmanager", "data.db")
+	// 使用 config.GetDatabasePath() 获取源数据库路径，尊重 TASKMANAGER_DB_PATH 环境变量
+	sourceDBPath := config.GetDatabasePath()
 
-	queries := fmt.Sprintf(`
-ATTACH DATABASE '%s' AS src;
-INSERT OR REPLACE INTO users SELECT * FROM src.users;
-INSERT OR REPLACE INTO user_tokens SELECT * FROM src.user_tokens;
-DETACH DATABASE src;
-`, defaultDBPath)
-
-	cmd := exec.Command("sqlite3", testDBPath, queries)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// 如果 sqlite3 不可用或复制失败，记录日志但不中断测试
-		t.Logf("复制认证数据到临时数据库失败: %v\n%s", err, string(output))
+	// 验证源数据库存在
+	if _, err := os.Stat(sourceDBPath); os.IsNotExist(err) {
+		t.Skipf("跳过: 源数据库不存在: %s", sourceDBPath)
 	}
+
+	// 打开源数据库和目标数据库
+	sourceDB, err := sql.Open("sqlite3", sourceDBPath)
+	if err != nil {
+		t.Fatalf("无法打开源数据库: %v", err)
+	}
+	defer sourceDB.Close()
+
+	targetDB, err := sql.Open("sqlite3", testDBPath)
+	if err != nil {
+		t.Fatalf("无法打开目标数据库: %v", err)
+	}
+	defer targetDB.Close()
+
+	// 开始事务
+	tx, err := targetDB.Begin()
+	if err != nil {
+		t.Fatalf("无法开始事务: %v", err)
+	}
+
+	// 复制 users 表
+	rows, err := sourceDB.Query("SELECT id, user_code, username, email, display_name, password_hash, is_active, created_at, updated_at FROM users")
+	if err != nil {
+		tx.Rollback()
+		t.Fatalf("无法查询源数据库 users 表: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, userCode, username, email, displayName, passwordHash string
+		var isActive int
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&id, &userCode, &username, &email, &displayName, &passwordHash, &isActive, &createdAt, &updatedAt); err != nil {
+			tx.Rollback()
+			t.Fatalf("无法读取 users 数据: %v", err)
+		}
+		_, err = tx.Exec("INSERT OR REPLACE INTO users (id, user_code, username, email, display_name, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			id, userCode, username, email, displayName, passwordHash, isActive, createdAt, updatedAt)
+		if err != nil {
+			tx.Rollback()
+			t.Fatalf("无法插入 users 数据: %v", err)
+		}
+	}
+	rows.Close()
+
+	// 复制 user_tokens 表
+	rows, err = sourceDB.Query("SELECT id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at FROM user_tokens")
+	if err != nil {
+		tx.Rollback()
+		t.Fatalf("无法查询源数据库 user_tokens 表: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, userID, name, description, tokenHash string
+		var expiresAt, lastUsedAt sql.NullInt64
+		var isActive int
+		var createdAt int64
+		if err := rows.Scan(&id, &userID, &name, &description, &tokenHash, &expiresAt, &lastUsedAt, &isActive, &createdAt); err != nil {
+			tx.Rollback()
+			t.Fatalf("无法读取 user_tokens 数据: %v", err)
+		}
+		_, err = tx.Exec("INSERT OR REPLACE INTO user_tokens (id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			id, userID, name, description, tokenHash, expiresAt, lastUsedAt, isActive, createdAt)
+		if err != nil {
+			tx.Rollback()
+			t.Fatalf("无法插入 user_tokens 数据: %v", err)
+		}
+	}
+	rows.Close()
+
+	// 提交事务
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("无法提交事务: %v", err)
+	}
+}
+
+// waitForServerReady 使用轮询方式检查服务器是否就绪
+// 每100ms检查一次，总超时时间5秒
+func waitForServerReady(t *testing.T, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	baseURL := config.GetAPIBaseURL()
+	token := config.GetAPIToken()
+
+	for time.Now().Before(deadline) {
+		// 尝试访问 /api/v1/auth/me 端点来检查服务器是否就绪
+		req, err := http.NewRequest("GET", baseURL+"/auth/me", nil)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Do(req)
+		if err == nil {
+			resp.Body.Close()
+			// 只要服务器响应（无论是 200 还是 401），都认为服务器已就绪
+			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusUnauthorized {
+				return nil
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("等待服务器就绪超时（%v）", timeout)
 }
 
 func useTestDB(t *testing.T, dbPath string) {
@@ -141,13 +240,22 @@ func useTestDB(t *testing.T, dbPath string) {
 	if err != nil {
 		t.Fatalf("启动临时 server 失败: %v\n%s", err, output)
 	}
-	// 等待 server 就绪
-	time.Sleep(1 * time.Second)
+
+	// 使用轮询方式等待 server 就绪，总超时5秒
+	if err := waitForServerReady(t, 5*time.Second); err != nil {
+		t.Fatalf("等待临时 server 就绪失败: %v", err)
+	}
 
 	t.Cleanup(func() {
 		// 恢复默认数据库的 server
-		_, _ = runCLI("server", "restart")
-		time.Sleep(500 * time.Millisecond)
+		output, err := runCLI("server", "restart")
+		if err != nil {
+			t.Fatalf("恢复默认 server 失败: %v\n%s", err, output)
+		}
+		// 使用轮询方式等待 server 恢复，总超时5秒
+		if err := waitForServerReady(t, 5*time.Second); err != nil {
+			t.Fatalf("等待默认 server 恢复失败: %v", err)
+		}
 	})
 }
 
