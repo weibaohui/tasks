@@ -73,7 +73,7 @@ function getTraceStats(records: ConversationRecord[]) {
   const sorted = [...records].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const totalTokens = records.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
   const duration = Math.round(
-    ((sorted[sorted.length - 1]?.timestamp || 0) - (sorted[0]?.timestamp || 0))
+    ((sorted[sorted.length - 1]?.timestamp || 0) - (sorted[0]?.timestamp || 0)) / 1000
   );
   return { count: records.length, totalTokens, duration };
 }
@@ -247,7 +247,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
                 <Col span={8}>
                   <Statistic
                     title="总耗时"
-                    value={`${traceStats.duration}ms`}
+                    value={`${traceStats.duration}s`}
                   />
                 </Col>
               </Row>
