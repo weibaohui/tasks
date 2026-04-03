@@ -433,19 +433,16 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			llmCallCtx = modifiedCtx
 		}
 
-		// 确保 PostLLMCall 被调用
-		// 注意：流式查询可能需要较长时间，使用 background context 避免 context 超时
+		// 确保 PostLLMCall 和 OnToolExecutionComplete 被调用
+		// 使用 hookCtx（而非新建 context），确保 span 状态在 PreToolCall/PostToolCall 之间正确共享
 		defer func() {
 			resp := &domain.LLMResponse{Content: result, Usage: domain.Usage{}}
 			if llmUsage != nil {
 				resp.Usage = *llmUsage
 			}
-			// 使用 background context 创建新的 hook context
-			bgHookCtx := domain.NewHookContext(context.Background())
-			// 设置必要的 metadata
-			bgHookCtx.SetMetadata("session_key", sessionKey)
-			bgHookCtx.SetMetadata("trace_id", traceID)
-			p.hookManager.PostLLMCall(bgHookCtx, llmCallCtx, resp)
+			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
+			// 工具执行完成后，写入延迟的最终 llm_response
+			p.hookManager.OnToolExecutionComplete(hookCtx)
 		}()
 	}
 
