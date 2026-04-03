@@ -3,11 +3,11 @@ tmp_dir = "tmp"
 
 [build]
 pre_cmd = ["mkdir -p tmp", "mkdir -p logs"]
-cmd = "go build -o ./tmp/taskmanager ./cmd/server/"
+cmd = "go build -o ./bin/taskmanager-server ./cmd/server/"
 include_ext = ["go"]
 exclude_dir = ["tmp", "vendor", "bin", "../frontend"]
 
-full_bin = "./tmp/taskmanager"
+full_bin = "./bin/taskmanager-server"
 
 [log]
 # 显示时间戳
