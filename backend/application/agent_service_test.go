@@ -319,8 +319,8 @@ func TestAgentService_UpdateAgent(t *testing.T) {
 	isActive := false
 	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
 		ID:          created.ID(),
-		Name:        "NewName",
-		Description: "NewDesc",
+		Name:        strPtr("NewName"),
+		Description: strPtr("NewDesc"),
 		IsActive:    &isActive,
 	})
 
@@ -347,7 +347,7 @@ func TestAgentService_UpdateAgent_NotFound(t *testing.T) {
 
 	_, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
 		ID:   domain.NewAgentID("non-existent"),
-		Name: "NewName",
+		Name: strPtr("NewName"),
 	})
 	if err != ErrAgentNotFound {
 		t.Errorf("期望 ErrAgentNotFound, 实际为 %v", err)
@@ -366,11 +366,11 @@ func TestAgentService_UpdateAgent_Config(t *testing.T) {
 
 	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
 		ID:                    created.ID(),
-		Model:                 "gpt-3.5",
-		MaxTokens:             6000,
-		Temperature:           0.5,
-		MaxIterations:         10,
-		HistoryMessages:       15,
+		Model:                 strPtr("gpt-3.5"),
+		MaxTokens:             intPtr(6000),
+		Temperature:           float64Ptr(0.5),
+		MaxIterations:         intPtr(10),
+		HistoryMessages:       intPtr(15),
 		EnableThinkingProcess: boolPtr(true),
 	})
 
@@ -511,9 +511,10 @@ func TestBoolValue(t *testing.T) {
 	}
 }
 
-func boolPtr(b bool) *bool {
-	return &b
-}
+func boolPtr(b bool) *bool   { return &b }
+func strPtr(s string) *string { return &s }
+func intPtr(i int) *int       { return &i }
+func float64Ptr(f float64) *float64 { return &f }
 
 func TestAgentService_PatchAgent_WithClaudeCodeConfig(t *testing.T) {
 	svc := setupTestAgentSvc()

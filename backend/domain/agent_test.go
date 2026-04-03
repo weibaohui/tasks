@@ -201,7 +201,6 @@ func TestAgent_UpdateConfig(t *testing.T) {
 		"用户设定",
 		"工具设定",
 		"gpt-4",
-		"",
 		8192,
 		0.9,
 		20,
@@ -282,7 +281,6 @@ func TestAgent_UpdateConfig_PreservesDefaultValues(t *testing.T) {
 		"", // 空，保持原值
 		"", // 空，保持原值
 		"claude-3",
-		"",
 		0,  // 0 不应被设置
 		0,  // 0 不应被设置
 		0,  // 0 不应被设置
@@ -398,7 +396,6 @@ func TestAgent_ToSnapshot(t *testing.T) {
 		"",
 		"",
 		"gpt-4",
-		"",
 		8192,
 		0.8,
 		25,
@@ -500,7 +497,6 @@ func TestAgent_FromSnapshot(t *testing.T) {
 		"user",
 		"tools",
 		"gpt-4",
-		"",
 		8192,
 		0.8,
 		25,
@@ -602,7 +598,7 @@ func TestAgent_SkillsList_ReturnsCopy(t *testing.T) {
 		AgentTypeBareLLM,
 	)
 
-	agent.UpdateConfig("", "", "", "", "", "", "", 0, 0, 0, 0, []string{"skill1", "skill2"}, nil, false)
+	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, []string{"skill1", "skill2"}, nil, false)
 
 	skills1 := agent.SkillsList()
 	skills1[0] = "modified"
@@ -623,7 +619,7 @@ func TestAgent_ToolsList_ReturnsCopy(t *testing.T) {
 		AgentTypeBareLLM,
 	)
 
-	agent.UpdateConfig("", "", "", "", "", "", "", 0, 0, 0, 0, nil, []string{"tool1", "tool2"}, false)
+	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, nil, []string{"tool1", "tool2"}, false)
 
 	tools1 := agent.ToolsList()
 	tools1[0] = "modified"

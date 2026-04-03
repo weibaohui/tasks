@@ -39,21 +39,21 @@ type CreateAgentCommand struct {
 
 type UpdateAgentCommand struct {
 	ID                    domain.AgentID
-	Name                  string
-	Description           string
-	IdentityContent       string
-	SoulContent           string
-	AgentsContent         string
-	UserContent           string
-	ToolsContent          string
-	Model                 string
+	Name                  *string
+	Description           *string
+	IdentityContent       *string
+	SoulContent           *string
+	AgentsContent         *string
+	UserContent           *string
+	ToolsContent          *string
+	Model                 *string
 	LLMProviderID         *string
-	MaxTokens             int
-	Temperature           float64
-	MaxIterations         int
-	HistoryMessages       int
-	SkillsList            []string
-	ToolsList             []string
+	MaxTokens             *int
+	Temperature           *float64
+	MaxIterations         *int
+	HistoryMessages       *int
+	SkillsList            *[]string
+	ToolsList             *[]string
 	IsActive              *bool
 	IsDefault             *bool
 	EnableThinkingProcess *bool
@@ -215,26 +215,92 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 		return nil, ErrAgentNotFound
 	}
 
-	if cmd.Name != "" {
-		if err := agent.UpdateProfile(cmd.Name, cmd.Description); err != nil {
+	// 按需更新 profile 字段
+	if cmd.Name != nil && strings.TrimSpace(*cmd.Name) != "" {
+		desc := cmd.Description
+		if desc == nil {
+			d := agent.Description()
+			desc = &d
+		}
+		if err := agent.UpdateProfile(*cmd.Name, *desc); err != nil {
+			return nil, err
+		}
+	} else if cmd.Description != nil {
+		if err := agent.UpdateProfile(agent.Name(), *cmd.Description); err != nil {
 			return nil, err
 		}
 	}
-	agent.UpdateConfig(
-		cmd.IdentityContent,
-		cmd.SoulContent,
-		cmd.AgentsContent,
-		cmd.UserContent,
-		cmd.ToolsContent,
-		cmd.Model,
-		cmd.MaxTokens,
-		cmd.Temperature,
-		cmd.MaxIterations,
-		cmd.HistoryMessages,
-		cmd.SkillsList,
-		cmd.ToolsList,
-		boolValue(cmd.EnableThinkingProcess, agent.EnableThinkingProcess()),
-	)
+
+	// 按需更新 config 字段
+	hasConfigField := cmd.IdentityContent != nil || cmd.SoulContent != nil ||
+		cmd.AgentsContent != nil || cmd.UserContent != nil || cmd.ToolsContent != nil ||
+		cmd.Model != nil || cmd.MaxTokens != nil || cmd.Temperature != nil ||
+		cmd.MaxIterations != nil || cmd.HistoryMessages != nil ||
+		cmd.SkillsList != nil || cmd.ToolsList != nil ||
+		cmd.EnableThinkingProcess != nil
+
+	if hasConfigField {
+		identityContent := agent.IdentityContent()
+		soulContent := agent.SoulContent()
+		agentsContent := agent.AgentsContent()
+		userContent := agent.UserContent()
+		toolsContent := agent.ToolsContent()
+		model := agent.Model()
+		maxTokens := agent.MaxTokens()
+		temperature := agent.Temperature()
+		maxIterations := agent.MaxIterations()
+		historyMessages := agent.HistoryMessages()
+		skillsList := agent.SkillsList()
+		toolsList := agent.ToolsList()
+		enableThinkingProcess := agent.EnableThinkingProcess()
+
+		if cmd.IdentityContent != nil {
+			identityContent = *cmd.IdentityContent
+		}
+		if cmd.SoulContent != nil {
+			soulContent = *cmd.SoulContent
+		}
+		if cmd.AgentsContent != nil {
+			agentsContent = *cmd.AgentsContent
+		}
+		if cmd.UserContent != nil {
+			userContent = *cmd.UserContent
+		}
+		if cmd.ToolsContent != nil {
+			toolsContent = *cmd.ToolsContent
+		}
+		if cmd.Model != nil {
+			model = *cmd.Model
+		}
+		if cmd.MaxTokens != nil {
+			maxTokens = *cmd.MaxTokens
+		}
+		if cmd.Temperature != nil {
+			temperature = *cmd.Temperature
+		}
+		if cmd.MaxIterations != nil {
+			maxIterations = *cmd.MaxIterations
+		}
+		if cmd.HistoryMessages != nil {
+			historyMessages = *cmd.HistoryMessages
+		}
+		if cmd.SkillsList != nil {
+			skillsList = *cmd.SkillsList
+		}
+		if cmd.ToolsList != nil {
+			toolsList = *cmd.ToolsList
+		}
+		if cmd.EnableThinkingProcess != nil {
+			enableThinkingProcess = *cmd.EnableThinkingProcess
+		}
+
+		agent.UpdateConfig(
+			identityContent, soulContent, agentsContent, userContent, toolsContent,
+			model, maxTokens, temperature, maxIterations, historyMessages,
+			skillsList, toolsList, enableThinkingProcess,
+		)
+	}
+
 	if cmd.IsActive != nil {
 		agent.SetActive(*cmd.IsActive)
 	}

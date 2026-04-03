@@ -24,12 +24,12 @@ type UpdateProjectCommand struct {
 	GitRepoURL                string
 	DefaultBranch             string
 	InitSteps                 []string
-	HeartbeatEnabled          bool
-	HeartbeatIntervalMinutes  int
-	HeartbeatMDContent        string
-	AgentCode                string
-	DispatchChannelCode      string
-	DispatchSessionKey       string
+	HeartbeatEnabled          *bool
+	HeartbeatIntervalMinutes  *int
+	HeartbeatMDContent        *string
+	AgentCode                 *string
+	DispatchChannelCode       *string
+	DispatchSessionKey        *string
 }
 
 type ProjectApplicationService struct {
@@ -84,8 +84,12 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	if err := project.Update(cmd.Name, cmd.GitRepoURL, cmd.DefaultBranch, cmd.InitSteps); err != nil {
 		return nil, err
 	}
-	project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
-	project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
+	if cmd.HeartbeatEnabled != nil || cmd.HeartbeatIntervalMinutes != nil || cmd.HeartbeatMDContent != nil || cmd.AgentCode != nil {
+		project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
+	}
+	if cmd.DispatchChannelCode != nil || cmd.DispatchSessionKey != nil {
+		project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
+	}
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err
 	}

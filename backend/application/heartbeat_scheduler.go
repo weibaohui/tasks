@@ -265,7 +265,7 @@ func (s *HeartbeatScheduler) UpdateProjectHeartbeat(ctx context.Context, project
 		return fmt.Errorf("project not found")
 	}
 
-	project.UpdateHeartbeatConfig(enabled, intervalMinutes, mdContent, agentID)
+	project.UpdateHeartbeatConfig(&enabled, &intervalMinutes, &mdContent, &agentID)
 	return s.projectRepo.Save(ctx, project)
 }
 

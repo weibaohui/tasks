@@ -25,9 +25,9 @@ type CreateUserRequest struct {
 }
 
 type UpdateUserRequest struct {
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	IsActive    *bool  `json:"is_active"`
+	Email       *string `json:"email"`
+	DisplayName *string `json:"display_name"`
+	IsActive    *bool   `json:"is_active"`
 }
 
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {

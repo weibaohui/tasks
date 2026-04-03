@@ -103,19 +103,31 @@ func (p *Project) Update(name, gitRepoURL, defaultBranch string, initSteps []str
 	return nil
 }
 
-// UpdateHeartbeatConfig 更新心跳配置
-func (p *Project) UpdateHeartbeatConfig(enabled bool, intervalMinutes int, mdContent, agentCode string) {
-	p.heartbeatEnabled = enabled
-	p.heartbeatIntervalMinutes = intervalMinutes
-	p.heartbeatMDContent = mdContent
-	p.agentCode = agentCode
+// UpdateHeartbeatConfig 更新心跳配置（仅更新非 nil 字段）
+func (p *Project) UpdateHeartbeatConfig(enabled *bool, intervalMinutes *int, mdContent, agentCode *string) {
+	if enabled != nil {
+		p.heartbeatEnabled = *enabled
+	}
+	if intervalMinutes != nil {
+		p.heartbeatIntervalMinutes = *intervalMinutes
+	}
+	if mdContent != nil {
+		p.heartbeatMDContent = *mdContent
+	}
+	if agentCode != nil {
+		p.agentCode = *agentCode
+	}
 	p.updatedAt = time.Now()
 }
 
-// UpdateDispatchConfig 更新派发配置
-func (p *Project) UpdateDispatchConfig(channelCode, sessionKey string) {
-	p.dispatchChannelCode = channelCode
-	p.dispatchSessionKey = sessionKey
+// UpdateDispatchConfig 更新派发配置（仅更新非 nil 字段）
+func (p *Project) UpdateDispatchConfig(channelCode, sessionKey *string) {
+	if channelCode != nil {
+		p.dispatchChannelCode = *channelCode
+	}
+	if sessionKey != nil {
+		p.dispatchSessionKey = *sessionKey
+	}
 	p.updatedAt = time.Now()
 }
 

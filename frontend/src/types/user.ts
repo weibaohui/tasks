@@ -29,8 +29,8 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
-  email: string;
-  display_name: string;
+  email?: string;
+  display_name?: string;
   is_active?: boolean;
 }
 

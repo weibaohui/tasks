@@ -24,8 +24,15 @@ export interface CreateHookConfigRequest {
   priority: number;
 }
 
-export interface UpdateHookConfigRequest extends CreateHookConfigRequest {
+export interface UpdateHookConfigRequest {
   id: string;
+  project_id?: string;
+  name?: string;
+  trigger_point?: string;
+  action_type?: string;
+  action_config?: string;
+  enabled?: boolean;
+  priority?: number;
 }
 
 /**

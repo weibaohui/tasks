@@ -41,14 +41,14 @@ type CreateHookConfigRequest struct {
 }
 
 type UpdateHookConfigRequest struct {
-	ID           string `json:"id"`
-	ProjectID    string `json:"project_id"`
-	Name         string `json:"name"`
-	TriggerPoint string `json:"trigger_point"`
-	ActionType  string `json:"action_type"`
-	ActionConfig string `json:"action_config"`
-	Enabled     bool   `json:"enabled"`
-	Priority    int    `json:"priority"`
+	ID           string  `json:"id"`
+	ProjectID    *string `json:"project_id"`
+	Name         *string `json:"name"`
+	TriggerPoint *string `json:"trigger_point"`
+	ActionType   *string `json:"action_type"`
+	ActionConfig *string `json:"action_config"`
+	Enabled      *bool   `json:"enabled"`
+	Priority     *int    `json:"priority"`
 }
 
 // CreateHookConfig 创建 Hook 配置
@@ -167,13 +167,27 @@ func (h *HookHandler) UpdateHookConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing.Name = req.Name
-	existing.ProjectID = req.ProjectID
-	existing.TriggerPoint = req.TriggerPoint
-	existing.ActionType = req.ActionType
-	existing.ActionConfig = req.ActionConfig
-	existing.Enabled = req.Enabled
-	existing.Priority = req.Priority
+	if req.Name != nil {
+		existing.Name = *req.Name
+	}
+	if req.ProjectID != nil {
+		existing.ProjectID = *req.ProjectID
+	}
+	if req.TriggerPoint != nil {
+		existing.TriggerPoint = *req.TriggerPoint
+	}
+	if req.ActionType != nil {
+		existing.ActionType = *req.ActionType
+	}
+	if req.ActionConfig != nil {
+		existing.ActionConfig = *req.ActionConfig
+	}
+	if req.Enabled != nil {
+		existing.Enabled = *req.Enabled
+	}
+	if req.Priority != nil {
+		existing.Priority = *req.Priority
+	}
 	existing.UpdatedAt = time.Now()
 
 	if err := h.configRepo.Save(r.Context(), existing); err != nil {
