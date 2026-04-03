@@ -140,10 +140,15 @@ func applyEnvOverrides(cfg *Config) {
 	if baseURL := os.Getenv("API_BASE_URL"); baseURL != "" {
 		cfg.API.BaseURL = baseURL
 	}
+
+	// TASKMANAGER_DB_PATH 环境变量
+	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
+		cfg.Database.Path = dbPath
+	}
 }
 
 // GetDatabasePath 获取数据库路径
-// 使用配置文件中指定的路径，不再支持环境变量覆盖
+// 优先使用 TASKMANAGER_DB_PATH 环境变量，其次使用配置文件中的路径
 func GetDatabasePath() string {
 	cfg, err := Load()
 	if err != nil {
