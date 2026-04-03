@@ -3,6 +3,7 @@
  * 支持按条件查询对话记录，以对话形式展示会话记录，以及链路树可视化
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -103,6 +104,7 @@ interface TraceNode {
 }
 
 export const ConversationRecordsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm<QueryFormValues>();
@@ -493,9 +495,15 @@ export const ConversationRecordsPage: React.FC = () => {
     })),
   }));
 
+  // 从 URL 参数读取 trace_id 并自动应用
   useEffect(() => {
+    const traceIdFromUrl = searchParams.get('trace_id');
+    if (traceIdFromUrl) {
+      form.setFieldsValue({ trace_id: traceIdFromUrl });
+      setFilterVisible(true);
+    }
     fetchList();
-  }, [fetchList]);
+  }, [fetchList, searchParams, form]);
 
   return (
     <div style={{ padding: 0 }}>
