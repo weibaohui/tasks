@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/weibh/taskmanager/application"
@@ -230,8 +232,7 @@ func (h *RequirementHandler) DeleteRequirement(w http.ResponseWriter, r *http.Re
 		ID: domain.NewRequirementID(id),
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		h.handleDeleteError(w, r.Context(), err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -257,8 +258,7 @@ func (h *RequirementHandler) BatchDeleteRequirements(w http.ResponseWriter, r *h
 		IDs: ids,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		h.handleDeleteError(w, r.Context(), err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -327,4 +327,27 @@ func (h *RequirementHandler) getClaudeRuntimeByRequirement(r *http.Request, requ
 	}
 
 	return result
+}
+
+// handleDeleteError 处理删除操作的错误，根据错误类型返回相应的状态码
+// - ErrRequirementNotFound -> 404
+// - 上下文取消/超时 -> 500
+// - 其他内部错误 -> 500（不暴露原始错误信息）
+func (h *RequirementHandler) handleDeleteError(w http.ResponseWriter, ctx context.Context, err error) {
+	if errors.Is(err, application.ErrRequirementNotFound) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: "requirement not found"})
+		return
+	}
+
+	// 检查上下文错误
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "request timeout or cancelled"})
+		return
+	}
+
+	// 其他内部错误，不暴露原始错误信息
+	w.WriteHeader(http.StatusInternalServerError)
+	_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "internal server error"})
 }
