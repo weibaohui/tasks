@@ -608,7 +608,7 @@ export const ProjectRequirementPage: React.FC = () => {
             复制并派发
           </Button>
           {item.trace_id && (
-            <Button type="link" onClick={() => navigate(`/conversation-records?trace_id=${item.trace_id}`)}>
+            <Button type="link" onClick={() => navigate(`/conversation-records?trace_id=${encodeURIComponent(item.trace_id)}`)}>
               对话链路
             </Button>
           )}

@@ -329,6 +329,17 @@ func (a *Agent) SetLLMProviderID(id LLMProviderID) {
 	a.updatedAt = time.Now()
 }
 
+// ApplyLLMProvider 应用 LLM Provider ID 到 Agent
+// 当 providerID 为 nil 时，表示清空关联；否则设置为指定值
+func (a *Agent) ApplyLLMProvider(providerID *string) {
+	if providerID == nil {
+		a.llmProviderID = LLMProviderID{}
+	} else {
+		a.llmProviderID = NewLLMProviderID(*providerID)
+	}
+	a.updatedAt = time.Now()
+}
+
 type AgentSnapshot struct {
 	ID                    AgentID
 	AgentCode             AgentCode

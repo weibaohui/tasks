@@ -230,7 +230,7 @@ type AgentResponse struct {
 
 ### 配置解析流程图
 
-```
+```text
 开始
   │
   ▼

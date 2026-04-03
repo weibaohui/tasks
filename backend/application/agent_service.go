@@ -169,9 +169,7 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		cmd.EnableThinkingProcess,
 	)
 	agent.SetDefault(cmd.IsDefault)
-	if cmd.LLMProviderID != nil {
-		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
-	}
+	agent.ApplyLLMProvider(cmd.LLMProviderID)
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)
@@ -248,9 +246,7 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 			return nil, err
 		}
 	}
-	if cmd.LLMProviderID != nil {
-		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
-	}
+	agent.ApplyLLMProvider(cmd.LLMProviderID)
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)
@@ -408,9 +404,7 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 	if cmd.ClaudeCodeConfig != nil {
 		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
 	}
-	if cmd.LLMProviderID != nil {
-		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
-	}
+	agent.ApplyLLMProvider(cmd.LLMProviderID)
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to save agent: %w", err)

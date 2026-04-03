@@ -15,6 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const defaultTokenAggregationLimit = 1000 // Token 聚合查询默认限制
+
 // StreamingCallback 回调接口用于流式输出
 type StreamingCallback interface {
 	OnThinking(thinking string)
@@ -1084,7 +1086,7 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	// 按 trace_id 查询对话记录并计算 token
 	traceID := requirement.TraceID()
 	if traceID != "" && p.conversationRepo != nil {
-		records, err := p.conversationRepo.FindByTraceID(ctx, traceID, 1000) // 最多查询1000条
+		records, err := p.conversationRepo.FindByTraceID(ctx, traceID, defaultTokenAggregationLimit) // 最多查询1000条
 		if err != nil {
 			p.logger.Warn("查询对话记录失败", zap.String("trace_id", traceID), zap.Error(err))
 		} else {
