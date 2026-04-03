@@ -10,6 +10,7 @@ import (
 	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -46,6 +47,15 @@ func (a *toolHookAdapter) preToolUseAdapter(ctx context.Context, input any, tool
 	if !ok {
 		a.logger.Warn("ClaudeCode PreToolUse: unexpected input type")
 		return claudecode.HookJSONOutput{Continue: boolPtr(true)}, nil
+	}
+
+	// 在 Claude Code SDK 路径中，PostLLMCall（会设置 ToolParentSpanKey）在工具调用之后才执行（defer）。
+	// 因此首次 PreToolCall 时 ToolParentSpanKey 还未设置，需要在这里主动设置，
+	// 确保连续工具调用共享同一个父级（llm_response_with_tools），而不是互相嵌套。
+	if a.hookCtx.Get(hooks.ToolParentSpanKey) == nil {
+		if currentSpan, ok := a.hookCtx.Get(hooks.SpanKey).(string); ok && currentSpan != "" {
+			a.hookCtx.WithValue(hooks.ToolParentSpanKey, currentSpan)
+		}
 	}
 
 	// Convert to domain.ToolCallContext

@@ -91,8 +91,8 @@ func TestE2E_TraceTree(t *testing.T) {
 	ctx2 = trace.WithSpanID(ctx2, "span-2")
 	ctx2 = trace.WithParentSpanID(ctx2, llmCallSpanID) // parent 指向 llm_call
 	hookCtx2 := domain.NewHookContext(ctx2)
-	// 将 llmCallSpanID 存入 spanKey（模拟 PreLLMCall 的行为）
-	hookCtx2 = hookCtx2.WithValue(spanKey, llmCallSpanID)
+	// 将 llmCallSpanID 存入 SpanKey（模拟 PreLLMCall 的行为）
+	hookCtx2 = hookCtx2.WithValue(SpanKey, llmCallSpanID)
 
 	resp := &domain.LLMResponse{
 		Content: "我将帮你执行 ls 命令",
@@ -107,18 +107,18 @@ func TestE2E_TraceTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostLLMCall 失败: %v", err)
 	}
-	// PostLLMCall 会将新生成的 span 存入 spanKey，我们需要获取它
-	llmResponseSpanID, _ := hookCtx2.Get(spanKey).(string)
+	// PostLLMCall 会将新生成的 span 存入 SpanKey，我们需要获取它
+	llmResponseSpanID, _ := hookCtx2.Get(SpanKey).(string)
 
 	// ========== Step 3: 工具调用 (PreToolCall) ==========
-	// 注意：ctx3 用于传递 Go context，但 spanKey 的值来自 PostLLMCall 存储
+	// 注意：ctx3 用于传递 Go context，但 SpanKey 的值来自 PostLLMCall 存储
 	ctx3 := trace.WithTraceID(ctx, traceID)
-	ctx3 = trace.WithSpanID(ctx3, "span-3") // 仅用于测试设置，不用于 spanKey 传递
+	ctx3 = trace.WithSpanID(ctx3, "span-3") // 仅用于测试设置，不用于 SpanKey 传递
 	ctx3 = trace.WithParentSpanID(ctx3, "span-2")
 	hookCtx3 := domain.NewHookContext(ctx3)
-	// PostLLMCall 通过 hookCtx2.WithValue(spanKey, spanID) 存储了 llmResponseSpanID
+	// PostLLMCall 通过 hookCtx2.WithValue(SpanKey, spanID) 存储了 llmResponseSpanID
 	// PreToolCall 需要从 hookCtx2 传递到 hookCtx3，这里模拟传递
-	hookCtx3 = hookCtx3.WithValue(spanKey, llmResponseSpanID) // 关键：传递 llmResponseSpanID
+	hookCtx3 = hookCtx3.WithValue(SpanKey, llmResponseSpanID) // 关键：传递 llmResponseSpanID
 	hookCtx3 = hookCtx3.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-e2e",
 		UserCode:    "user-e2e",
@@ -138,8 +138,8 @@ func TestE2E_TraceTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PreToolCall 失败: %v", err)
 	}
-	// PreToolCall 会生成新的 span 并存入 spanKey
-	toolCallSpanID, _ = hookCtx3.Get(spanKey).(string)
+	// PreToolCall 会生成新的 span 并存入 SpanKey
+	toolCallSpanID, _ = hookCtx3.Get(SpanKey).(string)
 
 	// ========== Step 4: 工具结果 (PostToolCall) ==========
 	ctx4 := trace.WithTraceID(ctx, traceID)
@@ -154,7 +154,7 @@ func TestE2E_TraceTree(t *testing.T) {
 		ChannelType: "feishu",
 	})
 	// PostToolCall 需要 tool_call 的 span_id
-	hookCtx4 = hookCtx4.WithValue(spanKey, toolCallSpanID)
+	hookCtx4 = hookCtx4.WithValue(SpanKey, toolCallSpanID)
 
 	result := &domain.ToolExecutionResult{
 		Success: true,
@@ -310,7 +310,7 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	ctx2 = trace.WithSpanID(ctx2, "span-2")
 	ctx2 = trace.WithParentSpanID(ctx2, "span-1")
 	hookCtx2 := domain.NewHookContext(ctx2)
-	hookCtx2 = hookCtx2.WithValue(spanKey, "span-1")
+	hookCtx2 = hookCtx2.WithValue(SpanKey, "span-1")
 	// 传递 scope
 	hookCtx2 = hookCtx2.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
@@ -338,12 +338,12 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 
 	// ========== Step 3: 工具调用 (PreToolCall) ==========
 	// 获取 llm_response_with_tools 的 span
-	llmWithToolsSpan, _ := hookCtx2.Get(spanKey).(string)
+	llmWithToolsSpan, _ := hookCtx2.Get(SpanKey).(string)
 
 	ctx3 := trace.WithTraceID(ctx, traceID)
 	ctx3 = trace.WithSpanID(ctx3, "span-3")
 	hookCtx3 := domain.NewHookContext(ctx3)
-	hookCtx3 = hookCtx3.WithValue(spanKey, llmWithToolsSpan)
+	hookCtx3 = hookCtx3.WithValue(SpanKey, llmWithToolsSpan)
 	hookCtx3 = hookCtx3.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
 		UserCode:    "user-tools",
@@ -366,12 +366,12 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 
 	// ========== Step 4: 工具结果 (PostToolCall) ==========
 	// 获取 tool_call 的 span
-	toolCallSpanID, _ := hookCtx3.Get(spanKey).(string)
+	toolCallSpanID, _ := hookCtx3.Get(SpanKey).(string)
 
 	ctx4 := trace.WithTraceID(ctx, traceID)
 	ctx4 = trace.WithSpanID(ctx4, "span-4")
 	hookCtx4 := domain.NewHookContext(ctx4)
-	hookCtx4 = hookCtx4.WithValue(spanKey, toolCallSpanID)
+	hookCtx4 = hookCtx4.WithValue(SpanKey, toolCallSpanID)
 	hookCtx4 = hookCtx4.WithValue(ScopeKey, ScopeInfo{
 		SessionKey:  "session-tools",
 		UserCode:    "user-tools",
@@ -391,9 +391,10 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	}
 
 	// ========== Step 5: 工具执行完成，触发延迟的 llm_response 记录 ==========
-	// OnToolExecutionComplete 应该记录最终的 llm_response，parent 是 tool_call 的 span
-	// 需要把 deferredResponseKey 从 hookCtx2 传递过来
-	hookCtx4 = hookCtx4.WithValue(spanKey, toolCallSpanID)
+	// OnToolExecutionComplete 应该记录最终的 llm_response，parent 是 llm_response_with_tools 的 span
+	// 需要把 ToolParentSpanKey 和 deferredResponseKey 传递过来
+	hookCtx4 = hookCtx4.WithValue(SpanKey, toolCallSpanID)
+	hookCtx4 = hookCtx4.WithValue(ToolParentSpanKey, llmWithToolsSpan)
 	hookCtx4 = hookCtx4.WithValue(deferredResponseKey, hookCtx2.Get(deferredResponseKey))
 
 	hook.OnToolExecutionComplete(hookCtx4)
@@ -443,9 +444,9 @@ func TestE2E_LLMResponseWithTools(t *testing.T) {
 	for _, r := range records {
 		if r.EventType() == "llm_response" && r.SpanID() == "span-2" {
 			foundFinalLLMResponse = true
-			// 最终的 llm_response 的 parent 应该是 tool_call (span-5)
-			if r.ParentSpanID() != "span-5" {
-				t.Errorf("最终 llm_response 的 parent 应为 span-5，实际 %s", r.ParentSpanID())
+			// 最终的 llm_response 的 parent 应该是 llm_response_with_tools (llmWithToolsSpan)
+			if r.ParentSpanID() != llmWithToolsSpan {
+				t.Errorf("最终 llm_response 的 parent 应为 %s(llm_response_with_tools)，实际 %s", llmWithToolsSpan, r.ParentSpanID())
 			} else {
 				t.Logf("✓ 最终 llm_response 存在，parent=%s", r.ParentSpanID())
 			}
