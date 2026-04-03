@@ -128,22 +128,22 @@ export interface CreateAgentRequest {
 }
 
 export interface UpdateAgentRequest {
-  name: string;
-  agent_type: string;
-  description: string;
-  identity_content: string;
-  soul_content: string;
-  agents_content: string;
-  user_content: string;
-  tools_content: string;
-  model: string;
-  llm_provider_id: string;
-  max_tokens: number;
-  temperature: number;
-  max_iterations: number;
-  history_messages: number;
-  skills_list: string[];
-  tools_list: string[];
+  name?: string;
+  agent_type?: string;
+  description?: string;
+  identity_content?: string;
+  soul_content?: string;
+  agents_content?: string;
+  user_content?: string;
+  tools_content?: string;
+  model?: string;
+  llm_provider_id?: string;
+  max_tokens?: number;
+  temperature?: number;
+  max_iterations?: number;
+  history_messages?: number;
+  skills_list?: string[];
+  tools_list?: string[];
   is_active?: boolean;
   is_default?: boolean;
   enable_thinking_process?: boolean;

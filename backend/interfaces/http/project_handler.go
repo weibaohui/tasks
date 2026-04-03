@@ -27,17 +27,17 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
-	ID                        string   `json:"id"`
-	Name                      string   `json:"name"`
-	GitRepoURL                string   `json:"git_repo_url"`
-	DefaultBranch             string   `json:"default_branch"`
-	InitSteps                 []string `json:"init_steps"`
-	HeartbeatEnabled          bool     `json:"heartbeat_enabled"`
-	HeartbeatIntervalMinutes  int      `json:"heartbeat_interval_minutes"`
-	HeartbeatMDContent        string   `json:"heartbeat_md_content"`
-	AgentCode                string   `json:"agent_code"`
-	DispatchChannelCode       string   `json:"dispatch_channel_code"`
-	DispatchSessionKey        string   `json:"dispatch_session_key"`
+	ID                        string    `json:"id"`
+	Name                      string    `json:"name"`
+	GitRepoURL                string    `json:"git_repo_url"`
+	DefaultBranch             string    `json:"default_branch"`
+	InitSteps                 []string  `json:"init_steps"`
+	HeartbeatEnabled          *bool     `json:"heartbeat_enabled,omitempty"`
+	HeartbeatIntervalMinutes  *int      `json:"heartbeat_interval_minutes,omitempty"`
+	HeartbeatMDContent        *string   `json:"heartbeat_md_content,omitempty"`
+	AgentCode                 *string   `json:"agent_code,omitempty"`
+	DispatchChannelCode       *string   `json:"dispatch_channel_code,omitempty"`
+	DispatchSessionKey        *string   `json:"dispatch_session_key,omitempty"`
 }
 
 func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {

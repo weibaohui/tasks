@@ -53,14 +53,18 @@ export interface CreateProjectRequest {
   init_steps: string[];
 }
 
-export interface UpdateProjectRequest extends CreateProjectRequest {
+export interface UpdateProjectRequest {
   id: string;
-  heartbeat_enabled: boolean;
-  heartbeat_interval_minutes: number;
-  heartbeat_md_content: string;
-  agent_code: string;
-  dispatch_channel_code: string;
-  dispatch_session_key: string;
+  name?: string;
+  git_repo_url?: string;
+  default_branch?: string;
+  init_steps?: string[];
+  heartbeat_enabled?: boolean;
+  heartbeat_interval_minutes?: number;
+  heartbeat_md_content?: string;
+  agent_code?: string;
+  dispatch_channel_code?: string;
+  dispatch_session_key?: string;
 }
 
 export interface CreateRequirementRequest {
@@ -73,8 +77,8 @@ export interface CreateRequirementRequest {
 
 export interface UpdateRequirementRequest {
   id: string;
-  title: string;
-  description: string;
-  acceptance_criteria: string;
-  temp_workspace_root: string;
+  title?: string;
+  description?: string;
+  acceptance_criteria?: string;
+  temp_workspace_root?: string;
 }

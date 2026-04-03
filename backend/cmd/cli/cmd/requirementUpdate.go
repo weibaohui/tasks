@@ -29,29 +29,19 @@ var requirementUpdateCmd = &cobra.Command{
 		ctx := context.Background()
 		c := client.New()
 
-		// 首先获取当前需求详情，用于填充未提供的字段
-		currentReq, err := c.GetRequirement(ctx, id)
-		if err != nil {
-			printJSONError("find requirement failed: %v", err)
-			return
+		// 仅传递用户显式提供的字段（即使是空字符串）
+		var newTitle, newDesc, newAcceptance, newTempWorkspace *string
+		if cmd.Flags().Changed("title") {
+			newTitle = &title
 		}
-
-		// 使用新值或保留原值
-		newTitle := title
-		if newTitle == "" {
-			newTitle = currentReq.Title
+		if cmd.Flags().Changed("description") {
+			newDesc = &description
 		}
-		newDesc := description
-		if newDesc == "" {
-			newDesc = currentReq.Description
+		if cmd.Flags().Changed("acceptance-criteria") {
+			newAcceptance = &acceptance
 		}
-		newAcceptance := acceptance
-		if newAcceptance == "" {
-			newAcceptance = currentReq.AcceptanceCriteria
-		}
-		newTempWorkspace := tempWorkspace
-		if newTempWorkspace == "" {
-			newTempWorkspace = currentReq.TempWorkspaceRoot
+		if cmd.Flags().Changed("temp-workspace-root") {
+			newTempWorkspace = &tempWorkspace
 		}
 
 		requirement, err := c.UpdateRequirement(ctx, client.UpdateRequirementRequest{

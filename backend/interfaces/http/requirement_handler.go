@@ -29,11 +29,11 @@ type CreateRequirementRequest struct {
 }
 
 type UpdateRequirementRequest struct {
-	ID                 string `json:"id"`
-	Title              string `json:"title"`
-	Description        string `json:"description"`
-	AcceptanceCriteria string `json:"acceptance_criteria"`
-	TempWorkspaceRoot  string `json:"temp_workspace_root"`
+	ID                 string  `json:"id"`
+	Title              *string `json:"title"`
+	Description        *string `json:"description"`
+	AcceptanceCriteria *string `json:"acceptance_criteria"`
+	TempWorkspaceRoot  *string `json:"temp_workspace_root"`
 }
 
 type DispatchRequirementRequest struct {

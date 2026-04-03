@@ -26,8 +26,8 @@ type CreateUserCommand struct {
 
 type UpdateUserCommand struct {
 	ID          domain.UserID
-	Email       string
-	DisplayName string
+	Email       *string
+	DisplayName *string
 	IsActive    *bool
 }
 
@@ -103,7 +103,17 @@ func (s *UserApplicationService) UpdateUser(ctx context.Context, cmd UpdateUserC
 		return nil, ErrUserNotFound
 	}
 
-	user.UpdateProfile(cmd.Email, cmd.DisplayName)
+	if cmd.Email != nil || cmd.DisplayName != nil {
+		email := user.Email()
+		displayName := user.DisplayName()
+		if cmd.Email != nil {
+			email = *cmd.Email
+		}
+		if cmd.DisplayName != nil {
+			displayName = *cmd.DisplayName
+		}
+		user.UpdateProfile(email, displayName)
+	}
 	if cmd.IsActive != nil {
 		if *cmd.IsActive {
 			user.Activate()
