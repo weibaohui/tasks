@@ -263,11 +263,10 @@ func (s *RequirementApplicationService) DeleteRequirement(ctx context.Context, c
 
 // BatchDeleteRequirements 批量删除需求
 func (s *RequirementApplicationService) BatchDeleteRequirements(ctx context.Context, cmd BatchDeleteRequirementsCommand) error {
-	var lastErr error
 	for _, id := range cmd.IDs {
 		if err := s.DeleteRequirement(ctx, DeleteRequirementCommand{ID: id}); err != nil {
-			lastErr = err
+			return err
 		}
 	}
-	return lastErr
+	return nil
 }
