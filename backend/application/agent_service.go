@@ -26,7 +26,7 @@ type CreateAgentCommand struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
-	LLMProviderID         string
+	LLMProviderID         *string
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -47,7 +47,7 @@ type UpdateAgentCommand struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
-	LLMProviderID         string
+	LLMProviderID         *string
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -169,8 +169,8 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		cmd.EnableThinkingProcess,
 	)
 	agent.SetDefault(cmd.IsDefault)
-	if cmd.LLMProviderID != "" {
-		agent.SetLLMProviderID(domain.NewLLMProviderID(cmd.LLMProviderID))
+	if cmd.LLMProviderID != nil {
+		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
 	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
@@ -248,8 +248,8 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 			return nil, err
 		}
 	}
-	if cmd.LLMProviderID != "" {
-		agent.SetLLMProviderID(domain.NewLLMProviderID(cmd.LLMProviderID))
+	if cmd.LLMProviderID != nil {
+		agent.SetLLMProviderID(domain.NewLLMProviderID(*cmd.LLMProviderID))
 	}
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {

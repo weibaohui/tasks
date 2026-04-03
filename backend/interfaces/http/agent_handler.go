@@ -27,7 +27,7 @@ type CreateAgentRequest struct {
 	UserContent           string   `json:"user_content"`
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
-	LLMProviderID         string   `json:"llm_provider_id"`
+	LLMProviderID         *string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`
@@ -48,7 +48,7 @@ type UpdateAgentRequest struct {
 	UserContent           string   `json:"user_content"`
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
-	LLMProviderID         string   `json:"llm_provider_id"`
+	LLMProviderID         *string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`

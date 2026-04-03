@@ -24,7 +24,14 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 
 	// 序列化 claude_code_config
 	var configJSON []byte
-	var err error
+	// Handle nullable LLMProviderID
+	var llmProviderID interface{}
+	if snap.LLMProviderID.String() != "" {
+		llmProviderID = snap.LLMProviderID.String()
+	} else {
+		llmProviderID = nil
+	}
+var err error
 	if snap.ClaudeCodeConfig != nil {
 		configJSON, err = json.Marshal(snap.ClaudeCodeConfig)
 		if err != nil {
@@ -81,7 +88,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		snap.UserContent,
 		snap.ToolsContent,
 		snap.Model,
-		snap.LLMProviderID.String(),
+		llmProviderID,
 		snap.MaxTokens,
 		snap.Temperature,
 		snap.MaxIterations,
@@ -109,7 +116,7 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(llm_provider_id, '') as llm_provider_id,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -130,7 +137,7 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(llm_provider_id, '') as llm_provider_id,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -151,7 +158,7 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(llm_provider_id, '') as llm_provider_id,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -176,7 +183,7 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(llm_provider_id, '') as llm_provider_id,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -224,7 +231,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		userContent          string
 		toolsContent         string
 		model                string
-		llmProviderIDStr     string
+		llmProviderIDStr     sql.NullString
 		maxTokens            int
 		temperature          float64
 		maxIterations        int
@@ -287,6 +294,12 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		_ = json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig)
 	}
 
+	// Handle nullable LLMProviderID
+	var llmProviderID string
+	if llmProviderIDStr.Valid {
+		llmProviderID = llmProviderIDStr.String
+	}
+
 	agent := &domain.Agent{}
 	agent.FromSnapshot(domain.AgentSnapshot{
 		ID:                    domain.NewAgentID(idStr),
@@ -301,7 +314,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		UserContent:           userContent,
 		ToolsContent:          toolsContent,
 		Model:                 model,
-		LLMProviderID:         domain.NewLLMProviderID(llmProviderIDStr),
+		LLMProviderID:         domain.NewLLMProviderID(llmProviderID),
 		MaxTokens:             maxTokens,
 		Temperature:           temperature,
 		MaxIterations:         maxIterations,
