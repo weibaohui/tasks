@@ -54,22 +54,22 @@ func (m *mockRequirementRepo) Delete(ctx context.Context, id domain.RequirementI
 	return nil
 }
 
-type mockProjectRepo struct {
+type reqMockProjectRepo struct {
 	projects map[string]*domain.Project
 }
 
-func newMockProjectRepo() *mockProjectRepo {
-	return &mockProjectRepo{
+func newReqMockProjectRepo() *reqMockProjectRepo {
+	return &reqMockProjectRepo{
 		projects: make(map[string]*domain.Project),
 	}
 }
 
-func (m *mockProjectRepo) Save(ctx context.Context, project *domain.Project) error {
+func (m *reqMockProjectRepo) Save(ctx context.Context, project *domain.Project) error {
 	m.projects[project.ID().String()] = project
 	return nil
 }
 
-func (m *mockProjectRepo) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
+func (m *reqMockProjectRepo) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
 	project, ok := m.projects[id.String()]
 	if !ok {
 		return nil, nil
@@ -77,7 +77,7 @@ func (m *mockProjectRepo) FindByID(ctx context.Context, id domain.ProjectID) (*d
 	return project, nil
 }
 
-func (m *mockProjectRepo) FindAll(ctx context.Context) ([]*domain.Project, error) {
+func (m *reqMockProjectRepo) FindAll(ctx context.Context) ([]*domain.Project, error) {
 	var result []*domain.Project
 	for _, project := range m.projects {
 		result = append(result, project)
@@ -85,7 +85,7 @@ func (m *mockProjectRepo) FindAll(ctx context.Context) ([]*domain.Project, error
 	return result, nil
 }
 
-func (m *mockProjectRepo) Delete(ctx context.Context, id domain.ProjectID) error {
+func (m *reqMockProjectRepo) Delete(ctx context.Context, id domain.ProjectID) error {
 	delete(m.projects, id.String())
 	return nil
 }
@@ -99,16 +99,16 @@ func (m *mockRequirementIDGen) Generate() string {
 	return "req-id-" + strconv.Itoa(m.count)
 }
 
-func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirementRepo, *mockProjectRepo) {
+func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirementRepo, *reqMockProjectRepo) {
 	reqRepo := newMockRequirementRepo()
-	projRepo := newMockProjectRepo()
+	projRepo := newReqMockProjectRepo()
 	idGen := &mockRequirementIDGen{}
 
 	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil, nil)
 	return svc, reqRepo, projRepo
 }
 
-func createTestProject(repo *mockProjectRepo) *domain.Project {
+func createTestProject(repo *reqMockProjectRepo) *domain.Project {
 	project, _ := domain.NewProject(
 		domain.NewProjectID("proj-001"),
 		"Test Project",
