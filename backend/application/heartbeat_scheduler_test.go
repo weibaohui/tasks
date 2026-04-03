@@ -127,7 +127,11 @@ func TestHeartbeatScheduler_ExecuteHeartbeat(t *testing.T) {
 	}
 
 	// 启用心跳
-	project.UpdateHeartbeatConfig(true, 5, "心跳内容: ${project.name}", "agent-001")
+	enabled := true
+	interval := 5
+	mdContent := "心跳内容: ${project.name}"
+	agentCode := "agent-001"
+	project.UpdateHeartbeatConfig(&enabled, &interval, &mdContent, &agentCode)
 
 	projectRepo := &MockProjectRepository{projects: []*domain.Project{project}}
 	agentRepo := &MockAgentRepository{agents: []*domain.Agent{}}

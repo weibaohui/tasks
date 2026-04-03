@@ -208,11 +208,11 @@ func (c *Client) GetRequirement(ctx context.Context, id string) (*Requirement, e
 
 // UpdateRequirementRequest 更新需求请求
 type UpdateRequirementRequest struct {
-	ID                 string `json:"id"`
-	Title              string `json:"title"`
-	Description        string `json:"description"`
-	AcceptanceCriteria string `json:"acceptance_criteria"`
-	TempWorkspaceRoot  string `json:"temp_workspace_root,omitempty"`
+	ID                 string  `json:"id"`
+	Title              *string `json:"title,omitempty"`
+	Description        *string `json:"description,omitempty"`
+	AcceptanceCriteria *string `json:"acceptance_criteria,omitempty"`
+	TempWorkspaceRoot  *string `json:"temp_workspace_root,omitempty"`
 }
 
 // UpdateRequirement 更新需求
@@ -512,12 +512,12 @@ type UpdateProjectRequest struct {
 	GitRepoURL               string   `json:"git_repo_url,omitempty"`
 	DefaultBranch            string   `json:"default_branch,omitempty"`
 	InitSteps                []string `json:"init_steps,omitempty"`
-	HeartbeatEnabled         bool     `json:"heartbeat_enabled"`
-	HeartbeatIntervalMinutes int      `json:"heartbeat_interval_minutes"`
-	HeartbeatMDContent       string   `json:"heartbeat_md_content,omitempty"`
-	AgentCode                string   `json:"agent_code,omitempty"`
-	DispatchChannelCode      string   `json:"dispatch_channel_code,omitempty"`
-	DispatchSessionKey       string   `json:"dispatch_session_key,omitempty"`
+	HeartbeatEnabled         *bool    `json:"heartbeat_enabled,omitempty"`
+	HeartbeatIntervalMinutes *int     `json:"heartbeat_interval_minutes,omitempty"`
+	HeartbeatMDContent       *string  `json:"heartbeat_md_content,omitempty"`
+	AgentCode                *string  `json:"agent_code,omitempty"`
+	DispatchChannelCode      *string  `json:"dispatch_channel_code,omitempty"`
+	DispatchSessionKey       *string  `json:"dispatch_session_key,omitempty"`
 }
 
 // UpdateProject 更新项目
@@ -544,10 +544,10 @@ func (c *Client) UpdateProject(ctx context.Context, req UpdateProjectRequest) (*
 func (c *Client) UpdateProjectHeartbeat(ctx context.Context, projectID string, enabled bool, intervalMinutes int, mdContent, agentCode string) (*Project, error) {
 	req := UpdateProjectRequest{
 		ID:                       projectID,
-		HeartbeatEnabled:         enabled,
-		HeartbeatIntervalMinutes: intervalMinutes,
-		HeartbeatMDContent:       mdContent,
-		AgentCode:                agentCode,
+		HeartbeatEnabled:         &enabled,
+		HeartbeatIntervalMinutes: &intervalMinutes,
+		HeartbeatMDContent:       &mdContent,
+		AgentCode:                &agentCode,
 	}
 	return c.UpdateProject(ctx, req)
 }

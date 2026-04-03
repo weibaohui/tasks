@@ -39,25 +39,25 @@ type CreateAgentRequest struct {
 }
 
 type UpdateAgentRequest struct {
-	Name                  string   `json:"name"`
-	AgentType             string   `json:"agent_type"`
-	Description           string   `json:"description"`
-	IdentityContent       string   `json:"identity_content"`
-	SoulContent           string   `json:"soul_content"`
-	AgentsContent         string   `json:"agents_content"`
-	UserContent           string   `json:"user_content"`
-	ToolsContent          string   `json:"tools_content"`
-	Model                 string   `json:"model"`
+	Name                  *string   `json:"name"`
+	AgentType             *string   `json:"agent_type"`
+	Description           *string   `json:"description"`
+	IdentityContent       *string   `json:"identity_content"`
+	SoulContent           *string   `json:"soul_content"`
+	AgentsContent         *string   `json:"agents_content"`
+	UserContent           *string   `json:"user_content"`
+	ToolsContent          *string   `json:"tools_content"`
+	Model                 *string   `json:"model"`
 	LLMProviderID         *string   `json:"llm_provider_id"`
-	MaxTokens             int      `json:"max_tokens"`
-	Temperature           float64  `json:"temperature"`
-	MaxIterations         int      `json:"max_iterations"`
-	HistoryMessages       int      `json:"history_messages"`
-	SkillsList            []string `json:"skills_list"`
-	ToolsList             []string `json:"tools_list"`
-	IsActive              *bool    `json:"is_active"`
-	IsDefault             *bool    `json:"is_default"`
-	EnableThinkingProcess *bool    `json:"enable_thinking_process"`
+	MaxTokens             *int      `json:"max_tokens"`
+	Temperature           *float64  `json:"temperature"`
+	MaxIterations         *int      `json:"max_iterations"`
+	HistoryMessages       *int      `json:"history_messages"`
+	SkillsList            *[]string `json:"skills_list"`
+	ToolsList             *[]string `json:"tools_list"`
+	IsActive              *bool     `json:"is_active"`
+	IsDefault             *bool     `json:"is_default"`
+	EnableThinkingProcess *bool     `json:"enable_thinking_process"`
 }
 
 func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +157,7 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	agent, err := h.agentService.UpdateAgent(r.Context(), application.UpdateAgentCommand{
 		ID:                    domain.NewAgentID(id),
 		Name:                  req.Name,
-		AgentType:             &req.AgentType,
+		AgentType:             req.AgentType,
 		Description:           req.Description,
 		IdentityContent:       req.IdentityContent,
 		SoulContent:           req.SoulContent,

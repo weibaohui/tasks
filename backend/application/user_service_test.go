@@ -215,10 +215,12 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	isActive := false
+	newEmail := "new@example.com"
+	newDisplayName := "New Name"
 	updated, err := svc.UpdateUser(ctx, UpdateUserCommand{
 		ID:          created.ID(),
-		Email:       "new@example.com",
-		DisplayName: "New Name",
+		Email:       &newEmail,
+		DisplayName: &newDisplayName,
 		IsActive:    &isActive,
 	})
 
@@ -243,9 +245,10 @@ func TestUpdateUser_NotFound(t *testing.T) {
 	svc := setupTestUserService()
 	ctx := context.Background()
 
+	newEmail := "new@example.com"
 	_, err := svc.UpdateUser(ctx, UpdateUserCommand{
 		ID:    domain.NewUserID("non-existent"),
-		Email: "new@example.com",
+		Email: &newEmail,
 	})
 	if err != ErrUserNotFound {
 		t.Errorf("期望 ErrUserNotFound, 实际为 %v", err)

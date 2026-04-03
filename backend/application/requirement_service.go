@@ -22,10 +22,10 @@ type CreateRequirementCommand struct {
 
 type UpdateRequirementCommand struct {
 	ID                 domain.RequirementID
-	Title              string
-	Description        string
-	AcceptanceCriteria string
-	TempWorkspaceRoot  string
+	Title              *string
+	Description        *string
+	AcceptanceCriteria *string
+	TempWorkspaceRoot  *string
 }
 
 type ReportRequirementPRCommand struct {
@@ -111,8 +111,29 @@ func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, c
 	if requirement == nil {
 		return nil, ErrRequirementNotFound
 	}
-	if err := requirement.UpdateContent(cmd.Title, cmd.Description, cmd.AcceptanceCriteria, cmd.TempWorkspaceRoot); err != nil {
-		return nil, err
+
+	if cmd.Title != nil || cmd.Description != nil || cmd.AcceptanceCriteria != nil || cmd.TempWorkspaceRoot != nil {
+		title := requirement.Title()
+		description := requirement.Description()
+		acceptanceCriteria := requirement.AcceptanceCriteria()
+		tempWorkspaceRoot := requirement.TempWorkspaceRoot()
+
+		if cmd.Title != nil {
+			title = *cmd.Title
+		}
+		if cmd.Description != nil {
+			description = *cmd.Description
+		}
+		if cmd.AcceptanceCriteria != nil {
+			acceptanceCriteria = *cmd.AcceptanceCriteria
+		}
+		if cmd.TempWorkspaceRoot != nil {
+			tempWorkspaceRoot = *cmd.TempWorkspaceRoot
+		}
+
+		if err := requirement.UpdateContent(title, description, acceptanceCriteria, tempWorkspaceRoot); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
