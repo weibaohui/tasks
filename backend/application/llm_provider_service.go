@@ -30,21 +30,19 @@ type CreateProviderCommand struct {
 }
 
 type UpdateProviderCommand struct {
-	ID                    domain.LLMProviderID
-	ProviderKey           *string
-	ProviderName          *string
-	APIKey                *string
-	APIBase               *string
-	ProviderType          *string
-	ExtraHeaders          *map[string]string
-	SupportedModels       *[]domain.ModelInfo
-	DefaultModel          *string
-	IsDefault             *bool
-	Priority              *int
-	AutoMerge             *bool
-	IsActive              *bool
-	EmbeddingModels       *[]domain.EmbeddingModelInfo
-	DefaultEmbeddingModel *string
+	ID              domain.LLMProviderID
+	ProviderKey     *string
+	ProviderName    *string
+	APIKey          *string
+	APIBase         *string
+	ProviderType    *string
+	ExtraHeaders    *map[string]string
+	SupportedModels *[]domain.ModelInfo
+	DefaultModel    *string
+	IsDefault       *bool
+	Priority        *int
+	AutoMerge       *bool
+	IsActive        *bool
 }
 
 type LLMProviderApplicationService struct {
@@ -165,17 +163,6 @@ func (s *LLMProviderApplicationService) Update(ctx context.Context, cmd UpdatePr
 	}
 	if cmd.ProviderType != nil {
 		provider.SetProviderType(*cmd.ProviderType)
-	}
-	if cmd.EmbeddingModels != nil || cmd.DefaultEmbeddingModel != nil {
-		embeddingModels := provider.EmbeddingModels()
-		defaultEmbeddingModel := provider.DefaultEmbeddingModel()
-		if cmd.EmbeddingModels != nil {
-			embeddingModels = *cmd.EmbeddingModels
-		}
-		if cmd.DefaultEmbeddingModel != nil {
-			defaultEmbeddingModel = *cmd.DefaultEmbeddingModel
-		}
-		provider.SetEmbeddingModels(embeddingModels, defaultEmbeddingModel)
 	}
 	if cmd.IsDefault != nil {
 		if *cmd.IsDefault {

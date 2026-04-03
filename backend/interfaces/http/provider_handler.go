@@ -22,12 +22,6 @@ type ProviderModelInfoRequest struct {
 	MaxTokens int    `json:"max_tokens"`
 }
 
-type ProviderEmbeddingModelRequest struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Dimensions int    `json:"dimensions"`
-}
-
 type CreateProviderRequest struct {
 	UserCode        string                     `json:"user_code"`
 	ProviderKey     string                     `json:"provider_key"`
@@ -44,25 +38,18 @@ type CreateProviderRequest struct {
 }
 
 type UpdateProviderRequest struct {
-	ProviderKey           *string                          `json:"provider_key"`
-	ProviderName          *string                          `json:"provider_name"`
-	APIKey                *string                          `json:"api_key"`
-	APIBase               *string                          `json:"api_base"`
-	ProviderType          *string                          `json:"provider_type"`
-	ExtraHeaders          *map[string]string               `json:"extra_headers"`
-	SupportedModels       *[]ProviderModelInfoRequest      `json:"supported_models"`
-	DefaultModel          *string                          `json:"default_model"`
-	IsDefault             *bool                            `json:"is_default"`
-	Priority              *int                             `json:"priority"`
-	AutoMerge             *bool                            `json:"auto_merge"`
-	IsActive              *bool                            `json:"is_active"`
-	EmbeddingModels       *[]ProviderEmbeddingModelRequest `json:"embedding_models"`
-	DefaultEmbeddingModel *string                          `json:"default_embedding_model"`
-}
-
-type UpdateEmbeddingRequest struct {
-	EmbeddingModels       []ProviderEmbeddingModelRequest `json:"embedding_models"`
-	DefaultEmbeddingModel string                          `json:"default_embedding_model"`
+	ProviderKey     *string                     `json:"provider_key"`
+	ProviderName    *string                     `json:"provider_name"`
+	APIKey          *string                     `json:"api_key"`
+	APIBase         *string                     `json:"api_base"`
+	ProviderType    *string                     `json:"provider_type"`
+	ExtraHeaders    *map[string]string          `json:"extra_headers"`
+	SupportedModels *[]ProviderModelInfoRequest `json:"supported_models"`
+	DefaultModel    *string                     `json:"default_model"`
+	IsDefault       *bool                       `json:"is_default"`
+	Priority        *int                        `json:"priority"`
+	AutoMerge       *bool                       `json:"auto_merge"`
+	IsActive        *bool                       `json:"is_active"`
 }
 
 func (h *LLMProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Request) {
@@ -151,21 +138,19 @@ func (h *LLMProviderHandler) UpdateProvider(w http.ResponseWriter, r *http.Reque
 	}
 
 	provider, err := h.providerService.Update(r.Context(), application.UpdateProviderCommand{
-		ID:                    domain.NewLLMProviderID(id),
-		ProviderKey:           req.ProviderKey,
-		ProviderName:          req.ProviderName,
-		APIKey:                req.APIKey,
-		APIBase:               req.APIBase,
-		ProviderType:          req.ProviderType,
-		ExtraHeaders:          req.ExtraHeaders,
-		SupportedModels:       toDomainModelInfosPtr(req.SupportedModels),
-		DefaultModel:          req.DefaultModel,
-		IsDefault:             req.IsDefault,
-		Priority:              req.Priority,
-		AutoMerge:             req.AutoMerge,
-		IsActive:              req.IsActive,
-		EmbeddingModels:       toDomainEmbeddingModelsPtr(req.EmbeddingModels),
-		DefaultEmbeddingModel: req.DefaultEmbeddingModel,
+		ID:              domain.NewLLMProviderID(id),
+		ProviderKey:     req.ProviderKey,
+		ProviderName:    req.ProviderName,
+		APIKey:          req.APIKey,
+		APIBase:         req.APIBase,
+		ProviderType:    req.ProviderType,
+		ExtraHeaders:    req.ExtraHeaders,
+		SupportedModels: toDomainModelInfosPtr(req.SupportedModels),
+		DefaultModel:    req.DefaultModel,
+		IsDefault:       req.IsDefault,
+		Priority:        req.Priority,
+		AutoMerge:       req.AutoMerge,
+		IsActive:        req.IsActive,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -206,75 +191,23 @@ func (h *LLMProviderHandler) TestConnection(w http.ResponseWriter, r *http.Reque
 	_ = json.NewEncoder(w).Encode(result)
 }
 
-func (h *LLMProviderHandler) GetEmbeddingModels(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
-		return
-	}
-	provider, err := h.providerService.Get(r.Context(), domain.NewLLMProviderID(id))
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
-		return
-	}
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"embedding_models":        provider.EmbeddingModels(),
-		"default_embedding_model": provider.DefaultEmbeddingModel(),
-		"has_embedding_models":    provider.HasEmbeddingModels(),
-	})
-}
-
-func (h *LLMProviderHandler) UpdateEmbeddingModels(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
-		return
-	}
-
-	var req UpdateEmbeddingRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
-		return
-	}
-
-	embeddingModels := toDomainEmbeddingModels(req.EmbeddingModels)
-	defaultEmbeddingModel := req.DefaultEmbeddingModel
-	provider, err := h.providerService.Update(r.Context(), application.UpdateProviderCommand{
-		ID:                    domain.NewLLMProviderID(id),
-		EmbeddingModels:       &embeddingModels,
-		DefaultEmbeddingModel: &defaultEmbeddingModel,
-	})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
-		return
-	}
-	_ = json.NewEncoder(w).Encode(providerToMap(provider))
-}
-
 func providerToMap(provider *domain.LLMProvider) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                      provider.ID().String(),
-		"user_code":               provider.UserCode(),
-		"provider_key":            provider.ProviderKey(),
-		"provider_name":           provider.ProviderName(),
-		"api_base":                provider.APIBase(),
-		"provider_type":           provider.ProviderType(),
-		"extra_headers":           provider.ExtraHeaders(),
-		"supported_models":        provider.SupportedModels(),
-		"default_model":           provider.DefaultModel(),
-		"is_default":              provider.IsDefault(),
-		"priority":                provider.Priority(),
-		"auto_merge":              provider.AutoMerge(),
-		"embedding_models":        provider.EmbeddingModels(),
-		"default_embedding_model": provider.DefaultEmbeddingModel(),
-		"is_active":               provider.IsActive(),
-		"created_at":              provider.CreatedAt().UnixMilli(),
-		"updated_at":              provider.UpdatedAt().UnixMilli(),
+		"id":               provider.ID().String(),
+		"user_code":        provider.UserCode(),
+		"provider_key":     provider.ProviderKey(),
+		"provider_name":    provider.ProviderName(),
+		"api_base":         provider.APIBase(),
+		"provider_type":    provider.ProviderType(),
+		"extra_headers":    provider.ExtraHeaders(),
+		"supported_models": provider.SupportedModels(),
+		"default_model":    provider.DefaultModel(),
+		"is_default":       provider.IsDefault(),
+		"priority":         provider.Priority(),
+		"auto_merge":       provider.AutoMerge(),
+		"is_active":        provider.IsActive(),
+		"created_at":       provider.CreatedAt().UnixMilli(),
+		"updated_at":       provider.UpdatedAt().UnixMilli(),
 	}
 }
 
@@ -298,28 +231,5 @@ func toDomainModelInfosPtr(models *[]ProviderModelInfoRequest) *[]domain.ModelIn
 		return nil
 	}
 	out := toDomainModelInfos(*models)
-	return &out
-}
-
-func toDomainEmbeddingModels(models []ProviderEmbeddingModelRequest) []domain.EmbeddingModelInfo {
-	if len(models) == 0 {
-		return nil
-	}
-	out := make([]domain.EmbeddingModelInfo, 0, len(models))
-	for _, item := range models {
-		out = append(out, domain.EmbeddingModelInfo{
-			ID:         item.ID,
-			Name:       item.Name,
-			Dimensions: item.Dimensions,
-		})
-	}
-	return out
-}
-
-func toDomainEmbeddingModelsPtr(models *[]ProviderEmbeddingModelRequest) *[]domain.EmbeddingModelInfo {
-	if models == nil {
-		return nil
-	}
-	out := toDomainEmbeddingModels(*models)
 	return &out
 }

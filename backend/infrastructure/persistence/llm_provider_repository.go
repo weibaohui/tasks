@@ -21,15 +21,14 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 	snap := provider.ToSnapshot()
 	extraHeaders, _ := json.Marshal(snap.ExtraHeaders)
 	supportedModels, _ := json.Marshal(snap.SupportedModels)
-	embeddingModels, _ := json.Marshal(snap.EmbeddingModels)
 
 	query := `
 		INSERT INTO llm_providers (
 			id, user_code, provider_key, provider_name, api_key, api_base, provider_type, extra_headers,
 			supported_models, default_model, is_default, priority, auto_merge,
-			embedding_models, default_embedding_model, is_active, created_at, updated_at
+			is_active, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			provider_key=excluded.provider_key,
 			provider_name=excluded.provider_name,
@@ -42,8 +41,6 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 			is_default=excluded.is_default,
 			priority=excluded.priority,
 			auto_merge=excluded.auto_merge,
-			embedding_models=excluded.embedding_models,
-			default_embedding_model=excluded.default_embedding_model,
 			is_active=excluded.is_active,
 			updated_at=excluded.updated_at
 	`
@@ -63,8 +60,6 @@ func (r *SQLiteLLMProviderRepository) Save(ctx context.Context, provider *domain
 		boolToInt(snap.IsDefault),
 		snap.Priority,
 		boolToInt(snap.AutoMerge),
-		embeddingModels,
-		snap.DefaultEmbeddingModel,
 		boolToInt(snap.IsActive),
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
@@ -82,8 +77,6 @@ func (r *SQLiteLLMProviderRepository) FindByID(ctx context.Context, id domain.LL
 		COALESCE(supported_models, '[]') as supported_models,
 		COALESCE(default_model, '') as default_model,
 		is_default, priority, auto_merge,
-		COALESCE(embedding_models, '[]') as embedding_models,
-		COALESCE(default_embedding_model, '') as default_embedding_model,
 		is_active, created_at, updated_at
 		FROM llm_providers WHERE id = ?`, id.String())
 	return scanProvider(row)
@@ -99,8 +92,6 @@ func (r *SQLiteLLMProviderRepository) FindByUserCode(ctx context.Context, userCo
 		COALESCE(supported_models, '[]') as supported_models,
 		COALESCE(default_model, '') as default_model,
 		is_default, priority, auto_merge,
-		COALESCE(embedding_models, '[]') as embedding_models,
-		COALESCE(default_embedding_model, '') as default_embedding_model,
 		is_active, created_at, updated_at
 		FROM llm_providers WHERE user_code = ? ORDER BY priority DESC, created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userCode)
@@ -121,8 +112,6 @@ func (r *SQLiteLLMProviderRepository) FindDefaultActive(ctx context.Context, use
 		COALESCE(supported_models, '[]') as supported_models,
 		COALESCE(default_model, '') as default_model,
 		is_default, priority, auto_merge,
-		COALESCE(embedding_models, '[]') as embedding_models,
-		COALESCE(default_embedding_model, '') as default_embedding_model,
 		is_active, created_at, updated_at
 		FROM llm_providers WHERE user_code = ? AND is_default = 1 AND is_active = 1 LIMIT 1`
 	row := r.db.QueryRowContext(ctx, query, userCode)
@@ -139,8 +128,6 @@ func (r *SQLiteLLMProviderRepository) FindByProviderKey(ctx context.Context, pro
 		COALESCE(supported_models, '[]') as supported_models,
 		COALESCE(default_model, '') as default_model,
 		is_default, priority, auto_merge,
-		COALESCE(embedding_models, '[]') as embedding_models,
-		COALESCE(default_embedding_model, '') as default_embedding_model,
 		is_active, created_at, updated_at
 		FROM llm_providers WHERE provider_key = ? AND is_active = 1 LIMIT 1`
 	row := r.db.QueryRowContext(ctx, query, providerKey)
@@ -179,24 +166,22 @@ func scanProviders(rows *sql.Rows) ([]*domain.LLMProvider, error) {
 
 func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 	var (
-		idStr                 string
-		userCode              string
-		providerKey           string
-		providerName          string
-		apiKey                string
-		apiBase               string
-		providerType          string
-		extraHeadersJSON      []byte
-		supportedModelsJSON   []byte
-		defaultModel          string
-		isDefaultInt          int
-		priority              int
-		autoMergeInt          int
-		embeddingModelsJSON   []byte
-		defaultEmbeddingModel string
-		isActiveInt           int
-		createdAtUnix         int64
-		updatedAtUnix         int64
+		idStr               string
+		userCode            string
+		providerKey         string
+		providerName        string
+		apiKey              string
+		apiBase             string
+		providerType        string
+		extraHeadersJSON    []byte
+		supportedModelsJSON []byte
+		defaultModel        string
+		isDefaultInt        int
+		priority            int
+		autoMergeInt        int
+		isActiveInt         int
+		createdAtUnix       int64
+		updatedAtUnix       int64
 	)
 
 	err := scanner.Scan(
@@ -213,8 +198,6 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 		&isDefaultInt,
 		&priority,
 		&autoMergeInt,
-		&embeddingModelsJSON,
-		&defaultEmbeddingModel,
 		&isActiveInt,
 		&createdAtUnix,
 		&updatedAtUnix,
@@ -230,29 +213,25 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 	_ = json.Unmarshal(extraHeadersJSON, &extraHeaders)
 	var supportedModels []domain.ModelInfo
 	_ = json.Unmarshal(supportedModelsJSON, &supportedModels)
-	var embeddingModels []domain.EmbeddingModelInfo
-	_ = json.Unmarshal(embeddingModelsJSON, &embeddingModels)
 
 	provider := &domain.LLMProvider{}
 	provider.FromSnapshot(domain.LLMProviderSnapshot{
-		ID:                    domain.NewLLMProviderID(idStr),
-		UserCode:              userCode,
-		ProviderKey:           providerKey,
-		ProviderName:          providerName,
-		APIKey:                apiKey,
-		APIBase:               apiBase,
-		ProviderType:          providerType,
-		ExtraHeaders:          extraHeaders,
-		SupportedModels:       supportedModels,
-		DefaultModel:          defaultModel,
-		IsDefault:             isDefaultInt == 1,
-		Priority:              priority,
-		AutoMerge:             autoMergeInt == 1,
-		EmbeddingModels:       embeddingModels,
-		DefaultEmbeddingModel: defaultEmbeddingModel,
-		IsActive:              isActiveInt == 1,
-		CreatedAt:             time.Unix(createdAtUnix, 0),
-		UpdatedAt:             time.Unix(updatedAtUnix, 0),
+		ID:              domain.NewLLMProviderID(idStr),
+		UserCode:        userCode,
+		ProviderKey:     providerKey,
+		ProviderName:    providerName,
+		APIKey:          apiKey,
+		APIBase:         apiBase,
+		ProviderType:    providerType,
+		ExtraHeaders:    extraHeaders,
+		SupportedModels: supportedModels,
+		DefaultModel:    defaultModel,
+		IsDefault:       isDefaultInt == 1,
+		Priority:        priority,
+		AutoMerge:       autoMergeInt == 1,
+		IsActive:        isActiveInt == 1,
+		CreatedAt:       time.Unix(createdAtUnix, 0),
+		UpdatedAt:       time.Unix(updatedAtUnix, 0),
 	})
 	return provider, nil
 }

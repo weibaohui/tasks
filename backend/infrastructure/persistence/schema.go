@@ -124,8 +124,6 @@ CREATE TABLE IF NOT EXISTS llm_providers (
     is_default INTEGER NOT NULL,
     priority INTEGER NOT NULL,
     auto_merge INTEGER NOT NULL,
-    embedding_models TEXT,
-    default_embedding_model TEXT,
     is_active INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
