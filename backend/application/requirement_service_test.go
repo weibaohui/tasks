@@ -54,42 +54,6 @@ func (m *mockRequirementRepo) Delete(ctx context.Context, id domain.RequirementI
 	return nil
 }
 
-type reqMockProjectRepo struct {
-	projects map[string]*domain.Project
-}
-
-func newReqMockProjectRepo() *reqMockProjectRepo {
-	return &reqMockProjectRepo{
-		projects: make(map[string]*domain.Project),
-	}
-}
-
-func (m *reqMockProjectRepo) Save(ctx context.Context, project *domain.Project) error {
-	m.projects[project.ID().String()] = project
-	return nil
-}
-
-func (m *reqMockProjectRepo) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
-	project, ok := m.projects[id.String()]
-	if !ok {
-		return nil, nil
-	}
-	return project, nil
-}
-
-func (m *reqMockProjectRepo) FindAll(ctx context.Context) ([]*domain.Project, error) {
-	var result []*domain.Project
-	for _, project := range m.projects {
-		result = append(result, project)
-	}
-	return result, nil
-}
-
-func (m *reqMockProjectRepo) Delete(ctx context.Context, id domain.ProjectID) error {
-	delete(m.projects, id.String())
-	return nil
-}
-
 type mockRequirementIDGen struct {
 	count int
 }
@@ -99,16 +63,16 @@ func (m *mockRequirementIDGen) Generate() string {
 	return "req-id-" + strconv.Itoa(m.count)
 }
 
-func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirementRepo, *reqMockProjectRepo) {
+func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirementRepo, *sharedMockProjectRepo) {
 	reqRepo := newMockRequirementRepo()
-	projRepo := newReqMockProjectRepo()
+	projRepo := newSharedMockProjectRepo()
 	idGen := &mockRequirementIDGen{}
 
 	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil, nil)
 	return svc, reqRepo, projRepo
 }
 
-func createTestProject(repo *reqMockProjectRepo) *domain.Project {
+func createTestProject(repo *sharedMockProjectRepo) *domain.Project {
 	project, _ := domain.NewProject(
 		domain.NewProjectID("proj-001"),
 		"Test Project",
