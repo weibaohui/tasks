@@ -95,6 +95,17 @@ export const ProjectRequirementPage: React.FC = () => {
     });
   }, [requirements, statusFilter, typeFilter]);
 
+  // 当项目或状态筛选变化时，清空选择
+  useEffect(() => {
+    setSelectedRequirementKeys([]);
+  }, [selectedProjectId, statusFilter]);
+
+  // 当过滤后的列表变化时，过滤掉不可见的选择项
+  useEffect(() => {
+    const visibleIds = new Set(filteredRequirements.map((req) => req.id));
+    setSelectedRequirementKeys((prev) => prev.filter((key) => visibleIds.has(key as string)));
+  }, [filteredRequirements]);
+
   const projectOptions = useMemo(
     () => projects.map((project) => ({ label: project.name, value: project.id })),
     [projects],
@@ -350,6 +361,8 @@ export const ProjectRequirementPage: React.FC = () => {
     try {
       await deleteRequirement(item.id);
       message.success('删除需求成功');
+      // 从选中列表中移除已删除的id
+      setSelectedRequirementKeys((prev) => prev.filter((key) => key !== item.id));
       await fetchRequirements(selectedProjectId);
     } catch (_error) {
       message.error('删除需求失败');
