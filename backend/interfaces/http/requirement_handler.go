@@ -172,6 +172,14 @@ type RedispatchRequirementRequest struct {
 	RequirementID string `json:"requirement_id"`
 }
 
+type DeleteRequirementRequest struct {
+	ID string `json:"id"`
+}
+
+type BatchDeleteRequirementsRequest struct {
+	IDs []string `json:"ids"`
+}
+
 func (h *RequirementHandler) RedispatchRequirement(w http.ResponseWriter, r *http.Request) {
 	var req RedispatchRequirementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -209,6 +217,51 @@ func (h *RequirementHandler) CopyAndDispatchRequirement(w http.ResponseWriter, r
 		return
 	}
 	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
+}
+
+func (h *RequirementHandler) DeleteRequirement(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	err := h.requirementService.DeleteRequirement(r.Context(), application.DeleteRequirementCommand{
+		ID: domain.NewRequirementID(id),
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *RequirementHandler) BatchDeleteRequirements(w http.ResponseWriter, r *http.Request) {
+	var req BatchDeleteRequirementsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+	if len(req.IDs) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "ids is required"})
+		return
+	}
+	ids := make([]domain.RequirementID, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, domain.NewRequirementID(id))
+	}
+	err := h.requirementService.BatchDeleteRequirements(r.Context(), application.BatchDeleteRequirementsCommand{
+		IDs: ids,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *RequirementHandler) requirementToMap(r *http.Request, requirement *domain.Requirement) map[string]interface{} {

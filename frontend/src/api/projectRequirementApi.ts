@@ -82,3 +82,13 @@ export async function copyAndDispatchRequirement(requirementId: string): Promise
   });
   return response.data;
 }
+
+// deleteRequirement 删除单个需求
+export async function deleteRequirement(id: string): Promise<void> {
+  await apiClient.delete('/requirements', { params: { id } });
+}
+
+// batchDeleteRequirements 批量删除需求
+export async function batchDeleteRequirements(ids: string[]): Promise<void> {
+  await apiClient.post('/requirements/batch-delete', { ids });
+}

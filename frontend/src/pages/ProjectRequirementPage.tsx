@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
-import { copyAndDispatchRequirement, createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
@@ -79,6 +79,9 @@ export const ProjectRequirementPage: React.FC = () => {
 
   // 需求状态过滤
   const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // 选中需求ID列表（用于批量删除）
+  const [selectedRequirementKeys, setSelectedRequirementKeys] = useState<React.Key[]>([]);
 
   // 需求类型过滤
   const [typeFilter, setTypeFilter] = useState<string>('');
@@ -339,6 +342,33 @@ export const ProjectRequirementPage: React.FC = () => {
       await fetchRequirements(selectedProjectId);
     } catch (_error) {
       message.error('复制并派发失败');
+    }
+  };
+
+  // 删除单个需求
+  const handleDeleteRequirement = async (item: Requirement) => {
+    try {
+      await deleteRequirement(item.id);
+      message.success('删除需求成功');
+      await fetchRequirements(selectedProjectId);
+    } catch (_error) {
+      message.error('删除需求失败');
+    }
+  };
+
+  // 批量删除需求
+  const handleBatchDeleteRequirements = async () => {
+    if (selectedRequirementKeys.length === 0) {
+      message.warning('请先选择要删除的需求');
+      return;
+    }
+    try {
+      await batchDeleteRequirements(selectedRequirementKeys as string[]);
+      message.success(`成功删除 ${selectedRequirementKeys.length} 个需求`);
+      setSelectedRequirementKeys([]);
+      await fetchRequirements(selectedProjectId);
+    } catch (_error) {
+      message.error('批量删除需求失败');
     }
   };
 
@@ -628,6 +658,17 @@ export const ProjectRequirementPage: React.FC = () => {
               对话链路
             </Button>
           )}
+          <Popconfirm
+            title="确认删除"
+            description={`确定要删除需求 "${item.title}" 吗？`}
+            onConfirm={() => handleDeleteRequirement(item)}
+            okText="确认"
+            cancelText="取消"
+          >
+            <Button type="link" danger>
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -697,10 +738,32 @@ export const ProjectRequirementPage: React.FC = () => {
                     <Button type="primary" disabled={!selectedProjectId} onClick={openCreateRequirement}>
                       新建需求
                     </Button>
+                    <Popconfirm
+                      title="批量删除"
+                      description={`确定要删除选中的 ${selectedRequirementKeys.length} 个需求吗？`}
+                      onConfirm={handleBatchDeleteRequirements}
+                      okText="确认"
+                      cancelText="取消"
+                      disabled={selectedRequirementKeys.length === 0}
+                    >
+                      <Button danger disabled={selectedRequirementKeys.length === 0}>
+                        批量删除 ({selectedRequirementKeys.length})
+                      </Button>
+                    </Popconfirm>
                   </Space>
                 }
               >
-                <Table<Requirement> rowKey="id" loading={loadingRequirements} dataSource={filteredRequirements} columns={requirementColumns} />
+                <Table<Requirement>
+                  rowKey="id"
+                  loading={loadingRequirements}
+                  dataSource={filteredRequirements}
+                  columns={requirementColumns}
+                  rowSelection={{
+                    type: 'checkbox',
+                    selectedRowKeys: selectedRequirementKeys,
+                    onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
+                  }}
+                />
               </Card>
             ),
           },
