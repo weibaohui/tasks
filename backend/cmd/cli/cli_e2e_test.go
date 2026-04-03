@@ -668,17 +668,11 @@ func TestCLI_Workflow_ProjectAndRequirement(t *testing.T) {
 }
 
 func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
-	// 手动集成测试 - 需要设置有效的数据库路径
-	// export TASKMANAGER_DB_PATH=/path/to/test.db
-	dbPath := os.Getenv("TASKMANAGER_DB_PATH")
-	if dbPath == "" {
-		t.Skip("跳过: 需要设置 TASKMANAGER_DB_PATH 环境变量")
-	}
-
+	requiresAPIToken(t)
 	buildCLI(t)
 
-	// 1. 创建项目
-	db, _, dbCleanup := setupTestDB(t)
+	// 1. 创建临时数据库并准备测试数据
+	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
 	idGen := utils.NewNanoIDGenerator(21)
@@ -699,8 +693,13 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 
 	t.Logf("创建项目成功: %s", project.ID().String())
 
+	// 切换到临时数据库的 server，统一测试数据和 CLI 调用的数据库路径
+	useTestDB(t, dbPath)
+
 	// 2. 列出项目验证
-	output, err := runCLI("project", "list")
+	output, err := runCLIWithEnv(
+		map[string]string{"TASKMANAGER_DB_PATH": dbPath},
+		"project", "list")
 	if err != nil {
 		t.Fatalf("project list 失败: %v\n%s", err, output)
 	}
@@ -722,7 +721,9 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	t.Logf("创建需求成功: %s", requirement.ID().String())
 
 	// 4. 获取需求详情
-	output, err = runCLI("requirement", "get", "--id", requirement.ID().String())
+	output, err = runCLIWithEnv(
+		map[string]string{"TASKMANAGER_DB_PATH": dbPath},
+		"requirement", "get", "--id", requirement.ID().String())
 	if err != nil {
 		t.Fatalf("requirement get 失败: %v\n%s", err, output)
 	}
@@ -735,7 +736,9 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	}
 
 	// 5. 列出需求
-	output, err = runCLI("requirement", "list")
+	output, err = runCLIWithEnv(
+		map[string]string{"TASKMANAGER_DB_PATH": dbPath},
+		"requirement", "list")
 	if err != nil {
 		t.Fatalf("requirement list 失败: %v\n%s", err, output)
 	}
