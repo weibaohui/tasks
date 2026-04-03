@@ -608,19 +608,20 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 // migrateRequirementsClaudeRuntime 迁移 requirements 表新增 claude_runtime 相关字段
 func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 	columns := []struct {
-		name    string
-		sqlType string
+		name         string
+		sqlType      string
+		backfillZero bool
 	}{
-		{"claude_runtime_status", "TEXT"},
-		{"claude_runtime_started_at", "INTEGER"},
-		{"claude_runtime_ended_at", "INTEGER"},
-		{"claude_runtime_error", "TEXT"},
-		{"claude_runtime_result", "TEXT"},
-		{"claude_runtime_prompt", "TEXT"},
-		{"trace_id", "TEXT"},
-		{"prompt_tokens", "INTEGER"},
-		{"completion_tokens", "INTEGER"},
-		{"total_tokens", "INTEGER"},
+		{"claude_runtime_status", "TEXT", false},
+		{"claude_runtime_started_at", "INTEGER", false},
+		{"claude_runtime_ended_at", "INTEGER", false},
+		{"claude_runtime_error", "TEXT", false},
+		{"claude_runtime_result", "TEXT", false},
+		{"claude_runtime_prompt", "TEXT", false},
+		{"trace_id", "TEXT", false},
+		{"prompt_tokens", "INTEGER NOT NULL DEFAULT 0", true},
+		{"completion_tokens", "INTEGER NOT NULL DEFAULT 0", true},
+		{"total_tokens", "INTEGER NOT NULL DEFAULT 0", true},
 	}
 
 	for _, col := range columns {
@@ -630,6 +631,12 @@ func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 		}
 		if !has {
 			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE requirements ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
+				return err
+			}
+		}
+		// 对需要回填的列，将历史 NULL 值更新为 0
+		if col.backfillZero {
+			if _, err := db.Exec(fmt.Sprintf("UPDATE requirements SET %s = 0 WHERE %s IS NULL", col.name, col.name)); err != nil {
 				return err
 			}
 		}
