@@ -63,10 +63,11 @@ func NewConversationRecordHook(
 type contextKey string
 
 const (
-	ScopeKey            contextKey = "conversation_scope"
-	spanKey             contextKey = "conversation_span"
-	promptKey           contextKey = "conversation_prompt"
-	deferredResponseKey contextKey = "conversation_deferred_response"
+	ScopeKey             contextKey = "conversation_scope"
+	spanKey              contextKey = "conversation_span"
+	toolParentSpanKey    contextKey = "conversation_tool_parent_span"
+	promptKey            contextKey = "conversation_prompt"
+	deferredResponseKey  contextKey = "conversation_deferred_response"
 )
 
 // ScopeInfo 存储对话范围信息 - 导出供其他包使用
@@ -223,14 +224,17 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 				zap.String("parent_span_id", parentSpanID))
 		}
 
-		// 更新 span 链：后续的 tool_call 应该以这个中间响应为 parent
+		// 更新 span 链：后续的 tool_call 应以这个中间响应为 parent
+		// toolParentSpanKey 存储固定的工具调用父级，不随每次 tool 调用更新
+		// spanKey 仍更新为 toolCallsSpanID，供非工具场景使用
+		ctx.WithValue(toolParentSpanKey, toolCallsSpanID)
 		ctx.WithValue(spanKey, toolCallsSpanID)
 
 		// 延迟记录最终的 llm_response：存储信息到 context，由 OnToolExecutionComplete 记录
 		ctx.WithValue(deferredResponseKey, &deferredLLMResponse{
 			TraceID:      traceID,
 			SpanID:       spanID,
-			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_call 的 span
+			ParentSpanID: "", // 将在 OnToolExecutionComplete 时设置为 tool_result 的 span
 			Content:      resp.Content,
 			Usage:        resp.Usage,
 			Scope: ScopeInfo{
@@ -288,9 +292,13 @@ func (h *ConversationRecordHook) PreToolCall(ctx *domain.HookContext, callCtx *d
 	// 生成新的 span_id 用于工具调用
 	spanID := h.idGenerator.Generate()
 
-	// 从 ctx 获取父 span_id（PostLLMCall 会存储新的 span）
+	// 从 ctx 获取父 span_id
+	// 优先使用 toolParentSpanKey（PostLLMCall 存储的固定父级 span），
+	// 这样连续工具调用都有正确的共同父级（llm_response_with_tools），而不是互相嵌套
 	parentSpanID := ""
-	if p, ok := ctx.Get(spanKey).(string); ok {
+	if p, ok := ctx.Get(toolParentSpanKey).(string); ok && p != "" {
+		parentSpanID = p
+	} else if p, ok := ctx.Get(spanKey).(string); ok {
 		parentSpanID = p
 	}
 	if parentSpanID == "" {
