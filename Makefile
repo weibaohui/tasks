@@ -8,7 +8,7 @@ help:
 	@echo "  make build        - 构建后端（含前端嵌入）"
 	@echo "  make install      - 安装 taskmanager 到 /usr/local/bin"
 	@echo "  make clean        - 清理构建产物"
-	@echo "  make dev          - 启动开发环境 (air 热重载)"
+	@echo "  make dev          - 启动开发环境 (后端+前端热重载)"
 	@echo "  make dev-server   - 启动开发环境 (air 热重载)"
 	@echo "  make stop         - 停止服务"
 	@echo "  make test         - 运行测试"
@@ -65,21 +65,24 @@ clean:
 	@touch backend/internal/embed/ui/dist/.keep
 	cd frontend && rm -rf dist/ node_modules/.vite
 
-# 开发模式 - 启动合并后的完整服务（包含核心业务 + HTTP API + 前端）
+# 开发模式 - 同时启动后端（air 热重载）和前端（Vite 热重载）
 dev:
 	@echo "========================================="
 	@echo "  启动 TaskManager 开发环境"
 	@echo "========================================="
-	@echo "  服务地址: http://localhost:13618"
-	@echo "  前端界面: http://localhost:13618"
+	@echo "  后端 API:  http://localhost:13618"
+	@echo "  前端界面: http://localhost:3000"
 	@echo "  日志文件: backend/logs/air.log"
-	@echo "  按 Ctrl+C 停止服务"
+	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@mkdir -p backend/logs
 	@(trap 'kill 0' INT; \
 		set -a; source backend/.env; set +a; \
-		echo "启动服务..."; \
+		echo "[1/2] 启动后端服务 (air)..."; \
 		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log & \
+		sleep 2; \
+		echo "[2/2] 启动前端服务 (vite)..."; \
+		cd frontend && pnpm run dev & \
 		wait)
 
 # 启动开发模式 (air 热重载)
@@ -93,6 +96,7 @@ dev-server:
 stop:
 	@echo "正在停止 TaskManager 进程..."
 	@-lsof -ti :13618 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
 	@sleep 1
 	@echo "已停止 TaskManager 进程"
 
