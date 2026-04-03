@@ -45,9 +45,9 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 	if agentCode != "" && s.agentRepo != nil && s.providerRepo != nil {
 		agent, err := s.agentRepo.FindByAgentCode(ctx, NewAgentCode(agentCode))
 		if err == nil && agent != nil {
-			// 优先使用 agent 的 providerKey 进行动态查找
-			if agent.ProviderKey() != "" {
-				provider, err := s.providerRepo.FindByProviderKey(ctx, agent.ProviderKey())
+			// 优先使用 agent 的 llmProviderID 进行查找
+			if agent.LLMProviderID().String() != "" {
+				provider, err := s.providerRepo.FindByID(ctx, agent.LLMProviderID())
 				if err == nil && provider != nil {
 					return s.buildConfigFromProvider(provider, agent.Model()), nil
 				}
@@ -71,9 +71,9 @@ func (s *LLMProviderSelectionService) SelectProviderForTask(ctx context.Context,
 			if agentCode != "" {
 				agent, err := s.agentRepo.FindByAgentCode(ctx, NewAgentCode(agentCode))
 				if err == nil && agent != nil {
-					// 优先使用 agent 的 providerKey 进行动态查找
-					if agent.ProviderKey() != "" {
-						provider, err := s.providerRepo.FindByProviderKey(ctx, agent.ProviderKey())
+					// 优先使用 agent 的 llmProviderID 进行查找
+					if agent.LLMProviderID().String() != "" {
+						provider, err := s.providerRepo.FindByID(ctx, agent.LLMProviderID())
 						if err == nil && provider != nil {
 							return s.buildConfigFromProvider(provider, agent.Model()), nil
 						}

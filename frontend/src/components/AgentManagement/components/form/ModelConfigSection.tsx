@@ -15,20 +15,18 @@ interface ModelConfigCardProps {
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
   screens: Record<string, boolean>;
   modelOptions: Array<{ value: string; label: string }>;
-  providerOptions: Array<{ value: string; label: string }>;
-  providersLoading: boolean;
   llmProviderOptions: Array<{ value: string; label: string }>;
   llmProvidersLoading: boolean;
 }
 
 export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
-  form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions, providerOptions, providersLoading,
+  form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions,
   llmProviderOptions, llmProvidersLoading,
 }) => {
   const isEditing = editingSections.modelConfig;
 
   const handleSave = () => {
-    const values = form.getFieldsValue(['model', 'provider_key', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+    const values = form.getFieldsValue(['model', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
     if (!values.model) return;
     handlePatchSection('modelConfig', values);
   };
@@ -55,7 +53,6 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
       {!isEditing ? (
         <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
           <div><span style={{ color: '#999' }}>LLM Provider：</span>{llmProviderOptions.find(p => p.value === form.getFieldValue('llm_provider_id'))?.label || '-'}</div>
-          <div><span style={{ color: '#999' }}>Provider Key：</span>{form.getFieldValue('provider_key') || '-'}</div>
           <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('model') || '-'}</div>
           <div><span style={{ color: '#999' }}>Max Tokens：</span>{form.getFieldValue('max_tokens')}</div>
           <div><span style={{ color: '#999' }}>Temperature：</span>{form.getFieldValue('temperature')}</div>
@@ -70,19 +67,14 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
               allowClear
               loading={llmProvidersLoading}
               options={llmProviderOptions}
-              placeholder={llmProvidersLoading ? '正在加载 Provider 列表...' : '请选择 LLM Provider（可选，优先使用）'}
+              placeholder={llmProvidersLoading ? '正在加载 Provider 列表...' : '请选择 LLM Provider（可选）'}
               notFoundContent={llmProvidersLoading ? '正在加载...' : '没有可选 Provider'}
             />
           </Form.Item>
-          <Form.Item label="Provider Key (旧版)" name="provider_key">
-            <Select showSearch allowClear loading={providersLoading} options={providerOptions}
-              placeholder={providersLoading ? '正在加载 Provider 列表...' : '请选择 Provider Key（可选，已废弃）'}
-              notFoundContent={providersLoading ? '正在加载...' : '没有可选 Provider'} />
-          </Form.Item>
           <Form.Item label="模型" name="model" rules={[{ required: true, message: '请选择模型' }]}>
-            <Select showSearch allowClear loading={providersLoading} options={modelOptions}
-              placeholder={providersLoading ? '正在加载模型列表...' : '请选择模型'}
-              notFoundContent={providersLoading ? '正在加载...' : '没有可选模型'}
+            <Select showSearch allowClear options={modelOptions}
+              placeholder="请选择模型"
+              notFoundContent="没有可选模型"
               filterOption={(input, option) => {
                 const q = input.toLowerCase();
                 const v = String(option?.value || '').toLowerCase();

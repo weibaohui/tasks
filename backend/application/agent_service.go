@@ -26,7 +26,6 @@ type CreateAgentCommand struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
-	ProviderKey           string
 	LLMProviderID         string
 	MaxTokens             int
 	Temperature           float64
@@ -48,7 +47,6 @@ type UpdateAgentCommand struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
-	ProviderKey           string
 	LLMProviderID         string
 	MaxTokens             int
 	Temperature           float64
@@ -162,7 +160,6 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		cmd.UserContent,
 		cmd.ToolsContent,
 		cmd.Model,
-		cmd.ProviderKey,
 		cmd.MaxTokens,
 		cmd.Temperature,
 		cmd.MaxIterations,
@@ -232,7 +229,6 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 		cmd.UserContent,
 		cmd.ToolsContent,
 		cmd.Model,
-		cmd.ProviderKey,
 		cmd.MaxTokens,
 		cmd.Temperature,
 		cmd.MaxIterations,
@@ -284,7 +280,6 @@ type PatchAgentCommand struct {
 	UserContent           *string
 	ToolsContent          *string
 	Model                 *string
-	ProviderKey           *string
 	LLMProviderID         *string
 	MaxTokens             *int
 	Temperature           *float64
@@ -330,7 +325,7 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 	}
 	hasConfigField := cmd.IdentityContent != nil || cmd.SoulContent != nil ||
 		cmd.AgentsContent != nil || cmd.UserContent != nil || cmd.ToolsContent != nil ||
-		cmd.Model != nil || cmd.ProviderKey != nil || cmd.MaxTokens != nil || cmd.Temperature != nil ||
+		cmd.Model != nil || cmd.MaxTokens != nil || cmd.Temperature != nil ||
 		cmd.MaxIterations != nil || cmd.HistoryMessages != nil ||
 		cmd.SkillsList != nil || cmd.ToolsList != nil ||
 		cmd.EnableThinkingProcess != nil
@@ -343,7 +338,6 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 		userContent := agent.UserContent()
 		toolsContent := agent.ToolsContent()
 		model := agent.Model()
-		providerKey := agent.ProviderKey()
 		maxTokens := agent.MaxTokens()
 		temperature := agent.Temperature()
 		maxIterations := agent.MaxIterations()
@@ -370,9 +364,6 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 		if cmd.Model != nil {
 			model = *cmd.Model
 		}
-		if cmd.ProviderKey != nil {
-			providerKey = *cmd.ProviderKey
-		}
 		if cmd.MaxTokens != nil {
 			maxTokens = *cmd.MaxTokens
 		}
@@ -397,7 +388,7 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 
 		agent.UpdateConfig(
 			identityContent, soulContent, agentsContent, userContent, toolsContent,
-			model, providerKey, maxTokens, temperature, maxIterations, historyMessages,
+			model, maxTokens, temperature, maxIterations, historyMessages,
 			skillsList, toolsList, enableThinkingProcess,
 		)
 	}

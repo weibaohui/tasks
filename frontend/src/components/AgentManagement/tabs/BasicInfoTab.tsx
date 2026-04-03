@@ -14,15 +14,13 @@ interface BasicInfoTabProps {
   toggleSectionEdit: (section: string) => void;
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
   modelOptions: Array<{ value: string; label: string }>;
-  providerOptions: Array<{ value: string; label: string }>;
-  providersLoading: boolean;
   llmProviderOptions: Array<{ value: string; label: string }>;
   llmProvidersLoading: boolean;
 }
 
 export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   form, editing, editingSections, screens,
-  toggleSectionEdit, handlePatchSection, modelOptions, providerOptions, providersLoading,
+  toggleSectionEdit, handlePatchSection, modelOptions,
   llmProviderOptions, llmProvidersLoading,
 }) => {
   return (
@@ -30,8 +28,7 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       <ModelConfigCard
         form={form} editing={editing} editingSections={editingSections}
         toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
-        screens={screens} modelOptions={modelOptions} providerOptions={providerOptions}
-        providersLoading={providersLoading}
+        screens={screens} modelOptions={modelOptions}
         llmProviderOptions={llmProviderOptions}
         llmProvidersLoading={llmProvidersLoading}
       />

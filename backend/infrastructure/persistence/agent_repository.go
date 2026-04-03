@@ -37,11 +37,11 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 	query := `
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
-			user_content, tools_content, model, provider_key, llm_provider_id, max_tokens, temperature, max_iterations, history_messages,
+			user_content, tools_content, model, llm_provider_id, max_tokens, temperature, max_iterations, history_messages,
 			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, shadow_from, created_at, updated_at,
 			claude_code_config
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -51,7 +51,6 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 			user_content=excluded.user_content,
 			tools_content=excluded.tools_content,
 			model=excluded.model,
-			provider_key=excluded.provider_key,
 			llm_provider_id=excluded.llm_provider_id,
 			max_tokens=excluded.max_tokens,
 			temperature=excluded.temperature,
@@ -82,7 +81,6 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		snap.UserContent,
 		snap.ToolsContent,
 		snap.Model,
-		snap.ProviderKey,
 		snap.LLMProviderID.String(),
 		snap.MaxTokens,
 		snap.Temperature,
@@ -111,7 +109,6 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
 		COALESCE(llm_provider_id, '') as llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
@@ -133,7 +130,6 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
 		COALESCE(llm_provider_id, '') as llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
@@ -155,7 +151,6 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
 		COALESCE(llm_provider_id, '') as llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
@@ -181,7 +176,6 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
 		COALESCE(llm_provider_id, '') as llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
@@ -230,7 +224,6 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		userContent          string
 		toolsContent         string
 		model                string
-		providerKey          string
 		llmProviderIDStr     string
 		maxTokens            int
 		temperature          float64
@@ -260,7 +253,6 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&userContent,
 		&toolsContent,
 		&model,
-		&providerKey,
 		&llmProviderIDStr,
 		&maxTokens,
 		&temperature,
@@ -309,7 +301,6 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		UserContent:           userContent,
 		ToolsContent:          toolsContent,
 		Model:                 model,
-		ProviderKey:           providerKey,
 		LLMProviderID:         domain.NewLLMProviderID(llmProviderIDStr),
 		MaxTokens:             maxTokens,
 		Temperature:           temperature,

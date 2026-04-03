@@ -27,7 +27,6 @@ type CreateAgentRequest struct {
 	UserContent           string   `json:"user_content"`
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
-	ProviderKey           string   `json:"provider_key"`
 	LLMProviderID         string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
@@ -49,7 +48,6 @@ type UpdateAgentRequest struct {
 	UserContent           string   `json:"user_content"`
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
-	ProviderKey           string   `json:"provider_key"`
 	LLMProviderID         string   `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
@@ -81,7 +79,6 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		UserContent:           req.UserContent,
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
-		ProviderKey:           req.ProviderKey,
 		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
@@ -168,7 +165,6 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		UserContent:           req.UserContent,
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
-		ProviderKey:           req.ProviderKey,
 		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
@@ -199,7 +195,6 @@ type PatchAgentRequest struct {
 	UserContent           *string                  `json:"user_content"`
 	ToolsContent          *string                  `json:"tools_content"`
 	Model                 *string                  `json:"model"`
-	ProviderKey           *string                  `json:"provider_key"`
 	LLMProviderID         *string                  `json:"llm_provider_id"`
 	MaxTokens             *int                     `json:"max_tokens"`
 	Temperature           *float64                 `json:"temperature"`
@@ -238,7 +233,6 @@ func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
 		UserContent:           req.UserContent,
 		ToolsContent:          req.ToolsContent,
 		Model:                 req.Model,
-		ProviderKey:           req.ProviderKey,
 		LLMProviderID:         req.LLMProviderID,
 		MaxTokens:             req.MaxTokens,
 		Temperature:           req.Temperature,
