@@ -199,20 +199,16 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
   const traceStats = useMemo(() => getTraceStats(records), [records]);
   const traceTreeData = useMemo(() => buildTraceTree(records), [records]);
 
+  // 递归转换树节点，支持任意层级
+  const convertToTreeData = (nodes: TraceNode[]): DataNode[] =>
+    nodes.map((node) => ({
+      key: node.key,
+      title: node.title,
+      children: node.children ? convertToTreeData(node.children) : undefined,
+    }));
+
   const treeData: DataNode[] = useMemo(
-    () =>
-      traceTreeData.map((node) => ({
-        key: node.key,
-        title: node.title,
-        children: node.children?.map((child) => ({
-          key: child.key,
-          title: child.title,
-          children: child.children?.map((grandChild) => ({
-            key: grandChild.key,
-            title: grandChild.title,
-          })),
-        })),
-      })),
+    () => convertToTreeData(traceTreeData),
     [traceTreeData]
   );
 
