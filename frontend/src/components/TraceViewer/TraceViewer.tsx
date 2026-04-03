@@ -144,7 +144,7 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
       </Space>
     );
 
-    nodeMap.set(record.id, {
+    nodeMap.set(record.span_id, {
       key: record.id,
       title,
       record,
@@ -154,8 +154,8 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
 
   const roots: TraceNode[] = [];
   sorted.forEach((record) => {
-    const node = nodeMap.get(record.id)!;
-    if (record.parent_span_id && nodeMap.has(record.parent_span_id)) {
+    const node = nodeMap.get(record.span_id)!;
+    if (record.parent_span_id && record.parent_span_id !== '' && nodeMap.has(record.parent_span_id)) {
       const parent = nodeMap.get(record.parent_span_id)!;
       if (!parent.children) parent.children = [];
       parent.children.push(node);
