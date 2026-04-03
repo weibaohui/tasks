@@ -31,7 +31,6 @@ export interface McpServerConfig {
 export interface ClaudeCodeConfig {
   // === Tab 1: 基本设置 ===
   model?: string;
-  provider_key?: string;
   system_prompt?: string;
   max_thinking_tokens?: number;
   permission_mode?: PermissionMode;
@@ -89,7 +88,7 @@ export interface Agent {
   user_content: string;
   tools_content: string;
   model: string;
-  provider_key: string;
+  llm_provider_id: string; // 关联的 LLM Provider ID
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -116,7 +115,7 @@ export interface CreateAgentRequest {
   user_content: string;
   tools_content: string;
   model: string;
-  provider_key: string;
+  llm_provider_id: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -138,7 +137,7 @@ export interface UpdateAgentRequest {
   user_content: string;
   tools_content: string;
   model: string;
-  provider_key: string;
+  llm_provider_id: string;
   max_tokens: number;
   temperature: number;
   max_iterations: number;
@@ -161,7 +160,7 @@ export interface PatchAgentRequest {
   user_content?: string;
   tools_content?: string;
   model?: string;
-  provider_key?: string;
+  llm_provider_id?: string;
   max_tokens?: number;
   temperature?: number;
   max_iterations?: number;

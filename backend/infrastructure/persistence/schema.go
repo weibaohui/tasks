@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS agents (
     user_content TEXT,
     tools_content TEXT,
     model TEXT,
-    provider_key TEXT NOT NULL DEFAULT '',
+    llm_provider_id TEXT REFERENCES llm_providers(id),
     max_tokens INTEGER NOT NULL,
     temperature REAL NOT NULL,
     max_iterations INTEGER NOT NULL,
@@ -124,8 +124,6 @@ CREATE TABLE IF NOT EXISTS llm_providers (
     is_default INTEGER NOT NULL,
     priority INTEGER NOT NULL,
     auto_merge INTEGER NOT NULL,
-    embedding_models TEXT,
-    default_embedding_model TEXT,
     is_active INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -211,6 +209,9 @@ CREATE TABLE IF NOT EXISTS requirements (
     claude_runtime_result TEXT,
     claude_runtime_prompt TEXT,
     trace_id TEXT,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
@@ -405,9 +406,6 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateAgentTypeColumn(db); err != nil {
 		return err
 	}
-	if err := migrateAgentProviderKeyColumn(db); err != nil {
-		return err
-	}
 	if err := migrateTasksTimeoutToSeconds(db); err != nil {
 		return err
 	}
@@ -429,7 +427,10 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateRequirementType(db); err != nil {
 		return err
 	}
-	return migrateConversationRecordsTimestampToMillis(db)
+	if err := migrateConversationRecordsTimestampToMillis(db); err != nil {
+		return err
+	}
+	return migrateAgentLLMProviderID(db)
 }
 
 // migrateTasksNewColumns 迁移 tasks 表新增字段
@@ -496,20 +497,6 @@ func migrateAgentTypeColumn(db *sql.DB) error {
 	}
 	if !has {
 		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'BareLLM'"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// migrateAgentProviderKeyColumn 迁移 agents 表新增 provider_key 字段
-func migrateAgentProviderKeyColumn(db *sql.DB) error {
-	has, err := tableHasColumn(db, "agents", "provider_key")
-	if err != nil {
-		return err
-	}
-	if !has {
-		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN provider_key TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}
@@ -621,16 +608,20 @@ func migrateRequirementsNewColumns(db *sql.DB) error {
 // migrateRequirementsClaudeRuntime 迁移 requirements 表新增 claude_runtime 相关字段
 func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 	columns := []struct {
-		name    string
-		sqlType string
+		name         string
+		sqlType      string
+		backfillZero bool
 	}{
-		{"claude_runtime_status", "TEXT"},
-		{"claude_runtime_started_at", "INTEGER"},
-		{"claude_runtime_ended_at", "INTEGER"},
-		{"claude_runtime_error", "TEXT"},
-		{"claude_runtime_result", "TEXT"},
-		{"claude_runtime_prompt", "TEXT"},
-		{"trace_id", "TEXT"},
+		{"claude_runtime_status", "TEXT", false},
+		{"claude_runtime_started_at", "INTEGER", false},
+		{"claude_runtime_ended_at", "INTEGER", false},
+		{"claude_runtime_error", "TEXT", false},
+		{"claude_runtime_result", "TEXT", false},
+		{"claude_runtime_prompt", "TEXT", false},
+		{"trace_id", "TEXT", false},
+		{"prompt_tokens", "INTEGER NOT NULL DEFAULT 0", true},
+		{"completion_tokens", "INTEGER NOT NULL DEFAULT 0", true},
+		{"total_tokens", "INTEGER NOT NULL DEFAULT 0", true},
 	}
 
 	for _, col := range columns {
@@ -640,6 +631,12 @@ func migrateRequirementsClaudeRuntime(db *sql.DB) error {
 		}
 		if !has {
 			if _, err := db.Exec(fmt.Sprintf("ALTER TABLE requirements ADD COLUMN %s %s", col.name, col.sqlType)); err != nil {
+				return err
+			}
+		}
+		// 对需要回填的列，将历史 NULL 值更新为 0
+		if col.backfillZero {
+			if _, err := db.Exec(fmt.Sprintf("UPDATE requirements SET %s = 0 WHERE %s IS NULL", col.name, col.name)); err != nil {
 				return err
 			}
 		}
@@ -779,6 +776,20 @@ func migrateConversationRecordsTimestampToMillis(db *sql.DB) error {
 	// 执行转换：秒级 * 1000 = 毫秒级
 	_, err = db.Exec(`UPDATE conversation_records SET timestamp = timestamp * 1000, created_at = created_at * 1000 WHERE timestamp < 1000000000000`)
 	return err
+}
+
+// migrateAgentLLMProviderID 迁移 agents 表新增 llm_provider_id 字段
+func migrateAgentLLMProviderID(db *sql.DB) error {
+	has, err := tableHasColumn(db, "agents", "llm_provider_id")
+	if err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN llm_provider_id TEXT REFERENCES llm_providers(id)"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {

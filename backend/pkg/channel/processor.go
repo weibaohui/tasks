@@ -231,6 +231,7 @@ type MessageProcessor struct {
 	mcpService           *application.MCPApplicationService
 	skillsLoader         *skill.SkillsLoader
 	requirementRepo      domain.RequirementRepository
+	conversationRepo     domain.ConversationRecordRepository
 	hookExecutor         *domain.ConfigurableHookExecutor
 	replicaAgentManager  *domain.ReplicaAgentManager
 	claudeCodeProcessor  claudecode.ClaudeCodeProcessorInterface
@@ -253,6 +254,7 @@ func NewMessageProcessor(
 	mcpService *application.MCPApplicationService,
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
+	conversationRepo domain.ConversationRecordRepository,
 	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *MessageProcessor {
@@ -280,9 +282,10 @@ func NewMessageProcessor(
 		mcpService:           mcpService,
 		skillsLoader:         skillsLoader,
 		requirementRepo:      requirementRepo,
+		conversationRepo:     conversationRepo,
 		hookExecutor:         hookExecutor,
 		replicaAgentManager:  replicaAgentManager,
-		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor, replicaAgentManager),
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor, replicaAgentManager, conversationRepo),
 		commandProcessor:     commandProcessor,
 	}
 }

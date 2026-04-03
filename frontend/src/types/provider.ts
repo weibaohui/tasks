@@ -8,12 +8,6 @@ export interface ProviderModelInfo {
   max_tokens: number;
 }
 
-export interface ProviderEmbeddingModelInfo {
-  id: string;
-  name: string;
-  dimensions: number;
-}
-
 export interface LLMProvider {
   id: string;
   user_code: string;
@@ -27,8 +21,6 @@ export interface LLMProvider {
   is_default: boolean;
   priority: number;
   auto_merge: boolean;
-  embedding_models: ProviderEmbeddingModelInfo[];
-  default_embedding_model: string;
   is_active: boolean;
   created_at: number;
   updated_at: number;
@@ -62,8 +54,6 @@ export interface UpdateProviderRequest {
   priority?: number;
   auto_merge?: boolean;
   is_active?: boolean;
-  embedding_models?: ProviderEmbeddingModelInfo[];
-  default_embedding_model?: string;
 }
 
 export interface TestProviderResult {

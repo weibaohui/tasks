@@ -143,7 +143,7 @@ type Agent struct {
 	userContent           string
 	toolsContent          string
 	model                 string
-	providerKey           string // LLM Provider 的 provider_key，用于动态查找
+	llmProviderID         LLMProviderID // 关联的 LLM Provider ID
 	maxTokens             int
 	temperature           float64
 	maxIterations         int
@@ -217,7 +217,7 @@ func (a *Agent) AgentsContent() string       { return a.agentsContent }
 func (a *Agent) UserContent() string         { return a.userContent }
 func (a *Agent) ToolsContent() string        { return a.toolsContent }
 func (a *Agent) Model() string               { return a.model }
-func (a *Agent) ProviderKey() string       { return a.providerKey }
+func (a *Agent) LLMProviderID() LLMProviderID { return a.llmProviderID }
 func (a *Agent) MaxTokens() int              { return a.maxTokens }
 func (a *Agent) Temperature() float64        { return a.temperature }
 func (a *Agent) MaxIterations() int          { return a.maxIterations }
@@ -254,7 +254,6 @@ func (a *Agent) UpdateConfig(
 	userContent string,
 	toolsContent string,
 	model string,
-	providerKey string,
 	maxTokens int,
 	temperature float64,
 	maxIterations int,
@@ -269,7 +268,6 @@ func (a *Agent) UpdateConfig(
 	a.userContent = userContent
 	a.toolsContent = toolsContent
 	a.model = model
-	a.providerKey = providerKey
 	if maxTokens > 0 {
 		a.maxTokens = maxTokens
 	}
@@ -326,6 +324,22 @@ func (a *Agent) SetClaudeCodeConfig(config *ClaudeCodeConfig) {
 	a.updatedAt = time.Now()
 }
 
+func (a *Agent) SetLLMProviderID(id LLMProviderID) {
+	a.llmProviderID = id
+	a.updatedAt = time.Now()
+}
+
+// ApplyLLMProvider 应用 LLM Provider ID 到 Agent
+// 当 providerID 为 nil 时，表示清空关联；否则设置为指定值
+func (a *Agent) ApplyLLMProvider(providerID *string) {
+	if providerID == nil {
+		a.llmProviderID = LLMProviderID{}
+	} else {
+		a.llmProviderID = NewLLMProviderID(*providerID)
+	}
+	a.updatedAt = time.Now()
+}
+
 type AgentSnapshot struct {
 	ID                    AgentID
 	AgentCode             AgentCode
@@ -339,7 +353,7 @@ type AgentSnapshot struct {
 	UserContent           string
 	ToolsContent          string
 	Model                 string
-	ProviderKey           string
+	LLMProviderID         LLMProviderID
 	MaxTokens             int
 	Temperature           float64
 	MaxIterations         int
@@ -369,7 +383,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		UserContent:           a.userContent,
 		ToolsContent:          a.toolsContent,
 		Model:                 a.model,
-		ProviderKey:           a.providerKey,
+		LLMProviderID:         a.llmProviderID,
 		MaxTokens:             a.maxTokens,
 		Temperature:           a.temperature,
 		MaxIterations:         a.maxIterations,
@@ -399,7 +413,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.userContent = snap.UserContent
 	a.toolsContent = snap.ToolsContent
 	a.model = snap.Model
-	a.providerKey = snap.ProviderKey
+	a.llmProviderID = snap.LLMProviderID
 	a.maxTokens = snap.MaxTokens
 	a.temperature = snap.Temperature
 	a.maxIterations = snap.MaxIterations

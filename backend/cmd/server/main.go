@@ -198,7 +198,7 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 
 	// 8. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, taskService, workerPool, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 9. 初始化心跳调度器
@@ -473,6 +473,7 @@ func initGateway(
 	mcpService *application.MCPApplicationService,
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
+	conversationRecordRepo domain.ConversationRecordRepository,
 	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *Gateway {
@@ -487,7 +488,7 @@ func initGateway(
 	hookManager.Register(feishuThinkingHook)
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, hookExecutor, replicaAgentManager)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, workerPool, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
 	gw.channelManager = channel.NewManager(gw.messageBus)
 	gw.loadChannels(channelService)
 

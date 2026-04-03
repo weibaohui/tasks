@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
 import { copyAndDispatchRequirement, createProject, createRequirement, deleteProject, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
@@ -35,6 +36,7 @@ const claudeRuntimeColorMap: Record<string, string> = {
 const defaultDispatchSessionKey = 'feishu:ou_df798fe15d056000143691af8c1cdb55';
 
 export const ProjectRequirementPage: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [projects, setProjects] = useState<Project[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -574,6 +576,21 @@ export const ProjectRequirementPage: React.FC = () => {
       },
     },
     {
+      title: 'Token消耗',
+      key: 'tokens',
+      render: (_: unknown, item: Requirement) => {
+        const totalTokens = item.total_tokens || 0;
+        if (totalTokens === 0) {
+          return <span>-</span>;
+        }
+        return (
+          <Tooltip title={`Prompt: ${item.prompt_tokens || 0}, Completion: ${item.completion_tokens || 0}`}>
+            <Tag color="blue">{totalTokens.toLocaleString()}</Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: '操作',
       key: 'action',
       render: (_: unknown, item: Requirement) => (
@@ -590,6 +607,11 @@ export const ProjectRequirementPage: React.FC = () => {
           <Button type="link" disabled={item.status === 'todo'} onClick={() => handleCopyAndDispatch(item)}>
             复制并派发
           </Button>
+          {item.trace_id && (
+            <Button type="link" onClick={() => navigate(`/conversation-records?trace_id=${encodeURIComponent(item.trace_id)}`)}>
+              对话链路
+            </Button>
+          )}
         </Space>
       ),
     },

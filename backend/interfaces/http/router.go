@@ -290,17 +290,6 @@ func SetupRoutesWithManagement(
 			}
 			providerHandler.TestConnection(w, r)
 		}))
-
-		mux.HandleFunc("/api/v1/providers/embedding", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				providerHandler.GetEmbeddingModels(w, r)
-			case http.MethodPut:
-				providerHandler.UpdateEmbeddingModels(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
 	}
 
 	if channelHandler != nil {

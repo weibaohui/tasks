@@ -24,7 +24,14 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 
 	// 序列化 claude_code_config
 	var configJSON []byte
-	var err error
+	// Handle nullable LLMProviderID
+	var llmProviderID interface{}
+	if snap.LLMProviderID.String() != "" {
+		llmProviderID = snap.LLMProviderID.String()
+	} else {
+		llmProviderID = nil
+	}
+var err error
 	if snap.ClaudeCodeConfig != nil {
 		configJSON, err = json.Marshal(snap.ClaudeCodeConfig)
 		if err != nil {
@@ -37,7 +44,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 	query := `
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
-			user_content, tools_content, model, provider_key, max_tokens, temperature, max_iterations, history_messages,
+			user_content, tools_content, model, llm_provider_id, max_tokens, temperature, max_iterations, history_messages,
 			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, shadow_from, created_at, updated_at,
 			claude_code_config
 		)
@@ -51,7 +58,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 			user_content=excluded.user_content,
 			tools_content=excluded.tools_content,
 			model=excluded.model,
-			provider_key=excluded.provider_key,
+			llm_provider_id=excluded.llm_provider_id,
 			max_tokens=excluded.max_tokens,
 			temperature=excluded.temperature,
 			max_iterations=excluded.max_iterations,
@@ -81,7 +88,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 		snap.UserContent,
 		snap.ToolsContent,
 		snap.Model,
-		snap.ProviderKey,
+		llmProviderID,
 		snap.MaxTokens,
 		snap.Temperature,
 		snap.MaxIterations,
@@ -109,7 +116,7 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -130,7 +137,7 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -151,7 +158,7 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -176,7 +183,7 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		COALESCE(user_content, '') as user_content,
 		COALESCE(tools_content, '') as tools_content,
 		COALESCE(model, '') as model,
-		COALESCE(provider_key, '') as provider_key,
+		llm_provider_id,
 		max_tokens, temperature, max_iterations, history_messages,
 		COALESCE(skills_list, '[]') as skills_list,
 		COALESCE(tools_list, '[]') as tools_list,
@@ -213,31 +220,31 @@ func scanAgents(rows *sql.Rows) ([]*domain.Agent, error) {
 
 func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 	var (
-		idStr               string
-		agentCodeStr        string
-		userCode            string
-		name                string
-		description         string
-		identityContent     string
-		soulContent         string
-		agentsContent       string
-		userContent         string
-		toolsContent        string
-		model               string
-		providerKey         string
-		maxTokens           int
-		temperature         float64
-		maxIterations       int
-		historyMessages     int
-		skillsJSON          []byte
-		toolsJSON           []byte
-		isActiveInt         int
-		isDefaultInt        int
-		enableThinkingInt   int
-		agentTypeStr        string
-		shadowFrom          string
-		createdAtUnix       int64
-		updatedAtUnix       int64
+		idStr                string
+		agentCodeStr         string
+		userCode             string
+		name                 string
+		description          string
+		identityContent      string
+		soulContent          string
+		agentsContent        string
+		userContent          string
+		toolsContent         string
+		model                string
+		llmProviderIDStr     sql.NullString
+		maxTokens            int
+		temperature          float64
+		maxIterations        int
+		historyMessages      int
+		skillsJSON           []byte
+		toolsJSON            []byte
+		isActiveInt          int
+		isDefaultInt         int
+		enableThinkingInt    int
+		agentTypeStr         string
+		shadowFrom           string
+		createdAtUnix        int64
+		updatedAtUnix        int64
 		claudeCodeConfigJSON []byte
 	)
 
@@ -253,7 +260,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&userContent,
 		&toolsContent,
 		&model,
-		&providerKey,
+		&llmProviderIDStr,
 		&maxTokens,
 		&temperature,
 		&maxIterations,
@@ -287,6 +294,12 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		_ = json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig)
 	}
 
+	// Handle nullable LLMProviderID
+	var llmProviderID string
+	if llmProviderIDStr.Valid {
+		llmProviderID = llmProviderIDStr.String
+	}
+
 	agent := &domain.Agent{}
 	agent.FromSnapshot(domain.AgentSnapshot{
 		ID:                    domain.NewAgentID(idStr),
@@ -301,7 +314,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		UserContent:           userContent,
 		ToolsContent:          toolsContent,
 		Model:                 model,
-		ProviderKey:           providerKey,
+		LLMProviderID:         domain.NewLLMProviderID(llmProviderID),
 		MaxTokens:             maxTokens,
 		Temperature:           temperature,
 		MaxIterations:         maxIterations,
