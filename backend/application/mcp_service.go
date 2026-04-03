@@ -57,6 +57,7 @@ type MCPApplicationService struct {
 	mcpToolRepo    domain.MCPToolRepository
 	mcpToolLogRepo domain.MCPToolLogRepository
 	idGen          domain.IDGenerator
+	clientFactory  func(server *domain.MCPServer) (*client.Client, error)
 }
 
 func NewMCPApplicationService(
@@ -67,7 +68,7 @@ func NewMCPApplicationService(
 	mcpToolLogRepo domain.MCPToolLogRepository,
 	idGen domain.IDGenerator,
 ) *MCPApplicationService {
-	return &MCPApplicationService{
+	svc := &MCPApplicationService{
 		mcpServerRepo:  mcpServerRepo,
 		agentRepo:      agentRepo,
 		bindingRepo:    bindingRepo,
@@ -75,6 +76,8 @@ func NewMCPApplicationService(
 		mcpToolLogRepo: mcpToolLogRepo,
 		idGen:          idGen,
 	}
+	svc.clientFactory = svc.defaultCreateMCPClient
+	return svc
 }
 
 // MCP Server
@@ -165,7 +168,7 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	if server == nil {
 		return errors.New("MCP 服务器不存在")
 	}
-	cli, err := s.createMCPClient(server)
+	cli, err := s.clientFactory(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -210,7 +213,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	if server == nil {
 		return errors.New("MCP 服务器不存在")
 	}
-	cli, err := s.createMCPClient(server)
+	cli, err := s.clientFactory(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -395,7 +398,7 @@ func (s *MCPApplicationService) ExecuteTool(ctx context.Context, serverID domain
 	if server == nil || server.Status() != "active" {
 		return "", fmt.Errorf("MCP 服务器不可用")
 	}
-	cli, err := s.createMCPClient(server)
+	cli, err := s.clientFactory(server)
 	if err != nil {
 		return "", err
 	}
@@ -429,7 +432,7 @@ func (s *MCPApplicationService) ExecuteTool(ctx context.Context, serverID domain
 }
 
 // create client according to transport
-func (s *MCPApplicationService) createMCPClient(server *domain.MCPServer) (*client.Client, error) {
+func (s *MCPApplicationService) defaultCreateMCPClient(server *domain.MCPServer) (*client.Client, error) {
 	switch server.TransportType() {
 	case domain.MCPTransportSTDIO:
 		env := []string{}

@@ -2,10 +2,15 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/weibh/taskmanager/domain"
 )
 
@@ -28,10 +33,20 @@ type mockMCPServerRepo struct {
 	updateErr          error
 	deleteErr          error
 	listErr            error
+	updateCounter      int
 }
 
 func newMockMCPServerRepo() *mockMCPServerRepo {
 	return &mockMCPServerRepo{servers: make(map[string]*domain.MCPServer)}
+}
+
+func deepCopyMCPServer(s *domain.MCPServer) *domain.MCPServer {
+	if s == nil {
+		return nil
+	}
+	copy := &domain.MCPServer{}
+	copy.FromSnapshot(s.ToSnapshot())
+	return copy
 }
 
 func (m *mockMCPServerRepo) Create(ctx context.Context, server *domain.MCPServer) error {
@@ -47,6 +62,7 @@ func (m *mockMCPServerRepo) Update(ctx context.Context, server *domain.MCPServer
 		return m.updateErr
 	}
 	m.servers[server.ID().String()] = server
+	m.updateCounter++
 	return nil
 }
 
@@ -62,13 +78,13 @@ func (m *mockMCPServerRepo) GetByID(ctx context.Context, id domain.MCPServerID) 
 	if m.getByIDErr != nil {
 		return nil, m.getByIDErr
 	}
-	return m.servers[id.String()], nil
+	return deepCopyMCPServer(m.servers[id.String()]), nil
 }
 
 func (m *mockMCPServerRepo) GetByCode(ctx context.Context, code string) (*domain.MCPServer, error) {
 	for _, s := range m.servers {
 		if s.Code() == code {
-			return s, nil
+			return deepCopyMCPServer(s), nil
 		}
 	}
 	return nil, nil
@@ -80,7 +96,7 @@ func (m *mockMCPServerRepo) List(ctx context.Context) ([]*domain.MCPServer, erro
 	}
 	var result []*domain.MCPServer
 	for _, s := range m.servers {
-		result = append(result, s)
+		result = append(result, deepCopyMCPServer(s))
 	}
 	return result, nil
 }
@@ -89,7 +105,7 @@ func (m *mockMCPServerRepo) ListByStatus(ctx context.Context, status string) ([]
 	var result []*domain.MCPServer
 	for _, s := range m.servers {
 		if s.Status() == status {
-			result = append(result, s)
+			result = append(result, deepCopyMCPServer(s))
 		}
 	}
 	return result, nil
@@ -108,11 +124,12 @@ func (m *mockMCPServerRepo) CheckCodeExists(ctx context.Context, code string) (b
 }
 
 type mockMCPToolRepo struct {
-	tools              map[string]*domain.MCPToolModel
-	serverTools        map[string][]*domain.MCPToolModel
-	deleteByServerIDErr error
-	createErr          error
-	listByServerIDErr  error
+	tools                 map[string]*domain.MCPToolModel
+	serverTools           map[string][]*domain.MCPToolModel
+	deleteByServerIDErr   error
+	createErr             error
+	listByServerIDErr     error
+	deleteByServerIDCalls []string
 }
 
 func newMockMCPToolRepo() *mockMCPToolRepo {
@@ -132,6 +149,7 @@ func (m *mockMCPToolRepo) Create(ctx context.Context, tool *domain.MCPToolModel)
 }
 
 func (m *mockMCPToolRepo) DeleteByServerID(ctx context.Context, serverID domain.MCPServerID) error {
+	m.deleteByServerIDCalls = append(m.deleteByServerIDCalls, serverID.String())
 	if m.deleteByServerIDErr != nil {
 		return m.deleteByServerIDErr
 	}
@@ -152,17 +170,27 @@ func (m *mockMCPToolRepo) ListByServerID(ctx context.Context, serverID domain.MC
 }
 
 type mockAgentMCPBindingRepo struct {
-	bindings          map[string]*domain.AgentMCPBinding
-	getByIDErr        error
-	getByAgentIDErr   error
-	createErr         error
-	updateErr         error
-	deleteErr         error
-	checkExistsErr    error
+	bindings        map[string]*domain.AgentMCPBinding
+	getByIDErr      error
+	getByAgentIDErr error
+	createErr       error
+	updateErr       error
+	deleteErr       error
+	checkExistsErr  error
+	updateCounter   int
 }
 
 func newMockAgentMCPBindingRepo() *mockAgentMCPBindingRepo {
 	return &mockAgentMCPBindingRepo{bindings: make(map[string]*domain.AgentMCPBinding)}
+}
+
+func deepCopyAgentMCPBinding(b *domain.AgentMCPBinding) *domain.AgentMCPBinding {
+	if b == nil {
+		return nil
+	}
+	copy := &domain.AgentMCPBinding{}
+	copy.FromSnapshot(b.ToSnapshot())
+	return copy
 }
 
 func (m *mockAgentMCPBindingRepo) Create(ctx context.Context, binding *domain.AgentMCPBinding) error {
@@ -178,6 +206,7 @@ func (m *mockAgentMCPBindingRepo) Update(ctx context.Context, binding *domain.Ag
 		return m.updateErr
 	}
 	m.bindings[binding.ID().String()] = binding
+	m.updateCounter++
 	return nil
 }
 
@@ -202,7 +231,7 @@ func (m *mockAgentMCPBindingRepo) GetByID(ctx context.Context, id domain.AgentMC
 	if m.getByIDErr != nil {
 		return nil, m.getByIDErr
 	}
-	return m.bindings[id.String()], nil
+	return deepCopyAgentMCPBinding(m.bindings[id.String()]), nil
 }
 
 func (m *mockAgentMCPBindingRepo) GetByAgentID(ctx context.Context, agentID domain.AgentID) ([]*domain.AgentMCPBinding, error) {
@@ -212,7 +241,7 @@ func (m *mockAgentMCPBindingRepo) GetByAgentID(ctx context.Context, agentID doma
 	var result []*domain.AgentMCPBinding
 	for _, b := range m.bindings {
 		if b.AgentID().String() == agentID.String() {
-			result = append(result, b)
+			result = append(result, deepCopyAgentMCPBinding(b))
 		}
 	}
 	return result, nil
@@ -298,6 +327,15 @@ func TestMCPService_CreateServer(t *testing.T) {
 	}
 	if server.Command() != "node" {
 		t.Errorf("期望 command 为 'node', 实际为 '%s'", server.Command())
+	}
+	if server.Description() != "desc" {
+		t.Errorf("期望 description 为 'desc', 实际为 '%s'", server.Description())
+	}
+	if len(server.Args()) != 1 || server.Args()[0] != "server.js" {
+		t.Errorf("期望 args 为 ['server.js'], 实际为 %v", server.Args())
+	}
+	if len(server.EnvVars()) != 1 || server.EnvVars()["KEY"] != "VAL" {
+		t.Errorf("期望 envVars 为 map[KEY:VAL], 实际为 %v", server.EnvVars())
 	}
 }
 
@@ -402,6 +440,9 @@ func TestMCPService_UpdateServer(t *testing.T) {
 	newArgs := []string{"--port", "8080"}
 	newEnv := map[string]string{"FOO": "BAR"}
 
+	repo := svc.mcpServerRepo.(*mockMCPServerRepo)
+	before := repo.updateCounter
+
 	updated, err := svc.UpdateServer(ctx, UpdateMCPServerCommand{
 		ID:            created.ID(),
 		Name:          &newName,
@@ -414,6 +455,9 @@ func TestMCPService_UpdateServer(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+	if repo.updateCounter != before+1 {
+		t.Errorf("期望 Update 被调用 1 次, 实际从 %d 变为 %d", before, repo.updateCounter)
 	}
 	if updated.Name() != "Updated" {
 		t.Errorf("期望 name 为 'Updated', 实际为 '%s'", updated.Name())
@@ -429,6 +473,12 @@ func TestMCPService_UpdateServer(t *testing.T) {
 	}
 	if updated.URL() != "http://localhost" {
 		t.Errorf("期望 url 为 'http://localhost', 实际为 '%s'", updated.URL())
+	}
+	if len(updated.Args()) != 2 || updated.Args()[0] != "--port" || updated.Args()[1] != "8080" {
+		t.Errorf("期望 args 为 ['--port', '8080'], 实际为 %v", updated.Args())
+	}
+	if len(updated.EnvVars()) != 1 || updated.EnvVars()["FOO"] != "BAR" {
+		t.Errorf("期望 envVars 为 map[FOO:BAR], 实际为 %v", updated.EnvVars())
 	}
 }
 
@@ -471,13 +521,22 @@ func TestMCPService_DeleteServer(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	_, err = svc.GetServer(ctx, created.ID())
+	server, err := svc.GetServer(ctx, created.ID())
 	if err != nil {
 		t.Fatalf("获取时出错了: %v", err)
 	}
-	server, _ := svc.GetServer(ctx, created.ID())
 	if server != nil {
 		t.Error("删除后服务器应该不存在")
+	}
+
+	// verify DeleteByServerID was called
+	repo := svc.mcpToolRepo.(*mockMCPToolRepo)
+	if len(repo.deleteByServerIDCalls) != 1 || repo.deleteByServerIDCalls[0] != created.ID().String() {
+		t.Errorf("期望 DeleteByServerID 被调用一次且参数为 %s, 实际为 %v", created.ID().String(), repo.deleteByServerIDCalls)
+	}
+	// verify tools are cleared
+	if len(repo.serverTools[created.ID().String()]) != 0 {
+		t.Errorf("期望删除后该服务器的工具被清空, 实际剩余 %d", len(repo.serverTools[created.ID().String()]))
 	}
 }
 
@@ -497,6 +556,12 @@ func TestMCPService_DeleteServer_DeleteToolsError(t *testing.T) {
 	err := svc.DeleteServer(ctx, created.ID())
 	if err == nil {
 		t.Fatal("期望 delete tools 错误返回")
+	}
+
+	// verify server was NOT deleted
+	server, _ := svc.GetServer(ctx, created.ID())
+	if server == nil {
+		t.Error("DeleteByServerID 失败时服务器不应被删除")
 	}
 }
 
@@ -525,8 +590,9 @@ func TestMCPService_TestServer_UnsupportedTransport(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望不支持的 transport 返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-test-1"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
 	}
 }
 
@@ -554,8 +620,191 @@ func TestMCPService_RefreshCapabilities_UnsupportedTransport(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望不支持的 transport 返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-ref-1"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
+	}
+}
+
+// mock transport for success path tests
+type mockMCPTransport struct {
+	initializeResult *mcp.InitializeResult
+	listToolsResult  *mcp.ListToolsResult
+	listToolsErr     error
+	callToolResult   *mcp.CallToolResult
+}
+
+func (m *mockMCPTransport) Start(ctx context.Context) error { return nil }
+func (m *mockMCPTransport) SendRequest(ctx context.Context, request transport.JSONRPCRequest) (*transport.JSONRPCResponse, error) {
+	switch request.Method {
+	case "initialize":
+		res := m.initializeResult
+		if res == nil {
+			res = &mcp.InitializeResult{
+				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+				ServerInfo:      mcp.Implementation{Name: "mock", Version: "1.0"},
+			}
+		}
+		b, _ := json.Marshal(res)
+		return transport.NewJSONRPCResultResponse(request.ID, b), nil
+	case "tools/list":
+		if m.listToolsErr != nil {
+			return nil, m.listToolsErr
+		}
+		res := m.listToolsResult
+		if res == nil {
+			res = &mcp.ListToolsResult{Tools: []mcp.Tool{}}
+		}
+		b, _ := json.Marshal(res)
+		return transport.NewJSONRPCResultResponse(request.ID, b), nil
+	case "tools/call":
+		res := m.callToolResult
+		if res == nil {
+			res = &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}
+		}
+		b, _ := json.Marshal(res)
+		return transport.NewJSONRPCResultResponse(request.ID, b), nil
+	}
+	return nil, fmt.Errorf("unknown method: %s", request.Method)
+}
+func (m *mockMCPTransport) SendNotification(ctx context.Context, notification mcp.JSONRPCNotification) error { return nil }
+func (m *mockMCPTransport) SetNotificationHandler(handler func(notification mcp.JSONRPCNotification)) {}
+func (m *mockMCPTransport) Close() error                                          { return nil }
+func (m *mockMCPTransport) GetSessionId() string                                  { return "" }
+
+func TestMCPService_TestServer_Success(t *testing.T) {
+	svc := setupTestMCPService()
+	ctx := context.Background()
+
+	server, _ := svc.CreateServer(ctx, CreateMCPServerCommand{
+		Code:          "mcp_test_ok",
+		Name:          "TestOK",
+		TransportType: domain.MCPTransportSTDIO,
+		Command:       "echo",
+	})
+
+	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
+		return client.NewClient(&mockMCPTransport{}), nil
+	}
+
+	repo := svc.mcpServerRepo.(*mockMCPServerRepo)
+	before := repo.updateCounter
+
+	err := svc.TestServer(ctx, server.ID())
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	updated, _ := svc.GetServer(ctx, server.ID())
+	if updated.Status() != "active" {
+		t.Errorf("期望 status 为 'active', 实际为 '%s'", updated.Status())
+	}
+	if repo.updateCounter != before+1 {
+		t.Errorf("期望 Update 被调用 1 次, 实际从 %d 变为 %d", before, repo.updateCounter)
+	}
+}
+
+func TestMCPService_RefreshCapabilities_Success(t *testing.T) {
+	svc := setupTestMCPService()
+	ctx := context.Background()
+
+	server, _ := svc.CreateServer(ctx, CreateMCPServerCommand{
+		Code:          "mcp_ref_ok",
+		Name:          "RefOK",
+		TransportType: domain.MCPTransportSTDIO,
+		Command:       "echo",
+	})
+
+	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
+		return client.NewClient(&mockMCPTransport{
+			listToolsResult: &mcp.ListToolsResult{
+				Tools: []mcp.Tool{
+					{Name: "toolA", Description: "descA", InputSchema: mcp.ToolInputSchema{Properties: map[string]any{}}},
+					{Name: "toolB", Description: "descB", InputSchema: mcp.ToolInputSchema{Properties: map[string]any{}}},
+				},
+			},
+		}), nil
+	}
+
+	repo := svc.mcpServerRepo.(*mockMCPServerRepo)
+	before := repo.updateCounter
+
+	err := svc.RefreshCapabilities(ctx, server.ID())
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	updated, _ := svc.GetServer(ctx, server.ID())
+	if updated.Status() != "active" {
+		t.Errorf("期望 status 为 'active', 实际为 '%s'", updated.Status())
+	}
+	caps := updated.Capabilities()
+	if len(caps) != 2 {
+		t.Errorf("期望 capabilities 长度为 2, 实际为 %d", len(caps))
+	}
+	if repo.updateCounter != before+1 {
+		t.Errorf("期望 Update 被调用 1 次, 实际从 %d 变为 %d", before, repo.updateCounter)
+	}
+
+	tools, _ := svc.ListTools(ctx, server.ID())
+	if len(tools) != 2 {
+		t.Errorf("期望保存 2 个 tools, 实际为 %d", len(tools))
+	}
+}
+
+func TestMCPService_RefreshCapabilities_ListToolsError(t *testing.T) {
+	svc := setupTestMCPService()
+	ctx := context.Background()
+
+	server, _ := svc.CreateServer(ctx, CreateMCPServerCommand{
+		Code:          "mcp_ref_tools_err",
+		Name:          "RefToolsErr",
+		TransportType: domain.MCPTransportSTDIO,
+		Command:       "echo",
+	})
+
+	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
+		return client.NewClient(&mockMCPTransport{listToolsErr: errors.New("list tools failed")}), nil
+	}
+
+	err := svc.RefreshCapabilities(ctx, server.ID())
+	if err == nil {
+		t.Fatal("期望 ListTools 错误返回错误")
+	}
+	updated, _ := svc.GetServer(ctx, server.ID())
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
+	}
+}
+
+func TestMCPService_ExecuteTool_Success(t *testing.T) {
+	svc := setupTestMCPService()
+	ctx := context.Background()
+
+	server, _ := svc.CreateServer(ctx, CreateMCPServerCommand{
+		Code:          "mcp_exec_ok",
+		Name:          "ExecOK",
+		TransportType: domain.MCPTransportSTDIO,
+		Command:       "echo",
+	})
+	server.SetStatus("active", "")
+	// since GetByID returns deep copy, update stored server
+	svc.mcpServerRepo.(*mockMCPServerRepo).servers[server.ID().String()] = server
+
+	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
+		return client.NewClient(&mockMCPTransport{
+			callToolResult: &mcp.CallToolResult{
+				Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "result-data"}},
+			},
+		}), nil
+	}
+
+	res, err := svc.ExecuteTool(ctx, server.ID(), "toolA", map[string]interface{}{"key": "val"})
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+	if res == "" {
+		t.Error("期望返回非空结果")
 	}
 }
 
@@ -928,8 +1177,9 @@ func TestMCPService_TestServer_SSEStartFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望 SSE Start 失败返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-sse-start"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
 	}
 }
 
@@ -945,8 +1195,9 @@ func TestMCPService_TestServer_HTTPInitFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望 HTTP Initialize 失败返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-http-init"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
 	}
 }
 
@@ -962,8 +1213,9 @@ func TestMCPService_RefreshCapabilities_SSEStartFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望 SSE Start 失败返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-ref-sse"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
 	}
 }
 
@@ -979,8 +1231,9 @@ func TestMCPService_RefreshCapabilities_HTTPInitFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("期望 HTTP Initialize 失败返回错误")
 	}
-	if server.Status() != "error" {
-		t.Errorf("期望 status 为 'error', 实际为 '%s'", server.Status())
+	updated, _ := svc.GetServer(ctx, domain.NewMCPServerID("mcp-ref-http"))
+	if updated.Status() != "error" {
+		t.Errorf("期望 status 为 'error', 实际为 '%s'", updated.Status())
 	}
 }
 
