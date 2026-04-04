@@ -563,28 +563,36 @@ func TestAgentService_PatchAgent_ClaudeCodeConfigMerge(t *testing.T) {
 	svc := setupTestAgentSvc()
 	ctx := context.Background()
 
-	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+	created, err := svc.CreateAgent(ctx, CreateAgentCommand{
 		UserCode: "usr_001",
 		Name:     "MergeTestAgent",
 	})
+	if err != nil {
+		t.Fatalf("CreateAgent failed: %v", err)
+	}
 
 	// 先 Patch 一个完整配置
-	svc.PatchAgent(ctx, PatchAgentCommand{
+	if _, err := svc.PatchAgent(ctx, PatchAgentCommand{
 		ID: created.ID(),
 		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
 			Timeout:       600,
 			Model:         "claude-3-5-sonnet",
 			MaxThinkingTokens: 8000,
 		},
-	})
+	}); err != nil {
+		t.Fatalf("首次 Patch 失败: %v", err)
+	}
 
 	// 再 Patch 只更新 Timeout
-	patched, _ := svc.PatchAgent(ctx, PatchAgentCommand{
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
 		ID: created.ID(),
 		ClaudeCodeConfig: &domain.ClaudeCodeConfig{
 			Timeout: 300,
 		},
 	})
+	if err != nil {
+		t.Fatalf("二次 Patch 失败: %v", err)
+	}
 
 	config := patched.ClaudeCodeConfig()
 	// Timeout 应该被更新
@@ -659,7 +667,7 @@ func TestAgentService_CreateAgent_DuplicateCode(t *testing.T) {
 
 	// 首先手动添加一个agent到repo，使用idGen将生成的第一个code
 	agentCode := domain.NewAgentCode("agt_agent-id-1")
-	existingAgent, _ := domain.NewAgent(
+	existingAgent, err := domain.NewAgent(
 		domain.NewAgentID("existing-id"),
 		agentCode,
 		"usr_002",
@@ -667,10 +675,15 @@ func TestAgentService_CreateAgent_DuplicateCode(t *testing.T) {
 		"描述",
 		domain.AgentTypeBareLLM,
 	)
-	repo.Save(ctx, existingAgent)
+	if err != nil {
+		t.Fatalf("创建 existingAgent 失败: %v", err)
+	}
+	if err := repo.Save(ctx, existingAgent); err != nil {
+		t.Fatalf("保存 existingAgent 失败: %v", err)
+	}
 
 	// 尝试创建agent，应该检测到重复的AgentCode
-	_, err := svc.CreateAgent(ctx, CreateAgentCommand{
+	_, err = svc.CreateAgent(ctx, CreateAgentCommand{
 		UserCode: "usr_001",
 		Name:     "Agent1",
 	})
@@ -716,14 +729,33 @@ func TestDefaultAgentModelFromEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// 设置环境变量
+			// 使用 LookupEnv 捕获原始值
+			origLLMModel, llmModelExists := os.LookupEnv("LLM_MODEL")
+			origOpenaiModel, openaiModelExists := os.LookupEnv("OPENAI_MODEL")
+
+			t.Cleanup(func() {
+				if llmModelExists {
+					os.Setenv("LLM_MODEL", origLLMModel)
+				} else {
+					os.Unsetenv("LLM_MODEL")
+				}
+				if openaiModelExists {
+					os.Setenv("OPENAI_MODEL", origOpenaiModel)
+				} else {
+					os.Unsetenv("OPENAI_MODEL")
+				}
+			})
+
+			// 根据测试用例设置/清除环境变量
 			if tt.llmModel != "" {
 				os.Setenv("LLM_MODEL", tt.llmModel)
-				defer os.Unsetenv("LLM_MODEL")
+			} else {
+				os.Unsetenv("LLM_MODEL")
 			}
 			if tt.openaiModel != "" {
 				os.Setenv("OPENAI_MODEL", tt.openaiModel)
-				defer os.Unsetenv("OPENAI_MODEL")
+			} else {
+				os.Unsetenv("OPENAI_MODEL")
 			}
 
 			result := defaultAgentModelFromEnv()
@@ -765,10 +797,13 @@ func TestAgentService_PatchAgent_SetIsActive(t *testing.T) {
 	svc := setupTestAgentSvc()
 	ctx := context.Background()
 
-	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+	created, err := svc.CreateAgent(ctx, CreateAgentCommand{
 		UserCode: "usr_001",
 		Name:     "TestAgent",
 	})
+	if err != nil {
+		t.Fatalf("CreateAgent failed: %v", err)
+	}
 
 	// 初始为激活状态
 	if !created.IsActive() {
@@ -792,10 +827,13 @@ func TestAgentService_PatchAgent_SetIsActive(t *testing.T) {
 
 	// 再更新为激活
 	isActive = true
-	patched2, _ := svc.PatchAgent(ctx, PatchAgentCommand{
+	patched2, err := svc.PatchAgent(ctx, PatchAgentCommand{
 		ID:       patched.ID(),
 		IsActive: &isActive,
 	})
+	if err != nil {
+		t.Fatalf("再次 Patch 失败: %v", err)
+	}
 
 	if !patched2.IsActive() {
 		t.Error("再次Patch后agent应该是激活状态")
