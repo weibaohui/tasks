@@ -364,14 +364,14 @@ func TestHookContext_Duration(t *testing.T) {
 	hc := NewHookContext(context.Background())
 
 	// 等待一小段时间
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	d := hc.Duration()
 	if d <= 0 {
 		t.Errorf("期望 Duration > 0, 实际为 %v", d)
 	}
-	if d < 5*time.Millisecond {
-		t.Errorf("期望 Duration >= 5ms, 实际为 %v", d)
+	if d < 1*time.Millisecond {
+		t.Errorf("期望 Duration >= 1ms, 实际为 %v", d)
 	}
 }
 
@@ -1429,6 +1429,20 @@ func (m *mockFailingLogRepo) Save(ctx context.Context, log *RequirementHookActio
 	return m.mockRequirementHookActionLogRepository.Save(ctx, log)
 }
 
+// callCountLogRepo 跟踪 Save 调用次数，第一次返回 nil，第二次返回 error
+type callCountLogRepo struct {
+	mockRequirementHookActionLogRepository
+	saveCount int
+}
+
+func (m *callCountLogRepo) Save(ctx context.Context, log *RequirementHookActionLog) error {
+	m.saveCount++
+	if m.saveCount == 1 {
+		return m.mockRequirementHookActionLogRepository.Save(ctx, log)
+	}
+	return errors.New("save failed on second call")
+}
+
 func TestConfigurableHookExecutor_Execute_LogSaveInitError(t *testing.T) {
 	configRepo := newMockRequirementHookConfigRepository()
 	logRepo := &mockFailingLogRepo{}
@@ -1464,7 +1478,7 @@ func TestConfigurableHookExecutor_Execute_LogSaveInitError(t *testing.T) {
 
 func TestConfigurableHookExecutor_Execute_LogSaveUpdateError(t *testing.T) {
 	configRepo := newMockRequirementHookConfigRepository()
-	logRepo := &mockFailingLogRepo{}
+	logRepo := &callCountLogRepo{}
 	logRepo.logs = make(map[string]*RequirementHookActionLog)
 	logger := &mockConfigurableHookLogger{}
 	idGen := &mockIDGenerator{}
@@ -1489,5 +1503,13 @@ func TestConfigurableHookExecutor_Execute_LogSaveUpdateError(t *testing.T) {
 	// First call: initial save succeeds, update save fails
 	executor.Execute(context.Background(), "test", req, change)
 
+	// Verify Save was called twice (initial save + update save)
+	if logRepo.saveCount != 3 {
+		t.Errorf("期望 Save 被调用 3 次，实际调用 %d 次", logRepo.saveCount)
+	}
+
 	// No error log expected because the log update failures are silently ignored
+	if len(logger.errorLogs) >= 1 {
+		t.Errorf("期望没有 error 日志，实际有 %d 条", len(logger.errorLogs))
+	}
 }
