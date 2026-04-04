@@ -6,6 +6,7 @@ package application
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -561,6 +562,9 @@ func TestTaskContext_Concurrent_Complete(t *testing.T) {
 	// Complete 不使用锁保护回调调用，所以可能被调用多次
 	// 这里主要验证没有 panic 和 data race
 	t.Logf("Complete 回调被调用了 %d 次", counter)
+	if counter == 0 {
+		t.Error("Complete 回调应该至少被调用一次")
+	}
 }
 
 // TestTaskContext_Concurrent_SpawnSubTask 测试并发生成子任务
@@ -607,7 +611,7 @@ func TestTaskContext_Concurrent_MixedOperations(t *testing.T) {
 
 	// 添加一些初始待办项
 	for i := 0; i < 10; i++ {
-		tc.AddTodoItem(string(rune('0'+i)), "子任务", "thinking", "span")
+		tc.AddTodoItem(strconv.Itoa(i), "子任务", "thinking", "span")
 	}
 
 	const numGoroutines = 50
@@ -627,13 +631,13 @@ func TestTaskContext_Concurrent_MixedOperations(t *testing.T) {
 				case 2:
 					tc.SpawnSubTask("目标", domain.TaskTypeCoding)
 				case 3:
-					tc.AddTodoItem(string(rune('0'+index))+"-"+string(rune('0'+j%10)), "子任务", "thinking", "span")
+					tc.AddTodoItem(strconv.Itoa(index)+"-"+strconv.Itoa(j%10), "子任务", "thinking", "span")
 				case 4:
-					tc.UpdateTodoProgress(string(rune('0'+j%10)), j%100)
+					tc.UpdateTodoProgress(strconv.Itoa(j%10), j%100)
 				case 5:
-					tc.UpdateTodoCompleted(string(rune('0'+j%10)))
+					tc.UpdateTodoCompleted(strconv.Itoa(j%10))
 				case 6:
-					tc.UpdateTodoFailed(string(rune('0'+j%10)))
+					tc.UpdateTodoFailed(strconv.Itoa(j%10))
 				case 7:
 					_ = tc.AllSubTasksCompleted()
 				}
@@ -727,8 +731,8 @@ func TestTaskContext_ComplexWorkflow(t *testing.T) {
 	tc.SetOnSubTask(func(goal string, taskType domain.TaskType) *SubTaskResult {
 		subTasks = append(subTasks, goal)
 		return &SubTaskResult{
-			SubTaskID:    "sub-" + string(rune('0'+len(subTasks))),
-			SpanID:       "span-sub-" + string(rune('0'+len(subTasks))),
+			SubTaskID:    "sub-" + strconv.Itoa(len(subTasks)),
+			SpanID:       "span-sub-" + strconv.Itoa(len(subTasks)),
 			ParentSpanID: tc.SpanID,
 			TaskType:     taskType,
 			Goal:         goal,
