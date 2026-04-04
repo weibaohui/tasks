@@ -10,6 +10,8 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
+const DefaultFallbackModel = "gpt-3.5-turbo"
+
 var (
 	ErrProviderNotFound = errors.New("provider not found")
 )
@@ -43,7 +45,7 @@ func ChooseModelForProvider(defaultModel string, supportedModels []domain.ModelI
 		model = supportedModels[0].ID
 	}
 	if model == "" {
-		model = "gpt-3.5-turbo" // 默认模型
+		model = DefaultFallbackModel // 默认模型
 	}
 	return model
 }
