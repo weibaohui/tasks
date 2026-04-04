@@ -1111,6 +1111,7 @@ func TestLLMProviderService_TestConnection_WithSupportedModels(t *testing.T) {
 	}
 
 	// 验证返回结果
+
 	if result["success"] != false {
 		t.Errorf("期望 success 为 false, 实际为 %v", result["success"])
 	}
