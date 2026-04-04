@@ -14,6 +14,40 @@ var (
 	ErrProviderNotFound = errors.New("provider not found")
 )
 
+// TestConnectionRunner 定义测试连接的接口，便于测试时注入 mock
+type TestConnectionRunner interface {
+	RunTest(ctx context.Context, config *llm.Config) error
+}
+
+// defaultTestConnectionRunner 默认的测试连接实现
+type defaultTestConnectionRunner struct{}
+
+func (r *defaultTestConnectionRunner) RunTest(ctx context.Context, config *llm.Config) error {
+	client, err := llm.NewLLMProvider(config)
+	if err != nil {
+		return fmt.Errorf("创建 LLM 客户端失败: %w", err)
+	}
+
+	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	_, err = client.Generate(testCtx, "Hi, please respond with 'OK' if you receive this message.")
+	return err
+}
+
+// ChooseModelForProvider 根据 provider 信息选择用于测试连接的模型
+// 这是一个纯函数，便于独立测试
+func ChooseModelForProvider(defaultModel string, supportedModels []domain.ModelInfo) string {
+	model := defaultModel
+	if model == "" && len(supportedModels) > 0 {
+		model = supportedModels[0].ID
+	}
+	if model == "" {
+		model = "gpt-3.5-turbo" // 默认模型
+	}
+	return model
+}
+
 type CreateProviderCommand struct {
 	UserCode        string
 	ProviderKey     string
@@ -48,6 +82,7 @@ type UpdateProviderCommand struct {
 type LLMProviderApplicationService struct {
 	repo        domain.LLMProviderRepository
 	idGenerator domain.IDGenerator
+	testRunner  TestConnectionRunner
 }
 
 func NewLLMProviderApplicationService(
@@ -57,6 +92,20 @@ func NewLLMProviderApplicationService(
 	return &LLMProviderApplicationService{
 		repo:        repo,
 		idGenerator: idGenerator,
+		testRunner:  &defaultTestConnectionRunner{},
+	}
+}
+
+// NewLLMProviderApplicationServiceWithRunner 允许注入自定义 testRunner，用于测试
+func NewLLMProviderApplicationServiceWithRunner(
+	repo domain.LLMProviderRepository,
+	idGenerator domain.IDGenerator,
+	testRunner TestConnectionRunner,
+) *LLMProviderApplicationService {
+	return &LLMProviderApplicationService{
+		repo:        repo,
+		idGenerator: idGenerator,
+		testRunner:  testRunner,
 	}
 }
 
@@ -203,14 +252,8 @@ func (s *LLMProviderApplicationService) TestConnection(ctx context.Context, id d
 		}, nil
 	}
 
-	// 构建 LLM 配置
-	model := provider.DefaultModel()
-	if model == "" && len(provider.SupportedModels()) > 0 {
-		model = provider.SupportedModels()[0].ID
-	}
-	if model == "" {
-		model = "gpt-3.5-turbo" // 默认模型
-	}
+	// 使用纯函数选择模型
+	model := ChooseModelForProvider(provider.DefaultModel(), provider.SupportedModels())
 
 	config := &llm.Config{
 		ProviderType: provider.ProviderKey(),
@@ -221,21 +264,8 @@ func (s *LLMProviderApplicationService) TestConnection(ctx context.Context, id d
 		MaxTokens:    1024,
 	}
 
-	// 创建 LLM 客户端
-	client, err := llm.NewLLMProvider(config)
-	if err != nil {
-		return map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("创建 LLM 客户端失败: %v", err),
-		}, nil
-	}
-
-	// 设置超时
-	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// 发送测试请求
-	_, err = client.Generate(testCtx, "Hi, please respond with 'OK' if you receive this message.")
+	// 使用注入的 testRunner 进行测试
+	err = s.testRunner.RunTest(ctx, config)
 	if err != nil {
 		return map[string]interface{}{
 			"success": false,
