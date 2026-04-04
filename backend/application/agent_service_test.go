@@ -2,7 +2,9 @@ package application
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
@@ -645,5 +647,647 @@ func TestAgentService_PatchAgent_OtherFieldsStillWork(t *testing.T) {
 
 	if patched.ClaudeCodeConfig().Timeout != 600 {
 		t.Errorf("期望 Timeout 为 600, 实际为 %d", patched.ClaudeCodeConfig().Timeout)
+	}
+}
+
+// TestAgentService_CreateAgent_DuplicateCode 测试重复AgentCode检测
+func TestAgentService_CreateAgent_DuplicateCode(t *testing.T) {
+	repo := newMockAgentRepo()
+	idGen := &mockAgentIDGen{}
+	svc := NewAgentApplicationService(repo, idGen)
+	ctx := context.Background()
+
+	// 首先手动添加一个agent到repo，使用idGen将生成的第一个code
+	agentCode := domain.NewAgentCode("agt_agent-id-1")
+	existingAgent, _ := domain.NewAgent(
+		domain.NewAgentID("existing-id"),
+		agentCode,
+		"usr_002",
+		"ExistingAgent",
+		"描述",
+		domain.AgentTypeBareLLM,
+	)
+	repo.Save(ctx, existingAgent)
+
+	// 尝试创建agent，应该检测到重复的AgentCode
+	_, err := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "Agent1",
+	})
+
+	if err != ErrAgentCodeDuplicated {
+		t.Errorf("期望 ErrAgentCodeDuplicated, 实际为 %v", err)
+	}
+}
+
+// TestDefaultAgentModelFromEnv 测试从环境变量读取默认模型
+func TestDefaultAgentModelFromEnv(t *testing.T) {
+	tests := []struct {
+		name        string
+		llmModel    string
+		openaiModel string
+		expected    string
+	}{
+		{
+			name:        "LLM_MODEL优先",
+			llmModel:    "claude-3-opus",
+			openaiModel: "gpt-4",
+			expected:    "claude-3-opus",
+		},
+		{
+			name:        "OPENAI_MODEL作为回退",
+			llmModel:    "",
+			openaiModel: "gpt-4-turbo",
+			expected:    "gpt-4-turbo",
+		},
+		{
+			name:        "两者都为空使用domain默认值",
+			llmModel:    "",
+			openaiModel: "",
+			expected:    domain.DefaultModel,
+		},
+		{
+			name:        "空白字符被trim",
+			llmModel:    "  claude-3-sonnet  ",
+			openaiModel: "",
+			expected:    "claude-3-sonnet",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 设置环境变量
+			if tt.llmModel != "" {
+				os.Setenv("LLM_MODEL", tt.llmModel)
+				defer os.Unsetenv("LLM_MODEL")
+			}
+			if tt.openaiModel != "" {
+				os.Setenv("OPENAI_MODEL", tt.openaiModel)
+				defer os.Unsetenv("OPENAI_MODEL")
+			}
+
+			result := defaultAgentModelFromEnv()
+			if result != tt.expected {
+				t.Errorf("期望 %s, 实际为 %s", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestAgentService_PatchAgent_SetAgentType 测试PatchAgent更新AgentType
+func TestAgentService_PatchAgent_SetAgentType(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:  "usr_001",
+		Name:      "TestAgent",
+		AgentType: string(domain.AgentTypeBareLLM),
+	})
+
+	newType := string(domain.AgentTypeCoding)
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:        created.ID(),
+		AgentType: &newType,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if string(patched.AgentType()) != string(domain.AgentTypeCoding) {
+		t.Errorf("期望 AgentType 为 Coding, 实际为 %s", patched.AgentType())
+	}
+}
+
+// TestAgentService_PatchAgent_SetIsActive 测试PatchAgent更新IsActive
+func TestAgentService_PatchAgent_SetIsActive(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "TestAgent",
+	})
+
+	// 初始为激活状态
+	if !created.IsActive() {
+		t.Error("新创建的agent应该是激活状态")
+	}
+
+	// 更新为非激活
+	isActive := false
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:       created.ID(),
+		IsActive: &isActive,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.IsActive() {
+		t.Error("Patch后agent应该是非激活状态")
+	}
+
+	// 再更新为激活
+	isActive = true
+	patched2, _ := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:       patched.ID(),
+		IsActive: &isActive,
+	})
+
+	if !patched2.IsActive() {
+		t.Error("再次Patch后agent应该是激活状态")
+	}
+}
+
+// TestAgentService_PatchAgent_SetIsDefault 测试PatchAgent更新IsDefault
+func TestAgentService_PatchAgent_SetIsDefault(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "TestAgent",
+	})
+
+	// 初始为非默认
+	if created.IsDefault() {
+		t.Error("新创建的agent默认不应是默认状态")
+	}
+
+	// 更新为默认
+	isDefault := true
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:        created.ID(),
+		IsDefault: &isDefault,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if !patched.IsDefault() {
+		t.Error("Patch后agent应该是默认状态")
+	}
+}
+
+// TestAgentService_PatchAgent_UpdateConfig 测试PatchAgent更新配置字段
+func TestAgentService_PatchAgent_UpdateConfig(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "TestAgent",
+		Model:    "gpt-4",
+	})
+
+	// Patch更新多个配置字段
+	newModel := "claude-3"
+	newMaxTokens := 8000
+	newTemp := 0.9
+	newMaxIter := 20
+	newHistoryMsg := 25
+	newIdentity := "新身份"
+	newSoul := "新灵魂"
+	newAgents := "新agents内容"
+	newUser := "新user内容"
+	newTools := "新tools内容"
+	enableThinking := true
+
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:                    created.ID(),
+		Model:                 &newModel,
+		MaxTokens:             &newMaxTokens,
+		Temperature:           &newTemp,
+		MaxIterations:         &newMaxIter,
+		HistoryMessages:       &newHistoryMsg,
+		IdentityContent:       &newIdentity,
+		SoulContent:           &newSoul,
+		AgentsContent:         &newAgents,
+		UserContent:           &newUser,
+		ToolsContent:          &newTools,
+		EnableThinkingProcess: &enableThinking,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.Model() != "claude-3" {
+		t.Errorf("期望 Model 为 claude-3, 实际为 %s", patched.Model())
+	}
+	if patched.MaxTokens() != 8000 {
+		t.Errorf("期望 MaxTokens 为 8000, 实际为 %d", patched.MaxTokens())
+	}
+	if patched.Temperature() != 0.9 {
+		t.Errorf("期望 Temperature 为 0.9, 实际为 %f", patched.Temperature())
+	}
+	if patched.MaxIterations() != 20 {
+		t.Errorf("期望 MaxIterations 为 20, 实际为 %d", patched.MaxIterations())
+	}
+	if patched.HistoryMessages() != 25 {
+		t.Errorf("期望 HistoryMessages 为 25, 实际为 %d", patched.HistoryMessages())
+	}
+	if patched.IdentityContent() != "新身份" {
+		t.Errorf("期望 IdentityContent 为 '新身份', 实际为 %s", patched.IdentityContent())
+	}
+	if patched.SoulContent() != "新灵魂" {
+		t.Errorf("期望 SoulContent 为 '新灵魂', 实际为 %s", patched.SoulContent())
+	}
+	if patched.AgentsContent() != "新agents内容" {
+		t.Errorf("期望 AgentsContent 为 '新agents内容', 实际为 %s", patched.AgentsContent())
+	}
+	if patched.UserContent() != "新user内容" {
+		t.Errorf("期望 UserContent 为 '新user内容', 实际为 %s", patched.UserContent())
+	}
+	if patched.ToolsContent() != "新tools内容" {
+		t.Errorf("期望 ToolsContent 为 '新tools内容', 实际为 %s", patched.ToolsContent())
+	}
+	if !patched.EnableThinkingProcess() {
+		t.Error("期望 EnableThinkingProcess 为 true")
+	}
+}
+
+// TestAgentService_PatchAgent_SkillsAndTools 测试PatchAgent更新技能和工具列表
+func TestAgentService_PatchAgent_SkillsAndTools(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:   "usr_001",
+		Name:       "TestAgent",
+		SkillsList: []string{},
+		ToolsList:  []string{},
+	})
+
+	// Patch更新技能和工具列表
+	newSkills := []string{"skill1", "skill2", "skill3"}
+	newTools := []string{"tool1", "tool2"}
+
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:         created.ID(),
+		SkillsList: &newSkills,
+		ToolsList:  &newTools,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if len(patched.SkillsList()) != 3 {
+		t.Errorf("期望 SkillsList 长度为 3, 实际为 %d", len(patched.SkillsList()))
+	}
+	if len(patched.ToolsList()) != 2 {
+		t.Errorf("期望 ToolsList 长度为 2, 实际为 %d", len(patched.ToolsList()))
+	}
+}
+
+// TestAgentService_PatchAgent_ApplyLLMProvider 测试PatchAgent应用LLMProvider
+func TestAgentService_PatchAgent_ApplyLLMProvider(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "TestAgent",
+	})
+
+	// 应用LLMProvider
+	providerID := "provider-123"
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:            created.ID(),
+		LLMProviderID: &providerID,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.LLMProviderID().String() != "provider-123" {
+		t.Errorf("期望 LLMProviderID 为 provider-123, 实际为 %s", patched.LLMProviderID().String())
+	}
+}
+
+// TestAgentService_UpdateAgent_PartialFields 测试UpdateAgent部分字段更新
+func TestAgentService_UpdateAgent_PartialFields(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:    "usr_001",
+		Name:        "OriginalName",
+		Description: "OriginalDesc",
+	})
+
+	// 只更新Name，Description应该保持不变
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:   created.ID(),
+		Name: strPtr("NewName"),
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if updated.Name() != "NewName" {
+		t.Errorf("期望 Name 为 NewName, 实际为 %s", updated.Name())
+	}
+	// Description应该保持不变（通过读取原始值填充）
+	if updated.Description() != "OriginalDesc" {
+		t.Errorf("期望 Description 保持为 OriginalDesc, 实际为 %s", updated.Description())
+	}
+}
+
+// TestAgentService_UpdateAgent_OnlyDescription 测试UpdateAgent只更新Description
+func TestAgentService_UpdateAgent_OnlyDescription(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:    "usr_001",
+		Name:        "OriginalName",
+		Description: "OriginalDesc",
+	})
+
+	// 只更新Description，Name应该保持不变
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:          created.ID(),
+		Description: strPtr("NewDesc"),
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if updated.Name() != "OriginalName" {
+		t.Errorf("期望 Name 保持为 OriginalName, 实际为 %s", updated.Name())
+	}
+	if updated.Description() != "NewDesc" {
+		t.Errorf("期望 Description 为 NewDesc, 实际为 %s", updated.Description())
+	}
+}
+
+// TestAgentService_UpdateAgent_SetAgentType 测试UpdateAgent更新AgentType
+func TestAgentService_UpdateAgent_SetAgentType(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:  "usr_001",
+		Name:      "TestAgent",
+		AgentType: string(domain.AgentTypeBareLLM),
+	})
+
+	newType := string(domain.AgentTypeCoding)
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:        created.ID(),
+		AgentType: &newType,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if string(updated.AgentType()) != string(domain.AgentTypeCoding) {
+		t.Errorf("期望 AgentType 为 Coding, 实际为 %s", updated.AgentType())
+	}
+}
+
+// TestAgentService_UpdateAgent_SkillsAndTools 测试UpdateAgent更新技能和工具列表
+func TestAgentService_UpdateAgent_SkillsAndTools(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:   "usr_001",
+		Name:       "TestAgent",
+		SkillsList: []string{"skill1"},
+		ToolsList:  []string{"tool1"},
+	})
+
+	newSkills := []string{"skill2", "skill3"}
+	newTools := []string{"tool2", "tool3", "tool4"}
+
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:         created.ID(),
+		SkillsList: &newSkills,
+		ToolsList:  &newTools,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if len(updated.SkillsList()) != 2 {
+		t.Errorf("期望 SkillsList 长度为 2, 实际为 %d", len(updated.SkillsList()))
+	}
+	if len(updated.ToolsList()) != 3 {
+		t.Errorf("期望 ToolsList 长度为 3, 实际为 %d", len(updated.ToolsList()))
+	}
+}
+
+// TestAgentService_CreateAgent_WithLLMProvider 测试创建Agent时设置LLMProvider
+func TestAgentService_CreateAgent_WithLLMProvider(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	providerID := "provider-abc"
+	agent, err := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:      "usr_001",
+		Name:          "TestAgent",
+		LLMProviderID: &providerID,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if agent.LLMProviderID().String() != "provider-abc" {
+		t.Errorf("期望 LLMProviderID 为 provider-abc, 实际为 %s", agent.LLMProviderID().String())
+	}
+}
+
+// TestApplyDefaultAgentCreateConfig_AllDefaults 测试applyDefaultAgentCreateConfig所有默认值
+func TestApplyDefaultAgentCreateConfig_AllDefaults(t *testing.T) {
+	cmd := &CreateAgentCommand{
+		Name:     "TestAgent",
+		UserCode: "usr_001",
+	}
+
+	applyDefaultAgentCreateConfig(cmd)
+
+	// 验证所有默认内容字段
+	if cmd.IdentityContent != domain.DefaultIdentityContent {
+		t.Errorf("期望 IdentityContent 为默认值, 实际为 '%s'", cmd.IdentityContent)
+	}
+	if cmd.SoulContent != domain.DefaultSoulContent {
+		t.Errorf("期望 SoulContent 为默认值, 实际为 '%s'", cmd.SoulContent)
+	}
+	if cmd.AgentsContent != domain.DefaultAgentsContent {
+		t.Errorf("期望 AgentsContent 为默认值, 实际为 '%s'", cmd.AgentsContent)
+	}
+	if cmd.UserContent != domain.DefaultUserContent {
+		t.Errorf("期望 UserContent 为默认值, 实际为 '%s'", cmd.UserContent)
+	}
+	if cmd.ToolsContent != domain.DefaultToolsContent {
+		t.Errorf("期望 ToolsContent 为默认值, 实际为 '%s'", cmd.ToolsContent)
+	}
+	// 验证 SkillsList 和 ToolsList 被初始化为空数组
+	if cmd.SkillsList == nil {
+		t.Error("期望 SkillsList 被初始化为空数组, 实际为 nil")
+	}
+	if cmd.ToolsList == nil {
+		t.Error("期望 ToolsList 被初始化为空数组, 实际为 nil")
+	}
+}
+
+// TestApplyDefaultAgentCreateConfig_EmptyWhitespace 测试空白字符串被正确处理
+func TestApplyDefaultAgentCreateConfig_EmptyWhitespace(t *testing.T) {
+	cmd := &CreateAgentCommand{
+		Name:            "TestAgent",
+		UserCode:        "usr_001",
+		Description:     "   ",   // 空白字符串
+		IdentityContent: "\t\n", // 制表符和换行
+		Model:           "  ",    // 空白
+	}
+
+	applyDefaultAgentCreateConfig(cmd)
+
+	// 空白字符串应该被替换为默认值
+	if cmd.Description != domain.DefaultAgentDescription {
+		t.Errorf("期望空白 Description 被替换为默认值, 实际为 '%s'", cmd.Description)
+	}
+	if cmd.IdentityContent != domain.DefaultIdentityContent {
+		t.Errorf("期望空白 IdentityContent 被替换为默认值, 实际为 '%s'", cmd.IdentityContent)
+	}
+	// Model应该根据环境变量或默认值设置
+	// 注意：这里取决于环境变量设置，不直接断言具体值
+	if strings.TrimSpace(cmd.Model) == "" {
+		t.Error("期望空白 Model 被替换为非空值")
+	}
+}
+
+// TestApplyDefaultAgentCreateConfig_ZeroValues 测试零值被正确处理
+func TestApplyDefaultAgentCreateConfig_ZeroValues(t *testing.T) {
+	cmd := &CreateAgentCommand{
+		Name:            "TestAgent",
+		UserCode:        "usr_001",
+		MaxTokens:       0,
+		Temperature:     0,
+		MaxIterations:   0,
+		HistoryMessages: 0,
+	}
+
+	applyDefaultAgentCreateConfig(cmd)
+
+	// 零值应该被替换为默认值
+	if cmd.MaxTokens != domain.DefaultMaxTokens {
+		t.Errorf("期望 MaxTokens 为 %d, 实际为 %d", domain.DefaultMaxTokens, cmd.MaxTokens)
+	}
+	if cmd.Temperature != domain.DefaultTemperature {
+		t.Errorf("期望 Temperature 为 %f, 实际为 %f", domain.DefaultTemperature, cmd.Temperature)
+	}
+	if cmd.MaxIterations != domain.DefaultMaxIterations {
+		t.Errorf("期望 MaxIterations 为 %d, 实际为 %d", domain.DefaultMaxIterations, cmd.MaxIterations)
+	}
+	if cmd.HistoryMessages != domain.DefaultHistoryMessages {
+		t.Errorf("期望 HistoryMessages 为 %d, 实际为 %d", domain.DefaultHistoryMessages, cmd.HistoryMessages)
+	}
+}
+
+// TestAgentService_PatchAgent_OnlyDescription 测试PatchAgent只更新Description
+func TestAgentService_PatchAgent_OnlyDescription(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:    "usr_001",
+		Name:        "OriginalName",
+		Description: "OriginalDesc",
+	})
+
+	// 只更新Description
+	newDesc := "NewDescription"
+	patched, err := svc.PatchAgent(ctx, PatchAgentCommand{
+		ID:          created.ID(),
+		Description: &newDesc,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if patched.Description() != "NewDescription" {
+		t.Errorf("期望 Description 为 NewDescription, 实际为 %s", patched.Description())
+	}
+	// Name应该保持不变
+	if patched.Name() != "OriginalName" {
+		t.Errorf("期望 Name 保持为 OriginalName, 实际为 %s", patched.Name())
+	}
+}
+
+// TestAgentService_UpdateAgent_ApplyLLMProvider 测试UpdateAgent应用LLMProvider
+func TestAgentService_UpdateAgent_ApplyLLMProvider(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode: "usr_001",
+		Name:     "TestAgent",
+	})
+
+	// 初始没有LLMProvider
+	if created.LLMProviderID().String() != "" {
+		t.Error("新创建的agent应该没有LLMProvider")
+	}
+
+	// 应用LLMProvider
+	providerID := "provider-456"
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:            created.ID(),
+		LLMProviderID: &providerID,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if updated.LLMProviderID().String() != "provider-456" {
+		t.Errorf("期望 LLMProviderID 为 provider-456, 实际为 %s", updated.LLMProviderID().String())
+	}
+}
+
+// TestAgentService_UpdateAgent_EnableThinkingProcess 测试UpdateAgent更新EnableThinkingProcess
+func TestAgentService_UpdateAgent_EnableThinkingProcess(t *testing.T) {
+	svc := setupTestAgentSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateAgent(ctx, CreateAgentCommand{
+		UserCode:              "usr_001",
+		Name:                  "TestAgent",
+		EnableThinkingProcess: false,
+	})
+
+	// 初始为false
+	if created.EnableThinkingProcess() {
+		t.Error("新创建的agent EnableThinkingProcess 初始应为 false")
+	}
+
+	// 更新为true
+	enable := true
+	updated, err := svc.UpdateAgent(ctx, UpdateAgentCommand{
+		ID:                    created.ID(),
+		EnableThinkingProcess: &enable,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if !updated.EnableThinkingProcess() {
+		t.Error("更新后 EnableThinkingProcess 应为 true")
 	}
 }
