@@ -12,15 +12,12 @@ import (
 // 注意：由于 GetTaskRegistry 是单例，我们需要重置 defaultRegistry
 func setupTestRegistry(t *testing.T) *TaskRegistry {
 	registry := GetTaskRegistry()
-	// 清理注册表中的数据，确保测试之间相互独立
-	allTraceContexts := registry.GetAllTraceContexts()
-	for traceID := range allTraceContexts {
-		registry.UnregisterTraceContext(traceID)
-	}
-	allTodoLists := registry.GetAllTodoLists()
-	for taskID := range allTodoLists {
-		registry.UnregisterTodoList(taskID)
-	}
+	// 获取锁并直接重新初始化所有 map，确保测试之间相互独立
+	registry.mu.Lock()
+	registry.taskContexts = make(map[string]*TaskContext)
+	registry.traceContexts = make(map[string]*TraceContext)
+	registry.todoLists = make(map[string]*TodoList)
+	registry.mu.Unlock()
 	return registry
 }
 
