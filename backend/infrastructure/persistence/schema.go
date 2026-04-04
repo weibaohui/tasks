@@ -385,6 +385,59 @@ CREATE TABLE IF NOT EXISTS requirement_hook_action_logs (
 
 CREATE INDEX IF NOT EXISTS idx_hook_logs_requirement ON requirement_hook_action_logs(requirement_id);
 CREATE INDEX IF NOT EXISTS idx_hook_logs_config ON requirement_hook_action_logs(hook_config_id);
+
+-- 状态机相关表
+CREATE TABLE IF NOT EXISTS state_machines (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    config TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_state_machines_project ON state_machines(project_id);
+
+CREATE TABLE IF NOT EXISTS state_machine_type_bindings (
+    id TEXT PRIMARY KEY,
+    state_machine_id TEXT NOT NULL,
+    requirement_type TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(state_machine_id, requirement_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_type_bindings_machine ON state_machine_type_bindings(state_machine_id);
+CREATE INDEX IF NOT EXISTS idx_type_bindings_type ON state_machine_type_bindings(requirement_type);
+
+CREATE TABLE IF NOT EXISTS requirement_states (
+    id TEXT PRIMARY KEY,
+    requirement_id TEXT NOT NULL UNIQUE,
+    state_machine_id TEXT NOT NULL,
+    current_state TEXT NOT NULL,
+    current_state_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_req_states_requirement ON requirement_states(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_req_states_machine ON requirement_states(state_machine_id);
+
+CREATE TABLE IF NOT EXISTS transition_logs (
+    id TEXT PRIMARY KEY,
+    requirement_id TEXT NOT NULL,
+    from_state TEXT NOT NULL,
+    to_state TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    triggered_by TEXT NOT NULL,
+    remark TEXT,
+    result TEXT NOT NULL,
+    error_message TEXT,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transition_logs_requirement ON transition_logs(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_transition_logs_created ON transition_logs(created_at);
 `
 
 // InitSchema 初始化数据库 Schema
@@ -435,6 +488,13 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	return migrateRequirementsTraceIDIndex(db)
+}
+
+// migrateStateMachineTables 迁移状态机相关表（预留，未来可通过 migrations 调用）
+func migrateStateMachineTables(db *sql.DB) error {
+	// 表已通过 CREATE TABLE IF NOT EXISTS 创建
+	// 此处可添加未来需要的迁移逻辑
+	return nil
 }
 
 // migrateTasksNewColumns 迁移 tasks 表新增字段

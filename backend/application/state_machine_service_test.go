@@ -1,0 +1,510 @@
+package application
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/weibh/taskmanager/domain/state_machine"
+	"go.uber.org/zap"
+)
+
+// MockStateMachineRepository Mock 仓储
+type MockStateMachineRepository struct {
+	stateMachines       map[string]*state_machine.StateMachine
+	typeBindings        map[string]*state_machine.TypeBinding
+	requirementStates  map[string]*state_machine.RequirementState
+	transitionLogs     []*state_machine.TransitionLog
+}
+
+func NewMockStateMachineRepository() *MockStateMachineRepository {
+	return &MockStateMachineRepository{
+		stateMachines:      make(map[string]*state_machine.StateMachine),
+		typeBindings:       make(map[string]*state_machine.TypeBinding),
+		requirementStates:  make(map[string]*state_machine.RequirementState),
+		transitionLogs:     []*state_machine.TransitionLog{},
+	}
+}
+
+func (r *MockStateMachineRepository) SaveStateMachine(ctx context.Context, sm *state_machine.StateMachine) error {
+	r.stateMachines[sm.ID] = sm
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
+	sm, ok := r.stateMachines[id]
+	if !ok {
+		return nil, state_machine.ErrStateMachineNotFound(id)
+	}
+	return sm, nil
+}
+
+func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context, projectID string) ([]*state_machine.StateMachine, error) {
+	var result []*state_machine.StateMachine
+	for _, sm := range r.stateMachines {
+		if sm.ProjectID == projectID {
+			result = append(result, sm)
+		}
+	}
+	return result, nil
+}
+
+func (r *MockStateMachineRepository) DeleteStateMachine(ctx context.Context, id string) error {
+	delete(r.stateMachines, id)
+	return nil
+}
+
+func (r *MockStateMachineRepository) SaveTypeBinding(ctx context.Context, binding *state_machine.TypeBinding) error {
+	key := binding.StateMachineID + ":" + binding.RequirementType
+	r.typeBindings[key] = binding
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetTypeBinding(ctx context.Context, stateMachineID, requirementType string) (*state_machine.TypeBinding, error) {
+	key := stateMachineID + ":" + requirementType
+	binding, ok := r.typeBindings[key]
+	if !ok {
+		return nil, nil
+	}
+	return binding, nil
+}
+
+func (r *MockStateMachineRepository) DeleteTypeBinding(ctx context.Context, stateMachineID, requirementType string) error {
+	key := stateMachineID + ":" + requirementType
+	delete(r.typeBindings, key)
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetStateMachineByType(ctx context.Context, projectID, requirementType string) (*state_machine.StateMachine, error) {
+	for _, sm := range r.stateMachines {
+		if sm.ProjectID == projectID {
+			key := sm.ID + ":" + requirementType
+			if _, ok := r.typeBindings[key]; ok {
+				return sm, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (r *MockStateMachineRepository) SaveRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+	r.requirementStates[rs.RequirementID] = rs
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetRequirementState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
+	rs, ok := r.requirementStates[requirementID]
+	if !ok {
+		return nil, state_machine.ErrRequirementStateNotFound(requirementID)
+	}
+	return rs, nil
+}
+
+func (r *MockStateMachineRepository) UpdateRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+	r.requirementStates[rs.RequirementID] = rs
+	return nil
+}
+
+func (r *MockStateMachineRepository) SaveTransitionLog(ctx context.Context, log *state_machine.TransitionLog) error {
+	r.transitionLogs = append(r.transitionLogs, log)
+	return nil
+}
+
+func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
+	var result []*state_machine.TransitionLog
+	for _, log := range r.transitionLogs {
+		if log.RequirementID == requirementID {
+			result = append(result, log)
+		}
+	}
+	return result, nil
+}
+
+func (r *MockStateMachineRepository) Clear() {
+	r.stateMachines = make(map[string]*state_machine.StateMachine)
+	r.typeBindings = make(map[string]*state_machine.TypeBinding)
+	r.requirementStates = make(map[string]*state_machine.RequirementState)
+	r.transitionLogs = []*state_machine.TransitionLog{}
+}
+
+const testYAML = `
+name: test_flow
+description: 测试流程
+initial_state: created
+
+states:
+  - id: created
+    name: 已创建
+    is_final: false
+  - id: in_progress
+    name: 进行中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
+
+transitions:
+  - from: created
+    to: in_progress
+    trigger: start
+    description: 开始处理
+  - from: in_progress
+    to: completed
+    trigger: complete
+    description: 完成
+`
+
+func TestStateMachineService_CreateStateMachine(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+
+	if sm.Name != "test" {
+		t.Errorf("期望名称为 test, 实际为 %s", sm.Name)
+	}
+
+	if sm.ProjectID != "project-1" {
+		t.Errorf("期望项目ID为 project-1, 实际为 %s", sm.ProjectID)
+	}
+}
+
+func TestStateMachineService_CreateStateMachine_InvalidYAML(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	_, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", "invalid: yaml")
+	if err == nil {
+		t.Error("期望创建失败")
+	}
+}
+
+func TestStateMachineService_CreateStateMachine_InvalidConfig(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	_, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", `
+name: test
+initial_state: not_exist
+states:
+  - id: created
+    name: 已创建
+    is_final: false
+`)
+	if err == nil {
+		t.Error("期望创建失败")
+	}
+}
+
+func TestStateMachineService_GetStateMachine(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+
+	found, err := svc.GetStateMachine(ctx, sm.ID)
+	if err != nil {
+		t.Fatalf("获取失败: %v", err)
+	}
+
+	if found.Name != "test" {
+		t.Errorf("期望名称为 test, 实际为 %s", found.Name)
+	}
+}
+
+func TestStateMachineService_GetStateMachine_NotFound(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	_, err := svc.GetStateMachine(ctx, "not-exist")
+	if err == nil {
+		t.Error("期望未找到")
+	}
+}
+
+func TestStateMachineService_BindType(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+
+	err := svc.BindType(ctx, sm.ID, "normal")
+	if err != nil {
+		t.Fatalf("绑定失败: %v", err)
+	}
+
+	sm2, err := repo.GetStateMachineByType(ctx, "project-1", "normal")
+	if err != nil {
+		t.Fatalf("查找失败: %v", err)
+	}
+
+	if sm2.ID != sm.ID {
+		t.Error("期望找到绑定的状态机")
+	}
+}
+
+func TestStateMachineService_InitializeRequirementState(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+
+	rs, err := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	if err != nil {
+		t.Fatalf("初始化失败: %v", err)
+	}
+
+	if rs.CurrentState != "created" {
+		t.Errorf("期望初始状态为 created, 实际为 %s", rs.CurrentState)
+	}
+
+	if len(repo.transitionLogs) != 1 {
+		t.Errorf("期望1条日志, 实际为 %d", len(repo.transitionLogs))
+	}
+}
+
+func TestStateMachineService_InitializeRequirementState_NoBinding(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	_, err := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	if err == nil {
+		t.Error("期望失败：没有绑定")
+	}
+}
+
+func TestStateMachineService_TriggerTransition(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+
+	rs, err := svc.TriggerTransition(ctx, "req-1", "start", "user", "开始处理")
+	if err != nil {
+		t.Fatalf("转换失败: %v", err)
+	}
+
+	if rs.CurrentState != "in_progress" {
+		t.Errorf("期望状态为 in_progress, 实际为 %s", rs.CurrentState)
+	}
+}
+
+func TestStateMachineService_TriggerTransition_InvalidTrigger(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+
+	_, err := svc.TriggerTransition(ctx, "req-1", "invalid", "user", "")
+	if err == nil {
+		t.Error("期望失败：无效的触发器")
+	}
+}
+
+func TestStateMachineService_TriggerTransition_StateNotFound(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+	rs, _ := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	rs.CurrentState = "not_exist"
+	repo.UpdateRequirementState(ctx, rs)
+
+	_, err := svc.TriggerTransition(ctx, "req-1", "start", "user", "")
+	if err == nil {
+		t.Error("期望失败")
+	}
+}
+
+func TestStateMachineService_GetRequirementState(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+
+	rs, err := svc.GetRequirementState(ctx, "req-1")
+	if err != nil {
+		t.Fatalf("获取失败: %v", err)
+	}
+
+	if rs.RequirementID != "req-1" {
+		t.Errorf("期望需求ID为 req-1, 实际为 %s", rs.RequirementID)
+	}
+}
+
+func TestStateMachineService_GetRequirementState_NotFound(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	_, err := svc.GetRequirementState(ctx, "not-exist")
+	if err == nil {
+		t.Error("期望未找到")
+	}
+}
+
+func TestStateMachineService_GetTransitionHistory(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	svc.TriggerTransition(ctx, "req-1", "start", "user", "")
+
+	logs, err := svc.GetTransitionHistory(ctx, "req-1")
+	if err != nil {
+		t.Fatalf("获取失败: %v", err)
+	}
+
+	if len(logs) != 2 {
+		t.Errorf("期望2条日志, 实际为 %d", len(logs))
+	}
+}
+
+func TestStateMachineService_DeleteStateMachine(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+
+	err := svc.DeleteStateMachine(ctx, sm.ID)
+	if err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+
+	_, err = svc.GetStateMachine(ctx, sm.ID)
+	if err == nil {
+		t.Error("期望未找到")
+	}
+}
+
+func TestStateMachineService_UnbindType(t *testing.T) {
+	repo := NewMockStateMachineRepository()
+	logger, _ := zap.NewDevelopment()
+	svc := NewStateMachineService(repo, nil, logger)
+
+	ctx := context.Background()
+	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	svc.BindType(ctx, sm.ID, "normal")
+
+	err := svc.UnbindType(ctx, sm.ID, "normal")
+	if err != nil {
+		t.Fatalf("解绑失败: %v", err)
+	}
+
+	sm2, _ := repo.GetStateMachineByType(ctx, "project-1", "normal")
+	if sm2 != nil {
+		t.Error("期望未找到绑定")
+	}
+}
+
+func TestNewTransitionLog(t *testing.T) {
+	log := state_machine.NewTransitionLog("req-1", "created", "in_progress", "start", "user", "开始")
+	if log.Result != "success" {
+		t.Errorf("期望结果为 success, 实际为 %s", log.Result)
+	}
+
+	if log.FromState != "created" {
+		t.Errorf("期望源状态为 created, 实际为 %s", log.FromState)
+	}
+
+	if log.ToState != "in_progress" {
+		t.Errorf("期望目标状态为 in_progress, 实际为 %s", log.ToState)
+	}
+}
+
+func TestTransitionLog_MarkFailed(t *testing.T) {
+	log := state_machine.NewTransitionLog("req-1", "created", "in_progress", "start", "user", "")
+	log.MarkFailed("error message")
+
+	if log.Result != "failed" {
+		t.Errorf("期望结果为 failed, 实际为 %s", log.Result)
+	}
+
+	if log.ErrorMessage != "error message" {
+		t.Errorf("期望错误信息为 error message, 实际为 %s", log.ErrorMessage)
+	}
+}
+
+func TestNewRequirementState(t *testing.T) {
+	rs := state_machine.NewRequirementState("req-1", "sm-1", "created", "已创建")
+	if rs.RequirementID != "req-1" {
+		t.Errorf("期望需求ID为 req-1, 实际为 %s", rs.RequirementID)
+	}
+
+	if rs.CurrentState != "created" {
+		t.Errorf("期望状态为 created, 实际为 %s", rs.CurrentState)
+	}
+}
+
+func TestRequirementState_Transition(t *testing.T) {
+	rs := state_machine.NewRequirementState("req-1", "sm-1", "created", "已创建")
+	oldTime := rs.UpdatedAt
+	time.Sleep(time.Millisecond)
+
+	rs.Transition("in_progress", "进行中")
+
+	if rs.CurrentState != "in_progress" {
+		t.Errorf("期望状态为 in_progress, 实际为 %s", rs.CurrentState)
+	}
+
+	if rs.CurrentStateName != "进行中" {
+		t.Errorf("期望状态名称为 进行中, 实际为 %s", rs.CurrentStateName)
+	}
+
+	if !rs.UpdatedAt.After(oldTime) {
+		t.Error("期望更新时间更新")
+	}
+}
+
+func TestNewTypeBinding(t *testing.T) {
+	binding := state_machine.NewTypeBinding("sm-1", "normal")
+	if binding.StateMachineID != "sm-1" {
+		t.Errorf("期望状态机ID为 sm-1, 实际为 %s", binding.StateMachineID)
+	}
+
+	if binding.RequirementType != "normal" {
+		t.Errorf("期望类型为 normal, 实际为 %s", binding.RequirementType)
+	}
+}
