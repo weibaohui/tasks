@@ -26,6 +26,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/skill"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
@@ -263,11 +264,17 @@ func main() {
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
 
+	// 初始化状态机
+	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
+	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
+	stateMachineService := application.NewStateMachineService(stateMachineRepo, transitionExecutor, logger)
+	stateMachineHandler := httpHandler.NewStateMachineHandler(stateMachineService)
+
 	mux := httpHandler.SetupRoutesWithManagement(
 		taskHandler, userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
-		requirementHandler, hookHandler,
+		requirementHandler, hookHandler, stateMachineHandler,
 	)
 
 	// 11. 初始化 WebSocket（用于前端实时通知）
