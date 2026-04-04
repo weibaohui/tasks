@@ -20,6 +20,7 @@ import {
   ClusterOutlined,
   ThunderboltOutlined,
   SettingOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
 import { TaskManagement } from './pages/TaskManagement';
@@ -36,6 +37,7 @@ import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
 import { MCPManagementPage } from './pages/MCPManagementPage';
 import { SkillsManagementPage } from './pages/SkillsManagementPage';
 import HookManagementPage from './pages/HookManagementPage';
+import StateMachineManagementPage from './pages/StateMachineManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useAuthStore } from './stores/authStore';
 
@@ -71,9 +73,11 @@ const MainLayout: React.FC = () => {
                     ? '/sessions'
                     : location.pathname.startsWith('/conversation-records')
                       ? '/conversation-records'
-                      : location.pathname.startsWith('/dashboard')
-                        ? '/dashboard'
-                        : '/tasks';
+                      : location.pathname.startsWith('/state-machines')
+                        ? '/state-machines'
+                        : location.pathname.startsWith('/dashboard')
+                          ? '/dashboard'
+                          : '/tasks';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -101,6 +105,7 @@ const MainLayout: React.FC = () => {
               { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
               { key: '/skills', icon: <ClusterOutlined />, label: 'Skills 管理' },
               { key: '/hooks', icon: <ThunderboltOutlined />, label: 'Hook 管理' },
+              { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
               { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
               { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
               { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
@@ -151,6 +156,7 @@ const App: React.FC = () => {
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />
             <Route path="hooks" element={<HookManagementPage />} />
+            <Route path="state-machines" element={<StateMachineManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />
             <Route path="providers" element={<ProviderManagementPage />} />
