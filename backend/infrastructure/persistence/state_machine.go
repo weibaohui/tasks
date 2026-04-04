@@ -35,7 +35,9 @@ func (r *SQLiteStateMachineRepository) SaveStateMachine(ctx context.Context, sm 
 			config = excluded.config,
 			updated_at = excluded.updated_at
 	`
-	_, err = r.db.ExecContext(ctx, query, sm.ID, sm.ProjectID, sm.Name, sm.Description, configJSON, sm.CreatedAt, sm.UpdatedAt)
+	_, err = r.db.ExecContext(ctx, query,
+		sm.ID, sm.ProjectID, sm.Name, sm.Description, configJSON,
+		sm.CreatedAt.UnixMilli(), sm.UpdatedAt.UnixMilli())
 	return err
 }
 
@@ -65,24 +67,23 @@ func (r *SQLiteStateMachineRepository) ListStateMachines(ctx context.Context, pr
 }
 
 func (r *SQLiteStateMachineRepository) DeleteStateMachine(ctx context.Context, id string) error {
-	tx, err := r.db.ExecContext(ctx, `DELETE FROM state_machines WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	_, err = tx.RowsAffected()
+	_, err := r.db.ExecContext(ctx, `DELETE FROM state_machines WHERE id = ?`, id)
 	return err
 }
 
 func (r *SQLiteStateMachineRepository) scanStateMachine(row *sql.Row) (*state_machine.StateMachine, error) {
 	var sm state_machine.StateMachine
 	var configJSON []byte
-	err := row.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &sm.CreatedAt, &sm.UpdatedAt)
+	var createdAtMs, updatedAtMs int64
+	err := row.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, state_machine.ErrStateMachineNotFound("")
 		}
 		return nil, err
 	}
+	sm.CreatedAt = time.UnixMilli(createdAtMs)
+	sm.UpdatedAt = time.UnixMilli(updatedAtMs)
 	var cfg state_machine.Config
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return nil, err
@@ -94,10 +95,13 @@ func (r *SQLiteStateMachineRepository) scanStateMachine(row *sql.Row) (*state_ma
 func (r *SQLiteStateMachineRepository) scanStateMachineWithRows(rows *sql.Rows) (*state_machine.StateMachine, error) {
 	var sm state_machine.StateMachine
 	var configJSON []byte
-	err := rows.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &sm.CreatedAt, &sm.UpdatedAt)
+	var createdAtMs, updatedAtMs int64
+	err := rows.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
 	if err != nil {
 		return nil, err
 	}
+	sm.CreatedAt = time.UnixMilli(createdAtMs)
+	sm.UpdatedAt = time.UnixMilli(updatedAtMs)
 	var cfg state_machine.Config
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return nil, err
@@ -114,7 +118,7 @@ func (r *SQLiteStateMachineRepository) SaveTypeBinding(ctx context.Context, bind
 		ON CONFLICT(state_machine_id, requirement_type) DO UPDATE SET
 			state_machine_id = excluded.state_machine_id
 	`
-	_, err := r.db.ExecContext(ctx, query, binding.ID, binding.StateMachineID, binding.RequirementType, binding.CreatedAt)
+	_, err := r.db.ExecContext(ctx, query, binding.ID, binding.StateMachineID, binding.RequirementType, binding.CreatedAt.UnixMilli())
 	return err
 }
 
@@ -122,13 +126,15 @@ func (r *SQLiteStateMachineRepository) GetTypeBinding(ctx context.Context, state
 	query := `SELECT id, state_machine_id, requirement_type, created_at FROM state_machine_type_bindings WHERE state_machine_id = ? AND requirement_type = ?`
 	row := r.db.QueryRowContext(ctx, query, stateMachineID, requirementType)
 	var binding state_machine.TypeBinding
-	err := row.Scan(&binding.ID, &binding.StateMachineID, &binding.RequirementType, &binding.CreatedAt)
+	var createdAtMs int64
+	err := row.Scan(&binding.ID, &binding.StateMachineID, &binding.RequirementType, &createdAtMs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	binding.CreatedAt = time.UnixMilli(createdAtMs)
 	return &binding, nil
 }
 
@@ -140,16 +146,12 @@ func (r *SQLiteStateMachineRepository) DeleteTypeBinding(ctx context.Context, st
 func (r *SQLiteStateMachineRepository) GetStateMachineByType(ctx context.Context, projectID, requirementType string) (*state_machine.StateMachine, error) {
 	query := `
 		SELECT sm.id, sm.project_id, sm.name, sm.description, sm.config, sm.created_at, sm.updated_at
-		FROM state_machines sm
-		JOIN state_machine_type_bindings tb ON sm.id = tb.state_machine_id
-		WHERE sm.project_id = ? AND tb.requirement_type = ?
+			FROM state_machines sm
+			JOIN state_machine_type_bindings tb ON sm.id = tb.state_machine_id
+			WHERE sm.project_id = ? AND tb.requirement_type = ?
 	`
 	row := r.db.QueryRowContext(ctx, query, projectID, requirementType)
-	sm, err := r.scanStateMachine(row)
-	if err != nil {
-		return nil, err
-	}
-	return sm, nil
+	return r.scanStateMachine(row)
 }
 
 // RequirementState
@@ -158,7 +160,7 @@ func (r *SQLiteStateMachineRepository) SaveRequirementState(ctx context.Context,
 		INSERT INTO requirement_states (id, requirement_id, state_machine_id, current_state, current_state_name, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(ctx, query, rs.ID, rs.RequirementID, rs.StateMachineID, rs.CurrentState, rs.CurrentStateName, rs.CreatedAt, rs.UpdatedAt)
+	_, err := r.db.ExecContext(ctx, query, rs.ID, rs.RequirementID, rs.StateMachineID, rs.CurrentState, rs.CurrentStateName, rs.CreatedAt.UnixMilli(), rs.UpdatedAt.UnixMilli())
 	return err
 }
 
@@ -166,19 +168,22 @@ func (r *SQLiteStateMachineRepository) GetRequirementState(ctx context.Context, 
 	query := `SELECT id, requirement_id, state_machine_id, current_state, current_state_name, created_at, updated_at FROM requirement_states WHERE requirement_id = ?`
 	row := r.db.QueryRowContext(ctx, query, requirementID)
 	var rs state_machine.RequirementState
-	err := row.Scan(&rs.ID, &rs.RequirementID, &rs.StateMachineID, &rs.CurrentState, &rs.CurrentStateName, &rs.CreatedAt, &rs.UpdatedAt)
+	var createdAtMs, updatedAtMs int64
+	err := row.Scan(&rs.ID, &rs.RequirementID, &rs.StateMachineID, &rs.CurrentState, &rs.CurrentStateName, &createdAtMs, &updatedAtMs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, state_machine.ErrRequirementStateNotFound(requirementID)
 		}
 		return nil, err
 	}
+	rs.CreatedAt = time.UnixMilli(createdAtMs)
+	rs.UpdatedAt = time.UnixMilli(updatedAtMs)
 	return &rs, nil
 }
 
 func (r *SQLiteStateMachineRepository) UpdateRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
 	query := `UPDATE requirement_states SET current_state = ?, current_state_name = ?, updated_at = ? WHERE requirement_id = ?`
-	_, err := r.db.ExecContext(ctx, query, rs.CurrentState, rs.CurrentStateName, rs.UpdatedAt, rs.RequirementID)
+	_, err := r.db.ExecContext(ctx, query, rs.CurrentState, rs.CurrentStateName, rs.UpdatedAt.UnixMilli(), rs.RequirementID)
 	return err
 }
 
@@ -188,7 +193,7 @@ func (r *SQLiteStateMachineRepository) SaveTransitionLog(ctx context.Context, lo
 		INSERT INTO transition_logs (id, requirement_id, from_state, to_state, trigger, triggered_by, remark, result, error_message, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(ctx, query, log.ID, log.RequirementID, log.FromState, log.ToState, log.Trigger, log.TriggeredBy, log.Remark, log.Result, log.ErrorMessage, log.CreatedAt)
+	_, err := r.db.ExecContext(ctx, query, log.ID, log.RequirementID, log.FromState, log.ToState, log.Trigger, log.TriggeredBy, log.Remark, log.Result, log.ErrorMessage, log.CreatedAt.UnixMilli())
 	return err
 }
 
@@ -203,10 +208,12 @@ func (r *SQLiteStateMachineRepository) ListTransitionLogs(ctx context.Context, r
 	var results []*state_machine.TransitionLog
 	for rows.Next() {
 		var log state_machine.TransitionLog
-		err := rows.Scan(&log.ID, &log.RequirementID, &log.FromState, &log.ToState, &log.Trigger, &log.TriggeredBy, &log.Remark, &log.Result, &log.ErrorMessage, &log.CreatedAt)
+		var createdAtMs int64
+		err := rows.Scan(&log.ID, &log.RequirementID, &log.FromState, &log.ToState, &log.Trigger, &log.TriggeredBy, &log.Remark, &log.Result, &log.ErrorMessage, &createdAtMs)
 		if err != nil {
 			return nil, err
 		}
+		log.CreatedAt = time.UnixMilli(createdAtMs)
 		results = append(results, &log)
 	}
 	return results, rows.Err()
@@ -218,19 +225,4 @@ var _ state_machine.Repository = (*SQLiteStateMachineRepository)(nil)
 // generateID 生成 UUID
 func generateID() string {
 	return uuid.New().String()
-}
-
-// generateTimeBasedID 生成基于时间的 ID
-func generateTimeBasedID() string {
-	return time.Now().Format("20060102150405") + "-" + randomString(8)
-}
-
-func randomString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, n)
-	now := time.Now().UnixNano()
-	for i := range b {
-		b[i] = letters[int(now)%len(letters)]
-	}
-	return string(b)
 }
