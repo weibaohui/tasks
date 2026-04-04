@@ -14,6 +14,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// HookContext Hook 执行时的上下文信息
+type HookContext struct {
+	RequirementID   string // 需求ID
+	ProjectID      string // 项目ID
+	StateMachineID string // 状态机ID
+	FromState      string // 源状态
+	ToState        string // 目标状态
+	Trigger        string // 触发器
+	HookName       string // Hook名称
+	HookType       string // Hook类型
+}
+
 // TransitionExecutor 转换钩子执行器
 type TransitionExecutor struct {
 	logger     *zap.Logger
@@ -31,22 +43,30 @@ func NewTransitionExecutor(logger *zap.Logger) *TransitionExecutor {
 }
 
 // ExecuteHooks 异步执行 hooks
-func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_machine.TransitionHook, requirementID string) {
+func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_machine.TransitionHook, hookCtx HookContext) {
 	go func() {
 		for _, hook := range hooks {
-			e.executeHook(ctx, hook, requirementID)
+			e.executeHook(ctx, hook, hookCtx)
 		}
 	}()
 }
 
-func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine.TransitionHook, requirementID string) {
-	logger := e.logger.With(zap.String("hook", hook.Name), zap.String("requirement_id", requirementID))
+func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine.TransitionHook, hookCtx HookContext) {
+	logger := e.logger.With(
+		zap.String("hook", hook.Name),
+		zap.String("requirement_id", hookCtx.RequirementID),
+	)
 
-	// 构建基础上下文
-	hookCtx := map[string]interface{}{
-		"requirement_id": requirementID,
-		"hook_name":     hook.Name,
-		"hook_type":     hook.Type,
+	// 构建执行上下文（用于模板替换）
+	execCtx := map[string]interface{}{
+		"requirement_id":    hookCtx.RequirementID,
+		"project_id":        hookCtx.ProjectID,
+		"state_machine_id":  hookCtx.StateMachineID,
+		"from_state":        hookCtx.FromState,
+		"to_state":          hookCtx.ToState,
+		"trigger":           hookCtx.Trigger,
+		"hook_name":         hook.Name,
+		"hook_type":         hook.Type,
 	}
 
 	// 执行重试
@@ -65,12 +85,12 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine
 		var err error
 		switch hook.Type {
 		case "webhook":
-			err = e.executeWebhook(ctx, hook, hookCtx)
+			err = e.executeWebhook(ctx, hook, execCtx)
 		case "command":
-			err = e.executeCommand(ctx, hook, hookCtx)
+			err = e.executeCommand(ctx, hook, execCtx)
 		default:
 			logger.Warn("unknown hook type, treating as webhook", zap.String("type", hook.Type))
-			err = e.executeWebhook(ctx, hook, hookCtx)
+			err = e.executeWebhook(ctx, hook, execCtx)
 		}
 
 		if err == nil {
@@ -85,7 +105,7 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine
 	logger.Error("hook execution failed after all retries", zap.Error(lastErr))
 
 	// TODO: 执行补偿（预留接口）
-	e.executeCompensation(ctx, hook, requirementID, lastErr)
+	e.executeCompensation(ctx, hook, hookCtx.RequirementID, lastErr)
 }
 
 func (e *TransitionExecutor) executeWebhook(ctx context.Context, hook state_machine.TransitionHook, hookCtx map[string]interface{}) error {
