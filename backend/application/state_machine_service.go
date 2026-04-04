@@ -148,7 +148,17 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 
 	// 异步执行 hooks
 	if len(transition.Hooks) > 0 {
-		s.executor.ExecuteHooks(ctx, transition.Hooks, requirementID)
+		hookCtx := infra_sm.HookContext{
+			RequirementID:   requirementID,
+			ProjectID:       sm.ProjectID,
+			StateMachineID:  sm.ID,
+			FromState:       rs.CurrentState,
+			ToState:         toState.ID,
+			Trigger:         trigger,
+			HookName:        "",
+			HookType:        "",
+		}
+		s.executor.ExecuteHooks(ctx, transition.Hooks, hookCtx)
 	}
 
 	return rs, nil
