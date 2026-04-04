@@ -24,6 +24,9 @@ func AddCommands() {
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(projectCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(stateMachineCmd)
+	rootCmd.AddCommand(stateCmd)
+	rootCmd.AddCommand(hookCmd)
 }
 
 // RegisterFlagErrorFunc 自定义错误处理

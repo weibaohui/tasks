@@ -13,6 +13,7 @@ var requirementCmd = &cobra.Command{
 func init() {
 	requirementCmd.AddCommand(requirementCreateCmd)
 	requirementCmd.AddCommand(requirementUpdateCmd)
+	requirementCmd.AddCommand(requirementDeleteCmd)
 	requirementCmd.AddCommand(requirementDispatchCmd)
 	requirementCmd.AddCommand(requirementCompleteCmd)
 	requirementCmd.AddCommand(requirementListCmd)
