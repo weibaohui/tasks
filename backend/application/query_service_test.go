@@ -19,6 +19,17 @@ type mockQueryTaskRepository struct {
 	mu     sync.Mutex
 	tasks  map[string]*domain.Task
 	nextID int
+
+	// 错误注入钩子 - 用于测试失败路径
+	ErrSave             error
+	ErrFindByID         error
+	ErrFindAll          error
+	ErrFindByTraceID    error
+	ErrFindByParentID   error
+	ErrFindByStatus     error
+	ErrFindRunningTasks error
+	ErrDelete           error
+	ErrExists           error
 }
 
 func newMockQueryTaskRepository() *mockQueryTaskRepository {
@@ -37,6 +48,9 @@ func (m *mockQueryTaskRepository) generateID() string {
 }
 
 func (m *mockQueryTaskRepository) Save(ctx context.Context, task *domain.Task) error {
+	if m.ErrSave != nil {
+		return m.ErrSave
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.tasks[task.ID().String()] = task
@@ -44,6 +58,9 @@ func (m *mockQueryTaskRepository) Save(ctx context.Context, task *domain.Task) e
 }
 
 func (m *mockQueryTaskRepository) FindByID(ctx context.Context, id domain.TaskID) (*domain.Task, error) {
+	if m.ErrFindByID != nil {
+		return nil, m.ErrFindByID
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	task, ok := m.tasks[id.String()]
@@ -54,6 +71,9 @@ func (m *mockQueryTaskRepository) FindByID(ctx context.Context, id domain.TaskID
 }
 
 func (m *mockQueryTaskRepository) FindAll(ctx context.Context) ([]*domain.Task, error) {
+	if m.ErrFindAll != nil {
+		return nil, m.ErrFindAll
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var result []*domain.Task
@@ -64,6 +84,9 @@ func (m *mockQueryTaskRepository) FindAll(ctx context.Context) ([]*domain.Task, 
 }
 
 func (m *mockQueryTaskRepository) FindByTraceID(ctx context.Context, traceID domain.TraceID) ([]*domain.Task, error) {
+	if m.ErrFindByTraceID != nil {
+		return nil, m.ErrFindByTraceID
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	result := make([]*domain.Task, 0)
@@ -76,6 +99,9 @@ func (m *mockQueryTaskRepository) FindByTraceID(ctx context.Context, traceID dom
 }
 
 func (m *mockQueryTaskRepository) FindByParentID(ctx context.Context, parentID domain.TaskID) ([]*domain.Task, error) {
+	if m.ErrFindByParentID != nil {
+		return nil, m.ErrFindByParentID
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var result []*domain.Task
@@ -88,6 +114,9 @@ func (m *mockQueryTaskRepository) FindByParentID(ctx context.Context, parentID d
 }
 
 func (m *mockQueryTaskRepository) FindByStatus(ctx context.Context, status domain.TaskStatus) ([]*domain.Task, error) {
+	if m.ErrFindByStatus != nil {
+		return nil, m.ErrFindByStatus
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var result []*domain.Task
@@ -100,10 +129,16 @@ func (m *mockQueryTaskRepository) FindByStatus(ctx context.Context, status domai
 }
 
 func (m *mockQueryTaskRepository) FindRunningTasks(ctx context.Context) ([]*domain.Task, error) {
+	if m.ErrFindRunningTasks != nil {
+		return nil, m.ErrFindRunningTasks
+	}
 	return m.FindByStatus(ctx, domain.TaskStatusRunning)
 }
 
 func (m *mockQueryTaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
+	if m.ErrDelete != nil {
+		return m.ErrDelete
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.tasks, id.String())
@@ -111,6 +146,9 @@ func (m *mockQueryTaskRepository) Delete(ctx context.Context, id domain.TaskID) 
 }
 
 func (m *mockQueryTaskRepository) Exists(ctx context.Context, id domain.TaskID) (bool, error) {
+	if m.ErrExists != nil {
+		return false, m.ErrExists
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_, ok := m.tasks[id.String()]
@@ -292,9 +330,11 @@ func TestQueryService_GetTask(t *testing.T) {
 			t.Errorf("期望 ParentID 为 'parent-001', 实际为 %s", *dto.ParentID)
 		}
 
-		// 验证 StartedAt
+		// 验证 StartedAt - 使用精确毫秒值比较
 		if dto.StartedAt == nil {
 			t.Error("期望 StartedAt 不为 nil")
+		} else if *dto.StartedAt != task.StartedAt().UnixMilli() {
+			t.Errorf("期望 StartedAt 为 %d, 实际为 %d", task.StartedAt().UnixMilli(), *dto.StartedAt)
 		}
 
 		// 验证 FinishedAt 为 nil（任务未完成）
@@ -340,12 +380,16 @@ func TestQueryService_GetTask(t *testing.T) {
 			t.Fatalf("获取任务失败: %v", err)
 		}
 
-		// 验证 StartedAt 和 FinishedAt 都不为 nil
+		// 验证 StartedAt 和 FinishedAt 都不为 nil - 使用精确毫秒值比较
 		if dto.StartedAt == nil {
 			t.Error("期望 StartedAt 不为 nil")
+		} else if *dto.StartedAt != task.StartedAt().UnixMilli() {
+			t.Errorf("期望 StartedAt 为 %d, 实际为 %d", task.StartedAt().UnixMilli(), *dto.StartedAt)
 		}
 		if dto.FinishedAt == nil {
 			t.Error("期望 FinishedAt 不为 nil")
+		} else if *dto.FinishedAt != task.FinishedAt().UnixMilli() {
+			t.Errorf("期望 FinishedAt 为 %d, 实际为 %d", task.FinishedAt().UnixMilli(), *dto.FinishedAt)
 		}
 		if dto.Status != domain.TaskStatusCompleted.String() {
 			t.Errorf("期望 Status 为 'completed', 实际为 %s", dto.Status)
@@ -460,6 +504,27 @@ func TestQueryService_ListAllTasks(t *testing.T) {
 			t.Errorf("期望 cancelled 状态任务数为 1, 实际为 %d", statusCount["cancelled"])
 		}
 	})
+
+	// 测试仓库错误透传
+	t.Run("仓库错误透传", func(t *testing.T) {
+		repoWithError := newMockQueryTaskRepository()
+		repoWithError.ErrFindAll = errors.New("数据库连接失败")
+		serviceWithError := NewQueryService(repoWithError)
+
+		result, err := serviceWithError.ListAllTasks(ctx)
+
+		if err == nil {
+			t.Error("期望返回错误，但实际没有错误")
+		}
+
+		if !errors.Is(err, repoWithError.ErrFindAll) {
+			t.Errorf("期望返回仓库错误，实际返回 %v", err)
+		}
+
+		if result != nil {
+			t.Error("期望返回的结果为 nil")
+		}
+	})
 }
 
 // TestQueryService_ListTasksByTrace 测试按 TraceID 查询任务
@@ -567,6 +632,27 @@ func TestQueryService_ListTasksByTrace(t *testing.T) {
 			if dto.Name == "子任务1" && dto.Depth != 2 {
 				t.Errorf("期望子任务1 Depth 为 2, 实际为 %d", dto.Depth)
 			}
+		}
+	})
+
+	// 测试仓库错误透传
+	t.Run("仓库错误透传", func(t *testing.T) {
+		repoWithError := newMockQueryTaskRepository()
+		repoWithError.ErrFindByTraceID = errors.New("数据库查询失败")
+		serviceWithError := NewQueryService(repoWithError)
+
+		result, err := serviceWithError.ListTasksByTrace(ctx, domain.NewTraceID("trace-error"))
+
+		if err == nil {
+			t.Error("期望返回错误，但实际没有错误")
+		}
+
+		if !errors.Is(err, repoWithError.ErrFindByTraceID) {
+			t.Errorf("期望返回仓库错误，实际返回 %v", err)
+		}
+
+		if result != nil {
+			t.Error("期望返回的结果为 nil")
 		}
 	})
 }
@@ -699,6 +785,27 @@ func TestQueryService_GetTaskTree(t *testing.T) {
 			} else if *grandChild.Task.ParentID != child1.ID().String() {
 				t.Errorf("期望孙任务的 ParentID 为 %s, 实际为 %s", child1.ID().String(), *grandChild.Task.ParentID)
 			}
+		}
+	})
+
+	// 测试仓库错误透传
+	t.Run("仓库错误透传", func(t *testing.T) {
+		repoWithError := newMockQueryTaskRepository()
+		repoWithError.ErrFindByTraceID = errors.New("数据库查询失败")
+		serviceWithError := NewQueryService(repoWithError)
+
+		tree, err := serviceWithError.GetTaskTree(ctx, domain.NewTraceID("trace-error"))
+
+		if err == nil {
+			t.Error("期望返回错误，但实际没有错误")
+		}
+
+		if !errors.Is(err, repoWithError.ErrFindByTraceID) {
+			t.Errorf("期望返回仓库错误，实际返回 %v", err)
+		}
+
+		if tree != nil {
+			t.Error("期望返回的树为 nil")
 		}
 	})
 }
@@ -875,8 +982,10 @@ func TestToGetTaskDTO(t *testing.T) {
 		if dto.Progress.Value != 50 {
 			t.Errorf("期望 Progress.Value 为 50, 实际为 %d", dto.Progress.Value)
 		}
-		if dto.Progress.UpdatedAt == 0 {
-			t.Error("期望 Progress.UpdatedAt 不为 0")
+		// 使用精确毫秒值比较
+		expectedUpdatedAt := task.Progress().UpdatedAt().UnixMilli()
+		if dto.Progress.UpdatedAt != expectedUpdatedAt {
+			t.Errorf("期望 Progress.UpdatedAt 为 %d, 实际为 %d", expectedUpdatedAt, dto.Progress.UpdatedAt)
 		}
 	})
 }
