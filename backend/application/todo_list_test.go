@@ -759,7 +759,6 @@ func TestTodoList_Concurrent_MixedOperations(t *testing.T) {
 		t.Errorf("期望有 %d 个子任务, 实际有 %d 个", expectedCount, todoList.TotalCount())
 	}
 
-	t.Log("并发混合操作测试完成，未发现竞态条件")
 }
 
 // TestTodoList_Concurrent_ReadWrite 测试并发读写
@@ -805,7 +804,6 @@ func TestTodoList_Concurrent_ReadWrite(t *testing.T) {
 
 	wg.Wait()
 
-	t.Log("并发读写测试完成，未发现竞态条件")
 }
 
 // TestTodoList_EdgeCases 测试边界条件
