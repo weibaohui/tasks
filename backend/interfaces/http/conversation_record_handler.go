@@ -81,7 +81,7 @@ func (h *ConversationRecordHandler) CreateRecord(w http.ResponseWriter, r *http.
 func (h *ConversationRecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	records, err := h.recordService.ListRecords(r.Context(), application.ListConversationRecordsQuery{
+	query := application.ListConversationRecordsQuery{
 		TraceID:     r.URL.Query().Get("trace_id"),
 		SessionKey:  r.URL.Query().Get("session_key"),
 		UserCode:    r.URL.Query().Get("user_code"),
@@ -91,7 +91,14 @@ func (h *ConversationRecordHandler) ListRecords(w http.ResponseWriter, r *http.R
 		Role:        r.URL.Query().Get("role"),
 		Limit:       limit,
 		Offset:      offset,
-	})
+	}
+	records, err := h.recordService.ListRecords(r.Context(), query)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	total, err := h.recordService.CountRecords(r.Context(), query)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
@@ -101,7 +108,10 @@ func (h *ConversationRecordHandler) ListRecords(w http.ResponseWriter, r *http.R
 	for _, record := range records {
 		resp = append(resp, conversationRecordToMap(record))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"items": resp,
+		"total": total,
+	})
 }
 
 func (h *ConversationRecordHandler) GetRecord(w http.ResponseWriter, r *http.Request) {

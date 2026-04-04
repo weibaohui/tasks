@@ -1,14 +1,19 @@
 /**
  * 对话记录（Conversation Record）API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { ConversationRecord, ListConversationRecordsQuery, ConversationStats } from '../types/conversationRecord';
+
+export interface ListConversationRecordsResponse {
+  items: ConversationRecord[];
+  total: number;
+}
 
 /**
  * 获取对话记录列表
  */
-export async function listConversationRecords(query: ListConversationRecordsQuery): Promise<ConversationRecord[]> {
-  const response = await apiClient.get<ConversationRecord[]>('/conversation-records', { params: query });
+export async function listConversationRecords(query: ListConversationRecordsQuery): Promise<ListConversationRecordsResponse> {
+  const response = await apiClient.get<ListConversationRecordsResponse>('/conversation-records', { params: query });
   return response.data;
 }
 

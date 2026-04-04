@@ -61,6 +61,7 @@ function toRoleTag(role: string): React.ReactNode {
 export const ConversationRecordsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [items, setItems] = useState<ConversationRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm<QueryFormValues>();
   const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -68,6 +69,7 @@ export const ConversationRecordsPage: React.FC = () => {
     pageSize: 50,
     showSizeChanger: true,
     pageSizeOptions: [20, 50, 100, 200],
+    showTotal: (totalCount) => `共 ${totalCount} 条`,
   });
 
   // 链路可视化状态
@@ -128,8 +130,9 @@ export const ConversationRecordsPage: React.FC = () => {
         ...queryOverrides,
       };
       const data = await listConversationRecords(query);
-      setItems(data);
-      extractOptions(data);
+      setItems(data.items);
+      setTotal(data.total);
+      extractOptions(data.items);
     } catch (_error) {
       message.error('获取对话记录失败');
     } finally {
@@ -348,6 +351,7 @@ export const ConversationRecordsPage: React.FC = () => {
           columns={columns}
           pagination={{
             ...pagination,
+            total,
             onChange: (page, pageSize) => {
               setPagination((p) => ({ ...p, current: page, pageSize }));
               fetchList({ limit: pageSize, offset: (page - 1) * pageSize });
