@@ -1,7 +1,7 @@
 /**
  * LLM Provider API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { CreateProviderRequest, LLMProvider, TestProviderResult, UpdateProviderRequest } from '../types/provider';
 
 /**

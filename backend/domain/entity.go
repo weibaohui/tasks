@@ -8,8 +8,3 @@ type Entity interface {
 	// GetID 返回实体的唯一标识
 	GetID() string
 }
-
-// Identifiable 可标识接口
-type Identifiable interface {
-	ID() TaskID
-}

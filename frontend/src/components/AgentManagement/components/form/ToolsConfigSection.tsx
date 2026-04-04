@@ -6,7 +6,7 @@ import { Button, Card, Form, Select, Space, Tag } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
-import type { BuiltInTool } from '../../../../api/taskApi';
+import type { BuiltInTool } from '../../../../types/task';
 
 interface ToolsConfigCardProps {
   form: FormInstance;

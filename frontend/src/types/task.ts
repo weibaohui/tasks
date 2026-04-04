@@ -1,147 +1,23 @@
 /**
- * 任务状态枚举
+ * Task related types - for backward compatibility
+ * Note: Task management module has been removed, these types are kept for components that still reference them
  */
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
-/**
- * 任务类型枚举
- */
-export type TaskType = 'agent';
+export interface BuiltInTool {
+  name: string;
+  description: string;
+}
 
-/**
- * 任务接口
- */
 export interface Task {
   id: string;
-  trace_id: string;
-  span_id: string;
-  parent_id?: string;
   name: string;
-  description: string;
-  type: TaskType;
-  status: TaskStatus;
-  progress: Progress;
-  error?: string;
-  depth: number;
-  parent_span: string;
-  timeout: number;
-  max_retries: number;
-  priority: number;
-  created_at: number;
-  started_at?: number;
-  finished_at?: number;
-  // 独立字段（从 metadata 迁移）
-  acceptance_criteria: string;
-  task_requirement: string;
-  task_conclusion: string;
-  user_code: string;
-  agent_code: string;
-  channel_code: string;
-  session_key: string;
-  todo_list: string;
-  analysis: string;
-}
-
-/**
- * 进度接口
- */
-export interface Progress {
-  value: number;
-  updated_at: number;
-}
-
-/**
- * 创建任务请求
- */
-export interface CreateTaskRequest {
-  name: string;
-  description: string;
-  type: TaskType;
-  timeout: number;
-  max_retries: number;
-  priority: number;
-  metadata: Record<string, unknown>;
-  parent_id?: string;
-  trace_id?: string;
-  // 渠道信息，用于 LLM 查找
-  channel_code?: string;
-  user_code?: string;
-}
-
-/**
- * WebSocket 消息类型
- */
-export interface WSMessage {
-  type: string;
-  trace_id: string;
-  data: unknown;
-  timestamp: number;
-}
-
-/**
- * 创建任务响应
- */
-export interface CreateTaskResponse {
-  id: string;
-  trace_id: string;
-  span_id: string;
-  status: TaskStatus;
-}
-
-/**
- * 任务列表响应
- */
-export interface TaskListResponse {
-  tasks: Task[];
-  total: number;
-}
-
-/**
- * 任务树节点
- */
-export interface TaskTreeNode {
-  task: Task;
-  children: TaskTreeNode[];
-}
-
-/**
- * Todo 列表项状态
- */
-export type TodoStatus = 'distributed' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-/**
- * Todo 列表项
- */
-export interface TodoItem {
-  sub_task_id: string;
-  sub_task_type: TaskType;
-  goal: string;
-  status: TodoStatus;
-  progress: number;
-  span_id: string;
-  created_at: number;
-  completed_at?: number;
-}
-
-/**
- * Todo 列表
- */
-export interface TodoList {
-  task_id: string;
-  items: TodoItem[];
-  created_at: number;
-  updated_at: number;
-}
-
-/**
- * 任务执行摘要
- */
-export interface ExecutionSummary {
-  task_id: string;
-  span_id: string;
-  goal: string;
-  result: string;
-  stage: string;
-  completed_at: number;
   status: string;
+  trace_id?: string;
+  parent_id?: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface TaskTreeNode extends Task {
+  children?: TaskTreeNode[];
 }

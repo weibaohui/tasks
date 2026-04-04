@@ -17,7 +17,6 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
 	skilltools "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
-	tasktools "github.com/weibh/taskmanager/infrastructure/llm/tools/task"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
@@ -221,9 +220,9 @@ type MessageProcessor struct {
 	agentConfigCache     *AgentConfigCache
 	agentRepo            domain.AgentRepository
 	providerRepo         domain.LLMProviderRepository
-	taskService          *application.TaskApplicationService
+	taskService          interface{} // *application.TaskApplicationService - removed
 	sessionService       *application.SessionApplicationService
-	workerPool           *application.WorkerPool
+	workerPool           interface{} // *application.WorkerPool - removed
 	idGenerator          domain.IDGenerator
 	toolRegistry         *llm.ToolRegistry
 	hookManager          *hook.Manager
@@ -245,9 +244,9 @@ func NewMessageProcessor(
 	logger *zap.Logger,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
-	taskService *application.TaskApplicationService,
+	taskService interface{}, // *application.TaskApplicationService - removed
 	sessionService *application.SessionApplicationService,
-	workerPool *application.WorkerPool,
+	workerPool interface{}, // *application.WorkerPool - removed
 	idGenerator domain.IDGenerator,
 	hookManager *hook.Manager,
 	factory domain.LLMProviderFactory,
@@ -977,19 +976,19 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextP
 		}
 	}
 
-	// 4. 注册任务工具（所有 Agent 都可以创建和查询任务）
-	if p.taskService != nil {
-		registry.Register(tasktools.NewCreateTaskTool(
-			p.taskService,
-			p.idGenerator,
-			contextParams["agentCode"],
-			contextParams["userCode"],
-			contextParams["channelCode"],
-			contextParams["sessionKey"],
-		))
-		registry.Register(tasktools.NewQueryTaskTool(p.taskService))
-		registered = true
-	}
+	// 4. 注册任务工具（已禁用 - Task 模块已移除）
+	// if p.taskService != nil {
+	// 	registry.Register(tasktools.NewCreateTaskTool(
+	// 		p.taskService,
+	// 		p.idGenerator,
+	// 		contextParams["agentCode"],
+	// 		contextParams["userCode"],
+	// 		contextParams["channelCode"],
+	// 		contextParams["sessionKey"],
+	// 	))
+	// 	registry.Register(tasktools.NewQueryTaskTool(p.taskService))
+	// 	registered = true
+	// }
 
 	// 如果没有注册任何工具，返回 nil
 	if !registered {
@@ -1222,53 +1221,3 @@ func (a *toolHookAdapter) OnToolExecutionComplete(ctx context.Context, tools []l
 	a.processor.hookManager.OnToolExecutionComplete(domainHookCtx)
 }
 
-// createTaskFromMessage 从消息创建任务
-func (p *MessageProcessor) createTaskFromMessage(ctx context.Context, msg *bus.InboundMessage, traceID, spanID string, session *Session) {
-	// 从消息 metadata 中提取上下文信息
-	var agentCode, userCode, channelCode string
-	if msg.Metadata != nil {
-		agentCode, _ = msg.Metadata["agent_code"].(string)
-		channelCode, _ = msg.Metadata["channel_code"].(string)
-		userCode, _ = msg.Metadata["user_code"].(string)
-	}
-
-	// 使用消息的 trace_id 和 span_id
-	taskTraceID := domain.NewTraceID(traceID)
-	taskSpanID := domain.NewSpanID(spanID)
-
-	// 创建任务命令
-	cmd := application.CreateTaskCommand{
-		Name:        fmt.Sprintf("会话任务: %s", msg.SessionKey()),
-		Description: msg.Content,
-		Type:        domain.TaskTypeAgent,
-		Timeout:     60000, // 60秒超时
-		MaxRetries:  0,
-		Priority:    0,
-		TraceID:     &taskTraceID,
-		SpanID:      &taskSpanID,
-		SessionKey:  msg.SessionKey(),
-		AgentCode:   agentCode,
-		UserCode:    userCode,
-		ChannelCode: channelCode,
-	}
-
-	// 创建任务
-	task, err := p.taskService.CreateTask(ctx, cmd)
-	if err != nil {
-		p.logger.Error("创建任务失败", zap.Error(err), zap.String("trace_id", traceID))
-		return
-	}
-
-	// 启动任务并提交到工作池
-	if err := p.taskService.StartTask(ctx, task.ID()); err != nil {
-		p.logger.Error("启动任务失败", zap.Error(err), zap.String("task_id", task.ID().String()))
-		return
-	}
-
-	p.logger.Info("任务已创建并提交",
-		zap.String("task_id", task.ID().String()),
-		zap.String("trace_id", traceID),
-		zap.String("span_id", spanID),
-		zap.String("task_span_id", task.SpanID().String()),
-	)
-}

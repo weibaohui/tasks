@@ -6,13 +6,13 @@ import { Form, message } from 'antd';
 import { createAgent, deleteAgent, listAgents, patchAgent, updateAgent } from '../../../api/agentApi';
 import { listProviders } from '../../../api/providerApi';
 import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCPServers, listMCPTools, updateBinding } from '../../../api/mcpApi';
-import { listBuiltInTools } from '../../../api/taskApi';
+import { listBuiltInTools } from '../../../api/toolsApi';
 import { listSkillsSimple, type Skill } from '../../../api/skillApi';
 import { useAuthStore } from '../../../stores/authStore';
 import type { Agent, ClaudeCodeConfig, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../../../types/agent';
 import type { LLMProvider } from '../../../types/provider';
 import type { AgentMCPBinding, MCPServer, MCPTool } from '../../../types/mcp';
-import type { BuiltInTool } from '../../../api/taskApi';
+import type { BuiltInTool } from '../../../types/task';
 import type { FormInstance } from 'antd/es/form';
 
 import {

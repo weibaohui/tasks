@@ -1,4 +1,4 @@
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { CreateUserRequest, UpdateUserRequest, User } from '../types/user';
 
 export async function listUsers(): Promise<User[]> {

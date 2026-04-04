@@ -38,7 +38,7 @@ type RequirementDispatchService struct {
 	requirementRepo      domain.RequirementRepository
 	projectRepo          domain.ProjectRepository
 	agentRepo            domain.AgentRepository
-	taskService          *TaskApplicationService
+	taskService          interface{} // TaskApplicationService - no longer used
 	sessionService       *SessionApplicationService
 	idGenerator          domain.IDGenerator
 	inboundPublisher     interface {
@@ -52,7 +52,7 @@ func NewRequirementDispatchService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
-	taskService *TaskApplicationService,
+	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 	replicaAgentManager *domain.ReplicaAgentManager,

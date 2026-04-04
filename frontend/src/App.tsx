@@ -8,7 +8,6 @@ import { ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
   ApiOutlined,
-  AppstoreOutlined,
   ApartmentOutlined,
   BranchesOutlined,
   DashboardOutlined,
@@ -23,9 +22,6 @@ import {
   NodeIndexOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
-import { TaskManagement } from './pages/TaskManagement';
-import { TaskDetailPage } from './pages/TaskDetailPage';
-import { TaskTreePage } from './pages/TaskTreePage';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { ProjectRequirementPage } from './pages/ProjectRequirementPage';
@@ -77,7 +73,7 @@ const MainLayout: React.FC = () => {
                         ? '/state-machines'
                         : location.pathname.startsWith('/dashboard')
                           ? '/dashboard'
-                          : '/tasks';
+                          : '/dashboard';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -99,7 +95,6 @@ const MainLayout: React.FC = () => {
             selectedKeys={[selectedKey]}
             items={[
               { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
-              { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
               { key: '/projects', icon: <BranchesOutlined />, label: '项目需求' },
               { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
               { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
@@ -138,7 +133,7 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
-          <Route path="/login" element={token ? <Navigate to="/tasks" replace /> : <LoginPage />} />
+          <Route path="/login" element={token ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
           <Route
             path="/"
             element={
@@ -148,10 +143,7 @@ const App: React.FC = () => {
             }
           >
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="tasks" element={<TaskManagement />} />
             <Route path="projects" element={<ProjectRequirementPage />} />
-            <Route path="tasks/:taskId" element={<TaskDetailPage />} />
-            <Route path="tasks/trace/:traceId/tree" element={<TaskTreePage />} />
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />

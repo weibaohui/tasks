@@ -1,7 +1,7 @@
 /**
  * Hook 配置 API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { HookConfig, CreateHookConfigRequest, UpdateHookConfigRequest, HookActionLog } from '../types/hook';
 
 /**

@@ -1,7 +1,7 @@
 /**
  * 渠道（Channel）API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { Channel, ChannelTypeOption, CreateChannelRequest, UpdateChannelRequest } from '../types/channel';
 
 /**

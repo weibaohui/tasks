@@ -9,28 +9,6 @@ import (
 	"time"
 )
 
-// TaskRepository 任务仓储接口
-type TaskRepository interface {
-	// Save 保存任务
-	Save(ctx context.Context, task *Task) error
-	// FindByID 根据ID查找任务
-	FindByID(ctx context.Context, id TaskID) (*Task, error)
-	// FindAll 获取所有任务
-	FindAll(ctx context.Context) ([]*Task, error)
-	// FindByTraceID 根据TraceID查找所有任务
-	FindByTraceID(ctx context.Context, traceID TraceID) ([]*Task, error)
-	// FindByParentID 根据父任务ID查找子任务
-	FindByParentID(ctx context.Context, parentID TaskID) ([]*Task, error)
-	// FindByStatus 根据状态查找任务
-	FindByStatus(ctx context.Context, status TaskStatus) ([]*Task, error)
-	// FindRunningTasks 查找所有运行中的任务
-	FindRunningTasks(ctx context.Context) ([]*Task, error)
-	// Delete 删除任务
-	Delete(ctx context.Context, id TaskID) error
-	// Exists 判断任务是否存在
-	Exists(ctx context.Context, id TaskID) (bool, error)
-}
-
 type UserRepository interface {
 	Save(ctx context.Context, user *User) error
 	FindByID(ctx context.Context, id UserID) (*User, error)
@@ -150,6 +128,7 @@ type ConversationRecordRepository interface {
 	FindByTraceID(ctx context.Context, traceID string, limit int) ([]*ConversationRecord, error)
 	FindBySessionKey(ctx context.Context, sessionKey string, limit int) ([]*ConversationRecord, error)
 	List(ctx context.Context, filter ConversationRecordListFilter) ([]*ConversationRecord, error)
+	Count(ctx context.Context, filter ConversationRecordListFilter) (int, error)
 	GetStats(ctx context.Context, filter ConversationStatsFilter) (*ConversationStats, error)
 }
 

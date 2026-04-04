@@ -19,7 +19,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -115,7 +114,6 @@ func main() {
 
 	// 3. 初始化依赖
 	idGenerator := utils.NewNanoIDGenerator(21)
-	eventBus := bus.NewEventBus()
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
@@ -134,11 +132,9 @@ func main() {
 	sessionManager := channel.NewSessionManager(logger)
 	logger.Info("Session Manager 初始化完成")
 
-	// 6. 初始化应用服务 (在消息处理器之前，因为消息处理器需要 taskService)
-	taskRepo := _persistence.NewSQLiteTaskRepository(db)
-	taskService := application.NewTaskApplicationService(taskRepo, idGenerator, eventBus, logger)
+	// 6. 初始化应用服务
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
-	logger.Info("任务服务初始化完成")
+	logger.Info("Session 服务初始化完成")
 
 	// 6.5 初始化 Hook Executor 和 ReplicaAgentManager
 	hookExecutor := domain.NewConfigurableHookExecutor(hookConfigRepo, hookLogRepo, nil, &zapRequirementLogger{logger: logger}, idGenerator)
@@ -159,7 +155,7 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, taskService, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务
@@ -192,13 +188,10 @@ func main() {
 	}
 
 	// 创建最小化的 mux 用于管理 API
-	taskHandler := httpHandler.NewTaskHandler(taskService, nil)
 	userService := application.NewUserApplicationService(nil, idGenerator)
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/auth/login", authHandler.Login)
-	mux.HandleFunc("/api/tasks", taskHandler.CreateTask)
-	mux.HandleFunc("/api/tasks/", taskHandler.GetTask)
 
 	// 15. 启动 HTTP Server
 	server := &http.Server{

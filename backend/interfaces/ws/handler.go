@@ -12,7 +12,6 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
 )
 
@@ -172,61 +171,7 @@ func (h *WebSocketHandler) broadcastToTrace(traceID string, message *WSMessage) 
 	h.mu.RUnlock()
 }
 
-// SubscribeToEvents 订阅领域事件
+// SubscribeToEvents 订阅领域事件（Task 相关事件已移除）
 func (h *WebSocketHandler) SubscribeToEvents() {
-	h.eventBus.Subscribe("TaskCreated", func(event domain.DomainEvent) {
-		h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-			Type:      "TaskCreated",
-			TraceID:   event.TraceID().String(),
-			Data:      nil,
-			Timestamp: event.Timestamp(),
-		})
-	})
-
-	h.eventBus.Subscribe("TaskStarted", func(event domain.DomainEvent) {
-		h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-			Type:      "TaskStarted",
-			TraceID:   event.TraceID().String(),
-			Data:      nil,
-			Timestamp: event.Timestamp(),
-		})
-	})
-
-	h.eventBus.Subscribe("TaskCompleted", func(event domain.DomainEvent) {
-		h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-			Type:      "TaskCompleted",
-			TraceID:   event.TraceID().String(),
-			Data:      nil,
-			Timestamp: event.Timestamp(),
-		})
-	})
-
-	h.eventBus.Subscribe("TaskFailed", func(event domain.DomainEvent) {
-		h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-			Type:      "TaskFailed",
-			TraceID:   event.TraceID().String(),
-			Data:      nil,
-			Timestamp: event.Timestamp(),
-		})
-	})
-
-	h.eventBus.Subscribe("TaskCancelled", func(event domain.DomainEvent) {
-		h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-			Type:      "TaskCancelled",
-			TraceID:   event.TraceID().String(),
-			Data:      nil,
-			Timestamp: event.Timestamp(),
-		})
-	})
-
-	h.eventBus.Subscribe("TaskProgressUpdated", func(event domain.DomainEvent) {
-		if progressEvent, ok := event.(*domain.TaskProgressUpdatedEvent); ok {
-			h.broadcastToTrace(event.TraceID().String(), &WSMessage{
-				Type:      "TaskProgressUpdated",
-				TraceID:   event.TraceID().String(),
-				Data:      progressEvent.GetProgress().ToMap(),
-				Timestamp: event.Timestamp(),
-			})
-		}
-	})
+	// Task 模块已移除，相关事件订阅已删除
 }

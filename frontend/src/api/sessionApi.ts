@@ -1,7 +1,7 @@
 /**
  * 会话（Session）API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { CreateSessionRequest, Session } from '../types/session';
 
 /**

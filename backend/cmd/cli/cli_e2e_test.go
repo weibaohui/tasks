@@ -572,7 +572,6 @@ func TestCLI_RequirementHelp(t *testing.T) {
 		"dispatch",
 		"complete",
 		"review",
-		"tasks",
 	}
 
 	for _, cmd := range expectedSubcommands {
@@ -607,26 +606,6 @@ func TestCLI_ProjectHeartbeatHelp(t *testing.T) {
 	}
 
 	t.Logf("project heartbeat --help 输出:\n%s", output)
-}
-
-func TestCLI_RequirementTasksHelp(t *testing.T) {
-	buildCLI(t)
-
-	output, err := runCLI("requirement", "tasks", "--help")
-	if err != nil {
-		t.Fatalf("requirement tasks --help 失败: %v\n%s", err, output)
-	}
-
-	// 验证输出包含 tasks 命令信息
-	if !strings.Contains(output, "查看需求的子任务") {
-		t.Errorf("输出不包含 '查看需求的子任务':\n%s", output)
-	}
-
-	if !strings.Contains(output, "--id") {
-		t.Errorf("输出不包含 '--id' 标志:\n%s", output)
-	}
-
-	t.Logf("requirement tasks --help 输出:\n%s", output)
 }
 
 // ========== 错误处理测试 ==========
