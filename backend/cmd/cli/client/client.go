@@ -557,7 +557,6 @@ func (c *Client) UpdateProjectHeartbeat(ctx context.Context, projectID string, e
 // StateMachine 状态机响应结构
 type StateMachine struct {
 	ID          string `json:"id"`
-	ProjectID   string `json:"project_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Config      struct {
@@ -576,13 +575,13 @@ type StateMachine struct {
 			Description string `json:"description,omitempty"`
 		} `json:"transitions"`
 	} `json:"config"`
-	CreatedAt int64 `json:"created_at"`
-	UpdatedAt int64 `json:"updated_at"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
-// ListStateMachines 获取项目状态机列表
-func (c *Client) ListStateMachines(ctx context.Context, projectID string) ([]StateMachine, error) {
-	path := "/projects/" + projectID + "/state-machines"
+// ListStateMachines 获取状态机列表
+func (c *Client) ListStateMachines(ctx context.Context) ([]StateMachine, error) {
+	path := "/state-machines"
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -602,8 +601,8 @@ func (c *Client) ListStateMachines(ctx context.Context, projectID string) ([]Sta
 }
 
 // CreateStateMachine 创建状态机
-func (c *Client) CreateStateMachine(ctx context.Context, projectID, name, description, config string) (*StateMachine, error) {
-	path := "/projects/" + projectID + "/state-machines"
+func (c *Client) CreateStateMachine(ctx context.Context, name, description, config string) (*StateMachine, error) {
+	path := "/state-machines"
 	reqBody := map[string]string{
 		"name":        name,
 		"description": description,
@@ -644,13 +643,37 @@ func (c *Client) DeleteStateMachine(ctx context.Context, id string) error {
 	return nil
 }
 
+// GetStateMachine 获取状态机详情
+func (c *Client) GetStateMachine(ctx context.Context, id string) (*StateMachine, error) {
+	path := "/state-machines/" + id
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.handleError(resp)
+	}
+
+	var result StateMachine
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
+}
+
 // TriggerTransition 触发状态转换
-func (c *Client) TriggerTransition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) error {
+func (c *Client) TriggerTransition(ctx context.Context, requirementID, trigger, triggeredBy, remark string, metadata map[string]interface{}) error {
 	path := "/requirements/" + requirementID + "/transitions"
-	reqBody := map[string]string{
+	reqBody := map[string]interface{}{
 		"trigger":      trigger,
 		"triggered_by": triggeredBy,
 		"remark":       remark,
+	}
+	if metadata != nil {
+		reqBody["metadata"] = metadata
 	}
 
 	resp, err := c.doRequest(ctx, http.MethodPost, path, reqBody)
@@ -695,6 +718,31 @@ func (c *Client) GetRequirementState(ctx context.Context, requirementID string) 
 	return &result, nil
 }
 
+// InitializeRequirementState 初始化需求状态
+func (c *Client) InitializeRequirementState(ctx context.Context, requirementID, stateMachineID string) (*RequirementState, error) {
+	path := "/requirements/" + requirementID + "/state"
+	reqBody := map[string]string{
+		"state_machine_id": stateMachineID,
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodPost, path, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.handleError(resp)
+	}
+
+	var result RequirementState
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GetTransitionHistory 获取转换历史
 type TransitionLog struct {
 	ID            string `json:"id"`
@@ -704,7 +752,7 @@ type TransitionLog struct {
 	Trigger      string `json:"trigger"`
 	TriggeredBy  string `json:"triggered_by"`
 	Result       string `json:"result"`
-	CreatedAt    int64  `json:"created_at"`
+	CreatedAt    string `json:"created_at"`
 }
 
 func (c *Client) GetTransitionHistory(ctx context.Context, requirementID string) ([]TransitionLog, error) {

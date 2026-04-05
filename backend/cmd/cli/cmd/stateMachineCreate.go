@@ -12,17 +12,12 @@ import (
 var stateMachineCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "创建状态机",
-	Example: `  taskmanager statemachine create -p <project-id> -n "需求流程" -d "描述" -c '{"name":"flow","initial_state":"created","states":[{"id":"created","name":"已创建","is_final":false}],"transitions":[]}'`,
+	Example: `  taskmanager statemachine create -n "需求流程" -d "描述" -c '{"name":"flow","initial_state":"created","states":[{"id":"created","name":"已创建","is_final":false}],"transitions":[]}'`,
 	Run: func(cmd *cobra.Command, args []string) {
-		projectID, _ := cmd.Flags().GetString("project-id")
 		name, _ := cmd.Flags().GetString("name")
 		description, _ := cmd.Flags().GetString("description")
 		config, _ := cmd.Flags().GetString("config")
 
-		if projectID == "" {
-			printJSONError("项目 ID 不能为空")
-			return
-		}
 		if name == "" {
 			printJSONError("状态机名称不能为空")
 			return
@@ -35,7 +30,7 @@ var stateMachineCreateCmd = &cobra.Command{
 		ctx := context.Background()
 		c := client.New()
 
-		sm, err := c.CreateStateMachine(ctx, projectID, name, description, config)
+		sm, err := c.CreateStateMachine(ctx, name, description, config)
 		if err != nil {
 			printJSONError("创建状态机失败: %v", err)
 			return
@@ -47,11 +42,9 @@ var stateMachineCreateCmd = &cobra.Command{
 }
 
 func init() {
-	stateMachineCreateCmd.Flags().StringP("project-id", "p", "", "项目 ID (必填)")
 	stateMachineCreateCmd.Flags().StringP("name", "n", "", "状态机名称 (必填)")
 	stateMachineCreateCmd.Flags().StringP("description", "d", "", "状态机描述")
 	stateMachineCreateCmd.Flags().StringP("config", "c", "", "状态机配置 JSON (必填)")
-	stateMachineCreateCmd.MarkFlagRequired("project-id")
 	stateMachineCreateCmd.MarkFlagRequired("name")
 	stateMachineCreateCmd.MarkFlagRequired("config")
 }

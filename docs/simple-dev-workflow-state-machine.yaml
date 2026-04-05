@@ -1,0 +1,118 @@
+# 简化版软件开发流程状态机
+# 适合快速测试和演示
+#
+# 状态：已提交 → 审查中 → 构建中 → 测试中 → 已完成
+#
+# 这是一个最小化的可工作流程，演示状态机的完整功能
+
+name: simple_dev_workflow
+description: 简化版开发流程，用于快速测试
+
+initial_state: submitted
+
+states:
+  - id: submitted
+    name: 已提交
+    is_final: false
+  - id: in_review
+    name: 审查中
+    is_final: false
+  - id: building
+    name: 构建中
+    is_final: false
+  - id: testing
+    name: 测试中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
+
+transitions:
+  - from: submitted
+    to: in_review
+    trigger: submit_review
+    description: 提交审查
+    hooks:
+      - name: 通知审查者
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1
+
+  - from: in_review
+    to: building
+    trigger: approve
+    description: 审查通过
+    hooks:
+      - name: 触发构建
+        type: command
+        config:
+          command: echo "Building {{requirement_id}}..."
+        timeout: 30
+        retry: 0
+
+  - from: in_review
+    to: submitted
+    trigger: reject
+    description: 审查拒绝
+    hooks:
+      - name: 通知开发者
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1
+
+  - from: building
+    to: testing
+    trigger: build_success
+    description: 构建成功
+    hooks:
+      - name: 触发测试
+        type: command
+        config:
+          command: echo "Testing {{requirement_id}}..."
+        timeout: 30
+        retry: 0
+
+  - from: building
+    to: submitted
+    trigger: build_failed
+    description: 构建失败
+    hooks:
+      - name: 通知失败
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1
+
+  - from: testing
+    to: completed
+    trigger: test_pass
+    description: 测试通过
+    hooks:
+      - name: 发送完成通知
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1
+
+  - from: testing
+    to: building
+    trigger: test_failed
+    description: 测试失败
+    hooks:
+      - name: 通知测试失败
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1

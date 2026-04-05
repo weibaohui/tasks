@@ -13,9 +13,11 @@ var stateMachineCmd = &cobra.Command{
 func init() {
 	stateMachineCmd.AddCommand(stateMachineCreateCmd)
 	stateMachineCmd.AddCommand(stateMachineListCmd)
+	stateMachineCmd.AddCommand(stateMachineGetCmd)
+	stateMachineCmd.AddCommand(stateMachineTriggersCmd)
 	stateMachineCmd.AddCommand(stateMachineDeleteCmd)
 	stateMachineCmd.AddCommand(stateMachineTransitionCmd)
 	stateMachineCmd.AddCommand(stateMachineStateCmd)
-	stateMachineCmd.AddCommand(stateMachineBindCmd)
 	stateMachineCmd.AddCommand(stateMachineHistoryCmd)
+	stateMachineCmd.AddCommand(stateMachineInitCmd)
 }

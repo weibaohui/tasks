@@ -13,10 +13,10 @@ import type {
 } from '../types/stateMachine';
 
 /**
- * 获取项目状态机列表
+ * 获取状态机列表
  */
-export async function listStateMachines(projectId: string): Promise<StateMachine[]> {
-  const response = await apiClient.get<StateMachine[]>(`/projects/${projectId}/state-machines`);
+export async function listStateMachines(): Promise<StateMachine[]> {
+  const response = await apiClient.get<StateMachine[]>(`/state-machines`);
   return response.data;
 }
 
@@ -32,13 +32,9 @@ export async function getStateMachine(id: string): Promise<StateMachine> {
  * 创建状态机
  */
 export async function createStateMachine(
-  projectId: string,
   request: CreateStateMachineRequest,
 ): Promise<StateMachine> {
-  const response = await apiClient.post<StateMachine>(
-    `/projects/${projectId}/state-machines`,
-    request,
-  );
+  const response = await apiClient.post<StateMachine>(`/state-machines`, request);
   return response.data;
 }
 
@@ -46,10 +42,7 @@ export async function createStateMachine(
  * 更新状态机
  */
 export async function updateStateMachine(request: UpdateStateMachineRequest): Promise<StateMachine> {
-  const response = await apiClient.put<StateMachine>(
-    `/state-machines/${request.id}`,
-    request,
-  );
+  const response = await apiClient.put<StateMachine>(`/state-machines/${request.id}`, request);
   return response.data;
 }
 
@@ -61,22 +54,6 @@ export async function deleteStateMachine(id: string): Promise<void> {
 }
 
 /**
- * 绑定需求类型
- */
-export async function bindType(stateMachineId: string, requirementType: string): Promise<void> {
-  await apiClient.post(`/state-machines/${stateMachineId}/bind`, {
-    requirement_type: requirementType,
-  });
-}
-
-/**
- * 解绑需求类型
- */
-export async function unbindType(stateMachineId: string, requirementType: string): Promise<void> {
-  await apiClient.delete(`/state-machines/${stateMachineId}/bind/${requirementType}`);
-}
-
-/**
  * 触发状态转换
  */
 export async function triggerTransition(
@@ -84,6 +61,7 @@ export async function triggerTransition(
   trigger: string,
   triggeredBy?: string,
   remark?: string,
+  metadata?: Record<string, unknown>,
 ): Promise<RequirementState> {
   const response = await apiClient.post<RequirementState>(
     `/requirements/${requirementId}/transitions`,
@@ -91,6 +69,7 @@ export async function triggerTransition(
       trigger,
       triggered_by: triggeredBy || 'api',
       remark: remark || '',
+      metadata: metadata || {},
     },
   );
   return response.data;
@@ -117,12 +96,10 @@ export async function getTransitionHistory(requirementId: string): Promise<Trans
 }
 
 /**
- * 获取项目状态统计
+ * 获取状态统计
  */
-export async function getProjectStateSummary(projectId: string): Promise<StateSummary> {
-  const response = await apiClient.get<StateSummary>(
-    `/projects/${projectId}/requirements/states/summary`,
-  );
+export async function getStateSummary(): Promise<StateSummary> {
+  const response = await apiClient.get<StateSummary>(`/requirements/states/summary`);
   return response.data;
 }
 

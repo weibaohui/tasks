@@ -1,0 +1,279 @@
+# 软件开发流程状态机
+# 这是一个完整的软件开发流程，从代码提交到最终上线
+#
+# 状态说明：
+#   - code_commit: 代码已提交
+#   - code_review: 代码审查中
+#   - build: 构建中
+#   - testing: 测试中
+#   - staging: 预发布环境
+#   - production: 生产环境
+#   - completed: 已完成（终态）
+#
+# 转换说明：
+#   - submit_review: 提交代码审查
+#   - approve: 审查通过
+#   - reject: 审查拒绝，打回
+#   - build_success: 构建成功
+#   - build_failed: 构建失败，打回
+#   - test_pass: 测试通过
+#   - test_failed: 测试失败，打回
+#   - deploy_staging: 部署到预发布
+#   - promote_production: 上线生产
+#   - rollback: 回滚
+
+name: software_development_workflow
+description: 完整的软件开发流程，从代码提交到生产环境上线
+
+initial_state: code_commit
+
+states:
+  # 代码已提交
+  - id: code_commit
+    name: 代码已提交
+    is_final: false
+
+  # 代码审查中
+  - id: code_review
+    name: 代码审查中
+    is_final: false
+
+  # 构建中
+  - id: build
+    name: 构建中
+    is_final: false
+
+  # 测试中
+  - id: testing
+    name: 测试中
+    is_final: false
+
+  # 预发布环境
+  - id: staging
+    name: 预发布环境
+    is_final: false
+
+  # 生产环境
+  - id: production
+    name: 生产环境
+    is_final: false
+
+  # 已完成
+  - id: completed
+    name: 已完成
+    is_final: true
+
+transitions:
+  # 提交代码审查
+  - from: code_commit
+    to: code_review
+    trigger: submit_review
+    description: 提交代码审查
+    hooks:
+      - name: 发送审查通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 创建代码审查任务
+        type: webhook
+        config:
+          url: https://your-code-review-system.com/api/tasks
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 审查通过
+  - from: code_review
+    to: build
+    trigger: approve
+    description: 审查通过，开始构建
+    hooks:
+      - name: 触发CI构建
+        type: command
+        config:
+          command: /bin/bash /scripts/ci-trigger.sh {{requirement_id}} build
+        timeout: 300
+        retry: 0
+      - name: 发送构建开始通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 审查拒绝
+  - from: code_review
+    to: code_commit
+    trigger: reject
+    description: 审查拒绝，代码打回
+    hooks:
+      - name: 发送拒绝通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 创建TODO任务
+        type: webhook
+        config:
+          url: https://your-task-system.com/api/tasks
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 构建成功
+  - from: build
+    to: testing
+    trigger: build_success
+    description: 构建成功，开始测试
+    hooks:
+      - name: 触发自动化测试
+        type: command
+        config:
+          command: /bin/bash /scripts/run-tests.sh {{requirement_id}}
+        timeout: 600
+        retry: 0
+      - name: 发送测试开始通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 构建失败
+  - from: build
+    to: code_commit
+    trigger: build_failed
+    description: 构建失败，打回代码
+    hooks:
+      - name: 发送构建失败通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 创建修复任务
+        type: command
+        config:
+          command: /bin/bash /scripts/create-issue.sh "构建失败" {{requirement_id}}
+        timeout: 30
+        retry: 0
+
+  # 测试通过
+  - from: testing
+    to: staging
+    trigger: test_pass
+    description: 测试通过，部署预发布
+    hooks:
+      - name: 部署到预发布环境
+        type: command
+        config:
+          command: /bin/bash /scripts/deploy.sh {{requirement_id}} staging
+        timeout: 300
+        retry: 2
+      - name: 执行预发布冒烟测试
+        type: command
+        config:
+          command: /bin/bash /scripts/smoke-test.sh {{requirement_id}} staging
+        timeout: 180
+        retry: 0
+      - name: 发送预发布部署通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 测试失败
+  - from: testing
+    to: build
+    trigger: test_failed
+    description: 测试失败，打回构建
+    hooks:
+      - name: 发送测试失败通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 生成测试报告
+        type: command
+        config:
+          command: /bin/bash /scripts/generate-test-report.sh {{requirement_id}}
+        timeout: 60
+        retry: 0
+
+  # 部署生产
+  - from: staging
+    to: production
+    trigger: promote_production
+    description: 升级到生产环境
+    hooks:
+      - name: 执行生产部署
+        type: command
+        config:
+          command: /bin/bash /scripts/deploy.sh {{requirement_id}} production
+        timeout: 600
+        retry: 3
+      - name: 执行生产环境健康检查
+        type: command
+        config:
+          command: /bin/bash /scripts/health-check.sh {{requirement_id}} production
+        timeout: 120
+        retry: 2
+      - name: 发送上线成功通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+
+  # 回滚
+  - from: staging
+    to: code_commit
+    trigger: rollback
+    description: 回滚，打回代码
+    hooks:
+      - name: 发送回滚通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 创建回滚记录
+        type: command
+        config:
+          command: /bin/bash /scripts/log-rollback.sh {{requirement_id}}
+        timeout: 30
+        retry: 0
+
+  # 上线后标记完成
+  - from: production
+    to: completed
+    trigger: confirm_production
+    description: 确认上线完成
+    hooks:
+      - name: 发送完成通知
+        type: webhook
+        config:
+          url: https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-here
+          method: POST
+        timeout: 30
+        retry: 1
+      - name: 归档项目
+        type: command
+        config:
+          command: /bin/bash /scripts/archive-project.sh {{requirement_id}}
+        timeout: 60
+        retry: 0

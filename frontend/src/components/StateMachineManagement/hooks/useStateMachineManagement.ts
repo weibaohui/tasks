@@ -20,18 +20,12 @@ export interface UseStateMachineManagementReturn {
   open: boolean;
   editing: StateMachine | null;
 
-  // 选中的项目
-  projectId: string;
-  setProjectId: (id: string) => void;
-
   // 操作方法
-  fetchList: (projectId?: string) => Promise<void>;
+  fetchList: () => Promise<void>;
   openEditor: (record: StateMachine | null) => void;
   closeEditor: () => void;
   handleDelete: (id: string) => Promise<void>;
   handleSubmit: (values: CreateStateMachineRequest | UpdateStateMachineRequest) => Promise<void>;
-  handleBindType: (stateMachineId: string, requirementType: string) => Promise<void>;
-  handleUnbindType: (stateMachineId: string, requirementType: string) => Promise<void>;
 }
 
 export function useStateMachineManagement(): UseStateMachineManagementReturn {
@@ -40,17 +34,11 @@ export function useStateMachineManagement(): UseStateMachineManagementReturn {
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<StateMachine | null>(null);
-  const [projectId, setProjectId] = useState<string>('');
 
-  const fetchList = useCallback(async (pid?: string) => {
-    const targetProjectId = pid || projectId;
-    if (!targetProjectId) {
-      setItems([]);
-      return;
-    }
+  const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await stateMachineApi.listStateMachines(targetProjectId);
+      const data = await stateMachineApi.listStateMachines();
       setItems(data);
     } catch (err) {
       message.error('获取状态机列表失败');
@@ -58,7 +46,7 @@ export function useStateMachineManagement(): UseStateMachineManagementReturn {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, []);
 
   const openEditor = useCallback((record: StateMachine | null) => {
     setEditing(record);
@@ -89,7 +77,7 @@ export function useStateMachineManagement(): UseStateMachineManagementReturn {
           await stateMachineApi.updateStateMachine(values as UpdateStateMachineRequest);
           message.success('更新成功');
         } else {
-          await stateMachineApi.createStateMachine(projectId, values as CreateStateMachineRequest);
+          await stateMachineApi.createStateMachine(values as CreateStateMachineRequest);
           message.success('创建成功');
         }
         closeEditor();
@@ -101,35 +89,7 @@ export function useStateMachineManagement(): UseStateMachineManagementReturn {
         setSaving(false);
       }
     },
-    [editing, projectId, closeEditor, fetchList],
-  );
-
-  const handleBindType = useCallback(
-    async (stateMachineId: string, requirementType: string) => {
-      try {
-        await stateMachineApi.bindType(stateMachineId, requirementType);
-        message.success('绑定成功');
-        fetchList();
-      } catch (err) {
-        message.error('绑定失败');
-        console.error(err);
-      }
-    },
-    [fetchList],
-  );
-
-  const handleUnbindType = useCallback(
-    async (stateMachineId: string, requirementType: string) => {
-      try {
-        await stateMachineApi.unbindType(stateMachineId, requirementType);
-        message.success('解绑成功');
-        fetchList();
-      } catch (err) {
-        message.error('解绑失败');
-        console.error(err);
-      }
-    },
-    [fetchList],
+    [editing, closeEditor, fetchList],
   );
 
   return {
@@ -138,14 +98,10 @@ export function useStateMachineManagement(): UseStateMachineManagementReturn {
     saving,
     open,
     editing,
-    projectId,
-    setProjectId,
     fetchList,
     openEditor,
     closeEditor,
     handleDelete,
     handleSubmit,
-    handleBindType,
-    handleUnbindType,
   };
 }

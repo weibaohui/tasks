@@ -6,23 +6,22 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"go.uber.org/zap"
 )
 
 // MockStateMachineRepository Mock 仓储
 type MockStateMachineRepository struct {
-	stateMachines       map[string]*state_machine.StateMachine
-	typeBindings        map[string]*state_machine.TypeBinding
-	requirementStates  map[string]*state_machine.RequirementState
-	transitionLogs     []*state_machine.TransitionLog
+	stateMachines      map[string]*state_machine.StateMachine
+	requirementStates map[string]*state_machine.RequirementState
+	transitionLogs    []*state_machine.TransitionLog
 }
 
 func NewMockStateMachineRepository() *MockStateMachineRepository {
 	return &MockStateMachineRepository{
 		stateMachines:      make(map[string]*state_machine.StateMachine),
-		typeBindings:       make(map[string]*state_machine.TypeBinding),
-		requirementStates:  make(map[string]*state_machine.RequirementState),
-		transitionLogs:     []*state_machine.TransitionLog{},
+		requirementStates: make(map[string]*state_machine.RequirementState),
+		transitionLogs:    []*state_machine.TransitionLog{},
 	}
 }
 
@@ -39,12 +38,10 @@ func (r *MockStateMachineRepository) GetStateMachine(ctx context.Context, id str
 	return sm, nil
 }
 
-func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context, projectID string) ([]*state_machine.StateMachine, error) {
+func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
 	var result []*state_machine.StateMachine
 	for _, sm := range r.stateMachines {
-		if sm.ProjectID == projectID {
-			result = append(result, sm)
-		}
+		result = append(result, sm)
 	}
 	return result, nil
 }
@@ -52,39 +49,6 @@ func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context, proj
 func (r *MockStateMachineRepository) DeleteStateMachine(ctx context.Context, id string) error {
 	delete(r.stateMachines, id)
 	return nil
-}
-
-func (r *MockStateMachineRepository) SaveTypeBinding(ctx context.Context, binding *state_machine.TypeBinding) error {
-	key := binding.StateMachineID + ":" + binding.RequirementType
-	r.typeBindings[key] = binding
-	return nil
-}
-
-func (r *MockStateMachineRepository) GetTypeBinding(ctx context.Context, stateMachineID, requirementType string) (*state_machine.TypeBinding, error) {
-	key := stateMachineID + ":" + requirementType
-	binding, ok := r.typeBindings[key]
-	if !ok {
-		return nil, nil
-	}
-	return binding, nil
-}
-
-func (r *MockStateMachineRepository) DeleteTypeBinding(ctx context.Context, stateMachineID, requirementType string) error {
-	key := stateMachineID + ":" + requirementType
-	delete(r.typeBindings, key)
-	return nil
-}
-
-func (r *MockStateMachineRepository) GetStateMachineByType(ctx context.Context, projectID, requirementType string) (*state_machine.StateMachine, error) {
-	for _, sm := range r.stateMachines {
-		if sm.ProjectID == projectID {
-			key := sm.ID + ":" + requirementType
-			if _, ok := r.typeBindings[key]; ok {
-				return sm, nil
-			}
-		}
-	}
-	return nil, nil
 }
 
 func (r *MockStateMachineRepository) SaveRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
@@ -122,7 +86,6 @@ func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, req
 
 func (r *MockStateMachineRepository) Clear() {
 	r.stateMachines = make(map[string]*state_machine.StateMachine)
-	r.typeBindings = make(map[string]*state_machine.TypeBinding)
 	r.requirementStates = make(map[string]*state_machine.RequirementState)
 	r.transitionLogs = []*state_machine.TransitionLog{}
 }
@@ -160,17 +123,13 @@ func TestStateMachineService_CreateStateMachine(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	sm, err := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
 
 	if sm.Name != "test" {
 		t.Errorf("期望名称为 test, 实际为 %s", sm.Name)
-	}
-
-	if sm.ProjectID != "project-1" {
-		t.Errorf("期望项目ID为 project-1, 实际为 %s", sm.ProjectID)
 	}
 }
 
@@ -180,7 +139,7 @@ func TestStateMachineService_CreateStateMachine_InvalidYAML(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	_, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", "invalid: yaml")
+	_, err := svc.CreateStateMachine(ctx, "test", "测试", "invalid: yaml")
 	if err == nil {
 		t.Error("期望创建失败")
 	}
@@ -192,7 +151,7 @@ func TestStateMachineService_CreateStateMachine_InvalidConfig(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	_, err := svc.CreateStateMachine(ctx, "project-1", "test", "测试", `
+	_, err := svc.CreateStateMachine(ctx, "test", "测试", `
 name: test
 initial_state: not_exist
 states:
@@ -211,7 +170,7 @@ func TestStateMachineService_GetStateMachine(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
 
 	found, err := svc.GetStateMachine(ctx, sm.ID)
 	if err != nil {
@@ -235,39 +194,15 @@ func TestStateMachineService_GetStateMachine_NotFound(t *testing.T) {
 	}
 }
 
-func TestStateMachineService_BindType(t *testing.T) {
-	repo := NewMockStateMachineRepository()
-	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, logger)
-
-	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-
-	err := svc.BindType(ctx, sm.ID, "normal")
-	if err != nil {
-		t.Fatalf("绑定失败: %v", err)
-	}
-
-	sm2, err := repo.GetStateMachineByType(ctx, "project-1", "normal")
-	if err != nil {
-		t.Fatalf("查找失败: %v", err)
-	}
-
-	if sm2.ID != sm.ID {
-		t.Error("期望找到绑定的状态机")
-	}
-}
-
 func TestStateMachineService_InitializeRequirementState(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
 
-	rs, err := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	rs, err := svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 	if err != nil {
 		t.Fatalf("初始化失败: %v", err)
 	}
@@ -281,29 +216,18 @@ func TestStateMachineService_InitializeRequirementState(t *testing.T) {
 	}
 }
 
-func TestStateMachineService_InitializeRequirementState_NoBinding(t *testing.T) {
-	repo := NewMockStateMachineRepository()
-	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, logger)
-
-	ctx := context.Background()
-	_, err := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
-	if err == nil {
-		t.Error("期望失败：没有绑定")
-	}
-}
-
 func TestStateMachineService_TriggerTransition(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
+	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
-	rs, err := svc.TriggerTransition(ctx, "req-1", "start", "user", "开始处理")
+	metadata := map[string]interface{}{"project_id": "project-1"}
+	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	rs, err := svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "开始处理")
 	if err != nil {
 		t.Fatalf("转换失败: %v", err)
 	}
@@ -319,11 +243,12 @@ func TestStateMachineService_TriggerTransition_InvalidTrigger(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
+	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
-	_, err := svc.TriggerTransition(ctx, "req-1", "invalid", "user", "")
+	metadata := map[string]interface{}{"project_id": "project-1"}
+	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	_, err := svc.TriggerTransition(ctxWithMeta, "req-1", "invalid", "user", "")
 	if err == nil {
 		t.Error("期望失败：无效的触发器")
 	}
@@ -335,13 +260,14 @@ func TestStateMachineService_TriggerTransition_StateNotFound(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-	rs, _ := svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
+	rs, _ := svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 	rs.CurrentState = "not_exist"
 	repo.UpdateRequirementState(ctx, rs)
 
-	_, err := svc.TriggerTransition(ctx, "req-1", "start", "user", "")
+	metadata := map[string]interface{}{"project_id": "project-1"}
+	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	_, err := svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "")
 	if err == nil {
 		t.Error("期望失败")
 	}
@@ -353,9 +279,8 @@ func TestStateMachineService_GetRequirementState(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
+	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
 	rs, err := svc.GetRequirementState(ctx, "req-1")
 	if err != nil {
@@ -385,10 +310,12 @@ func TestStateMachineService_GetTransitionHistory(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-	svc.InitializeRequirementState(ctx, "req-1", "project-1", "normal")
-	svc.TriggerTransition(ctx, "req-1", "start", "user", "")
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
+	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
+
+	metadata := map[string]interface{}{"project_id": "project-1"}
+	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "")
 
 	logs, err := svc.GetTransitionHistory(ctx, "req-1")
 	if err != nil {
@@ -406,7 +333,7 @@ func TestStateMachineService_DeleteStateMachine(t *testing.T) {
 	svc := NewStateMachineService(repo, nil, logger)
 
 	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
+	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
 
 	err := svc.DeleteStateMachine(ctx, sm.ID)
 	if err != nil {
@@ -416,26 +343,6 @@ func TestStateMachineService_DeleteStateMachine(t *testing.T) {
 	_, err = svc.GetStateMachine(ctx, sm.ID)
 	if err == nil {
 		t.Error("期望未找到")
-	}
-}
-
-func TestStateMachineService_UnbindType(t *testing.T) {
-	repo := NewMockStateMachineRepository()
-	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, logger)
-
-	ctx := context.Background()
-	sm, _ := svc.CreateStateMachine(ctx, "project-1", "test", "测试", testYAML)
-	svc.BindType(ctx, sm.ID, "normal")
-
-	err := svc.UnbindType(ctx, sm.ID, "normal")
-	if err != nil {
-		t.Fatalf("解绑失败: %v", err)
-	}
-
-	sm2, _ := repo.GetStateMachineByType(ctx, "project-1", "normal")
-	if sm2 != nil {
-		t.Error("期望未找到绑定")
 	}
 }
 
@@ -495,16 +402,5 @@ func TestRequirementState_Transition(t *testing.T) {
 
 	if !rs.UpdatedAt.After(oldTime) {
 		t.Error("期望更新时间更新")
-	}
-}
-
-func TestNewTypeBinding(t *testing.T) {
-	binding := state_machine.NewTypeBinding("sm-1", "normal")
-	if binding.StateMachineID != "sm-1" {
-		t.Errorf("期望状态机ID为 sm-1, 实际为 %s", binding.StateMachineID)
-	}
-
-	if binding.RequirementType != "normal" {
-		t.Errorf("期望类型为 normal, 实际为 %s", binding.RequirementType)
 	}
 }
