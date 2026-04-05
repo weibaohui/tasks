@@ -1,9 +1,11 @@
 package feishu
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/weibh/taskmanager/pkg/bus"
@@ -94,7 +96,11 @@ func (c *Channel) Send(msg *bus.OutboundMessage) error {
 			Content:   ptrRawMessage(contentStr),
 		}).Build()
 
-	resp, err := c.client.Im.V1.Message.Create(c.ctx, req)
+	// 使用 30 秒超时的上下文，避免请求永久挂起
+	ctx, cancel := context.WithTimeout(c.ctx, 90*time.Second)
+	defer cancel()
+
+	resp, err := c.client.Im.V1.Message.Create(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to create Feishu message: %w", err)
 	}
@@ -185,7 +191,11 @@ func (c *Channel) SendWithReply(msg *bus.OutboundMessage, replyToMessageID strin
 			Content:   ptrRawMessage(contentStr),
 		}).Build()
 
-	resp, err := c.client.Im.V1.Message.Create(c.ctx, req)
+	// 使用 30 秒超时的上下文，避免请求永久挂起
+	ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+
+	resp, err := c.client.Im.V1.Message.Create(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to create Feishu reply message: %w", err)
 	}
