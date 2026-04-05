@@ -72,14 +72,15 @@ dev:
 	@echo "========================================="
 	@echo "  后端 API:  http://localhost:13618"
 	@echo "  前端界面: http://localhost:3000"
-	@echo "  日志文件: backend/logs/air.log"
+	@echo "  日志文件: ~/.taskmanager/server.log"
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@mkdir -p backend/logs
+	@mkdir -p ~/.taskmanager
 	@(trap 'kill 0' INT; \
 		set -a; source backend/.env; set +a; \
 		echo "[1/2] 启动后端服务 (air)..."; \
-		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log & \
+		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a ~/.taskmanager/server.log & \
 		sleep 2; \
 		echo "[2/2] 启动前端服务 (vite)..."; \
 		cd frontend && pnpm run dev & \
@@ -90,7 +91,8 @@ dev-server:
 	@command -v air >/dev/null 2>&1 || { echo "air 未安装，正在安装..."; go install github.com/air-verse/air@latest; }
 	@echo "启动服务 - air 热重载..."
 	@mkdir -p backend/logs
-	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee logs/air.log
+	@mkdir -p ~/.taskmanager
+	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a ~/.taskmanager/server.log
 
 # 停止所有 TaskManager 相关进程
 stop:
