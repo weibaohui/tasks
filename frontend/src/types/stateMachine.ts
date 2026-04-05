@@ -39,20 +39,11 @@ export interface StateMachineConfig {
 // StateMachine 状态机
 export interface StateMachine {
   id: string;
-  project_id: string;
   name: string;
   description: string;
   config: StateMachineConfig;
   created_at: string;
   updated_at: string;
-}
-
-// StateMachineTypeBinding 类型绑定
-export interface StateMachineTypeBinding {
-  id: string;
-  state_machine_id: string;
-  requirement_type: string;
-  created_at: string;
 }
 
 // RequirementState 需求状态

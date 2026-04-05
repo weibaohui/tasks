@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/weibh/taskmanager/domain/state_machine"
 )
 
@@ -27,8 +26,8 @@ func (r *SQLiteStateMachineRepository) SaveStateMachine(ctx context.Context, sm 
 	}
 
 	query := `
-		INSERT INTO state_machines (id, project_id, name, description, config, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO state_machines (id, name, description, config, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
 			description = excluded.description,
@@ -36,20 +35,20 @@ func (r *SQLiteStateMachineRepository) SaveStateMachine(ctx context.Context, sm 
 			updated_at = excluded.updated_at
 	`
 	_, err = r.db.ExecContext(ctx, query,
-		sm.ID, sm.ProjectID, sm.Name, sm.Description, configJSON,
+		sm.ID, sm.Name, sm.Description, configJSON,
 		sm.CreatedAt.UnixMilli(), sm.UpdatedAt.UnixMilli())
 	return err
 }
 
 func (r *SQLiteStateMachineRepository) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
-	query := `SELECT id, project_id, name, description, config, created_at, updated_at FROM state_machines WHERE id = ?`
+	query := `SELECT id, name, description, config, created_at, updated_at FROM state_machines WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, query, id)
 	return r.scanStateMachine(row)
 }
 
-func (r *SQLiteStateMachineRepository) ListStateMachines(ctx context.Context, projectID string) ([]*state_machine.StateMachine, error) {
-	query := `SELECT id, project_id, name, description, config, created_at, updated_at FROM state_machines WHERE project_id = ?`
-	rows, err := r.db.QueryContext(ctx, query, projectID)
+func (r *SQLiteStateMachineRepository) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
+	query := `SELECT id, name, description, config, created_at, updated_at FROM state_machines`
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +74,7 @@ func (r *SQLiteStateMachineRepository) scanStateMachine(row *sql.Row) (*state_ma
 	var sm state_machine.StateMachine
 	var configJSON []byte
 	var createdAtMs, updatedAtMs int64
-	err := row.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
+	err := row.Scan(&sm.ID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, state_machine.ErrStateMachineNotFound("")
@@ -96,7 +95,7 @@ func (r *SQLiteStateMachineRepository) scanStateMachineWithRows(rows *sql.Rows) 
 	var sm state_machine.StateMachine
 	var configJSON []byte
 	var createdAtMs, updatedAtMs int64
-	err := rows.Scan(&sm.ID, &sm.ProjectID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
+	err := rows.Scan(&sm.ID, &sm.Name, &sm.Description, &configJSON, &createdAtMs, &updatedAtMs)
 	if err != nil {
 		return nil, err
 	}
@@ -108,50 +107,6 @@ func (r *SQLiteStateMachineRepository) scanStateMachineWithRows(rows *sql.Rows) 
 	}
 	sm.Config = &cfg
 	return &sm, nil
-}
-
-// TypeBinding
-func (r *SQLiteStateMachineRepository) SaveTypeBinding(ctx context.Context, binding *state_machine.TypeBinding) error {
-	query := `
-		INSERT INTO state_machine_type_bindings (id, state_machine_id, requirement_type, created_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(state_machine_id, requirement_type) DO UPDATE SET
-			state_machine_id = excluded.state_machine_id
-	`
-	_, err := r.db.ExecContext(ctx, query, binding.ID, binding.StateMachineID, binding.RequirementType, binding.CreatedAt.UnixMilli())
-	return err
-}
-
-func (r *SQLiteStateMachineRepository) GetTypeBinding(ctx context.Context, stateMachineID, requirementType string) (*state_machine.TypeBinding, error) {
-	query := `SELECT id, state_machine_id, requirement_type, created_at FROM state_machine_type_bindings WHERE state_machine_id = ? AND requirement_type = ?`
-	row := r.db.QueryRowContext(ctx, query, stateMachineID, requirementType)
-	var binding state_machine.TypeBinding
-	var createdAtMs int64
-	err := row.Scan(&binding.ID, &binding.StateMachineID, &binding.RequirementType, &createdAtMs)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	binding.CreatedAt = time.UnixMilli(createdAtMs)
-	return &binding, nil
-}
-
-func (r *SQLiteStateMachineRepository) DeleteTypeBinding(ctx context.Context, stateMachineID, requirementType string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM state_machine_type_bindings WHERE state_machine_id = ? AND requirement_type = ?`, stateMachineID, requirementType)
-	return err
-}
-
-func (r *SQLiteStateMachineRepository) GetStateMachineByType(ctx context.Context, projectID, requirementType string) (*state_machine.StateMachine, error) {
-	query := `
-		SELECT sm.id, sm.project_id, sm.name, sm.description, sm.config, sm.created_at, sm.updated_at
-			FROM state_machines sm
-			JOIN state_machine_type_bindings tb ON sm.id = tb.state_machine_id
-			WHERE sm.project_id = ? AND tb.requirement_type = ?
-	`
-	row := r.db.QueryRowContext(ctx, query, projectID, requirementType)
-	return r.scanStateMachine(row)
 }
 
 // RequirementState
@@ -221,8 +176,3 @@ func (r *SQLiteStateMachineRepository) ListTransitionLogs(ctx context.Context, r
 
 // Ensure SQLiteStateMachineRepository implements state_machine.Repository
 var _ state_machine.Repository = (*SQLiteStateMachineRepository)(nil)
-
-// generateID 生成 UUID
-func generateID() string {
-	return uuid.New().String()
-}

@@ -10,7 +10,6 @@ interface StateMachineTableProps {
   loading: boolean;
   onEdit: (record: StateMachine) => void;
   onDelete: (id: string) => void;
-  onViewDetail: (record: StateMachine) => void;
 }
 
 export const StateMachineTable: React.FC<StateMachineTableProps> = ({
@@ -18,7 +17,6 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
   loading,
   onEdit,
   onDelete,
-  onViewDetail,
 }) => {
   const columns = [
     {
@@ -87,9 +85,6 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
       width: 180,
       render: (_: unknown, record: StateMachine) => (
         <Space size="small">
-          <Button type="link" size="small" onClick={() => onViewDetail(record)}>
-            详情
-          </Button>
           <Button type="link" size="small" onClick={() => onEdit(record)}>
             编辑
           </Button>

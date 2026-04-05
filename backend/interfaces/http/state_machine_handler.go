@@ -6,6 +6,7 @@ import (
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 )
 
 // StateMachineHandler 状态机 HTTP 处理
@@ -25,27 +26,17 @@ type CreateStateMachineRequest struct {
 	Config      string `json:"config"` // YAML 内容
 }
 
-// BindTypeRequest 绑定类型请求
-type BindTypeRequest struct {
-	RequirementType string `json:"requirement_type"`
-}
-
 // TriggerTransitionRequest 触发转换请求
 type TriggerTransitionRequest struct {
-	Trigger     string `json:"trigger"`
-	TriggeredBy string `json:"triggered_by"`
-	Remark      string `json:"remark"`
+	Trigger     string                 `json:"trigger"`
+	TriggeredBy string                 `json:"triggered_by"`
+	Remark      string                 `json:"remark"`
+	Metadata    map[string]interface{} `json:"metadata"`
 }
 
 // ListStateMachines 列出状态机
 func (h *StateMachineHandler) ListStateMachines(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
-	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
-		return
-	}
-
-	sms, err := h.service.ListStateMachines(r.Context(), projectID)
+	sms, err := h.service.ListStateMachines(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -56,12 +47,6 @@ func (h *StateMachineHandler) ListStateMachines(w http.ResponseWriter, r *http.R
 
 // CreateStateMachine 创建状态机
 func (h *StateMachineHandler) CreateStateMachine(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
-	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
-		return
-	}
-
 	var req CreateStateMachineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -73,7 +58,7 @@ func (h *StateMachineHandler) CreateStateMachine(w http.ResponseWriter, r *http.
 		return
 	}
 
-	sm, err := h.service.CreateStateMachine(r.Context(), projectID, req.Name, req.Description, req.Config)
+	sm, err := h.service.CreateStateMachine(r.Context(), req.Name, req.Description, req.Config)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
 			writeError(w, http.StatusBadRequest, smErr.Message)
@@ -137,7 +122,7 @@ func (h *StateMachineHandler) UpdateStateMachine(w http.ResponseWriter, r *http.
 		return
 	}
 
-	sm, err := h.service.CreateStateMachine(r.Context(), id, req.Name, req.Description, req.Config)
+	sm, err := h.service.CreateStateMachine(r.Context(), req.Name, req.Description, req.Config)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
 			writeError(w, http.StatusBadRequest, smErr.Message)
@@ -148,50 +133,6 @@ func (h *StateMachineHandler) UpdateStateMachine(w http.ResponseWriter, r *http.
 	}
 
 	writeJSON(w, sm)
-}
-
-// BindType 绑定类型
-func (h *StateMachineHandler) BindType(w http.ResponseWriter, r *http.Request) {
-	stateMachineID := r.PathValue("id")
-	if stateMachineID == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
-		return
-	}
-
-	var req BindTypeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	if req.RequirementType == "" {
-		writeError(w, http.StatusBadRequest, "requirement_type is required")
-		return
-	}
-
-	if err := h.service.BindType(r.Context(), stateMachineID, req.RequirementType); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-}
-
-// UnbindType 解绑类型
-func (h *StateMachineHandler) UnbindType(w http.ResponseWriter, r *http.Request) {
-	stateMachineID := r.PathValue("id")
-	requirementType := r.PathValue("type")
-	if stateMachineID == "" || requirementType == "" {
-		writeError(w, http.StatusBadRequest, "id and type are required")
-		return
-	}
-
-	if err := h.service.UnbindType(r.Context(), stateMachineID, requirementType); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // TriggerTransition 触发转换
@@ -217,7 +158,13 @@ func (h *StateMachineHandler) TriggerTransition(w http.ResponseWriter, r *http.R
 		req.TriggeredBy = "api"
 	}
 
-	rs, err := h.service.TriggerTransition(r.Context(), requirementID, req.Trigger, req.TriggeredBy, req.Remark)
+	// 将 metadata 存入 context
+	ctx := r.Context()
+	if req.Metadata != nil {
+		ctx = infra_sm.WithMetadata(ctx, req.Metadata)
+	}
+
+	rs, err := h.service.TriggerTransition(ctx, requirementID, req.Trigger, req.TriggeredBy, req.Remark)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
 			switch smErr.Code {
@@ -273,15 +220,9 @@ func (h *StateMachineHandler) GetTransitionHistory(w http.ResponseWriter, r *htt
 	writeJSON(w, logs)
 }
 
-// GetProjectStateSummary 获取项目状态统计
-func (h *StateMachineHandler) GetProjectStateSummary(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
-	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
-		return
-	}
-
-	summary, err := h.service.GetProjectStateSummary(r.Context(), projectID)
+// GetStateSummary 获取状态统计
+func (h *StateMachineHandler) GetStateSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := h.service.GetStateSummary(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

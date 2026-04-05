@@ -472,8 +472,8 @@ func SetupRoutesWithManagement(
 
 	// 状态机路由
 	if stateMachineHandler != nil {
-		// 项目状态机管理
-		mux.HandleFunc("/api/v1/projects/{project_id}/state-machines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		// 状态机列表和创建
+		mux.HandleFunc("/api/v1/state-machines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodGet:
 				stateMachineHandler.ListStateMachines(w, r)
@@ -484,10 +484,10 @@ func SetupRoutesWithManagement(
 			}
 		}))
 
-		// 项目状态统计
-		mux.HandleFunc("/api/v1/projects/{project_id}/requirements/states/summary", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		// 状态统计
+		mux.HandleFunc("/api/v1/requirements/states/summary", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet {
-				stateMachineHandler.GetProjectStateSummary(w, r)
+				stateMachineHandler.GetStateSummary(w, r)
 			} else {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
@@ -503,23 +503,6 @@ func SetupRoutesWithManagement(
 			case http.MethodDelete:
 				stateMachineHandler.DeleteStateMachine(w, r)
 			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 类型绑定
-		mux.HandleFunc("/api/v1/state-machines/{id}/bind", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost {
-				stateMachineHandler.BindType(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		mux.HandleFunc("/api/v1/state-machines/{id}/bind/{type}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodDelete {
-				stateMachineHandler.UnbindType(w, r)
-			} else {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}))

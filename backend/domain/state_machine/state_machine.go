@@ -44,7 +44,6 @@ type Config struct {
 // StateMachine 状态机聚合根
 type StateMachine struct {
 	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Config      *Config   `json:"config"`
@@ -129,11 +128,10 @@ func (c *Config) GetState(stateID string) *State {
 }
 
 // NewStateMachine 创建状态机
-func NewStateMachine(projectID, name, description string, cfg *Config) *StateMachine {
+func NewStateMachine(name, description string, cfg *Config) *StateMachine {
 	now := time.Now()
 	return &StateMachine{
 		ID:          uuid.New().String(),
-		ProjectID:   projectID,
 		Name:        name,
 		Description: description,
 		Config:      cfg,

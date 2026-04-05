@@ -10,9 +10,9 @@ import (
 
 // StateMachineService 应用服务
 type StateMachineService struct {
-	repo      state_machine.Repository
-	executor  *infra_sm.TransitionExecutor
-	logger    *zap.Logger
+	repo     state_machine.Repository
+	executor *infra_sm.TransitionExecutor
+	logger   *zap.Logger
 }
 
 // NewStateMachineService 创建服务
@@ -25,7 +25,7 @@ func NewStateMachineService(repo state_machine.Repository, executor *infra_sm.Tr
 }
 
 // CreateStateMachine 创建状态机
-func (s *StateMachineService) CreateStateMachine(ctx context.Context, projectID, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
+func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
 	cfg, err := state_machine.ParseConfig(yamlConfig)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (s *StateMachineService) CreateStateMachine(ctx context.Context, projectID,
 		return nil, err
 	}
 
-	sm := state_machine.NewStateMachine(projectID, name, description, cfg)
+	sm := state_machine.NewStateMachine(name, description, cfg)
 	if err := s.repo.SaveStateMachine(ctx, sm); err != nil {
 		return nil, err
 	}
@@ -49,8 +49,8 @@ func (s *StateMachineService) GetStateMachine(ctx context.Context, id string) (*
 }
 
 // ListStateMachines 列出状态机
-func (s *StateMachineService) ListStateMachines(ctx context.Context, projectID string) ([]*state_machine.StateMachine, error) {
-	return s.repo.ListStateMachines(ctx, projectID)
+func (s *StateMachineService) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
+	return s.repo.ListStateMachines(ctx)
 }
 
 // DeleteStateMachine 删除状态机
@@ -58,32 +58,13 @@ func (s *StateMachineService) DeleteStateMachine(ctx context.Context, id string)
 	return s.repo.DeleteStateMachine(ctx, id)
 }
 
-// BindType 绑定类型
-func (s *StateMachineService) BindType(ctx context.Context, stateMachineID, requirementType string) error {
-	// 验证状态机存在
-	_, err := s.repo.GetStateMachine(ctx, stateMachineID)
-	if err != nil {
-		return err
-	}
-
-	binding := state_machine.NewTypeBinding(stateMachineID, requirementType)
-	return s.repo.SaveTypeBinding(ctx, binding)
-}
-
-// UnbindType 解绑类型
-func (s *StateMachineService) UnbindType(ctx context.Context, stateMachineID, requirementType string) error {
-	return s.repo.DeleteTypeBinding(ctx, stateMachineID, requirementType)
-}
-
 // InitializeRequirementState 初始化需求状态（创建需求时调用）
-func (s *StateMachineService) InitializeRequirementState(ctx context.Context, requirementID, projectID, requirementType string) (*state_machine.RequirementState, error) {
-	// 查找绑定的状态机
-	sm, err := s.repo.GetStateMachineByType(ctx, projectID, requirementType)
+// 注意：此方法需要调用方传入 stateMachineID，因为状态机不再绑定到特定项目
+func (s *StateMachineService) InitializeRequirementState(ctx context.Context, requirementID, stateMachineID string) (*state_machine.RequirementState, error) {
+	// 获取状态机
+	sm, err := s.repo.GetStateMachine(ctx, stateMachineID)
 	if err != nil {
 		return nil, err
-	}
-	if sm == nil {
-		return nil, state_machine.ErrStateMachineNotFound("no state machine bound for type '" + requirementType + "'")
 	}
 
 	// 创建初始状态
@@ -105,6 +86,7 @@ func (s *StateMachineService) InitializeRequirementState(ctx context.Context, re
 }
 
 // TriggerTransition 触发转换
+// metadata 通过 context 传递，用于 hook 上下文的模板变量替换
 func (s *StateMachineService) TriggerTransition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*state_machine.RequirementState, error) {
 	// 获取当前状态
 	rs, err := s.repo.GetRequirementState(ctx, requirementID)
@@ -148,15 +130,19 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 
 	// 异步执行 hooks
 	if len(transition.Hooks) > 0 {
+		metadata := infra_sm.MetadataFromContext(ctx)
+		if metadata == nil {
+			metadata = make(map[string]interface{})
+		}
 		hookCtx := infra_sm.HookContext{
 			RequirementID:   requirementID,
-			ProjectID:       sm.ProjectID,
 			StateMachineID:  sm.ID,
 			FromState:       rs.CurrentState,
 			ToState:         toState.ID,
 			Trigger:         trigger,
 			HookName:        "",
 			HookType:        "",
+			Metadata:        metadata,
 		}
 		s.executor.ExecuteHooks(ctx, transition.Hooks, hookCtx)
 	}
@@ -181,10 +167,9 @@ type StateSummary struct {
 	Count     int    `json:"count"`
 }
 
-// GetProjectStateSummary 获取项目下需求的状态统计
-func (s *StateMachineService) GetProjectStateSummary(ctx context.Context, projectID string) ([]*StateSummary, error) {
-	// 获取项目下所有状态机
-	sms, err := s.repo.ListStateMachines(ctx, projectID)
+// GetStateSummary 获取所有状态机的状态统计
+func (s *StateMachineService) GetStateSummary(ctx context.Context) ([]*StateSummary, error) {
+	sms, err := s.repo.ListStateMachines(ctx)
 	if err != nil {
 		return nil, err
 	}

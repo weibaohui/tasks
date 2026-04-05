@@ -355,26 +355,12 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_created_at ON mcp_tool_logs(created
 -- 状态机相关表
 CREATE TABLE IF NOT EXISTS state_machines (
     id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
     config TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_state_machines_project ON state_machines(project_id);
-
-CREATE TABLE IF NOT EXISTS state_machine_type_bindings (
-    id TEXT PRIMARY KEY,
-    state_machine_id TEXT NOT NULL,
-    requirement_type TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    UNIQUE(state_machine_id, requirement_type)
-);
-
-CREATE INDEX IF NOT EXISTS idx_type_bindings_machine ON state_machine_type_bindings(state_machine_id);
-CREATE INDEX IF NOT EXISTS idx_type_bindings_type ON state_machine_type_bindings(requirement_type);
 
 CREATE TABLE IF NOT EXISTS requirement_states (
     id TEXT PRIMARY KEY,
