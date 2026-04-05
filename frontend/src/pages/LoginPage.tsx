@@ -14,7 +14,7 @@ export const LoginPage: React.FC = () => {
       return;
     }
     message.success('登录成功');
-    navigate('/tasks', { replace: true });
+    navigate('/dashboard', { replace: true });
   };
 
   return (

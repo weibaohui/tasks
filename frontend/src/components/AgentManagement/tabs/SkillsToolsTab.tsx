@@ -4,7 +4,7 @@
 import React from 'react';
 import type { FormInstance } from 'antd/es/form';
 import type { AgentMCPBinding, MCPServer } from '../../../types/mcp';
-import type { BuiltInTool } from '../../../api/taskApi';
+import type { BuiltInTool } from '../../../types/task';
 import type { Skill } from '../../../api/skillApi';
 import type { Agent } from '../../../types/agent';
 

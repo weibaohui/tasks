@@ -8,7 +8,6 @@ import { ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
   ApiOutlined,
-  AppstoreOutlined,
   ApartmentOutlined,
   BranchesOutlined,
   DashboardOutlined,
@@ -18,14 +17,10 @@ import {
   ToolOutlined,
   UserOutlined,
   ClusterOutlined,
-  ThunderboltOutlined,
   SettingOutlined,
   NodeIndexOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
-import { TaskManagement } from './pages/TaskManagement';
-import { TaskDetailPage } from './pages/TaskDetailPage';
-import { TaskTreePage } from './pages/TaskTreePage';
 import { LoginPage } from './pages/LoginPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { ProjectRequirementPage } from './pages/ProjectRequirementPage';
@@ -36,7 +31,6 @@ import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
 import { MCPManagementPage } from './pages/MCPManagementPage';
 import { SkillsManagementPage } from './pages/SkillsManagementPage';
-import HookManagementPage from './pages/HookManagementPage';
 import StateMachineManagementPage from './pages/StateMachineManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useAuthStore } from './stores/authStore';
@@ -64,10 +58,10 @@ const MainLayout: React.FC = () => {
           : location.pathname.startsWith('/projects')
             ? '/projects'
             : location.pathname.startsWith('/skills')
-              ? '/skills'
-              : location.pathname.startsWith('/hooks')
-                ? '/hooks'
-                : location.pathname.startsWith('/channels')
+            ? '/skills'
+            : location.pathname.startsWith('/state-machines')
+              ? '/state-machines'
+              : location.pathname.startsWith('/channels')
                   ? '/channels'
                   : location.pathname.startsWith('/sessions')
                     ? '/sessions'
@@ -77,7 +71,7 @@ const MainLayout: React.FC = () => {
                         ? '/state-machines'
                         : location.pathname.startsWith('/dashboard')
                           ? '/dashboard'
-                          : '/tasks';
+                          : '/dashboard';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -99,12 +93,10 @@ const MainLayout: React.FC = () => {
             selectedKeys={[selectedKey]}
             items={[
               { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
-              { key: '/tasks', icon: <AppstoreOutlined />, label: '任务管理' },
               { key: '/projects', icon: <BranchesOutlined />, label: '项目需求' },
               { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
               { key: '/agents', icon: <RobotOutlined />, label: 'Agents 管理' },
               { key: '/skills', icon: <ClusterOutlined />, label: 'Skills 管理' },
-              { key: '/hooks', icon: <ThunderboltOutlined />, label: 'Hook 管理' },
               { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
               { key: '/mcp', icon: <ToolOutlined />, label: 'MCP 管理' },
               { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
@@ -138,7 +130,7 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
-          <Route path="/login" element={token ? <Navigate to="/tasks" replace /> : <LoginPage />} />
+          <Route path="/login" element={token ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
           <Route
             path="/"
             element={
@@ -148,14 +140,10 @@ const App: React.FC = () => {
             }
           >
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="tasks" element={<TaskManagement />} />
             <Route path="projects" element={<ProjectRequirementPage />} />
-            <Route path="tasks/:taskId" element={<TaskDetailPage />} />
-            <Route path="tasks/trace/:traceId/tree" element={<TaskTreePage />} />
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />
-            <Route path="hooks" element={<HookManagementPage />} />
             <Route path="state-machines" element={<StateMachineManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />

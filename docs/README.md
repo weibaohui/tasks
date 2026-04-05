@@ -1,5 +1,13 @@
 # 文档目录
 
+## 平台概念
+
+| 文档 | 说明 |
+|------|------|
+| [ai-native-platform.md](./ai-native-platform.md) | **AI 原生平台核心洞察** - 系统是为 AI Agent 打造的软件开发平台 |
+| [ai-devops-system.md](./ai-devops-system.md) | AI 调度器设计 - OODA 循环、任务调度、工作流编排 |
+| [SPEC-ai-dev-platform.md](./SPEC-ai-dev-platform.md) | 需求·任务·云盘 系统设计 |
+
 ## 规范 (standards/)
 
 开发必须遵守的约束规则，包含：
@@ -14,6 +22,13 @@
 - 问题排查指南
 - 数据库指南
 - 部署指南
+
+## 设计 (design/)
+
+系统核心模块的详细设计：
+- 状态机设计
+- Hook 系统设计
+- DDD 架构设计
 
 ---
 

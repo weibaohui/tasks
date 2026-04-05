@@ -2,9 +2,20 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
 )
+
+// mockIDGenerator is a simple mock implementation for testing
+type mockIDGenerator struct {
+	counter int
+}
+
+func (m *mockIDGenerator) Generate() string {
+	m.counter++
+	return fmt.Sprintf("id-%d", m.counter)
+}
 
 // sharedMockProjectRepo is a shared mock implementation of domain.ProjectRepository
 // for use in tests across multiple test files.

@@ -120,6 +120,14 @@ func (m *mockConvRecordRepo) GetStats(ctx context.Context, filter domain.Convers
 	}, nil
 }
 
+func (m *mockConvRecordRepo) Count(ctx context.Context, filter domain.ConversationRecordListFilter) (int, error) {
+	records, err := m.List(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return len(records), nil
+}
+
 type mockConvRecordIDGen struct {
 	count int
 }

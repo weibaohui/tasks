@@ -1,7 +1,7 @@
 /**
  * Agent API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { Agent, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../types/agent';
 
 /**

@@ -21,7 +21,6 @@ import {
 } from 'recharts';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useTaskStore } from '../stores/taskStore';
 import { getConversationStats } from '../api/conversationRecordApi';
 import type { ConversationStats } from '../types/conversationRecord';
 
@@ -32,9 +31,6 @@ const { Title } = Typography;
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 export const Dashboard: React.FC = () => {
-  // 任务统计
-  const { tasks, fetchTasks } = useTaskStore();
-
   // 对话统计
   const [statsLoading, setStatsLoading] = useState(false);
   const [stats, setStats] = useState<ConversationStats | null>(null);
@@ -60,18 +56,8 @@ export const Dashboard: React.FC = () => {
   }, [dateRange]);
 
   useEffect(() => {
-    fetchTasks();
     fetchStats();
-  }, [fetchTasks, fetchStats]);
-
-  // 任务统计计算
-  const rootTasks = tasks.filter((t) => !t.parent_id);
-  const statusCounts = {
-    pending: rootTasks.filter((t) => t.status === 'pending').length,
-    running: rootTasks.filter((t) => t.status === 'running').length,
-    completed: rootTasks.filter((t) => t.status === 'completed').length,
-    failed: rootTasks.filter((t) => t.status === 'failed').length,
-  };
+  }, [fetchStats]);
 
   // Token 趋势图表数据
   const tokenTrendData = stats?.token_stats.daily_trends || [];
@@ -129,30 +115,6 @@ export const Dashboard: React.FC = () => {
           </Button>
         </Space>
       </div>
-
-      {/* 任务统计 */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic title="待处理" value={statusCounts.pending} valueStyle={{ color: '#faad14' }} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="运行中" value={statusCounts.running} valueStyle={{ color: '#1890ff' }} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="已完成" value={statusCounts.completed} valueStyle={{ color: '#52c41a' }} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="失败" value={statusCounts.failed} valueStyle={{ color: '#f5222d' }} />
-          </Card>
-        </Col>
-      </Row>
 
       {/* 对话核心指标 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>

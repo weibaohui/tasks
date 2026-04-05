@@ -1,7 +1,7 @@
 /**
  * Skill API 调用模块
  */
-import apiClient from './taskApi';
+import apiClient from './client';
 import type { Skill, SkillDetail, ListResponse } from '../types/skill';
 
 export type { Skill, SkillDetail };

@@ -137,7 +137,6 @@ type ClaudeCodeProcessor struct {
 	idGenerator         domain.IDGenerator
 	requirementRepo     domain.RequirementRepository
 	conversationRepo    domain.ConversationRecordRepository
-	hookExecutor        *domain.ConfigurableHookExecutor
 	replicaAgentManager *domain.ReplicaAgentManager
 }
 
@@ -160,7 +159,6 @@ func NewClaudeCodeProcessor(
 	providerRepo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
 	requirementRepo domain.RequirementRepository,
-	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
@@ -171,7 +169,6 @@ func NewClaudeCodeProcessor(
 		idGenerator:         idGenerator,
 		requirementRepo:     requirementRepo,
 		conversationRepo:    conversationRepo,
-		hookExecutor:        hookExecutor,
 		replicaAgentManager: replicaAgentManager,
 	}
 }
@@ -249,7 +246,7 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	}
 
 	// 调用 Claude Code
-	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg.SessionKey(), msg.Content, cliSessionID, traceID, provider, agent)
+	response, newCliSessionID, err := p.queryClaudeCode(queryCtx, msg, cliSessionID, traceID, provider, agent)
 	if err != nil {
 		p.logger.Error("Claude Code 调用失败", zap.Error(err))
 		return "", fmt.Errorf("Claude Code 调用失败: %w", err)
@@ -407,6 +404,14 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			userCode = agent.UserCode()
 		}
 
+		// 从 msg.Metadata 提取 channel_code
+		channelCode := ""
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				channelCode = v
+			}
+		}
+
 		ccToolHookAdapter = &toolHookAdapter{
 			hookManager: p.hookManager,
 			logger:      p.logger,
@@ -414,6 +419,8 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			sessionKey:  sessionKey,
 			userCode:    userCode,
 			agentCode:   agentCode,
+			channelCode: channelCode,
+			channelType: msg.Channel,
 			traceID:     traceID,
 		}
 
@@ -429,6 +436,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 				"trace_id":     traceID,
 				"user_code":    userCode,
 				"agent_code":   agentCode,
+				"channel_code": channelCode,
 				"channel_type": msg.Channel,
 				"chat_id":      msg.ChatID,
 			},
@@ -590,7 +598,10 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 }
 
 // queryClaudeCode 调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
+func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, msg *bus.InboundMessage, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent) (string, string, error) {
+	sessionKey := msg.SessionKey()
+	userInput := msg.Content
+
 	// 创建工具钩子适配器，用于将 Claude Code SDK 工具调用桥接到现有 hook 系统
 	var ccToolHookAdapter *toolHookAdapter
 	if p.hookManager != nil {
@@ -605,6 +616,14 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, u
 			userCode = agent.UserCode()
 		}
 
+		// 从 msg.Metadata 提取 channel_code
+		channelCode := ""
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				channelCode = v
+			}
+		}
+
 		ccToolHookAdapter = &toolHookAdapter{
 			hookManager: p.hookManager,
 			logger:      p.logger,
@@ -612,6 +631,8 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, sessionKey, u
 			sessionKey:  sessionKey,
 			userCode:    userCode,
 			agentCode:   agentCode,
+			channelCode: channelCode,
+			channelType: msg.Channel,
 			traceID:     traceID,
 		}
 	}
@@ -1117,17 +1138,5 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 				)
 			}
 		}
-	}
-
-	// 触发 hook
-	if p.hookExecutor != nil {
-		change := &domain.StateChange{
-			FromStatus: requirement.Status(),
-			ToStatus:   requirement.Status(),
-			Trigger:    "claude_code_finished",
-			Reason:     "Claude Code 对话结束",
-			Timestamp:  time.Now(),
-		}
-		p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
 	}
 }

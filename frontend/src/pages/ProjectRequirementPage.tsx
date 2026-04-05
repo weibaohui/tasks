@@ -3,13 +3,10 @@ import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Ta
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
-import { listHookConfigs, createHookConfig, updateHookConfig, deleteHookConfig, enableHookConfig, disableHookConfig } from '../api/hookApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement } from '../types/projectRequirement';
-import type { HookConfig, CreateHookConfigRequest, UpdateHookConfigRequest } from '../types/hook';
-import { TRIGGER_POINTS, ACTION_TYPES } from '../types/hook';
 import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
@@ -59,12 +56,6 @@ export const ProjectRequirementPage: React.FC = () => {
   // 项目配置抽屉状态
   const [projectConfigDrawerOpen, setProjectConfigDrawerOpen] = useState(false);
   const [configProject, setConfigProject] = useState<Project | null>(null);
-  const [projectHooks, setProjectHooks] = useState<HookConfig[]>([]);
-  const [loadingProjectHooks, setLoadingProjectHooks] = useState(false);
-  const [hookModalOpen, setHookModalOpen] = useState(false);
-  const [editingHook, setEditingHook] = useState<HookConfig | null>(null);
-  const [hookForm] = Form.useForm();
-  const [savingHook, setSavingHook] = useState(false);
 
   // 心跳配置相关状态
   const [heartbeatForm] = Form.useForm();
@@ -395,7 +386,6 @@ export const ProjectRequirementPage: React.FC = () => {
   const openProjectConfig = async (project: Project) => {
     setConfigProject(project);
     setProjectConfigDrawerOpen(true);
-    setLoadingProjectHooks(true);
 
     // 设置心跳表单默认值
     heartbeatForm.setFieldsValue({
@@ -404,124 +394,11 @@ export const ProjectRequirementPage: React.FC = () => {
       heartbeat_md_content: project.heartbeat_md_content || '',
       agent_code: project.agent_code || '',
     });
-
-    try {
-      const hooks = await listHookConfigs(project.id);
-      setProjectHooks(hooks);
-    } catch (_error) {
-      message.error('获取项目 Hook 配置失败');
-    } finally {
-      setLoadingProjectHooks(false);
-    }
   };
 
   const closeProjectConfig = () => {
     setProjectConfigDrawerOpen(false);
     setConfigProject(null);
-    setProjectHooks([]);
-  };
-
-  const openCreateHook = () => {
-    setEditingHook(null);
-    hookForm.resetFields();
-    hookForm.setFieldsValue({
-      project_id: configProject?.id,
-      trigger_point: 'start_dispatch',
-      action_type: 'coding_agent',
-      enabled: true,
-      priority: 50,
-    });
-    setHookModalOpen(true);
-  };
-
-  const openEditHook = (hook: HookConfig) => {
-    setEditingHook(hook);
-    const formValues: Record<string, unknown> = {
-      project_id: hook.project_id,
-      name: hook.name,
-      trigger_point: hook.trigger_point,
-      action_type: hook.action_type,
-      enabled: hook.enabled,
-      priority: hook.priority,
-    };
-
-    // 解析 action_config JSON
-    if (hook.action_type === 'coding_agent') {
-      try {
-        const config = JSON.parse(hook.action_config || '{}');
-        formValues.prompt_template = config.prompt_template || '';
-      } catch {
-        formValues.prompt_template = '';
-      }
-    } else {
-      formValues.action_config = hook.action_config;
-    }
-
-    hookForm.setFieldsValue(formValues);
-    setHookModalOpen(true);
-  };
-
-  const submitHook = async (values: CreateHookConfigRequest & { prompt_template?: string }) => {
-    setSavingHook(true);
-    try {
-      const submitValues = { ...values };
-
-      // 如果是 coding_agent，将 prompt_template 放入 action_config
-      if (values.action_type === 'coding_agent') {
-        const actionConfig = {
-          prompt_template: values.prompt_template || '',
-        };
-        submitValues.action_config = JSON.stringify(actionConfig);
-        delete submitValues.prompt_template;
-      }
-
-      if (editingHook) {
-        await updateHookConfig({ ...submitValues, id: editingHook.id } as UpdateHookConfigRequest);
-        message.success('更新 Hook 成功');
-      } else {
-        await createHookConfig(submitValues as CreateHookConfigRequest);
-        message.success('创建 Hook 成功');
-      }
-      setHookModalOpen(false);
-      // 刷新项目 Hook 列表
-      if (configProject) {
-        const hooks = await listHookConfigs(configProject.id);
-        setProjectHooks(hooks);
-      }
-    } catch (_error) {
-      message.error(editingHook ? '更新 Hook 失败' : '创建 Hook 失败');
-    } finally {
-      setSavingHook(false);
-    }
-  };
-
-  const handleDeleteHook = async (id: string) => {
-    try {
-      await deleteHookConfig(id);
-      message.success('删除 Hook 成功');
-      if (configProject) {
-        const hooks = await listHookConfigs(configProject.id);
-        setProjectHooks(hooks);
-      }
-    } catch (_error) {
-      message.error('删除 Hook 失败');
-    }
-  };
-
-  const handleToggleHookEnabled = async (hook: HookConfig) => {
-    try {
-      if (hook.enabled) {
-        await disableHookConfig(hook.id);
-      } else {
-        await enableHookConfig(hook.id);
-      }
-      if (configProject) {
-        const hooks = await listHookConfigs(configProject.id);
-        setProjectHooks(hooks);
-      }
-    } catch (_error) {
-      message.error('操作失败');
-    }
   };
 
   // 心跳配置保存
@@ -998,58 +875,6 @@ export const ProjectRequirementPage: React.FC = () => {
               ),
             },
             {
-              key: 'hooks',
-              label: 'Hook 配置',
-              children: (
-                <>
-                  <div style={{ marginBottom: 16 }}>
-                    <Button type="primary" onClick={openCreateHook}>
-                      新建 Hook
-                    </Button>
-                  </div>
-                  <Table
-                    dataSource={projectHooks}
-                    loading={loadingProjectHooks}
-                    rowKey="id"
-                    pagination={false}
-                    size="small"
-                    columns={[
-                      { title: '名称', dataIndex: 'name', key: 'name', width: 120 },
-                      { title: '触发点', dataIndex: 'trigger_point', key: 'trigger_point', width: 140 },
-                      { title: '动作类型', dataIndex: 'action_type', key: 'action_type', width: 100 },
-                      { title: '优先级', dataIndex: 'priority', key: 'priority', width: 60 },
-                      {
-                        title: '启用',
-                        dataIndex: 'enabled',
-                        key: 'enabled',
-                        width: 60,
-                        render: (enabled: boolean, hook: HookConfig) => (
-                          <Switch checked={enabled} onChange={() => handleToggleHookEnabled(hook)} />
-                        ),
-                      },
-                      {
-                        title: '操作',
-                        key: 'action',
-                        width: 120,
-                        render: (_: unknown, hook: HookConfig) => (
-                          <Space size="small">
-                            <Button type="link" size="small" onClick={() => openEditHook(hook)}>
-                              编辑
-                            </Button>
-                            <Popconfirm title="确定删除此 Hook？" onConfirm={() => handleDeleteHook(hook.id)}>
-                              <Button type="link" size="small" danger>
-                                删除
-                              </Button>
-                            </Popconfirm>
-                          </Space>
-                        ),
-                      },
-                    ]}
-                  />
-                </>
-              ),
-            },
-            {
               key: 'heartbeat',
               label: '心跳配置',
               children: (
@@ -1119,118 +944,6 @@ export const ProjectRequirementPage: React.FC = () => {
           ]}
         />
       </Drawer>
-
-      {/* Hook 编辑 Modal */}
-      <Modal
-        title={editingHook ? '编辑 Hook' : '新建 Hook'}
-        open={hookModalOpen}
-        footer={null}
-        onCancel={() => setHookModalOpen(false)}
-        width={600}
-      >
-        <Form layout="vertical" form={hookForm} onFinish={submitHook}>
-          <Form.Item name="project_id" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="例如：派发时通知" />
-          </Form.Item>
-          <Form.Item label="触发点" name="trigger_point" rules={[{ required: true, message: '请选择触发点' }]}>
-            <Select>
-              {TRIGGER_POINTS.map((tp) => (
-                <Select.Option key={tp.value} value={tp.value}>
-                  {tp.label}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="动作类型" name="action_type" rules={[{ required: true, message: '请选择动作类型' }]}>
-            <Select>
-              {ACTION_TYPES.map((at) => (
-                <Select.Option key={at.value} value={at.value}>
-                  {at.label}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          {/* Coding Agent 配置 */}
-          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.action_type !== curr.action_type}>
-            {({ getFieldValue }) => {
-              const actionType = getFieldValue('action_type');
-              if (actionType === 'coding_agent') {
-                return (
-                  <>
-                    <Alert
-                      message="使用项目默认配置"
-                      description="Hook 将使用【基本信息】Tab 中配置的默认 Agent、渠道和 SessionKey 执行。"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Form.Item
-                      label="Prompt 模板"
-                      name="prompt_template"
-                      rules={[{ required: true, message: '请输入 Prompt 模板' }]}
-                      extra={
-                        <div style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-                            可用变量（会被替换为实际值）：
-                          </div>
-                          <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
-{`\${requirement.id}           - 需求ID
-\${requirement.title}         - 需求标题
-\${requirement.description}     - 需求描述
-\${requirement.status}          - 需求状态 (todo/preparing/coding/pr_opened/failed/completed/done)
-\${requirement.temp_workspace_root} - 临时工作目录根路径
-\${project.id}               - 项目ID
-\${project.name}         - 项目名称
-\${workspace.path}        - 工作目录路径
-\${change.trigger}        - 触发事件名称
-\${change.reason}        - 状态变更原因`}
-                          </pre>
-                          <div style={{ fontSize: 12, color: '#666', marginTop: 12, marginBottom: 8 }}>
-                            完成后请执行以下 CLI 命令标记需求完成：
-                          </div>
-                          <pre style={{ fontSize: 11, background: '#f0f8ff', padding: 8, borderRadius: 4 }}>
-{`taskmanager requirement complete --id \${requirement.id}`}
-                          </pre>
-                        </div>
-                      }
-                    >
-                      <Input.TextArea rows={6} placeholder="请处理需求 {{requirement.title}}，描述：{{requirement.description}}。完成后执行 taskmanager requirement complete 命令。" />
-                    </Form.Item>
-                  </>
-                );
-              }
-              return (
-                <Form.Item
-                  label="动作配置"
-                  name="action_config"
-                  rules={[{ required: true, message: '请输入动作配置' }]}
-                  extra={
-                    <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
-{`{"key": "value"}`}
-                    </pre>
-                  }
-                >
-                  <Input.TextArea rows={4} placeholder='{"key": "value"}' />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item label="优先级" name="priority" initialValue={50}>
-            <Input type="number" placeholder="数值越大越优先执行" />
-          </Form.Item>
-          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue={true}>
-            <Switch />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={savingHook}>
-            保存
-          </Button>
-        </Form>
-      </Modal>
 
       {/* 需求详情抽屉 */}
       <Drawer

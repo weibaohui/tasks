@@ -38,25 +38,23 @@ type RequirementDispatchService struct {
 	requirementRepo      domain.RequirementRepository
 	projectRepo          domain.ProjectRepository
 	agentRepo            domain.AgentRepository
-	taskService          *TaskApplicationService
+	taskService          interface{} // TaskApplicationService - no longer used
 	sessionService       *SessionApplicationService
 	idGenerator          domain.IDGenerator
 	inboundPublisher     interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	replicaAgentManager *domain.ReplicaAgentManager
-	hookExecutor        *domain.ConfigurableHookExecutor
 }
 
 func NewRequirementDispatchService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
-	taskService *TaskApplicationService,
+	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 	replicaAgentManager *domain.ReplicaAgentManager,
-	hookExecutor *domain.ConfigurableHookExecutor,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
 		requirementRepo:      requirementRepo,
@@ -66,7 +64,6 @@ func NewRequirementDispatchService(
 		sessionService:      sessionService,
 		idGenerator:         idGenerator,
 		replicaAgentManager: replicaAgentManager,
-		hookExecutor:        hookExecutor,
 	}
 }
 
@@ -85,14 +82,8 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, ErrRequirementNotFound
 	}
 
-	// 设置状态变更回调和分身管理器
-	requirement.ClearStateChangeCallbacks()
+	// 设置分身管理器
 	requirement.SetReplicaAgentManager(s.replicaAgentManager)
-	if s.hookExecutor != nil {
-		requirement.SetStateChangeCallback(func(change *domain.StateChange) {
-			s.hookExecutor.Execute(ctx, change.Trigger, requirement, change)
-		})
-	}
 	project, err := s.projectRepo.FindByID(ctx, requirement.ProjectID())
 	if err != nil {
 		return nil, err

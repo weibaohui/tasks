@@ -168,6 +168,48 @@ func (r *SQLiteConversationRecordRepository) List(ctx context.Context, filter do
 	return scanConversationRecords(rows)
 }
 
+func (r *SQLiteConversationRecordRepository) Count(ctx context.Context, filter domain.ConversationRecordListFilter) (int, error) {
+	queryBuilder := strings.Builder{}
+	queryBuilder.WriteString(`SELECT COUNT(*) FROM conversation_records WHERE 1=1`)
+	args := make([]interface{}, 0, 7)
+
+	if filter.TraceID != "" {
+		queryBuilder.WriteString(` AND trace_id = ?`)
+		args = append(args, filter.TraceID)
+	}
+	if filter.SessionKey != "" {
+		queryBuilder.WriteString(` AND session_key = ?`)
+		args = append(args, filter.SessionKey)
+	}
+	if filter.UserCode != "" {
+		queryBuilder.WriteString(` AND user_code = ?`)
+		args = append(args, filter.UserCode)
+	}
+	if filter.AgentCode != "" {
+		queryBuilder.WriteString(` AND agent_code = ?`)
+		args = append(args, filter.AgentCode)
+	}
+	if filter.ChannelCode != "" {
+		queryBuilder.WriteString(` AND channel_code = ?`)
+		args = append(args, filter.ChannelCode)
+	}
+	if filter.EventType != "" {
+		queryBuilder.WriteString(` AND event_type = ?`)
+		args = append(args, filter.EventType)
+	}
+	if filter.Role != "" {
+		queryBuilder.WriteString(` AND role = ?`)
+		args = append(args, filter.Role)
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, queryBuilder.String(), args...).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func scanConversationRecords(rows *sql.Rows) ([]*domain.ConversationRecord, error) {
 	records := make([]*domain.ConversationRecord, 0)
 	for rows.Next() {

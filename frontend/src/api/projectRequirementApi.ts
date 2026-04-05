@@ -1,4 +1,4 @@
-import apiClient from './taskApi';
+import apiClient from './client';
 import type {
   CreateProjectRequest,
   CreateRequirementRequest,

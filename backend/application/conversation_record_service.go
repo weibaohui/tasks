@@ -142,3 +142,16 @@ func (s *ConversationRecordApplicationService) GetStats(ctx context.Context, que
 	}
 	return s.recordRepo.GetStats(ctx, filter)
 }
+
+func (s *ConversationRecordApplicationService) CountRecords(ctx context.Context, query ListConversationRecordsQuery) (int, error) {
+	filter := domain.ConversationRecordListFilter{
+		TraceID:     query.TraceID,
+		SessionKey:  query.SessionKey,
+		UserCode:    query.UserCode,
+		AgentCode:   query.AgentCode,
+		ChannelCode: query.ChannelCode,
+		EventType:   query.EventType,
+		Role:        query.Role,
+	}
+	return s.recordRepo.Count(ctx, filter)
+}
