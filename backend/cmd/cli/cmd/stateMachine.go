@@ -14,5 +14,6 @@ func init() {
 	stateMachineCmd.AddCommand(stateMachineListCmd)
 	stateMachineCmd.AddCommand(stateMachineGetCmd)
 	stateMachineCmd.AddCommand(stateMachineTriggersCmd)
-	stateMachineCmd.AddCommand(stateMachineTransitionCmd)
+	stateMachineCmd.AddCommand(stateMachineExecuteCmd)
+	stateMachineCmd.AddCommand(stateMachineValidateCmd)
 }

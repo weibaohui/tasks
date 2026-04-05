@@ -11,51 +11,78 @@ import (
 
 var stateMachineTriggersCmd = &cobra.Command{
 	Use:   "triggers",
-	Short: "列出状态机的可用触发器",
-	Example: `  taskmanager statemachine triggers <state-machine-id>
-  taskmanager statemachine triggers <state-machine-id> -s submitted`,
+	Short: "查询指定状态的可用触发器",
+	Long:  `输入状态机模板名称和当前状态，返回该状态下所有可用的触发器列表。`,
+	Example: `  taskmanager statemachine triggers --machine=dev-release --from=code_review`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			printJSONError("状态机 ID 不能为空")
+		machineName, _ := cmd.Flags().GetString("machine")
+		currentState, _ := cmd.Flags().GetString("from")
+
+		if machineName == "" {
+			printJSONError("必须指定 --machine 参数")
 			return
 		}
-
-		id := args[0]
-		currentState, _ := cmd.Flags().GetString("state")
+		if currentState == "" {
+			printJSONError("必须指定 --from 参数")
+			return
+		}
 
 		ctx := context.Background()
 		c := client.New()
 
-		sm, err := c.GetStateMachine(ctx, id)
+		// 获取所有状态机，按名称匹配
+		sms, err := c.ListStateMachines(ctx)
 		if err != nil {
-			printJSONError("获取状态机详情失败: %v", err)
+			printJSONError("获取状态机列表失败: %v", err)
+			return
+		}
+
+		// 按名称查找状态机
+		var found *client.StateMachine
+		for i := range sms {
+			if sms[i].Name == machineName {
+				found = &sms[i]
+				break
+			}
+		}
+
+		if found == nil {
+			printJSONError("状态机 '%s' 不存在", machineName)
 			return
 		}
 
 		type TriggerInfo struct {
-			Trigger    string `json:"trigger"`
-			FromState string `json:"from_state"`
-			ToState   string `json:"to_state"`
+			Trigger     string `json:"trigger"`
+			ToState     string `json:"to_state"`
 			Description string `json:"description,omitempty"`
 		}
 
 		var triggers []TriggerInfo
-		for _, t := range sm.Config.Transitions {
-			if currentState == "" || t.From == currentState {
+		for _, t := range found.Config.Transitions {
+			if t.From == currentState {
 				triggers = append(triggers, TriggerInfo{
-					Trigger:    t.Trigger,
-					FromState: t.From,
-					ToState:   t.To,
+					Trigger:     t.Trigger,
+					ToState:     t.To,
 					Description: t.Description,
 				})
 			}
 		}
 
-		jsonBytes, _ := json.MarshalIndent(triggers, "", "  ")
+		result := map[string]interface{}{
+			"machine":       machineName,
+			"current_state": currentState,
+			"triggers":      triggers,
+			"count":         len(triggers),
+		}
+
+		jsonBytes, _ := json.Marshal(result)
 		fmt.Print(string(jsonBytes))
 	},
 }
 
 func init() {
-	stateMachineTriggersCmd.Flags().StringP("state", "s", "", "筛选指定状态的可用触发器")
+	stateMachineTriggersCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
+	stateMachineTriggersCmd.Flags().StringP("from", "f", "", "当前状态ID (必填)")
+	stateMachineTriggersCmd.MarkFlagRequired("machine")
+	stateMachineTriggersCmd.MarkFlagRequired("from")
 }

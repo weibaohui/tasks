@@ -3,7 +3,7 @@
  * Shows how to invoke a state machine via HTTP, CLI, and SDK
  */
 import React, { useState } from 'react';
-import { Drawer, Typography, Tabs, Card, Space, Tag, Button, message, Table } from 'antd';
+import { Drawer, Typography, Tabs, Card, Space, Tag, Button, message, Table, Alert } from 'antd';
 import { CopyOutlined, ApiOutlined, CodeOutlined } from '@ant-design/icons';
 import type { StateMachine } from '../../../types/stateMachine';
 
@@ -27,30 +27,31 @@ export const StateMachineInvokeDrawer: React.FC<StateMachineInvokeDrawerProps> =
   const baseUrl = window.location.origin;
   const apiBaseUrl = `${baseUrl}/api/v1`;
 
-  const httpCode = `curl -X POST "${apiBaseUrl}/state-machines/${stateMachine.id}/execute" \\
+  const httpCode = `curl -X POST "${apiBaseUrl}/requirements/{requirement-id}/transitions" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer <your-token>" \\
   -d '{
-    "trigger": "start",
-    "context": {
-      "requirement_id": "your-requirement-id",
-      "project_id": "your-project-id"
-    }
+    "trigger": "start"
   }'`;
 
-  const cliCode = `# 命令格式
-taskmanager state-machine execute <state-machine-id> \\
-  --trigger <trigger-name> \\
-  --context '<json-context>'
+  const cliCode = `# ============================================
+# 通用状态机 CLI 使用指南（纯规则引擎，无业务绑定）
+# ============================================
 
-# 示例 - context 支持多个属性
-taskmanager state-machine execute ${stateMachine.id} \\
-  --trigger start \\
-  --context '{
-    "requirement_id": "req-123",
-    "project_id": "proj-456",
-    "user_id": "user-789"
-  }'`;
+# 1. 列出所有状态机模板
+taskmanager statemachine list
+
+# 2. 获取状态机规则详情
+taskmanager statemachine get --machine=${stateMachine.name}
+
+# 3. 查询指定状态的可用触发器
+taskmanager statemachine triggers --machine=${stateMachine.name} --from=${stateMachine.config.initial_state}
+
+# 4. 验证状态转换是否允许（从A到B）
+taskmanager statemachine validate --machine=${stateMachine.name} --from=${stateMachine.config.initial_state} --to=<目标状态>
+
+# 5. 执行状态转换（返回目标状态）
+taskmanager statemachine execute --machine=${stateMachine.name} --from=${stateMachine.config.initial_state} --trigger=<触发器>`;
 
   const sdkCode = `package main
 
@@ -98,8 +99,15 @@ func main() {
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Alert
+            message="纯通用状态机引擎"
+            description="CLI 命令只负责状态流转规则计算，不管理业务实例ID。业务层自行管理实例和状态存储。"
+            type="info"
+            showIcon
+          />
+
           <Card
-            title="命令行执行"
+            title="完整使用示例"
             extra={
               <Button
                 icon={<CopyOutlined />}
@@ -110,23 +118,80 @@ func main() {
               </Button>
             }
           >
-            <pre style={{ margin: 0, overflow: 'auto' }}>
+            <pre style={{ margin: 0, overflow: 'auto', fontSize: 12 }}>
               <code>{cliCode}</code>
             </pre>
           </Card>
 
-          <Card title="常用命令">
+          <Card title="常用命令速查">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>
+                <Text strong>
+                  <Tag color="blue">list</Tag>
+                </Text>
+                <Text code>taskmanager statemachine list</Text>
+                <Text type="secondary">列出所有状态机模板</Text>
+              </div>
+              <div>
+                <Text strong>
+                  <Tag color="blue">get</Tag>
+                </Text>
+                <Text code>taskmanager statemachine get --machine=&lt;name&gt;</Text>
+                <Text type="secondary">获取状态机规则详情</Text>
+              </div>
+              <div>
+                <Text strong>
+                  <Tag color="blue">triggers</Tag>
+                </Text>
+                <Text code>taskmanager statemachine triggers -m &lt;name&gt; -f &lt;state&gt;</Text>
+                <Text type="secondary">查询状态的可用触发器</Text>
+              </div>
+              <div>
+                <Text strong>
+                  <Tag color="green">validate</Tag>
+                </Text>
+                <Text code>taskmanager statemachine validate -m &lt;name&gt; -f &lt;from&gt; -t &lt;to&gt;</Text>
+                <Text type="secondary">验证从A到B是否允许</Text>
+              </div>
+              <div>
+                <Text strong>
+                  <Tag color="green">execute</Tag>
+                </Text>
+                <Text code>taskmanager statemachine execute -m &lt;name&gt; -f &lt;state&gt; -t &lt;trigger&gt;</Text>
+                <Text type="secondary">执行状态转换</Text>
+              </div>
+            </Space>
+          </Card>
+
+          <Card title="参数说明">
             <Space direction="vertical">
               <Text>
-                <Tag>taskmanager state-machine list</Tag> 列出所有状态机
+                <Tag>--machine / -m</Tag> 状态机模板名称（如：{stateMachine.name}）
               </Text>
               <Text>
-                <Tag>taskmanager state-machine get {'<id>'}</Tag> 获取状态机详情
+                <Tag>--from / -f</Tag> 源状态（当前状态）
               </Text>
               <Text>
-                <Tag>taskmanager state-machine execute {'<id>'}</Tag> 执行状态机
+                <Tag>--to / -t</Tag> 目标状态（validate命令使用）
+              </Text>
+              <Text>
+                <Tag>--trigger / -t</Tag> 触发器名称（execute命令使用）
               </Text>
             </Space>
+          </Card>
+
+          <Card title="典型工作流示例">
+            <pre style={{ margin: 0, fontSize: 12, background: '#f6ffed', padding: 12, borderRadius: 4 }}>
+              <code>{`# 1. 查看当前状态有哪些可用触发器
+taskmanager statemachine triggers -m "${stateMachine.name}" -f "${stateMachine.config.initial_state}"
+
+# 2. 验证转换是否合法
+taskmanager statemachine validate -m "${stateMachine.name}" -f "${stateMachine.config.initial_state}" -t "<目标状态>"
+
+# 3. 执行转换（业务层自行保存结果）
+RESULT=$(taskmanager statemachine execute -m "${stateMachine.name}" -f "${stateMachine.config.initial_state}" -t "<触发器>")
+echo "转换结果: $RESULT"`}</code>
+            </pre>
           </Card>
         </Space>
       ),
@@ -142,7 +207,7 @@ func main() {
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           <Card
-            title="执行状态机"
+            title="触发状态转换"
             extra={
               <Button
                 icon={<CopyOutlined />}
@@ -175,7 +240,32 @@ func main() {
                 <Tag>trigger</Tag> 触发器名称，对应状态机配置中的 trigger
               </Text>
               <Text>
-                <Tag>context</Tag> 执行上下文，可包含 requirement_id、project_id 等变量
+                <Tag>requirement-id</Tag> 需求ID，状态转换的目标对象
+              </Text>
+            </Space>
+          </Card>
+
+          <Card title="其他 API">
+            <Space direction="vertical">
+              <Text>
+                <Tag>GET</Tag>
+                <Text code>/state-machines</Text>
+                列出所有状态机
+              </Text>
+              <Text>
+                <Tag>GET</Tag>
+                <Text code>/state-machines/{'{id}'}</Text>
+                获取状态机详情
+              </Text>
+              <Text>
+                <Tag>GET</Tag>
+                <Text code>/requirements/{'{id}'}/state</Text>
+                获取需求当前状态
+              </Text>
+              <Text>
+                <Tag>GET</Tag>
+                <Text code>/requirements/{'{id}'}/transitions/history</Text>
+                获取转换历史
               </Text>
             </Space>
           </Card>
@@ -230,7 +320,7 @@ func main() {
         </Space>
       }
       placement="right"
-      width={800}
+      width={850}
       onClose={onClose}
       open={open}
     >
@@ -250,6 +340,12 @@ func main() {
             <Tag color="green">
               {stateMachine.config.initial_state}
             </Tag>
+          </Paragraph>
+          <Paragraph>
+            <Text strong>状态数: </Text>
+            <Tag>{stateMachine.config.states.length}</Tag>
+            <Text strong style={{ marginLeft: 16 }}>转换规则数: </Text>
+            <Tag>{stateMachine.config.transitions.length}</Tag>
           </Paragraph>
           <div style={{ marginTop: 16 }}>
             <Text strong>可用触发器:</Text>
