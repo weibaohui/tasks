@@ -6,24 +6,25 @@
 //	import "github.com/weibh/taskmanager/pkg/statemachine"
 //
 //	func main() {
-//	    ctx := context.Background()
-//	    sm := statemachine.New(nil) // 使用默认配置
+//	    sm := statemachine.New() // 自动管理依赖
 //
-//	    // 创建状态机
 //	    machine, _ := sm.Create(ctx, "DevOps流程", "描述", yamlConfig)
-//
-//	    // 初始化需求
 //	    rs, _ := sm.Initialize(ctx, "req-001", machine.ID)
+//	    rs, _ = sm.Transition(ctx, "req-001", "approve", "reviewer", "通过")
 //
-//	    // 触发转换
-//	    newState, _ := sm.Transition(ctx, "req-001", "approve", "reviewer", "通过")
-//
-//	    // 获取状态
-//	    state, _ := sm.GetState(ctx, "req-001")
-//
-//	    // 获取历史
-//	    history, _ := sm.GetHistory(ctx, "req-001")
+//	    sm.Close()
 //	}
+//
+// 也支持依赖注入:
+//
+//	import "go.uber.org/zap"
+//
+//	logger := zap.NewExample()
+//	db, _ := sql.Open("sqlite3", "file::memory:?cache=shared")
+//	sm := statemachine.New(
+//	    statemachine.WithDB(db),
+//	    statemachine.WithLogger(logger),
+//	)
 package statemachine
 
 import (
@@ -47,35 +48,60 @@ type SDK struct {
 }
 
 // Option SDK 配置选项
-type Option func(*SDK)
+type Option func(*sdkOptions)
+
+type sdkOptions struct {
+	db     *sql.DB
+	logger *zap.Logger
+	svc    *application.StateMachineService
+}
 
 // WithDB 使用自定义数据库连接
 func WithDB(db *sql.DB) Option {
-	return func(s *SDK) {
-		s.db = db
+	return func(o *sdkOptions) {
+		o.db = db
 	}
 }
 
 // WithLogger 使用自定义 logger
 func WithLogger(logger *zap.Logger) Option {
-	return func(s *SDK) {
-		// 日志通过 StateMachineService 注入，当前忽略
+	return func(o *sdkOptions) {
+		o.logger = logger
+	}
+}
+
+// WithService 使用已有的 StateMachineService（用于测试或已创建的服务）
+func WithService(svc *application.StateMachineService) Option {
+	return func(o *sdkOptions) {
+		o.svc = svc
 	}
 }
 
 // New 创建 SDK 实例
-// ctx 可以为 nil，使用默认配置
-// 支持通过 Option 自定义配置
-func New(ctx context.Context, opts ...Option) *SDK {
-	s := &SDK{}
-
-	// 应用配置
-	for _, opt := range opts {
-		opt(s)
+// 选项：
+//   - WithDB: 自定义数据库连接
+//   - WithLogger: 自定义日志器
+//   - WithService: 直接注入已创建的服务
+func New(opts ...Option) *SDK {
+	o := &sdkOptions{
+		logger: zap.NewNop(),
 	}
 
-	// 如果没有提供 db，使用默认数据库
-	if s.db == nil {
+	// 应用选项
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	s := &SDK{}
+
+	// 如果注入了服务，直接使用
+	if o.svc != nil {
+		s.svc = o.svc
+		return s
+	}
+
+	// 否则自动创建依赖
+	if o.db == nil {
 		dbPath := config.GetDatabasePath()
 		dbDir := filepath.Dir(dbPath)
 		if err := os.MkdirAll(dbDir, 0755); err != nil {
@@ -85,21 +111,18 @@ func New(ctx context.Context, opts ...Option) *SDK {
 		if err != nil {
 			panic("failed to open db: " + err.Error())
 		}
-		s.db = db
+		o.db = db
 	}
 
-	// 创建内部服务
-	repo := persistence.NewSQLiteStateMachineRepository(s.db)
-	executor := infra_sm.NewTransitionExecutor(zap.NewNop())
-	s.svc = application.NewStateMachineService(repo, executor, zap.NewNop())
+	repo := persistence.NewSQLiteStateMachineRepository(o.db)
+	executor := infra_sm.NewTransitionExecutor(o.logger)
+	s.svc = application.NewStateMachineService(repo, executor, o.logger)
+	s.db = o.db
 
 	return s
 }
 
 // Create 创建状态机
-// name: 状态机名称
-// description: 描述
-// yamlConfig: YAML 格式的配置
 func (s *SDK) Create(ctx context.Context, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
 	return s.svc.CreateStateMachine(ctx, name, description, yamlConfig)
 }
@@ -120,18 +143,12 @@ func (s *SDK) Delete(ctx context.Context, id string) error {
 }
 
 // Initialize 初始化需求状态
-// requirementID: 需求 ID（可以是任意字符串）
-// stateMachineID: 状态机 ID
 func (s *SDK) Initialize(ctx context.Context, requirementID, stateMachineID string) (*state_machine.RequirementState, error) {
 	return s.svc.InitializeRequirementState(ctx, requirementID, stateMachineID)
 }
 
 // Transition 触发状态转换
-// requirementID: 需求 ID
-// trigger: 触发器名称
-// triggeredBy: 触发者
-// remark: 备注
-// 可以通过 context 传递 metadata：statemachine.WithMetadata(ctx, metadata)
+// 可以通过 statemachine.WithMetadata(ctx, metadata) 传递元数据
 func (s *SDK) Transition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*state_machine.RequirementState, error) {
 	return s.svc.TriggerTransition(ctx, requirementID, trigger, triggeredBy, remark)
 }
@@ -147,6 +164,7 @@ func (s *SDK) GetHistory(ctx context.Context, requirementID string) ([]*state_ma
 }
 
 // Close 关闭 SDK，释放资源
+// 只有 SDK 自己创建的 db 才会被关闭，通过 WithDB 注入的不会
 func (s *SDK) Close() error {
 	if s.db != nil {
 		return s.db.Close()
@@ -155,7 +173,6 @@ func (s *SDK) Close() error {
 }
 
 // WithMetadata 将 metadata 存入 context，用于 Hook 模板变量替换
-// 用法: sm.Transition(statemachine.WithMetadata(ctx, metadata), ...)
 func WithMetadata(ctx context.Context, metadata map[string]interface{}) context.Context {
 	return infra_sm.WithMetadata(ctx, metadata)
 }

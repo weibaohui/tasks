@@ -2,12 +2,87 @@ package statemachine
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/weibh/taskmanager/application"
+	"github.com/weibh/taskmanager/domain/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	"go.uber.org/zap"
 )
+
+// MockRepository 测试用 Mock Repository
+type MockRepository struct {
+	stateMachines      map[string]*state_machine.StateMachine
+	requirementStates map[string]*state_machine.RequirementState
+	transitionLogs    []*state_machine.TransitionLog
+}
+
+func NewMockRepository() *MockRepository {
+	return &MockRepository{
+		stateMachines:      make(map[string]*state_machine.StateMachine),
+		requirementStates: make(map[string]*state_machine.RequirementState),
+		transitionLogs:    []*state_machine.TransitionLog{},
+	}
+}
+
+func (r *MockRepository) SaveStateMachine(ctx context.Context, sm *state_machine.StateMachine) error {
+	r.stateMachines[sm.ID] = sm
+	return nil
+}
+
+func (r *MockRepository) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
+	sm, ok := r.stateMachines[id]
+	if !ok {
+		return nil, state_machine.ErrStateMachineNotFound(id)
+	}
+	return sm, nil
+}
+
+func (r *MockRepository) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
+	var result []*state_machine.StateMachine
+	for _, sm := range r.stateMachines {
+		result = append(result, sm)
+	}
+	return result, nil
+}
+
+func (r *MockRepository) DeleteStateMachine(ctx context.Context, id string) error {
+	delete(r.stateMachines, id)
+	return nil
+}
+
+func (r *MockRepository) SaveRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+	r.requirementStates[rs.RequirementID] = rs
+	return nil
+}
+
+func (r *MockRepository) GetRequirementState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
+	rs, ok := r.requirementStates[requirementID]
+	if !ok {
+		return nil, state_machine.ErrRequirementStateNotFound(requirementID)
+	}
+	return rs, nil
+}
+
+func (r *MockRepository) UpdateRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+	r.requirementStates[rs.RequirementID] = rs
+	return nil
+}
+
+func (r *MockRepository) SaveTransitionLog(ctx context.Context, log *state_machine.TransitionLog) error {
+	r.transitionLogs = append(r.transitionLogs, log)
+	return nil
+}
+
+func (r *MockRepository) ListTransitionLogs(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
+	var result []*state_machine.TransitionLog
+	for _, log := range r.transitionLogs {
+		if log.RequirementID == requirementID {
+			result = append(result, log)
+		}
+	}
+	return result, nil
+}
 
 const testYAML = `
 name: 测试流程
@@ -38,57 +113,14 @@ transitions:
 `
 
 func TestSDK(t *testing.T) {
-	// 创建临时数据库
-	tmpFile, err := os.CreateTemp("", "statemachine-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
+	// 创建 Mock 服务
+	logger := zap.NewNop()
+	repo := NewMockRepository()
+	executor := infra_sm.NewTransitionExecutor(logger)
+	svc := application.NewStateMachineService(repo, executor, logger)
 
-	db, err := sql.Open("sqlite3", tmpFile.Name()+"?_journal_mode=WAL")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	// 初始化表结构
-	if _, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS state_machines (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			description TEXT,
-			config TEXT NOT NULL,
-			created_at INTEGER NOT NULL,
-			updated_at INTEGER NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS requirement_states (
-			id TEXT PRIMARY KEY,
-			requirement_id TEXT NOT NULL UNIQUE,
-			state_machine_id TEXT NOT NULL,
-			current_state TEXT NOT NULL,
-			current_state_name TEXT NOT NULL,
-			created_at INTEGER NOT NULL,
-			updated_at INTEGER NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS transition_logs (
-			id TEXT PRIMARY KEY,
-			requirement_id TEXT NOT NULL,
-			from_state TEXT NOT NULL,
-			to_state TEXT NOT NULL,
-			trigger TEXT NOT NULL,
-			triggered_by TEXT NOT NULL,
-			remark TEXT,
-			result TEXT NOT NULL,
-			error_message TEXT,
-			created_at INTEGER NOT NULL
-		);
-	`); err != nil {
-		t.Fatal(err)
-	}
-
-	// 创建 SDK
-	sm := New(context.Background(), WithDB(db))
+	// 使用 WithService 注入
+	sm := New(WithService(svc))
 	defer sm.Close()
 
 	ctx := context.Background()
