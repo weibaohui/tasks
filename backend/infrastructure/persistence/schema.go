@@ -352,40 +352,6 @@ CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_mcp_server_id ON mcp_tool_logs(mcp_
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_tool_name ON mcp_tool_logs(tool_name);
 CREATE INDEX IF NOT EXISTS idx_mcp_tool_logs_created_at ON mcp_tool_logs(created_at);
 
-CREATE TABLE IF NOT EXISTS requirement_hook_configs (
-    id TEXT PRIMARY KEY,
-    project_id TEXT,
-    name TEXT NOT NULL,
-    trigger_point TEXT NOT NULL,
-    action_type TEXT NOT NULL,
-    action_config TEXT NOT NULL,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    priority INTEGER NOT NULL DEFAULT 50,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_hook_configs_trigger ON requirement_hook_configs(trigger_point, enabled);
-
-CREATE TABLE IF NOT EXISTS requirement_hook_action_logs (
-    id TEXT PRIMARY KEY,
-    hook_config_id TEXT NOT NULL,
-    requirement_id TEXT NOT NULL,
-    trigger_point TEXT NOT NULL,
-    action_type TEXT NOT NULL,
-    status TEXT NOT NULL,
-    input_context TEXT,
-    result TEXT,
-    error TEXT,
-    started_at INTEGER NOT NULL,
-    completed_at INTEGER,
-    FOREIGN KEY (hook_config_id) REFERENCES requirement_hook_configs(id),
-    FOREIGN KEY (requirement_id) REFERENCES requirements(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_hook_logs_requirement ON requirement_hook_action_logs(requirement_id);
-CREATE INDEX IF NOT EXISTS idx_hook_logs_config ON requirement_hook_action_logs(hook_config_id);
-
 -- 状态机相关表
 CREATE TABLE IF NOT EXISTS state_machines (
     id TEXT PRIMARY KEY,
@@ -467,9 +433,6 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	if err := migrateAgentShadowFrom(db); err != nil {
-		return err
-	}
-	if err := migrateHookConfigProjectID(db); err != nil {
 		return err
 	}
 	if err := migrateProjectsNewColumns(db); err != nil {
@@ -743,20 +706,6 @@ func migrateAgentShadowFrom(db *sql.DB) error {
 	}
 	if !has {
 		if _, err := db.Exec("ALTER TABLE agents ADD COLUMN shadow_from TEXT"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// migrateHookConfigProjectID 迁移 requirement_hook_configs 表新增 project_id 字段
-func migrateHookConfigProjectID(db *sql.DB) error {
-	has, err := tableHasColumn(db, "requirement_hook_configs", "project_id")
-	if err != nil {
-		return err
-	}
-	if !has {
-		if _, err := db.Exec("ALTER TABLE requirement_hook_configs ADD COLUMN project_id TEXT"); err != nil {
 			return err
 		}
 	}

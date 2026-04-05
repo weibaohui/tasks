@@ -103,9 +103,6 @@ type Requirement struct {
 	completionTokens int
 	totalTokens      int
 
-	// stateChangeCallbacks 状态变更回调列表（不持久化）
-	stateChangeCallbacks []StateChangeCallback
-
 	// replicaAgentManager 分身管理器（不持久化）
 	// 通过 SetReplicaAgentManager 设置
 	replicaAgentManager *ReplicaAgentManager
@@ -156,27 +153,6 @@ func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentCo
 // SetReplicaAgentManager 设置分身管理器
 func (r *Requirement) SetReplicaAgentManager(manager *ReplicaAgentManager) {
 	r.replicaAgentManager = manager
-}
-
-// StateChangeCallback 状态变更回调函数类型
-type StateChangeCallback func(change *StateChange)
-
-// SetStateChangeCallback 设置状态变更回调
-func (r *Requirement) SetStateChangeCallback(cb StateChangeCallback) {
-	r.stateChangeCallbacks = append(r.stateChangeCallbacks, cb)
-}
-
-// ClearStateChangeCallbacks 清除所有回调
-func (r *Requirement) ClearStateChangeCallbacks() {
-	r.stateChangeCallbacks = nil
-}
-
-// fireStateChange 触发状态变更回调
-func (r *Requirement) fireStateChange(change *StateChange) {
-	fmt.Printf("[DEBUG] fireStateChange: trigger=%s, callbacks=%d\n", change.Trigger, len(r.stateChangeCallbacks))
-	for _, cb := range r.stateChangeCallbacks {
-		cb(change)
-	}
 }
 
 // NewRedispatchedRequirement 创建重新派发的需求副本
@@ -319,8 +295,6 @@ func (r *Requirement) Redispatch() error {
 		return ErrRequirementCannotDispatch
 	}
 
-	fromStatus := r.status
-
 	now := time.Now()
 	r.status = RequirementStatusTodo
 	r.assigneeAgentCode = ""
@@ -331,14 +305,6 @@ func (r *Requirement) Redispatch() error {
 	r.completedAt = nil
 	r.claudeRuntimePrompt = ""
 	r.updatedAt = now
-
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "redispatch",
-		Reason:     "manual redispatch",
-		Timestamp:  now,
-	})
 
 	return nil
 }
@@ -360,22 +326,12 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 		return ErrRequirementCannotDispatch
 	}
 
-	fromStatus := r.status
-
 	now := time.Now()
 	r.status = RequirementStatusPreparing
 	r.assigneeAgentCode = assigneeAgentCode
 	r.startedAt = &now
 	r.lastError = ""
 	r.updatedAt = now
-
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "start_dispatch",
-		Reason:     "",
-		Timestamp:  now,
-	})
 
 	return nil
 }
@@ -391,42 +347,15 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 	now := time.Now()
 	r.updatedAt = now
 
-	r.fireStateChange(&StateChange{
-		FromStatus: RequirementStatusPreparing,
-		ToStatus:   r.status,
-		Trigger:    "mark_coding",
-		Reason:     "",
-		Timestamp:  now,
-	})
-
 	return nil
 }
 
 func (r *Requirement) MarkPROpened() {
-	fromStatus := r.status
-
 	now := time.Now()
 	r.status = RequirementStatusPROpened
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
-
-	// Claude Code 结束 - 成功
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "claude_code_finished",
-		Reason:     "",
-		Timestamp:  now,
-	})
-
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "mark_pr_opened",
-		Reason:     "",
-		Timestamp:  now,
-	})
 
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
@@ -437,29 +366,10 @@ func (r *Requirement) MarkPROpened() {
 }
 
 func (r *Requirement) MarkFailed(lastError string) {
-	fromStatus := r.status
-
 	r.status = RequirementStatusFailed
 	r.lastError = lastError
 	now := time.Now()
 	r.updatedAt = now
-
-	// Claude Code 结束 - 失败
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "claude_code_finished",
-		Reason:     lastError,
-		Timestamp:  now,
-	})
-
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "mark_failed",
-		Reason:     lastError,
-		Timestamp:  now,
-	})
 
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {
@@ -470,24 +380,11 @@ func (r *Requirement) MarkFailed(lastError string) {
 }
 
 // MarkCompleted 标记需求为已完成（Claude Code 正常结束）
-// 注意：只触发 mark_completed 事件，不触发 claude_code_finished
-// 因为 claude_code_finished 会触发新的 coding agent，而完成状态不需要再启动新的 agent
 func (r *Requirement) MarkCompleted() {
-	fromStatus := r.status
-
 	r.status = RequirementStatusCompleted
 	now := time.Now()
 	r.completedAt = &now
 	r.updatedAt = now
-
-	// 只触发 mark_completed 事件，不触发 claude_code_finished
-	r.fireStateChange(&StateChange{
-		FromStatus: fromStatus,
-		ToStatus:   r.status,
-		Trigger:    "mark_completed",
-		Reason:     "Claude Code 执行完成",
-		Timestamp:  time.Now(),
-	})
 
 	// 强制销毁分身（代码约束）
 	if r.replicaAgentManager != nil {

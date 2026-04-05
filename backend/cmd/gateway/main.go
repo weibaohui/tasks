@@ -32,53 +32,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// zapRequirementLogger 实现 domain.ConfigurableHookLogger 接口
-type zapRequirementLogger struct {
-	logger *zap.Logger
-}
-
-func (l *zapRequirementLogger) Debug(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Debug(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) Info(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Info(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) Error(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Error(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) toZapField(f domain.RequirementStateHookLogField) zap.Field {
-	switch v := f.(type) {
-	case domain.StringField:
-		return zap.String(v.Key, v.Val)
-	default:
-		if af, ok := f.(domain.AnyField); ok {
-			return zap.Any(af.Key, af.Val)
-		}
-		return zap.Any("unknown", f)
-	}
-}
-
 // resolveGatewayWorkspace 解析工作区目录路径
 func resolveGatewayWorkspace() string {
 	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
@@ -121,8 +74,6 @@ func main() {
 	userTokenRepo := _persistence.NewSQLiteUserTokenRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
-	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
-	hookLogRepo := _persistence.NewSQLiteRequirementHookActionLogRepository(db)
 
 	// 4. 初始化 Message Bus
 	messageBus := channelBus.NewMessageBus(logger)
@@ -136,10 +87,9 @@ func main() {
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	logger.Info("Session 服务初始化完成")
 
-	// 6.5 初始化 Hook Executor 和 ReplicaAgentManager
-	hookExecutor := domain.NewConfigurableHookExecutor(hookConfigRepo, hookLogRepo, nil, &zapRequirementLogger{logger: logger}, idGenerator)
+	// 6.5 初始化 ReplicaAgentManager
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
-	logger.Info("Hook Executor 和 ReplicaAgentManager 初始化完成")
+	logger.Info("ReplicaAgentManager 初始化完成")
 
 	// 7. 初始化 Hook Manager
 	hookManager := hook.NewManager(logger, nil)
@@ -155,7 +105,7 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务

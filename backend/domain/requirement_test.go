@@ -243,13 +243,6 @@ func TestRequirement_StartDispatch_Success(t *testing.T) {
 		"",
 	)
 
-	callbackTriggered := false
-	var stateChange *StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-		stateChange = change
-	})
-
 	time.Sleep(10 * time.Millisecond) // 确保时间戳不同
 	err := req.StartDispatch("agent-001")
 
@@ -275,23 +268,6 @@ func TestRequirement_StartDispatch_Success(t *testing.T) {
 	// 验证 LastError 被清空
 	if req.LastError() != "" {
 		t.Errorf("期望 LastError 被清空, 实际为 %s", req.LastError())
-	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
-
-	if stateChange != nil {
-		if stateChange.FromStatus != RequirementStatusTodo {
-			t.Errorf("期望 FromStatus 为 todo, 实际为 %s", stateChange.FromStatus)
-		}
-		if stateChange.ToStatus != RequirementStatusPreparing {
-			t.Errorf("期望 ToStatus 为 preparing, 实际为 %s", stateChange.ToStatus)
-		}
-		if stateChange.Trigger != "start_dispatch" {
-			t.Errorf("期望 Trigger 为 start_dispatch, 实际为 %s", stateChange.Trigger)
-		}
 	}
 }
 
@@ -323,13 +299,6 @@ func TestRequirement_StartDispatch_InvalidState(t *testing.T) {
 func TestRequirement_MarkCoding_Success(t *testing.T) {
 	req := createRequirementWithStatus(RequirementStatusPreparing)
 
-	callbackTriggered := false
-	var stateChange *StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-		stateChange = change
-	})
-
 	time.Sleep(10 * time.Millisecond)
 	err := req.MarkCoding("/workspace/test", "replica-001")
 
@@ -350,23 +319,6 @@ func TestRequirement_MarkCoding_Success(t *testing.T) {
 	// 验证分身代码
 	if req.ReplicaAgentCode() != "replica-001" {
 		t.Errorf("期望ReplicaAgentCode为 replica-001, 实际为 %s", req.ReplicaAgentCode())
-	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
-
-	if stateChange != nil {
-		if stateChange.FromStatus != RequirementStatusPreparing {
-			t.Errorf("期望 FromStatus 为 preparing, 实际为 %s", stateChange.FromStatus)
-		}
-		if stateChange.ToStatus != RequirementStatusCoding {
-			t.Errorf("期望 ToStatus 为 coding, 实际为 %s", stateChange.ToStatus)
-		}
-		if stateChange.Trigger != "mark_coding" {
-			t.Errorf("期望 Trigger 为 mark_coding, 实际为 %s", stateChange.Trigger)
-		}
 	}
 }
 
@@ -395,13 +347,6 @@ func TestRequirement_MarkCoding_InvalidState(t *testing.T) {
 func TestRequirement_MarkPROpened(t *testing.T) {
 	req := createRequirementWithStatus(RequirementStatusCoding)
 
-	callbackCount := 0
-	var stateChanges []*StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackCount++
-		stateChanges = append(stateChanges, change)
-	})
-
 	time.Sleep(10 * time.Millisecond)
 	req.MarkPROpened()
 
@@ -419,35 +364,10 @@ func TestRequirement_MarkPROpened(t *testing.T) {
 	if req.CompletedAt() == nil {
 		t.Error("期望 CompletedAt 被设置")
 	}
-
-	// 验证回调被触发两次
-	if callbackCount != 2 {
-		t.Errorf("期望回调被触发 2 次, 实际 %d 次", callbackCount)
-	}
-
-	// 验证回调内容
-	if len(stateChanges) >= 2 {
-		// 第一个回调是 claude_code_finished
-		if stateChanges[0].Trigger != "claude_code_finished" {
-			t.Errorf("期望第一个回调 Trigger 为 claude_code_finished, 实际为 %s", stateChanges[0].Trigger)
-		}
-
-		// 第二个回调是 mark_pr_opened
-		if stateChanges[1].Trigger != "mark_pr_opened" {
-			t.Errorf("期望第二个回调 Trigger 为 mark_pr_opened, 实际为 %s", stateChanges[1].Trigger)
-		}
-	}
 }
 
 func TestRequirement_MarkFailed(t *testing.T) {
 	req := createRequirementWithStatus(RequirementStatusCoding)
-
-	callbackCount := 0
-	var stateChanges []*StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackCount++
-		stateChanges = append(stateChanges, change)
-	})
 
 	time.Sleep(10 * time.Millisecond)
 	req.MarkFailed("执行失败: 网络错误")
@@ -461,38 +381,10 @@ func TestRequirement_MarkFailed(t *testing.T) {
 	if req.LastError() != "执行失败: 网络错误" {
 		t.Errorf("期望 LastError 为 '执行失败: 网络错误', 实际为 %s", req.LastError())
 	}
-
-	// 验证回调被触发两次
-	if callbackCount != 2 {
-		t.Errorf("期望回调被触发 2 次, 实际 %d 次", callbackCount)
-	}
-
-	// 验证回调内容
-	if len(stateChanges) >= 2 {
-		// 第一个回调是 claude_code_finished
-		if stateChanges[0].Trigger != "claude_code_finished" {
-			t.Errorf("期望第一个回调 Trigger 为 claude_code_finished, 实际为 %s", stateChanges[0].Trigger)
-		}
-		if stateChanges[0].Reason != "执行失败: 网络错误" {
-			t.Errorf("期望第一个回调 Reason 为错误信息, 实际为 %s", stateChanges[0].Reason)
-		}
-
-		// 第二个回调是 mark_failed
-		if stateChanges[1].Trigger != "mark_failed" {
-			t.Errorf("期望第二个回调 Trigger 为 mark_failed, 实际为 %s", stateChanges[1].Trigger)
-		}
-	}
 }
 
 func TestRequirement_MarkCompleted(t *testing.T) {
 	req := createRequirementWithStatus(RequirementStatusCoding)
-
-	callbackTriggered := false
-	var stateChange *StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-		stateChange = change
-	})
 
 	time.Sleep(10 * time.Millisecond)
 	req.MarkCompleted()
@@ -506,20 +398,6 @@ func TestRequirement_MarkCompleted(t *testing.T) {
 	if req.CompletedAt() == nil {
 		t.Error("期望 CompletedAt 被设置")
 	}
-
-	// 验证回调被触发一次 (只有 mark_completed，没有 claude_code_finished)
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
-
-	if stateChange != nil {
-		if stateChange.Trigger != "mark_completed" {
-			t.Errorf("期望 Trigger 为 mark_completed, 实际为 %s", stateChange.Trigger)
-		}
-		if stateChange.Reason != "Claude Code 执行完成" {
-			t.Errorf("期望 Reason 为 'Claude Code 执行完成', 实际为 %s", stateChange.Reason)
-		}
-	}
 }
 
 func TestRequirement_Redispatch_Success(t *testing.T) {
@@ -528,13 +406,6 @@ func TestRequirement_Redispatch_Success(t *testing.T) {
 	req.SetDispatchSessionKey("session-001")
 	req.SetWorkspacePath("/workspace/test")
 	req.SetReplicaAgentCode("replica-001")
-
-	callbackTriggered := false
-	var stateChange *StateChange
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-		stateChange = change
-	})
 
 	time.Sleep(10 * time.Millisecond)
 	err := req.Redispatch()
@@ -575,20 +446,6 @@ func TestRequirement_Redispatch_Success(t *testing.T) {
 
 	if req.ClaudeRuntimePrompt() != "" {
 		t.Errorf("期望 ClaudeRuntimePrompt 被清空, 实际为 %s", req.ClaudeRuntimePrompt())
-	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
-
-	if stateChange != nil {
-		if stateChange.Trigger != "redispatch" {
-			t.Errorf("期望 Trigger 为 redispatch, 实际为 %s", stateChange.Trigger)
-		}
-		if stateChange.Reason != "manual redispatch" {
-			t.Errorf("期望 Reason 为 'manual redispatch', 实际为 %s", stateChange.Reason)
-		}
 	}
 }
 
@@ -1397,93 +1254,6 @@ func TestRequirement_SnapshotRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRequirement_StateChangeCallback(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusTodo)
-
-	callbackCount := 0
-	var receivedChanges []*StateChange
-
-	callback := func(change *StateChange) {
-		callbackCount++
-		receivedChanges = append(receivedChanges, change)
-	}
-
-	req.SetStateChangeCallback(callback)
-
-	// 触发状态变更
-	req.StartDispatch("agent-001")
-
-	if callbackCount != 1 {
-		t.Errorf("期望回调被触发 1 次, 实际 %d 次", callbackCount)
-	}
-
-	// 添加第二个回调
-	callback2Count := 0
-	callback2 := func(change *StateChange) {
-		callback2Count++
-	}
-
-	req.SetStateChangeCallback(callback2)
-
-	// 再次触发状态变更
-	req.MarkCoding("/workspace", "replica-001")
-
-	if callbackCount != 2 {
-		t.Errorf("期望第一个回调被触发 2 次, 实际 %d 次", callbackCount)
-	}
-
-	if callback2Count != 1 {
-		t.Errorf("期望第二个回调被触发 1 次, 实际 %d 次", callback2Count)
-	}
-}
-
-func TestRequirement_ClearStateChangeCallbacks(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusTodo)
-
-	callbackTriggered := false
-	callback := func(change *StateChange) {
-		callbackTriggered = true
-	}
-
-	req.SetStateChangeCallback(callback)
-	req.ClearStateChangeCallbacks()
-
-	// 触发状态变更，回调不应被触发
-	req.StartDispatch("agent-001")
-
-	if callbackTriggered {
-		t.Error("清除回调后不应再触发回调")
-	}
-}
-
-func TestRequirement_MultipleCallbacks(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusTodo)
-
-	var callbackOrder []string
-
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackOrder = append(callbackOrder, "callback1")
-	})
-
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackOrder = append(callbackOrder, "callback2")
-	})
-
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackOrder = append(callbackOrder, "callback3")
-	})
-
-	req.StartDispatch("agent-001")
-
-	if len(callbackOrder) != 3 {
-		t.Errorf("期望触发 3 个回调, 实际 %d 个", len(callbackOrder))
-	}
-
-	if callbackOrder[0] != "callback1" || callbackOrder[1] != "callback2" || callbackOrder[2] != "callback3" {
-		t.Errorf("回调触发顺序不正确: %v", callbackOrder)
-	}
-}
-
 func TestRequirement_ClaudeRuntimeTimeCopy(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
@@ -1548,11 +1318,6 @@ func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
 	manager := NewReplicaAgentManager(mockRepo)
 	req.SetReplicaAgentManager(manager)
 
-	callbackTriggered := false
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-	})
-
 	req.MarkPROpened()
 
 	// 验证状态变更
@@ -1568,11 +1333,6 @@ func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
 	if req.WorkspacePath() != "" {
 		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
 	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
 }
 
 func TestRequirement_MarkFailed_WithManager(t *testing.T) {
@@ -1586,12 +1346,6 @@ func TestRequirement_MarkFailed_WithManager(t *testing.T) {
 	mockRepo := &mockAgentRepository{}
 	manager := NewReplicaAgentManager(mockRepo)
 	req.SetReplicaAgentManager(manager)
-
-	callbackTriggered := false
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-	})
-
 	req.MarkFailed("执行失败")
 
 	// 验证状态变更
@@ -1607,11 +1361,6 @@ func TestRequirement_MarkFailed_WithManager(t *testing.T) {
 	if req.WorkspacePath() != "" {
 		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
 	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
-	}
 }
 
 func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
@@ -1625,12 +1374,6 @@ func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
 	mockRepo := &mockAgentRepository{}
 	manager := NewReplicaAgentManager(mockRepo)
 	req.SetReplicaAgentManager(manager)
-
-	callbackTriggered := false
-	req.SetStateChangeCallback(func(change *StateChange) {
-		callbackTriggered = true
-	})
-
 	req.MarkCompleted()
 
 	// 验证状态变更
@@ -1645,11 +1388,6 @@ func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
 
 	if req.WorkspacePath() != "" {
 		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
-	}
-
-	// 验证回调被触发
-	if !callbackTriggered {
-		t.Error("期望状态变更回调被触发")
 	}
 }
 

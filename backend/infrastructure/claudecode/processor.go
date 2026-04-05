@@ -137,7 +137,6 @@ type ClaudeCodeProcessor struct {
 	idGenerator         domain.IDGenerator
 	requirementRepo     domain.RequirementRepository
 	conversationRepo    domain.ConversationRecordRepository
-	hookExecutor        *domain.ConfigurableHookExecutor
 	replicaAgentManager *domain.ReplicaAgentManager
 }
 
@@ -160,7 +159,6 @@ func NewClaudeCodeProcessor(
 	providerRepo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
 	requirementRepo domain.RequirementRepository,
-	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
@@ -171,7 +169,6 @@ func NewClaudeCodeProcessor(
 		idGenerator:         idGenerator,
 		requirementRepo:     requirementRepo,
 		conversationRepo:    conversationRepo,
-		hookExecutor:        hookExecutor,
 		replicaAgentManager: replicaAgentManager,
 	}
 }
@@ -1141,17 +1138,5 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 				)
 			}
 		}
-	}
-
-	// 触发 hook
-	if p.hookExecutor != nil {
-		change := &domain.StateChange{
-			FromStatus: requirement.Status(),
-			ToStatus:   requirement.Status(),
-			Trigger:    "claude_code_finished",
-			Reason:     "Claude Code 对话结束",
-			Timestamp:  time.Now(),
-		}
-		p.hookExecutor.Execute(ctx, "claude_code_finished", requirement, change)
 	}
 }

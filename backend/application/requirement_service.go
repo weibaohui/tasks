@@ -40,7 +40,6 @@ type RequirementApplicationService struct {
 	requirementRepo     domain.RequirementRepository
 	projectRepo         domain.ProjectRepository
 	idGenerator         domain.IDGenerator
-	hookExecutor        *domain.ConfigurableHookExecutor
 	replicaAgentManager *domain.ReplicaAgentManager
 }
 
@@ -48,14 +47,12 @@ func NewRequirementApplicationService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
-	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
 		requirementRepo:     requirementRepo,
 		projectRepo:         projectRepo,
 		idGenerator:         idGenerator,
-		hookExecutor:        hookExecutor,
 		replicaAgentManager: replicaAgentManager,
 	}
 }
@@ -153,18 +150,6 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 
 	// 设置分身管理器（用于清理）
 	requirement.SetReplicaAgentManager(s.replicaAgentManager)
-
-	// 设置状态变更回调
-	requirement.ClearStateChangeCallbacks()
-	if s.hookExecutor != nil {
-		requirement.SetStateChangeCallback(func(change *domain.StateChange) {
-			fmt.Printf("[DEBUG] Hook callback triggered: trigger=%s, requirement=%s\n", change.Trigger, requirement.ID())
-			s.hookExecutor.Execute(ctx, change.Trigger, requirement, change)
-		})
-		fmt.Println("[DEBUG] Hook executor available, callback set")
-	} else {
-		fmt.Println("[DEBUG] Hook executor is NIL!")
-	}
 
 	requirement.MarkPROpened()
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {

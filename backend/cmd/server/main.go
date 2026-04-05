@@ -134,21 +134,6 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 
-	// 初始化 Hook 配置仓储
-	hookConfigRepo := _persistence.NewSQLiteRequirementHookConfigRepository(db)
-	hookLogRepo := _persistence.NewSQLiteRequirementHookActionLogRepository(db)
-	logger.Info("Hook 仓储初始化完成")
-
-	hookLogger := &zapRequirementLogger{logger: logger}
-	hookExecutor := domain.NewConfigurableHookExecutor(
-		hookConfigRepo,
-		hookLogRepo,
-		nil,
-		hookLogger,
-		idGenerator,
-	)
-	logger.Info("ConfigurableHookExecutor 初始化完成")
-
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
 	logger.Info("ReplicaAgentManager 初始化完成")
 
@@ -160,7 +145,6 @@ func main() {
 		sessionService,
 		idGenerator,
 		replicaAgentManager,
-		hookExecutor,
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 
@@ -168,7 +152,7 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 
 	// 7. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 8. 初始化心跳调度器
@@ -180,12 +164,6 @@ func main() {
 		gateway.messageBus,
 		requirementDispatchService,
 	)
-
-	// 添加 TriggerAgentExecutor 到 Hook 执行器
-	triggerAgentExecutor := hook.NewTriggerAgentExecutor(agentRepo, requirementRepo, projectRepo, idGenerator, gateway.messageBus)
-	hookExecutor.AddExecutor(triggerAgentExecutor)
-	fmt.Printf("[DEBUG] TriggerAgentExecutor 注册完成\n")
-	logger.Info("TriggerAgentExecutor 注册完成")
 
 	// 启动心跳调度器
 	heartbeatCtx := context.Background()
@@ -217,7 +195,6 @@ func main() {
 		requirementRepo,
 		projectRepo,
 		idGenerator,
-		hookExecutor,
 		replicaAgentManager,
 	)
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
@@ -229,7 +206,6 @@ func main() {
 	}
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
-	hookHandler := httpHandler.NewHookHandler(hookConfigRepo, hookLogRepo, idGenerator)
 
 	// 初始化状态机
 	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
@@ -241,7 +217,7 @@ func main() {
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
-		requirementHandler, hookHandler, stateMachineHandler,
+		requirementHandler, stateMachineHandler,
 	)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）
@@ -446,7 +422,6 @@ func initGateway(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRecordRepo domain.ConversationRecordRepository,
-	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *Gateway {
 	gw := &Gateway{
@@ -460,7 +435,7 @@ func initGateway(
 	hookManager.Register(feishuThinkingHook)
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, hookExecutor, replicaAgentManager)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
 	gw.channelManager = channel.NewManager(gw.messageBus)
 	gw.loadChannels(channelService)
 
@@ -546,52 +521,6 @@ func (g *Gateway) Shutdown() {
 
 func (g *Gateway) ChannelCount() int {
 	return len(g.channelManager.List())
-}
-
-type zapRequirementLogger struct {
-	logger *zap.Logger
-}
-
-func (l *zapRequirementLogger) Debug(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Debug(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) Info(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Info(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) Error(msg string, fields ...domain.RequirementStateHookLogField) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		if sf, ok := f.(domain.RequirementStateHookLogField); ok {
-			zapFields[i] = l.toZapField(sf)
-		}
-	}
-	l.logger.Error(msg, zapFields...)
-}
-
-func (l *zapRequirementLogger) toZapField(f domain.RequirementStateHookLogField) zap.Field {
-	switch v := f.(type) {
-	case domain.StringField:
-		return zap.String(v.Key, v.Val)
-	default:
-		if af, ok := f.(domain.AnyField); ok {
-			return zap.Any(af.Key, af.Val)
-		}
-		return zap.Any("unknown", f)
-	}
 }
 
 // initLogger 根据配置的日志级别初始化 zap logger

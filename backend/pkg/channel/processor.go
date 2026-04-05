@@ -231,7 +231,6 @@ type MessageProcessor struct {
 	skillsLoader         *skill.SkillsLoader
 	requirementRepo      domain.RequirementRepository
 	conversationRepo     domain.ConversationRecordRepository
-	hookExecutor         *domain.ConfigurableHookExecutor
 	replicaAgentManager  *domain.ReplicaAgentManager
 	claudeCodeProcessor  claudecode.ClaudeCodeProcessorInterface
 	commandProcessor     *CommandProcessor
@@ -254,7 +253,6 @@ func NewMessageProcessor(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRepo domain.ConversationRecordRepository,
-	hookExecutor *domain.ConfigurableHookExecutor,
 	replicaAgentManager *domain.ReplicaAgentManager,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
@@ -282,9 +280,8 @@ func NewMessageProcessor(
 		skillsLoader:         skillsLoader,
 		requirementRepo:      requirementRepo,
 		conversationRepo:     conversationRepo,
-		hookExecutor:         hookExecutor,
 		replicaAgentManager:  replicaAgentManager,
-		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, hookExecutor, replicaAgentManager, conversationRepo),
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, replicaAgentManager, conversationRepo),
 		commandProcessor:     commandProcessor,
 	}
 }
