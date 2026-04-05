@@ -213,6 +213,7 @@ type UpdateRequirementRequest struct {
 	Description        *string `json:"description,omitempty"`
 	AcceptanceCriteria *string `json:"acceptance_criteria,omitempty"`
 	TempWorkspaceRoot  *string `json:"temp_workspace_root,omitempty"`
+	Status             *string `json:"status,omitempty"`
 }
 
 // UpdateRequirement 更新需求

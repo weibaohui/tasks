@@ -20,4 +20,6 @@ func init() {
 	requirementCmd.AddCommand(requirementGetCmd)
 	requirementCmd.AddCommand(requirementReviewCmd)
 	requirementCmd.AddCommand(requirementResetCmd)
+	requirementCmd.AddCommand(requirementGetStateCmd)
+	requirementCmd.AddCommand(requirementUpdateStateCmd)
 }
