@@ -2,9 +2,10 @@
  * StateMachine Edit Drawer Component
  */
 import React, { useEffect } from 'react';
-import { Drawer, Form, Input, Button, Space, message, Alert, Tabs, Modal, Select, Table, Tag, Divider } from 'antd';
-import { PlusOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Drawer, Form, Input, Button, Space, message, Alert, Tabs, Modal, Select, Table, Tag, Divider, Collapse } from 'antd';
+import { PlusOutlined, EditOutlined, InfoCircleOutlined, ThunderboltOutlined, CheckOutlined } from '@ant-design/icons';
 import type { StateMachine, CreateStateMachineRequest, TransitionHook } from '../../../types/stateMachine';
+import { hookExamples, examplesByCategory, categoryNames, type HookExample } from './hookExamples';
 
 const DEFAULT_YAML = `name: example_flow
 description: 示例状态机流程
@@ -83,6 +84,24 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     retry: 0,
     timeout: 30,
   });
+  const [selectedExample, setSelectedExample] = React.useState<HookExample | null>(null);
+
+  // 应用示例模板
+  const applyExample = (example: HookExample) => {
+    setSelectedExample(example);
+    setCurrentHook({
+      name: example.name,
+      type: example.type,
+      config: example.type === 'webhook'
+        ? { url: example.config.url || '', method: example.config.method || 'POST' }
+        : { command: example.config.command || '' },
+      retry: example.retry || 0,
+      timeout: example.timeout || 30,
+    });
+  };
+
+  // 根据当前选择的类型筛选示例
+  const filteredExamples = hookExamples.filter((e) => e.type === currentHook.type);
 
   useEffect(() => {
     if (open) {
@@ -529,163 +548,211 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
         title={editingHook && editingHook.hookIndex >= 0 ? '编辑 Hook' : '添加 Hook'}
         open={hookModalOpen}
         onOk={saveHook}
-        onCancel={() => setHookModalOpen(false)}
+        onCancel={() => {
+          setHookModalOpen(false);
+          setSelectedExample(null);
+        }}
         okText="保存"
         cancelText="取消"
-        width={700}
+        width={900}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Form layout="vertical">
-            <Form.Item label="Hook 名称" required>
-              <Input
-                value={currentHook.name}
-                onChange={(e) => setCurrentHook({ ...currentHook, name: e.target.value })}
-                placeholder="例如：发送通知、执行部署"
-              />
-            </Form.Item>
+        <div style={{ display: 'flex', gap: 24, minHeight: 400 }}>
+          {/* 左侧：示例库 */}
+          <div style={{ width: 280, borderRight: '1px solid #f0f0f0', paddingRight: 16 }}>
+            <div style={{ marginBottom: 12 }}>
+              <Space>
+                <ThunderboltOutlined />
+                <strong>示例模板</strong>
+              </Space>
+            </div>
+            <Collapse
+              defaultActiveKey={['notification', 'deployment']}
+              ghost
+              style={{ background: 'transparent' }}
+            >
+              {(Object.keys(examplesByCategory) as Array<keyof typeof examplesByCategory>).map((category) => {
+                const examples = examplesByCategory[category].filter((e) => e.type === currentHook.type);
+                if (examples.length === 0) return null;
+                return (
+                  <Collapse.Panel
+                    key={category}
+                    header={<span style={{ fontSize: 12 }}>{categoryNames[category]} ({examples.length})</span>}
+                  >
+                    {examples.map((example) => (
+                      <div
+                        key={example.id}
+                        onClick={() => applyExample(example)}
+                        style={{
+                          padding: '8px 12px',
+                          marginBottom: 4,
+                          borderRadius: 6,
+                          border: selectedExample?.id === example.id ? '2px solid #1890ff' : '1px dashed #d9d9d9',
+                          background: selectedExample?.id === example.id ? '#e6f7ff' : '#fafafa',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 500, fontSize: 13 }}>{example.name}</span>
+                          {selectedExample?.id === example.id && <CheckOutlined style={{ color: '#1890ff' }} />}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{example.description}</div>
+                      </div>
+                    ))}
+                  </Collapse.Panel>
+                );
+              })}
+            </Collapse>
+            {filteredExamples.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
+                先选择 Hook 类型
+              </div>
+            )}
+          </div>
 
-            <Form.Item label="Hook 类型" required>
-              <Select
-                value={currentHook.type}
-                onChange={(value) => setCurrentHook({
-                  ...currentHook,
-                  type: value,
-                  config: value === 'webhook' ? { url: '', method: 'POST' } : { command: '' },
-                })}
-              >
-                <Select.Option value="webhook">
-                  <span>🌐 Webhook</span>
-                </Select.Option>
-                <Select.Option value="command">
-                  <span>📦 命令执行</span>
-                </Select.Option>
-              </Select>
-            </Form.Item>
-          </Form>
-
-          <Divider style={{ margin: '8px 0' }} />
-
-          {currentHook.type === 'webhook' && (
-            <div>
+          {/* 右侧：表单编辑 */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <Form layout="vertical">
-                <Form.Item label="Webhook URL" required>
+                <Form.Item label="Hook 名称" required>
                   <Input
-                    value={(currentHook.config.url as string) || ''}
-                    onChange={(e) => setCurrentHook({
-                      ...currentHook,
-                      config: { ...currentHook.config, url: e.target.value },
-                    })}
-                    placeholder="https://example.com/webhook"
+                    value={currentHook.name}
+                    onChange={(e) => setCurrentHook({ ...currentHook, name: e.target.value })}
+                    placeholder="例如：发送通知、执行部署"
                   />
                 </Form.Item>
-                <Form.Item label="请求方法">
+
+                <Form.Item label="Hook 类型" required>
                   <Select
-                    value={(currentHook.config.method as string) || 'POST'}
-                    onChange={(value) => setCurrentHook({
-                      ...currentHook,
-                      config: { ...currentHook.config, method: value },
-                    })}
+                    value={currentHook.type}
+                    onChange={(value) => {
+                      setSelectedExample(null);
+                      setCurrentHook({
+                        ...currentHook,
+                        type: value,
+                        config: value === 'webhook' ? { url: '', method: 'POST' } : { command: '' },
+                      });
+                    }}
                   >
-                    <Select.Option value="POST">POST</Select.Option>
-                    <Select.Option value="GET">GET</Select.Option>
-                    <Select.Option value="PUT">PUT</Select.Option>
-                    <Select.Option value="DELETE">DELETE</Select.Option>
+                    <Select.Option value="webhook">
+                      <span>🌐 Webhook</span>
+                    </Select.Option>
+                    <Select.Option value="command">
+                      <span>📦 命令执行</span>
+                    </Select.Option>
                   </Select>
                 </Form.Item>
               </Form>
-            </div>
-          )}
 
-          {currentHook.type === 'command' && (
-            <div>
-              <Form layout="vertical">
-                <Form.Item label="命令" required>
-                  <Input.TextArea
-                    value={(currentHook.config.command as string) || ''}
+              <Divider style={{ margin: '8px 0' }} />
+
+              {currentHook.type === 'webhook' && (
+                <div>
+                  <Form layout="vertical">
+                    <Form.Item label="Webhook URL" required>
+                      <Input
+                        value={(currentHook.config.url as string) || ''}
+                        onChange={(e) => setCurrentHook({
+                          ...currentHook,
+                          config: { ...currentHook.config, url: e.target.value },
+                        })}
+                        placeholder="https://example.com/webhook"
+                        addonAfter={
+                          <Tag color="blue" style={{ margin: 0 }}>可使用 {`{{variable}}`}</Tag>
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item label="请求方法">
+                      <Select
+                        value={(currentHook.config.method as string) || 'POST'}
+                        onChange={(value) => setCurrentHook({
+                          ...currentHook,
+                          config: { ...currentHook.config, method: value },
+                        })}
+                      >
+                        <Select.Option value="POST">POST</Select.Option>
+                        <Select.Option value="GET">GET</Select.Option>
+                        <Select.Option value="PUT">PUT</Select.Option>
+                        <Select.Option value="DELETE">DELETE</Select.Option>
+                      </Select>
+                    </Form.Item>
+                  </Form>
+                </div>
+              )}
+
+              {currentHook.type === 'command' && (
+                <div>
+                  <Form layout="vertical">
+                    <Form.Item label="命令" required>
+                      <Input.TextArea
+                        value={(currentHook.config.command as string) || ''}
+                        onChange={(e) => setCurrentHook({
+                          ...currentHook,
+                          config: { ...currentHook.config, command: e.target.value },
+                        })}
+                        placeholder="/bin/bash /scripts/deploy.sh {{requirement_id}}"
+                        rows={3}
+                      />
+                    </Form.Item>
+                  </Form>
+                </div>
+              )}
+
+              <Form layout="horizontal" style={{ display: 'flex', gap: 16 }}>
+                <Form.Item label="超时时间（秒）" style={{ flex: 1 }}>
+                  <Input
+                    type="number"
+                    value={currentHook.timeout || 30}
                     onChange={(e) => setCurrentHook({
                       ...currentHook,
-                      config: { ...currentHook.config, command: e.target.value },
+                      timeout: parseInt(e.target.value) || 30,
                     })}
-                    placeholder="/bin/bash /scripts/deploy.sh {{requirement_id}}"
-                    rows={3}
+                    placeholder="30"
+                  />
+                </Form.Item>
+                <Form.Item label="重试次数" style={{ flex: 1 }}>
+                  <Input
+                    type="number"
+                    value={currentHook.retry || 0}
+                    onChange={(e) => setCurrentHook({
+                      ...currentHook,
+                      retry: parseInt(e.target.value) || 0,
+                    })}
+                    placeholder="0"
                   />
                 </Form.Item>
               </Form>
+
+              <Divider style={{ margin: '8px 0' }} />
+
+              {/* 模板变量说明 */}
+              <Alert
+                type="info"
+                showIcon
+                icon={<InfoCircleOutlined />}
+                message="可用模板变量"
+                description={
+                  <div>
+                    <p style={{ marginBottom: 8 }}>
+                      点击以下变量可插入到 {currentHook.type === 'webhook' ? 'URL' : '命令'} 中：
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {TEMPLATE_VARIABLES.map((v) => (
+                        <Tag
+                          key={v.key}
+                          color="cyan"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
+                        >
+                          {`{{${v.key}}}`}
+                        </Tag>
+                      ))}
+                    </div>
+                  </div>
+                }
+              />
             </div>
-          )}
-
-          <Form layout="horizontal" style={{ display: 'flex', gap: 16 }}>
-            <Form.Item label="超时时间（秒）" style={{ flex: 1 }}>
-              <Input
-                type="number"
-                value={currentHook.timeout || 30}
-                onChange={(e) => setCurrentHook({
-                  ...currentHook,
-                  timeout: parseInt(e.target.value) || 30,
-                })}
-                placeholder="30"
-              />
-            </Form.Item>
-            <Form.Item label="重试次数" style={{ flex: 1 }}>
-              <Input
-                type="number"
-                value={currentHook.retry || 0}
-                onChange={(e) => setCurrentHook({
-                  ...currentHook,
-                  retry: parseInt(e.target.value) || 0,
-                })}
-                placeholder="0"
-              />
-            </Form.Item>
-          </Form>
-
-          <Divider style={{ margin: '8px 0' }} />
-
-          {/* 模板变量说明 */}
-          <Alert
-            type="info"
-            showIcon
-            icon={<InfoCircleOutlined />}
-            message="可用模板变量"
-            description={
-              <div>
-                <p style={{ marginBottom: 8 }}>
-                  点击以下变量可插入到 {currentHook.type === 'webhook' ? 'URL' : '命令'} 中：
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {TEMPLATE_VARIABLES.map((v) => (
-                    <Tag
-                      key={v.key}
-                      color="cyan"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
-                    >
-                      {`{{${v.key}}}`}
-                    </Tag>
-                  ))}
-                </div>
-                <Divider style={{ margin: '12px 0 8px' }} />
-                <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #f0f0f0', padding: '4px 8px' }}>变量</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #f0f0f0', padding: '4px 8px' }}>说明</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TEMPLATE_VARIABLES.map((v) => (
-                      <tr key={v.key}>
-                        <td style={{ padding: '4px 8px' }}>
-                          <code style={{ color: '#1890ff' }}>{`{{${v.key}}}`}</code>
-                        </td>
-                        <td style={{ padding: '4px 8px', color: '#666' }}>{v.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            }
-          />
+          </div>
         </div>
       </Modal>
     </>
