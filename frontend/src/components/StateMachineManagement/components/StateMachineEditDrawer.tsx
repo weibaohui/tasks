@@ -618,7 +618,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               {record.hooks.map((hook, hookIndex) => (
                                 <Tag
-                                  key={hookIndex}
+                                  key={`${transitionIndex}-${hookIndex}-${hook.name}`}
                                   closable
                                   onClose={(e) => {
                                     e.stopPropagation();
