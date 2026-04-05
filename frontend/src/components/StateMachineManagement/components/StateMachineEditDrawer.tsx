@@ -3,9 +3,10 @@
  */
 import React, { useEffect } from 'react';
 import { Drawer, Form, Input, Button, Space, message, Alert, Tabs, Modal, Select, Table, Tag, Divider, Collapse } from 'antd';
-import { PlusOutlined, EditOutlined, InfoCircleOutlined, ThunderboltOutlined, CheckOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, InfoCircleOutlined, ThunderboltOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { StateMachine, CreateStateMachineRequest, TransitionHook } from '../../../types/stateMachine';
 import { hookExamples, examplesByCategory, categoryNames, type HookExample } from './hookExamples';
+import { stateMachineTemplates, type StateMachineTemplate } from './stateMachineTemplates';
 
 const DEFAULT_YAML = `name: example_flow
 description: 示例状态机流程
@@ -85,8 +86,9 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     timeout: 30,
   });
   const [selectedExample, setSelectedExample] = React.useState<HookExample | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = React.useState<StateMachineTemplate | null>(null);
 
-  // 应用示例模板
+  // 应用 Hook 示例模板
   const applyExample = (example: HookExample) => {
     setSelectedExample(example);
     setCurrentHook({
@@ -100,7 +102,55 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     });
   };
 
-  // 根据当前选择的类型筛选示例
+  // 应用状态机模板
+  const applyTemplate = (template: StateMachineTemplate) => {
+    setSelectedTemplate(template);
+    // 解析 YAML/JSON 并更新表单
+    try {
+      // 尝试解析 JSON
+      let config = JSON.parse(template.yaml);
+      form.setFieldsValue({
+        name: config.name || template.name,
+        description: config.description || template.description,
+        config: template.yaml,
+      });
+      // 更新可视化状态
+      if (config.states) {
+        setVisualStates(
+          config.states.map((s: { id: string; name: string; is_final: boolean }) => ({
+            id: s.id,
+            name: s.name,
+            isFinal: s.is_final,
+          })),
+        );
+      }
+      if (config.transitions) {
+        setVisualTransitions(
+          config.transitions.map((t: { from: string; to: string; trigger: string; description?: string; hooks?: TransitionHook[] }) => ({
+            from: t.from,
+            to: t.to,
+            trigger: t.trigger,
+            description: t.description || '',
+            hooks: t.hooks || [],
+          })),
+        );
+      }
+      // 切换到 JSON 编辑模式
+      setActiveTab('yaml');
+      message.success(`已加载模板：${template.name}`);
+    } catch {
+      // 如果不是 JSON，当作 YAML 处理
+      form.setFieldsValue({
+        name: template.name,
+        description: template.description,
+        config: template.yaml,
+      });
+      setActiveTab('yaml');
+      message.success(`已加载模板：${template.name}`);
+    }
+  };
+
+  // 根据当前选择的类型筛选 Hook 示例
   const filteredExamples = hookExamples.filter((e) => e.type === currentHook.type);
 
   useEffect(() => {
@@ -355,6 +405,39 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
         }
       >
         <Form form={form} layout="vertical">
+          {/* 模板选择器 */}
+          {!editing && (
+            <Form.Item label="快速开始">
+              <Space>
+                <Select
+                  placeholder="从模板创建..."
+                  style={{ width: 200 }}
+                  value={selectedTemplate?.id}
+                  onChange={(value) => {
+                    const template = stateMachineTemplates.find((t) => t.id === value);
+                    if (template) applyTemplate(template);
+                  }}
+                  options={stateMachineTemplates.map((t) => ({
+                    value: t.id,
+                    label: (
+                      <Space>
+                        <FileTextOutlined />
+                        {t.name}
+                      </Space>
+                    ),
+                  }))}
+                />
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => setSelectedTemplate(null)}
+                >
+                  清空
+                </Button>
+              </Space>
+            </Form.Item>
+          )}
+
           <Form.Item
             label="名称"
             name="name"
