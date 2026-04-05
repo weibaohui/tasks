@@ -4,6 +4,7 @@
 import React, { useEffect } from 'react';
 import { Drawer, Form, Input, Button, Space, message, Alert, Tabs, Modal, Select, Table, Tag, Divider, Collapse } from 'antd';
 import { PlusOutlined, EditOutlined, InfoCircleOutlined, ThunderboltOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
+import * as yaml from 'js-yaml';
 import type { StateMachine, CreateStateMachineRequest, TransitionHook } from '../../../types/stateMachine';
 import { hookExamples, examplesByCategory, categoryNames, type HookExample } from './hookExamples';
 import { stateMachineTemplates, type StateMachineTemplate } from './stateMachineTemplates';
@@ -102,56 +103,103 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     });
   };
 
+  // 待应用的模板（用于在标签页切换后设置表单值）
+  const pendingTemplateRef = React.useRef<StateMachineTemplate | null>(null);
+
   // 应用状态机模板
   const applyTemplate = (template: StateMachineTemplate) => {
     setSelectedTemplate(template);
-    // 解析 YAML/JSON 并更新表单
-    try {
-      // 尝试解析 JSON
-      let config = JSON.parse(template.yaml);
-      form.setFieldsValue({
-        name: config.name || template.name,
-        description: config.description || template.description,
-        config: template.yaml,
-      });
-      // 更新可视化状态
-      if (config.states) {
-        setVisualStates(
-          config.states.map((s: { id: string; name: string; is_final: boolean }) => ({
-            id: s.id,
-            name: s.name,
-            isFinal: s.is_final,
-          })),
-        );
-      }
-      if (config.transitions) {
-        setVisualTransitions(
-          config.transitions.map((t: { from: string; to: string; trigger: string; description?: string; hooks?: TransitionHook[] }) => ({
-            from: t.from,
-            to: t.to,
-            trigger: t.trigger,
-            description: t.description || '',
-            hooks: t.hooks || [],
-          })),
-        );
-      }
-      // 切换到 JSON 编辑模式
-      setActiveTab('yaml');
-      message.success(`已加载模板：${template.name}`);
-    } catch {
-      // 如果不是 JSON，当作 YAML 处理
+    // 如果已经在 yaml 标签页，直接设置表单值
+    if (activeTab === 'yaml') {
       form.setFieldsValue({
         name: template.name,
         description: template.description,
         config: template.yaml,
       });
-      setActiveTab('yaml');
-      message.success(`已加载模板：${template.name}`);
+    } else {
+      // 否则标记为待处理，等待标签页切换后应用
+      pendingTemplateRef.current = template;
     }
+    // 切换到 YAML 编辑模式
+    setActiveTab('yaml');
+    message.success(`已加载模板：${template.name}`);
   };
+
+  // 监听标签页变化，在切换到 yaml 标签页后应用待处理的模板值
+  useEffect(() => {
+    if (activeTab === 'yaml' && pendingTemplateRef.current) {
+      const template = pendingTemplateRef.current;
+      form.setFieldsValue({
+        name: template.name,
+        description: template.description,
+        config: template.yaml,
+      });
+      pendingTemplateRef.current = null;
+    }
+  }, [activeTab, form]);
+
+  // 监听标签页变化，在切换到 visual 标签页时解析 YAML 并更新可视化状态
+  useEffect(() => {
+    if (activeTab !== 'visual') return;
+
+    const configValue = form.getFieldValue('config') || '';
+    const parsed = parseConfig(configValue);
+    if (!parsed) return;
+
+    if (parsed.states && Array.isArray(parsed.states)) {
+      setVisualStates(
+        parsed.states.map((s: { id: string; name: string; is_final: boolean }) => ({
+          id: s.id,
+          name: s.name,
+          isFinal: s.is_final,
+        })),
+      );
+    }
+    if (parsed.transitions && Array.isArray(parsed.transitions)) {
+      setVisualTransitions(
+        parsed.transitions.map((t: { from: string; to: string; trigger: string; description?: string; hooks?: TransitionHook[] }) => ({
+          from: t.from,
+          to: t.to,
+          trigger: t.trigger,
+          description: t.description || '',
+          hooks: t.hooks || [],
+        })),
+      );
+    }
+  }, [activeTab, form]);
 
   // 根据当前选择的类型筛选 Hook 示例
   const filteredExamples = hookExamples.filter((e) => e.type === currentHook.type);
+
+  // 可视化编辑变化时同步到 YAML
+  useEffect(() => {
+    // 只有在可视化编辑模式下才自动同步
+    if (activeTab !== 'visual') return;
+
+    const name = form.getFieldValue('name') || 'unnamed';
+    const description = form.getFieldValue('description') || '';
+
+    const config: Record<string, unknown> = {
+      name,
+      description,
+      initial_state: visualStates.find((s) => !s.isFinal)?.id || visualStates[0]?.id || '',
+      states: visualStates.map((s) => ({
+        id: s.id,
+        name: s.name,
+        is_final: s.isFinal,
+      })),
+      transitions: visualTransitions.map((t) => ({
+        from: t.from,
+        to: t.to,
+        trigger: t.trigger,
+        description: t.description,
+        hooks: t.hooks.length > 0 ? t.hooks : undefined,
+      })),
+    };
+
+    // 始终输出 YAML 格式
+    form.setFieldsValue({ config: yaml.dump(config, { lineWidth: -1 }) });
+  }, [visualStates, visualTransitions, activeTab, form]);
 
   useEffect(() => {
     if (open) {
@@ -159,7 +207,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
         form.setFieldsValue({
           name: editing.name,
           description: editing.description,
-          config: JSON.stringify(editing.config, null, 2),
+          config: yaml.dump(editing.config, { lineWidth: -1 }),
         });
         try {
           const config = editing.config;
@@ -202,31 +250,45 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     }
   }, [open, editing, form]);
 
-  const handleYamlChange = (value: string) => {
+  // 解析配置（支持 JSON 和 YAML）
+  const parseConfig = (value: string): Record<string, unknown> | null => {
     try {
-      const parsed = JSON.parse(value);
-      if (parsed.states) {
-        setVisualStates(
-          parsed.states.map((s: { id: string; name: string; is_final: boolean }) => ({
-            id: s.id,
-            name: s.name,
-            isFinal: s.is_final,
-          })),
-        );
-      }
-      if (parsed.transitions) {
-        setVisualTransitions(
-          parsed.transitions.map((t: { from: string; to: string; trigger: string; description?: string; hooks?: TransitionHook[] }) => ({
-            from: t.from,
-            to: t.to,
-            trigger: t.trigger,
-            description: t.description || '',
-            hooks: t.hooks || [],
-          })),
-        );
-      }
+      // 先尝试 JSON
+      return JSON.parse(value);
     } catch {
-      // Not JSON, ignore
+      try {
+        // 再尝试 YAML
+        return yaml.load(value) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+  };
+
+  // YAML/JSON 编辑变化时同步到可视化
+  const handleYamlChange = (value: string) => {
+    const parsed = parseConfig(value);
+    if (!parsed) return;
+
+    if (parsed.states && Array.isArray(parsed.states)) {
+      setVisualStates(
+        parsed.states.map((s: { id: string; name: string; is_final: boolean }) => ({
+          id: s.id,
+          name: s.name,
+          isFinal: s.is_final,
+        })),
+      );
+    }
+    if (parsed.transitions && Array.isArray(parsed.transitions)) {
+      setVisualTransitions(
+        parsed.transitions.map((t: { from: string; to: string; trigger: string; description?: string; hooks?: TransitionHook[] }) => ({
+          from: t.from,
+          to: t.to,
+          trigger: t.trigger,
+          description: t.description || '',
+          hooks: t.hooks || [],
+        })),
+      );
     }
   };
 
@@ -363,7 +425,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
       })),
     };
 
-    return JSON.stringify(config, null, 2);
+    return yaml.dump(config, { lineWidth: -1 });
   };
 
   const handleSubmit = async () => {
@@ -452,9 +514,8 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
           >
             <Input.TextArea placeholder="描述状态机的用途" />
           </Form.Item>
-        </Form>
 
-        <Tabs
+          <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={[
@@ -599,12 +660,12 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
             },
             {
               key: 'yaml',
-              label: 'JSON 编辑',
+              label: 'YAML 编辑',
               children: (
                 <div>
                   <Alert
-                    message="JSON 格式"
-                    description="直接编辑状态机的 JSON 配置，支持 webhook 和 command 类型的 Hook"
+                    message="YAML 格式"
+                    description="直接编辑状态机的 YAML 配置，支持 webhook 和 command 类型的 Hook"
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
@@ -624,6 +685,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
             },
           ]}
         />
+        </Form>
       </Drawer>
 
       {/* Hook 编辑 Modal */}
