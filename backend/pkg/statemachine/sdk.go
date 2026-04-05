@@ -6,13 +6,15 @@
 //	import "github.com/weibh/taskmanager/pkg/statemachine"
 //
 //	func main() {
-//	    sm := statemachine.New() // 自动管理依赖
+//	    sm, err := statemachine.New()
+//	    if err != nil {
+//	        log.Fatal(err)
+//	    }
+//	    defer sm.Close()
 //
 //	    machine, _ := sm.Create(ctx, "DevOps流程", "描述", yamlConfig)
 //	    rs, _ := sm.Initialize(ctx, "req-001", machine.ID)
 //	    rs, _ = sm.Transition(ctx, "req-001", "approve", "reviewer", "通过")
-//
-//	    sm.Close()
 //	}
 //
 // 也支持依赖注入:
@@ -21,7 +23,7 @@
 //
 //	logger := zap.NewExample()
 //	db, _ := sql.Open("sqlite3", "file::memory:?cache=shared")
-//	sm := statemachine.New(
+//	sm, _ := statemachine.New(
 //	    statemachine.WithDB(db),
 //	    statemachine.WithLogger(logger),
 //	)
@@ -30,6 +32,8 @@ package statemachine
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -43,8 +47,9 @@ import (
 
 // SDK 状态机 SDK
 type SDK struct {
-	svc *application.StateMachineService
-	db  *sql.DB
+	svc    *application.StateMachineService
+	db     *sql.DB
+	ownDB  bool // true if SDK created the DB (should close it)
 }
 
 // Option SDK 配置选项
@@ -71,8 +76,12 @@ func WithLogger(logger *zap.Logger) Option {
 }
 
 // WithService 使用已有的 StateMachineService（用于测试或已创建的服务）
+// 注意：传入 nil 会 panic
 func WithService(svc *application.StateMachineService) Option {
 	return func(o *sdkOptions) {
+		if svc == nil {
+			panic("WithService: service cannot be nil")
+		}
 		o.svc = svc
 	}
 }
@@ -82,7 +91,7 @@ func WithService(svc *application.StateMachineService) Option {
 //   - WithDB: 自定义数据库连接
 //   - WithLogger: 自定义日志器
 //   - WithService: 直接注入已创建的服务
-func New(opts ...Option) *SDK {
+func New(opts ...Option) (*SDK, error) {
 	o := &sdkOptions{
 		logger: zap.NewNop(),
 	}
@@ -97,7 +106,7 @@ func New(opts ...Option) *SDK {
 	// 如果注入了服务，直接使用
 	if o.svc != nil {
 		s.svc = o.svc
-		return s
+		return s, nil
 	}
 
 	// 否则自动创建依赖
@@ -105,13 +114,14 @@ func New(opts ...Option) *SDK {
 		dbPath := config.GetDatabasePath()
 		dbDir := filepath.Dir(dbPath)
 		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			panic("failed to create db dir: " + err.Error())
+			return nil, fmt.Errorf("failed to create db dir: %w", err)
 		}
 		db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 		if err != nil {
-			panic("failed to open db: " + err.Error())
+			return nil, fmt.Errorf("failed to open db: %w", err)
 		}
 		o.db = db
+		s.ownDB = true
 	}
 
 	repo := persistence.NewSQLiteStateMachineRepository(o.db)
@@ -119,7 +129,7 @@ func New(opts ...Option) *SDK {
 	s.svc = application.NewStateMachineService(repo, executor, o.logger)
 	s.db = o.db
 
-	return s
+	return s, nil
 }
 
 // Create 创建状态机
@@ -166,7 +176,7 @@ func (s *SDK) GetHistory(ctx context.Context, requirementID string) ([]*state_ma
 // Close 关闭 SDK，释放资源
 // 只有 SDK 自己创建的 db 才会被关闭，通过 WithDB 注入的不会
 func (s *SDK) Close() error {
-	if s.db != nil {
+	if s.db != nil && s.ownDB {
 		return s.db.Close()
 	}
 	return nil
@@ -176,3 +186,6 @@ func (s *SDK) Close() error {
 func WithMetadata(ctx context.Context, metadata map[string]interface{}) context.Context {
 	return infra_sm.WithMetadata(ctx, metadata)
 }
+
+// ErrNilDB 当 DB 为 nil 时返回此错误
+var ErrNilDB = errors.New("db is nil, use New() or provide a db via WithDB")
