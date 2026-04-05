@@ -516,11 +516,14 @@ func SetupRoutesWithManagement(
 			}
 		}))
 
-		// 需求当前状态
+		// 需求当前状态（获取和初始化）
 		mux.HandleFunc("/api/v1/requirements/{requirement_id}/state", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
+			switch r.Method {
+			case http.MethodGet:
 				stateMachineHandler.GetRequirementState(w, r)
-			} else {
+			case http.MethodPost:
+				stateMachineHandler.InitializeRequirementState(w, r)
+			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}))

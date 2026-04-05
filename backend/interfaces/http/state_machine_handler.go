@@ -203,6 +203,43 @@ func (h *StateMachineHandler) GetRequirementState(w http.ResponseWriter, r *http
 	writeJSON(w, rs)
 }
 
+// InitializeRequirementStateRequest 初始化需求状态请求
+type InitializeRequirementStateRequest struct {
+	StateMachineID string `json:"state_machine_id"`
+}
+
+// InitializeRequirementState 初始化需求状态
+func (h *StateMachineHandler) InitializeRequirementState(w http.ResponseWriter, r *http.Request) {
+	requirementID := r.PathValue("requirement_id")
+	if requirementID == "" {
+		writeError(w, http.StatusBadRequest, "requirement_id is required")
+		return
+	}
+
+	var req InitializeRequirementStateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.StateMachineID == "" {
+		writeError(w, http.StatusBadRequest, "state_machine_id is required")
+		return
+	}
+
+	rs, err := h.service.InitializeRequirementState(r.Context(), requirementID, req.StateMachineID)
+	if err != nil {
+		if smErr, ok := err.(*state_machine.StateMachineError); ok {
+			writeError(w, http.StatusBadRequest, smErr.Message)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, rs)
+}
+
 // GetTransitionHistory 获取转换历史
 func (h *StateMachineHandler) GetTransitionHistory(w http.ResponseWriter, r *http.Request) {
 	requirementID := r.PathValue("requirement_id")
