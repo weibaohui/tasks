@@ -333,4 +333,35 @@ transitions:
         timeout: 30
         retry: 1`,
   },
+  {
+    id: 'heartbeat',
+    name: '心跳任务流程',
+    description: '适用于心跳任务的简单流程：待处理 → 已完成',
+    yaml: `name: heartbeat_workflow
+description: 心跳任务专用流程
+
+initial_state: todo
+
+states:
+  - id: todo
+    name: 待处理
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
+
+transitions:
+  - from: todo
+    to: completed
+    trigger: complete
+    description: 心跳任务完成
+    hooks:
+      - name: 发送完成通知
+        type: webhook
+        config:
+          url: https://httpbin.org/post
+          method: POST
+        timeout: 30
+        retry: 1`,
+  },
 ];
