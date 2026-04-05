@@ -3,6 +3,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tag, Popconfirm } from 'antd';
+import { PlayCircleOutlined } from '@ant-design/icons';
 import type { StateMachine } from '../../../types/stateMachine';
 
 interface StateMachineTableProps {
@@ -10,6 +11,7 @@ interface StateMachineTableProps {
   loading: boolean;
   onEdit: (record: StateMachine) => void;
   onDelete: (id: string) => void;
+  onInvoke?: (record: StateMachine) => void;
 }
 
 export const StateMachineTable: React.FC<StateMachineTableProps> = ({
@@ -17,6 +19,7 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
   loading,
   onEdit,
   onDelete,
+  onInvoke,
 }) => {
   const columns = [
     {
@@ -87,6 +90,14 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
         <Space size="small">
           <Button type="link" size="small" onClick={() => onEdit(record)}>
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<PlayCircleOutlined />}
+            onClick={() => onInvoke?.(record)}
+          >
+            调用
           </Button>
           <Popconfirm
             title="确定删除此状态机？"

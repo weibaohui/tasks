@@ -7,7 +7,8 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useStateMachineManagement } from './hooks';
 import { StateMachineTable } from './components/StateMachineTable';
 import { StateMachineEditDrawer } from './components/StateMachineEditDrawer';
-import type { CreateStateMachineRequest } from '../../types/stateMachine';
+import { StateMachineInvokeDrawer } from './components/StateMachineInvokeDrawer';
+import type { CreateStateMachineRequest, StateMachine } from '../../types/stateMachine';
 
 const { Title } = Typography;
 
@@ -24,6 +25,20 @@ export const StateMachineManagementPage: React.FC = () => {
     handleDelete,
     handleSubmit,
   } = useStateMachineManagement();
+
+  // 调用抽屉状态
+  const [invokeOpen, setInvokeOpen] = React.useState(false);
+  const [invokingStateMachine, setInvokingStateMachine] = React.useState<StateMachine | null>(null);
+
+  const handleOpenInvoke = (record: StateMachine) => {
+    setInvokingStateMachine(record);
+    setInvokeOpen(true);
+  };
+
+  const handleCloseInvoke = () => {
+    setInvokeOpen(false);
+    setInvokingStateMachine(null);
+  };
 
   useEffect(() => {
     fetchList();
@@ -51,6 +66,7 @@ export const StateMachineManagementPage: React.FC = () => {
           loading={loading}
           onEdit={openEditor}
           onDelete={handleDelete}
+          onInvoke={handleOpenInvoke}
         />
       </Card>
 
@@ -61,6 +77,13 @@ export const StateMachineManagementPage: React.FC = () => {
         saving={saving}
         onClose={closeEditor}
         onSubmit={handleSubmit as (values: CreateStateMachineRequest) => Promise<void>}
+      />
+
+      {/* 调用抽屉 */}
+      <StateMachineInvokeDrawer
+        open={invokeOpen}
+        stateMachine={invokingStateMachine}
+        onClose={handleCloseInvoke}
       />
     </div>
   );
