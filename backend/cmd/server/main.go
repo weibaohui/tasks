@@ -213,11 +213,15 @@ func main() {
 	stateMachineService := application.NewStateMachineService(stateMachineRepo, transitionExecutor, logger)
 	stateMachineHandler := httpHandler.NewStateMachineHandler(stateMachineService)
 
+	// 初始化项目状态机应用服务
+	projectStateMachineService := application.NewProjectStateMachineApplicationService(stateMachineRepo)
+	projectStateMachineHandler := httpHandler.NewProjectStateMachineHandler(projectStateMachineService)
+
 	mux := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
-		requirementHandler, stateMachineHandler,
+		requirementHandler, stateMachineHandler, projectStateMachineHandler,
 	)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）

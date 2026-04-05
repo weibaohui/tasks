@@ -390,6 +390,22 @@ CREATE TABLE IF NOT EXISTS transition_logs (
 
 CREATE INDEX IF NOT EXISTS idx_transition_logs_requirement ON transition_logs(requirement_id);
 CREATE INDEX IF NOT EXISTS idx_transition_logs_created ON transition_logs(created_at);
+
+-- 项目状态机关联表
+CREATE TABLE IF NOT EXISTS project_state_machines (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    requirement_type TEXT NOT NULL,
+    state_machine_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (state_machine_id) REFERENCES state_machines(id) ON DELETE CASCADE,
+    UNIQUE(project_id, requirement_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_state_machines_project ON project_state_machines(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_state_machines_machine ON project_state_machines(state_machine_id);
 `
 
 // InitSchema 初始化数据库 Schema

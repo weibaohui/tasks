@@ -59,3 +59,9 @@ func ErrRequirementStateNotFound(requirementID string) error {
 		Message: fmt.Sprintf("requirement state for '%s' not found", requirementID),
 	}
 }
+
+// ErrProjectStateMachineNotFound 项目状态机关联不存在
+var ErrProjectStateMachineNotFound = &StateMachineError{
+	Code:    "PROJECT_STATE_MACHINE_NOT_FOUND",
+	Message: "project state machine mapping not found",
+}

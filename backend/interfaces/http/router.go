@@ -13,11 +13,11 @@ import (
 // SetupRoutes 设置路由
 // 注意：Go 标准库 http.ServeMux 不支持路径参数，路由按最长前缀匹配
 func SetupRoutes() *http.ServeMux {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -33,6 +33,7 @@ func SetupRoutesWithManagement(
 	projectHandler *ProjectHandler,
 	requirementHandler *RequirementHandler,
 	stateMachineHandler *StateMachineHandler,
+	projectStateMachineHandler *ProjectStateMachineHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -532,6 +533,48 @@ func SetupRoutesWithManagement(
 		mux.HandleFunc("/api/v1/requirements/{requirement_id}/transitions/history", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet {
 				stateMachineHandler.GetTransitionHistory(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+	}
+
+	// 项目状态机关联路由
+	if projectStateMachineHandler != nil {
+		// 获取可用的需求类型列表
+		mux.HandleFunc("/api/v1/project-state-machines/requirement-types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				projectStateMachineHandler.GetAvailableRequirementTypes(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+
+		// 列出项目的所有状态机映射
+		mux.HandleFunc("/api/v1/projects/{project_id}/state-machines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				projectStateMachineHandler.ListProjectStateMachines(w, r)
+			case http.MethodPost:
+				projectStateMachineHandler.SetProjectStateMachine(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+
+		// 获取指定类型的状态机映射
+		mux.HandleFunc("/api/v1/projects/{project_id}/state-machines/{requirement_type}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				projectStateMachineHandler.GetProjectStateMachineByType(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+
+		// 删除项目状态机映射
+		mux.HandleFunc("/api/v1/project-state-machines/{id}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodDelete {
+				projectStateMachineHandler.DeleteProjectStateMachine(w, r)
 			} else {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

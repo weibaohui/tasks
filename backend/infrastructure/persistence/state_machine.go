@@ -174,5 +174,92 @@ func (r *SQLiteStateMachineRepository) ListTransitionLogs(ctx context.Context, r
 	return results, rows.Err()
 }
 
+// ProjectStateMachine
+func (r *SQLiteStateMachineRepository) SaveProjectStateMachine(ctx context.Context, psm *state_machine.ProjectStateMachine) error {
+	query := `
+		INSERT INTO project_state_machines (id, project_id, requirement_type, state_machine_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(project_id, requirement_type) DO UPDATE SET
+			state_machine_id = excluded.state_machine_id,
+			updated_at = excluded.updated_at
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		psm.ID(), psm.ProjectID(), string(psm.RequirementType()), psm.StateMachineID(),
+		psm.CreatedAt().UnixMilli(), psm.UpdatedAt().UnixMilli())
+	return err
+}
+
+func (r *SQLiteStateMachineRepository) GetProjectStateMachine(ctx context.Context, projectID string, requirementType state_machine.RequirementType) (*state_machine.ProjectStateMachine, error) {
+	query := `SELECT id, project_id, requirement_type, state_machine_id, created_at, updated_at FROM project_state_machines WHERE project_id = ? AND requirement_type = ?`
+	row := r.db.QueryRowContext(ctx, query, projectID, string(requirementType))
+	return r.scanProjectStateMachine(row)
+}
+
+func (r *SQLiteStateMachineRepository) ListProjectStateMachines(ctx context.Context, projectID string) ([]*state_machine.ProjectStateMachine, error) {
+	query := `SELECT id, project_id, requirement_type, state_machine_id, created_at, updated_at FROM project_state_machines WHERE project_id = ?`
+	rows, err := r.db.QueryContext(ctx, query, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*state_machine.ProjectStateMachine
+	for rows.Next() {
+		psm, err := r.scanProjectStateMachineWithRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, psm)
+	}
+	return results, rows.Err()
+}
+
+func (r *SQLiteStateMachineRepository) DeleteProjectStateMachine(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM project_state_machines WHERE id = ?`, id)
+	return err
+}
+
+func (r *SQLiteStateMachineRepository) DeleteProjectStateMachinesByProject(ctx context.Context, projectID string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM project_state_machines WHERE project_id = ?`, projectID)
+	return err
+}
+
+func (r *SQLiteStateMachineRepository) scanProjectStateMachine(row *sql.Row) (*state_machine.ProjectStateMachine, error) {
+	var snap state_machine.ProjectStateMachineSnapshot
+	var createdAtMs, updatedAtMs int64
+	var reqType string
+	err := row.Scan(&snap.ID, &snap.ProjectID, &reqType, &snap.StateMachineID, &createdAtMs, &updatedAtMs)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, state_machine.ErrProjectStateMachineNotFound
+		}
+		return nil, err
+	}
+	snap.RequirementType = state_machine.RequirementType(reqType)
+	snap.CreatedAt = time.UnixMilli(createdAtMs)
+	snap.UpdatedAt = time.UnixMilli(updatedAtMs)
+
+	psm := &state_machine.ProjectStateMachine{}
+	psm.FromSnapshot(snap)
+	return psm, nil
+}
+
+func (r *SQLiteStateMachineRepository) scanProjectStateMachineWithRows(rows *sql.Rows) (*state_machine.ProjectStateMachine, error) {
+	var snap state_machine.ProjectStateMachineSnapshot
+	var createdAtMs, updatedAtMs int64
+	var reqType string
+	err := rows.Scan(&snap.ID, &snap.ProjectID, &reqType, &snap.StateMachineID, &createdAtMs, &updatedAtMs)
+	if err != nil {
+		return nil, err
+	}
+	snap.RequirementType = state_machine.RequirementType(reqType)
+	snap.CreatedAt = time.UnixMilli(createdAtMs)
+	snap.UpdatedAt = time.UnixMilli(updatedAtMs)
+
+	psm := &state_machine.ProjectStateMachine{}
+	psm.FromSnapshot(snap)
+	return psm, nil
+}
+
 // Ensure SQLiteStateMachineRepository implements state_machine.Repository
 var _ state_machine.Repository = (*SQLiteStateMachineRepository)(nil)

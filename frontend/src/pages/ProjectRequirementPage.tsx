@@ -10,6 +10,7 @@ import type { CreateProjectRequest, CreateRequirementRequest, Project, Requireme
 import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
+import { ProjectStateMachineConfig } from '../components/ProjectStateMachineConfig';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -940,6 +941,11 @@ export const ProjectRequirementPage: React.FC = () => {
                   />
                 </>
               ),
+            },
+            {
+              key: 'stateMachine',
+              label: '状态机配置',
+              children: configProject ? <ProjectStateMachineConfig projectId={configProject.id} /> : null,
             },
           ]}
         />
