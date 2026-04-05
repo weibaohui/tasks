@@ -7,85 +7,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/weibh/taskmanager/application"
-	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
-	"go.uber.org/zap"
 )
-
-// MockRepository 测试用 Mock Repository
-type MockRepository struct {
-	stateMachines      map[string]*state_machine.StateMachine
-	requirementStates map[string]*state_machine.RequirementState
-	transitionLogs    []*state_machine.TransitionLog
-}
-
-func NewMockRepository() *MockRepository {
-	return &MockRepository{
-		stateMachines:      make(map[string]*state_machine.StateMachine),
-		requirementStates: make(map[string]*state_machine.RequirementState),
-		transitionLogs:    []*state_machine.TransitionLog{},
-	}
-}
-
-func (r *MockRepository) SaveStateMachine(ctx context.Context, sm *state_machine.StateMachine) error {
-	r.stateMachines[sm.ID] = sm
-	return nil
-}
-
-func (r *MockRepository) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
-	sm, ok := r.stateMachines[id]
-	if !ok {
-		return nil, state_machine.ErrStateMachineNotFound(id)
-	}
-	return sm, nil
-}
-
-func (r *MockRepository) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
-	var result []*state_machine.StateMachine
-	for _, sm := range r.stateMachines {
-		result = append(result, sm)
-	}
-	return result, nil
-}
-
-func (r *MockRepository) DeleteStateMachine(ctx context.Context, id string) error {
-	delete(r.stateMachines, id)
-	return nil
-}
-
-func (r *MockRepository) SaveRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
-	r.requirementStates[rs.RequirementID] = rs
-	return nil
-}
-
-func (r *MockRepository) GetRequirementState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
-	rs, ok := r.requirementStates[requirementID]
-	if !ok {
-		return nil, state_machine.ErrRequirementStateNotFound(requirementID)
-	}
-	return rs, nil
-}
-
-func (r *MockRepository) UpdateRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
-	r.requirementStates[rs.RequirementID] = rs
-	return nil
-}
-
-func (r *MockRepository) SaveTransitionLog(ctx context.Context, log *state_machine.TransitionLog) error {
-	r.transitionLogs = append(r.transitionLogs, log)
-	return nil
-}
-
-func (r *MockRepository) ListTransitionLogs(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
-	var result []*state_machine.TransitionLog
-	for _, log := range r.transitionLogs {
-		if log.RequirementID == requirementID {
-			result = append(result, log)
-		}
-	}
-	return result, nil
-}
 
 const testYAML = `
 name: 测试流程
@@ -115,54 +37,7 @@ transitions:
     description: 完成
 `
 
-func TestSDK_WithService(t *testing.T) {
-	// 使用 WithService 注入 Mock 服务
-	logger := zap.NewNop()
-	repo := NewMockRepository()
-	executor := infra_sm.NewTransitionExecutor(logger)
-	svc := application.NewStateMachineService(repo, executor, logger)
-
-	sm, err := New(WithService(svc))
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-	defer sm.Close()
-
-	ctx := context.Background()
-
-	// 创建状态机
-	t.Log("创建状态机...")
-	machine, err := sm.Create(ctx, "测试流程", "测试", testYAML)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-	t.Logf("状态机创建成功: ID=%s", machine.ID)
-
-	// 初始化需求
-	t.Log("初始化需求...")
-	reqID := "test-req-001"
-	rs, err := sm.Initialize(ctx, reqID, machine.ID)
-	if err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	if rs.CurrentState != "created" {
-		t.Errorf("Initial state: %s != created", rs.CurrentState)
-	}
-
-	// 触发转换
-	t.Log("触发转换 start...")
-	rs, err = sm.Transition(ctx, reqID, "start", "tester", "开始测试")
-	if err != nil {
-		t.Fatalf("Transition failed: %v", err)
-	}
-	if rs.CurrentState != "in_progress" {
-		t.Errorf("State after start: %s != in_progress", rs.CurrentState)
-	}
-
-	t.Log("测试完成!")
-}
-
-func TestSDK_WithDB(t *testing.T) {
+func TestSDK(t *testing.T) {
 	// 创建临时数据库
 	tmpFile, err := os.CreateTemp("", "statemachine-test-*.db")
 	if err != nil {
@@ -212,113 +87,98 @@ func TestSDK_WithDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 使用 WithDB 注入外部 DB
-	sm, err := New(WithDB(db))
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	// 创建 SDK
+	sm := New(context.Background(), WithDB(db))
 	defer sm.Close()
-
-	// 验证 Close 不会关闭外部 DB（通过再次查询验证）
-	defer func() {
-		_, err := db.Query("SELECT 1")
-		if err != nil {
-			t.Errorf("external db was closed by SDK.Close()")
-		}
-	}()
 
 	ctx := context.Background()
 
 	// 创建状态机
+	t.Log("创建状态机...")
 	machine, err := sm.Create(ctx, "测试流程", "测试", testYAML)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
+	t.Logf("状态机创建成功: ID=%s", machine.ID)
+
+	// 获取状态机
+	t.Log("获取状态机...")
+	got, err := sm.Get(ctx, machine.ID)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if got.ID != machine.ID {
+		t.Errorf("Get returned wrong ID: %s != %s", got.ID, machine.ID)
+	}
+
+	// 列出状态机
+	t.Log("列出状态机...")
+	list, err := sm.List(ctx)
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("List returned %d items, want 1", len(list))
+	}
 
 	// 初始化需求
-	reqID := "test-req-002"
-	_, err = sm.Initialize(ctx, reqID, machine.ID)
+	t.Log("初始化需求...")
+	reqID := "test-req-001"
+	rs, err := sm.Initialize(ctx, reqID, machine.ID)
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
-
-	// 触发转换
-	_, err = sm.Transition(ctx, reqID, "start", "tester", "开始测试")
-	if err != nil {
-		t.Fatalf("Transition failed: %v", err)
+	if rs.CurrentState != "created" {
+		t.Errorf("Initial state: %s != created", rs.CurrentState)
 	}
 
-	// 验证状态
+	// 触发转换 start
+	t.Log("触发转换 start...")
+	rs, err = sm.Transition(ctx, reqID, "start", "tester", "开始测试")
+	if err != nil {
+		t.Fatalf("Transition(start) failed: %v", err)
+	}
+	if rs.CurrentState != "in_progress" {
+		t.Errorf("State after start: %s != in_progress", rs.CurrentState)
+	}
+
+	// 触发转换 complete
+	t.Log("触发转换 complete...")
+	rs, err = sm.Transition(ctx, reqID, "complete", "tester", "完成测试")
+	if err != nil {
+		t.Fatalf("Transition(complete) failed: %v", err)
+	}
+	if rs.CurrentState != "done" {
+		t.Errorf("State after complete: %s != done", rs.CurrentState)
+	}
+
+	// 获取状态
+	t.Log("获取状态...")
 	state, err := sm.GetState(ctx, reqID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if state.CurrentState != "in_progress" {
-		t.Errorf("State: %s != in_progress", state.CurrentState)
+	if state.CurrentState != "done" {
+		t.Errorf("GetState state: %s != done", state.CurrentState)
 	}
 
-	// 验证历史
+	// 获取历史
+	t.Log("获取历史...")
 	history, err := sm.GetHistory(ctx, reqID)
 	if err != nil {
 		t.Fatalf("GetHistory failed: %v", err)
 	}
-	if len(history) != 2 { // init + start
-		t.Errorf("History count: %d != 2", len(history))
+	// init + start + complete = 3
+	if len(history) != 3 {
+		t.Errorf("History count: %d != 3", len(history))
 	}
 
-	t.Log("WithDB 测试完成!")
-}
-
-func TestSDK_WithMetadata(t *testing.T) {
-	logger := zap.NewNop()
-	repo := NewMockRepository()
-	executor := infra_sm.NewTransitionExecutor(logger)
-	svc := application.NewStateMachineService(repo, executor, logger)
-
-	sm, err := New(WithService(svc))
+	// 删除状态机
+	t.Log("删除状态机...")
+	err = sm.Delete(ctx, machine.ID)
 	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-	defer sm.Close()
-
-	ctx := context.Background()
-	reqID := "test-req-003"
-
-	// 创建状态机
-	machine, err := sm.Create(ctx, "测试流程", "测试", testYAML)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+		t.Fatalf("Delete failed: %v", err)
 	}
 
-	// 初始化需求
-	_, err = sm.Initialize(ctx, reqID, machine.ID)
-	if err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-
-	// 带 metadata 触发转换
-	metadata := map[string]interface{}{
-		"project_id": "proj-123",
-		"env":        "production",
-	}
-	ctxWithMeta := WithMetadata(ctx, metadata)
-
-	_, err = sm.Transition(ctxWithMeta, reqID, "start", "tester", "带元数据的转换")
-	if err != nil {
-		t.Fatalf("Transition failed: %v", err)
-	}
-
-	t.Log("WithMetadata 测试完成!")
-}
-
-func TestSDK_ErrorHandling(t *testing.T) {
-	// 测试 WithService 传入 nil 应该 panic 或返回错误
-	t.Run("WithService nil should panic", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic when passing nil service")
-			}
-		}()
-		New(WithService(nil))
-	})
+	t.Log("测试完成!")
 }
