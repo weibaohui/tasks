@@ -148,7 +148,10 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 查询项目关联的状态机
 	stateMachineName := s.getProjectStateMachineName(ctx, project.ID().String(), requirement.RequirementType())
 
-	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName)
+	// 获取当前状态机状态和 AI Guide
+	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
+
+	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide)
 
 	// 保存 Claude Runtime 执行提示词
 	requirement.SetClaudeRuntimePrompt(dispatchPrompt)
@@ -281,6 +284,38 @@ func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Cont
 	return sm.Name
 }
 
+// getStateMachineGuide 获取当前状态机状态和 AI Guide
+// 返回当前状态 ID 和 AI Guide 信息
+func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, projectID string, reqType domain.RequirementType) (string, map[string]interface{}) {
+	if s.stateMachineRepo == nil {
+		return "", nil
+	}
+
+	// 获取项目状态机映射
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	if err != nil {
+		return "", nil
+	}
+
+	snap := psm.ToSnapshot()
+
+	// 获取状态机配置
+	sm, err := s.stateMachineRepo.GetStateMachine(ctx, snap.StateMachineID)
+	if err != nil {
+		return "", nil
+	}
+
+	// 获取需求当前状态（从 RequirementState）
+	reqState, err := s.stateMachineRepo.GetRequirementState(ctx, projectID+"_"+string(reqType))
+	if err != nil {
+		// 如果没有 RequirementState，返回初始状态
+		return sm.Config.InitialState, sm.Config.GetStateAIGuide(sm.Config.InitialState)
+	}
+
+	// 返回当前状态和 AI Guide
+	return reqState.CurrentState, sm.Config.GetStateAIGuide(reqState.CurrentState)
+}
+
 func workspaceRootPath() string {
 	if p := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); p != "" {
 		return p
@@ -327,15 +362,16 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 	return channelType, chatID, nil
 }
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 	requirementType := "普通需求"
 	if isHeartbeat {
 		requirementType = "心跳需求"
 	}
 
-	// 构建状态机使用指南
+	// 构建状态机使用指南和 AI 指南
 	stateMachineGuide := buildStateMachineGuide(stateMachineName)
+	stateAIGuide := buildStateAIGuide(aiGuide)
 
 	// 心跳需求：调度员角色，不直接修改代码
 	var prompt string
@@ -346,6 +382,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 需求ID：%s
 - 需求类型：%s
 - 当前状态：%s
+- 状态机当前状态：%s
 - 需求标题：%s
 - 需求描述：%s
 - 项目ID：%s
@@ -364,6 +401,8 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 
 %s
 
+%s
+
 【执行流程】
 请按以下顺序执行：
 1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
@@ -373,10 +412,11 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 5. 所有需要代码改动的事项，必须使用 taskmanager requirement create 生成新需求，让其他 CodingAgent 完成
 6. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
 7. 工作完成后，输出本次心跳的执行结果摘要
-`, requirement.ID().String(), requirementType, requirement.Status(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+`, requirement.ID().String(), requirementType, requirement.Status(), firstNonEmpty(currentState, "未初始化"), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成调度工作"),
 			project.GitRepoURL(), project.DefaultBranch(), workspacePath,
+			stateAIGuide,
 			stateMachineGuide,
 			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch())
 	} else {
@@ -391,6 +431,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 需求ID：%s
 - 需求类型：%s
 - 当前状态：%s
+- 状态机当前状态：%s
 - 需求标题：%s
 - 需求描述：%s
 - 项目ID：%s
@@ -412,6 +453,8 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 
 %s
 
+%s
+
 【执行流程】
 请按以下顺序执行：
 1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
@@ -423,10 +466,11 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 7. 推送代码：git push origin feature/%s
 8. 创建 PR 或输出 PR 信息
 9. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
-`, requirement.ID().String(), requirementType, requirement.Status(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+`, requirement.ID().String(), requirementType, requirement.Status(), firstNonEmpty(currentState, "未初始化"), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
 			project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
+			stateAIGuide,
 			stateMachineGuide,
 			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
 			requirement.ID().String(), requirement.ID().String())
@@ -486,4 +530,83 @@ taskmanager requirement transition --id "${REQUIREMENT_ID}" --trigger=finish --m
 - STATE_MACHINE_NAME: 关联的状态机名称
 - REQUIREMENT_TYPE: 需求类型（normal/heartbeat）`,
 		stateMachineName, stateMachineName, stateMachineName)
+}
+
+// buildStateAIGuide 构建状态的 AI 指南
+func buildStateAIGuide(aiGuide map[string]interface{}) string {
+	if aiGuide == nil {
+		return "【当前状态执行指南】\n暂无详细的 AI 执行指南。请根据需求描述和验收标准自行判断当前阶段的工作内容。"
+	}
+
+	var result strings.Builder
+	result.WriteString("【当前状态执行指南】\n")
+
+	// 状态名称
+	if name, ok := aiGuide["name"].(string); ok && name != "" {
+		result.WriteString(fmt.Sprintf("当前阶段：%s\n\n", name))
+	}
+
+	// AI Guide
+	if guide, ok := aiGuide["ai_guide"].(string); ok && guide != "" {
+		result.WriteString(guide)
+		result.WriteString("\n\n")
+	}
+
+	// 自动初始化
+	if autoInit, ok := aiGuide["auto_init"].(string); ok && autoInit != "" {
+		result.WriteString("【自动初始化命令】\n")
+		result.WriteString("进入此状态时，将自动执行以下命令：\n")
+		result.WriteString("```bash\n")
+		result.WriteString(autoInit)
+		result.WriteString("\n```\n\n")
+	}
+
+	// 成功判断标准
+	if success, ok := aiGuide["success_criteria"].(string); ok && success != "" {
+		result.WriteString("【成功判断标准】\n")
+		result.WriteString(success)
+		result.WriteString("\n\n")
+	}
+
+	// 失败判断标准
+	if failure, ok := aiGuide["failure_criteria"].(string); ok && failure != "" {
+		result.WriteString("【失败判断标准】\n")
+		result.WriteString(failure)
+		result.WriteString("\n\n")
+	}
+
+	// 可用触发器
+	if triggers, ok := aiGuide["triggers"].([]interface{}); ok && len(triggers) > 0 {
+		result.WriteString("【可用状态转换】\n")
+		result.WriteString("根据工作结果，选择合适的触发器执行转换：\n\n")
+		for _, t := range triggers {
+			if trigger, ok := t.(map[string]interface{}); ok {
+				triggerName := ""
+				description := ""
+				condition := ""
+
+				if n, ok := trigger["trigger"].(string); ok {
+					triggerName = n
+				}
+				if d, ok := trigger["description"].(string); ok {
+					description = d
+				}
+				if c, ok := trigger["condition"].(string); ok {
+					condition = c
+				}
+
+				result.WriteString(fmt.Sprintf("• %s", triggerName))
+				if description != "" {
+					result.WriteString(fmt.Sprintf(" - %s", description))
+				}
+				result.WriteString("\n")
+				if condition != "" {
+					result.WriteString(fmt.Sprintf("  触发条件：%s\n", condition))
+				}
+			}
+		}
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }

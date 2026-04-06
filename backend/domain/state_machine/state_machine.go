@@ -7,11 +7,40 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// StateTriggerGuide 状态内触发器指南
+type StateTriggerGuide struct {
+	Trigger     string `json:"trigger" yaml:"trigger"`
+	Description string `json:"description" yaml:"description"`
+	Condition   string `json:"condition" yaml:"condition"`
+}
+
 // State 状态节点
 type State struct {
 	ID       string `json:"id" yaml:"id"`
 	Name     string `json:"name" yaml:"name"`
 	IsFinal  bool   `json:"is_final" yaml:"is_final"`
+
+	// === AI 指南相关字段（可选）===
+
+	// AIGuide AI操作指南（Markdown格式）
+	// 说明当前阶段应该做什么、执行步骤、注意事项
+	AIGuide string `json:"ai_guide,omitempty" yaml:"ai_guide,omitempty"`
+
+	// AutoInit 自动初始化命令（可选）
+	// 进入此状态时自动执行的 shell 命令
+	AutoInit string `json:"auto_init,omitempty" yaml:"auto_init,omitempty"`
+
+	// SuccessCriteria 成功判断标准
+	// AI 根据此标准判断任务是否成功完成
+	SuccessCriteria string `json:"success_criteria,omitempty" yaml:"success_criteria,omitempty"`
+
+	// FailureCriteria 失败判断标准
+	// AI 根据此标准判断任务是否失败
+	FailureCriteria string `json:"failure_criteria,omitempty" yaml:"failure_criteria,omitempty"`
+
+	// Triggers 可用的触发器说明
+	// 告诉 AI 在什么条件下应该触发哪个转换
+	Triggers []StateTriggerGuide `json:"triggers,omitempty" yaml:"triggers,omitempty"`
 }
 
 // Transition 转换规则
@@ -125,6 +154,53 @@ func (c *Config) GetState(stateID string) *State {
 		}
 	}
 	return nil
+}
+
+// GetAvailableTriggers 获取指定状态可用的触发器
+// 返回从该状态出发的所有转换对应的触发器指南
+func (c *Config) GetAvailableTriggers(stateID string) []StateTriggerGuide {
+	state := c.GetState(stateID)
+	if state == nil {
+		return nil
+	}
+
+	// 如果状态中已定义 triggers，直接返回
+	if len(state.Triggers) > 0 {
+		return state.Triggers
+	}
+
+	// 否则从 transitions 中推导
+	var triggers []StateTriggerGuide
+	for _, t := range c.Transitions {
+		if t.FromState == stateID {
+			triggers = append(triggers, StateTriggerGuide{
+				Trigger:     t.Trigger,
+				Description: t.Description,
+				Condition:   "",
+			})
+		}
+	}
+	return triggers
+}
+
+// GetStateAIGuide 获取状态的 AI 指南
+// 返回完整的 AI 执行指南信息
+func (c *Config) GetStateAIGuide(stateID string) map[string]interface{} {
+	state := c.GetState(stateID)
+	if state == nil {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"state":            state.ID,
+		"name":             state.Name,
+		"is_final":         state.IsFinal,
+		"ai_guide":         state.AIGuide,
+		"auto_init":        state.AutoInit,
+		"success_criteria": state.SuccessCriteria,
+		"failure_criteria": state.FailureCriteria,
+		"triggers":         c.GetAvailableTriggers(stateID),
+	}
 }
 
 // NewStateMachine 创建状态机

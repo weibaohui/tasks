@@ -555,29 +555,47 @@ func (c *Client) UpdateProjectHeartbeat(ctx context.Context, projectID string, e
 
 // ==================== State Machine APIs ====================
 
+// StateTrigger 状态触发器指南
+type StateTrigger struct {
+	Trigger     string `json:"trigger"`
+	Description string `json:"description,omitempty"`
+	Condition   string `json:"condition,omitempty"`
+}
+
+// State 状态机状态
+type State struct {
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	IsFinal         bool           `json:"is_final"`
+	AIGuide         string         `json:"ai_guide,omitempty"`
+	AutoInit        string         `json:"auto_init,omitempty"`
+	SuccessCriteria string         `json:"success_criteria,omitempty"`
+	FailureCriteria string         `json:"failure_criteria,omitempty"`
+	Triggers        []StateTrigger `json:"triggers,omitempty"`
+}
+
+// StateMachineConfig 状态机配置
+type StateMachineConfig struct {
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	InitialState string `json:"initial_state"`
+	States       []State `json:"states"`
+	Transitions []struct {
+		From        string `json:"from"`
+		To          string `json:"to"`
+		Trigger     string `json:"trigger"`
+		Description string `json:"description,omitempty"`
+	} `json:"transitions"`
+}
+
 // StateMachine 状态机响应结构
 type StateMachine struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Config      struct {
-		Name         string `json:"name"`
-		Description string `json:"description,omitempty"`
-		InitialState string `json:"initial_state"`
-		States      []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			IsFinal bool   `json:"is_final"`
-		} `json:"states"`
-		Transitions []struct {
-			From        string `json:"from"`
-			To          string `json:"to"`
-			Trigger     string `json:"trigger"`
-			Description string `json:"description,omitempty"`
-		} `json:"transitions"`
-	} `json:"config"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Config      StateMachineConfig `json:"config"`
+	CreatedAt   string             `json:"created_at"`
+	UpdatedAt   string             `json:"updated_at"`
 }
 
 // ListStateMachines 获取状态机列表
