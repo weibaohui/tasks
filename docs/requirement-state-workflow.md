@@ -218,6 +218,38 @@ taskmanager requirement transition --id req-abc-123 --trigger finish --metadata 
 | `statemachine validate` | 验证转换合法性 | `taskmanager statemachine validate -m "workflow" -f todo -t completed` |
 | `statemachine execute` | 执行状态转换计算 | `taskmanager statemachine execute -m "workflow" -f todo -t complete` |
 
+## AI 工作流指南（即将支持）
+
+状态机支持为每个状态配置 AI 执行指南：
+
+```bash
+# 获取当前状态的 AI 指南
+taskmanager statemachine guide --machine=workflow --state=coding
+```
+
+**输出示例：**
+```json
+{
+  "state": "coding",
+  "name": "编码中",
+  "ai_guide": "## 当前阶段任务\n1. 分析需求...",
+  "auto_init": "git clone ...",
+  "success_criteria": "测试通过且功能完整",
+  "failure_criteria": "无法实现需求",
+  "triggers": [
+    {"trigger": "complete", "description": "完成", "condition": "测试通过"},
+    {"trigger": "fail", "description": "失败", "condition": "技术障碍"}
+  ]
+}
+```
+
+配置 AI 指南后，分身 Agent 的提示词将自动注入：
+- 当前状态的执行步骤
+- 成功/失败的判断标准
+- 可用触发器的选择条件
+
+详细设计见：[state-machine-ai-guide-design.md](./state-machine-ai-guide-design.md)
+
 ## 注意事项
 
 1. **状态机与需求状态的区分**

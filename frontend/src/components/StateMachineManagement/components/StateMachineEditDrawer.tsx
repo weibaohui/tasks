@@ -17,9 +17,19 @@ states:
   - id: created
     name: 已创建
     is_final: false
+    # ai_guide: |           # 即将支持：AI操作指南（可选）
+    #   ## 当前阶段任务
+    #   1. 分析需求
+    #   2. 制定实现计划
+    # auto_init: |          # 即将支持：自动初始化命令（可选）
+    #   git clone {{git_repo_url}} .
+    # success_criteria: ... # 即将支持：成功判断标准（可选）
+    # failure_criteria: ... # 即将支持：失败判断标准（可选）
+
   - id: in_progress
     name: 进行中
     is_final: false
+
   - id: completed
     name: 已完成
     is_final: true
@@ -681,7 +691,14 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                 <div>
                   <Alert
                     message="YAML 格式"
-                    description="直接编辑状态机的 YAML 配置，支持 webhook 和 command 类型的 Hook"
+                    description={
+                      <div>
+                        <p>直接编辑状态机的 YAML 配置，支持 webhook 和 command 类型的 Hook</p>
+                        <p style={{ marginTop: 8, marginBottom: 0 }}>
+                          <strong>即将支持：</strong>状态可配置 AI Guide（ai_guide）、自动初始化（auto_init）、成功/失败判断标准等字段
+                        </p>
+                      </div>
+                    }
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
