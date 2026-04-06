@@ -9,13 +9,15 @@ import {
   type ProjectStateMachineMapping,
 } from '../../api/projectStateMachineApi';
 import { listStateMachines } from '../../api/stateMachineApi';
+import { requirementTypeApi, type RequirementType } from '../../api/requirementTypeApi';
 import type { StateMachine } from '../../types/stateMachine';
 
 interface ProjectStateMachineConfigProps {
   projectId: string;
 }
 
-const requirementTypeMap: Record<string, { label: string; color: string; description: string }> = {
+// Default fallback type config when API data is not available
+const defaultTypeConfig: Record<string, { label: string; color: string; description: string }> = {
   normal: {
     label: '普通需求',
     color: 'blue',
@@ -32,6 +34,7 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
   const [form] = Form.useForm();
   const [mappings, setMappings] = useState<ProjectStateMachineMapping[]>([]);
   const [stateMachines, setStateMachines] = useState<StateMachine[]>([]);
+  const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -58,9 +61,34 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
     }
   };
 
+  // 获取需求类型列表
+  const fetchRequirementTypes = async () => {
+    try {
+      const data = await requirementTypeApi.list(projectId);
+      setRequirementTypes(data);
+    } catch (_error) {
+      // 使用空数组，让下面的 getTypeConfig 回退到默认配置
+      setRequirementTypes([]);
+    }
+  };
+
+  // 获取类型配置（优先从 API，失败时使用默认配置）
+  const getTypeConfig = (code: string): { label: string; color: string; description: string } => {
+    const apiType = requirementTypes.find((t) => t.code === code);
+    if (apiType) {
+      return {
+        label: apiType.name || code,
+        color: apiType.color || 'default',
+        description: apiType.description || '',
+      };
+    }
+    return defaultTypeConfig[code] || { label: code, color: 'default', description: '' };
+  };
+
   useEffect(() => {
     fetchStateMachines();
     fetchMappings();
+    fetchRequirementTypes();
   }, [projectId]);
 
   // 保存状态机映射
@@ -99,7 +127,7 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
       key: 'requirement_type',
       width: 120,
       render: (type: string) => {
-        const config = requirementTypeMap[type] || { label: type, color: 'default', description: '' };
+        const config = getTypeConfig(type);
         return (
           <Tooltip title={config.description}>
             <Tag color={config.color}>{config.label}</Tag>
@@ -148,7 +176,24 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
   // 获取未配置的需求类型
   const getAvailableTypes = () => {
     const configuredTypes = new Set(mappings.map((m) => m.requirement_type));
-    return Object.entries(requirementTypeMap).filter(([type]) => !configuredTypes.has(type));
+    // 合并 API 类型和默认类型
+    const allTypes: Array<[string, { label: string; color: string; description: string }]> = [];
+
+    // 添加默认类型
+    Object.entries(defaultTypeConfig).forEach(([code, config]) => {
+      if (!configuredTypes.has(code)) {
+        allTypes.push([code, config]);
+      }
+    });
+
+    // 添加 API 返回的类型（跳过已配置的）
+    requirementTypes.forEach((t) => {
+      if (!configuredTypes.has(t.code) && !defaultTypeConfig[t.code]) {
+        allTypes.push([t.code, { label: t.name, color: t.color || 'default', description: t.description || '' }]);
+      }
+    });
+
+    return allTypes;
   };
 
   const availableTypes = getAvailableTypes();

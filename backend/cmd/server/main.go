@@ -194,7 +194,7 @@ func main() {
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
-	projectService := application.NewProjectApplicationService(projectRepo, idGenerator)
+	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator)
 
 	userHandler := httpHandler.NewUserHandler(userService)
 	agentHandler := httpHandler.NewAgentHandler(agentService)

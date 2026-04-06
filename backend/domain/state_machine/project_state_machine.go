@@ -26,13 +26,10 @@ const (
 )
 
 // IsValidRequirementType 检查需求类型是否有效
+// 注意：需求类型现在通过 requirement_types 表动态管理，不再硬编码验证
+// 此函数保留用于向后兼容，任何非空字符串都视为有效类型
 func IsValidRequirementType(t string) bool {
-	switch RequirementType(t) {
-	case RequirementTypeNormal, RequirementTypeHeartbeat:
-		return true
-	default:
-		return false
-	}
+	return t != ""
 }
 
 // ProjectStateMachine 项目状态机关联

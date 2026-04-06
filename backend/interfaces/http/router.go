@@ -444,6 +444,8 @@ func SetupRoutesWithManagement(
 				requirementTypeHandler.ListRequirementTypes(w, r)
 			case http.MethodPost:
 				requirementTypeHandler.CreateRequirementType(w, r)
+			case http.MethodDelete:
+				requirementTypeHandler.DeleteRequirementType(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

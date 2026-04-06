@@ -2,11 +2,17 @@
  * Requirement Type Management Page
  */
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Space, Button, Table, Popconfirm, message } from 'antd';
+import { Card, Typography, Space, Button, Table, Popconfirm, message, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { requirementTypeApi, type RequirementType, type CreateRequirementTypeRequest } from '../../api/requirementTypeApi';
 
 const { Title } = Typography;
+
+// 内置需求类型代码，这些类型不允许删除
+const BUILT_IN_TYPES = ['normal', 'heartbeat'];
+
+// 检查是否为内置类型
+const isBuiltInType = (code: string): boolean => BUILT_IN_TYPES.includes(code);
 
 interface RequirementTypeManagementPageProps {
   projectId: string;
@@ -41,6 +47,12 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       return;
     }
 
+    // 检查是否为内置类型代码
+    if (isBuiltInType(newCode.trim())) {
+      message.warning('不能使用内置类型代码');
+      return;
+    }
+
     setCreateLoading(true);
     try {
       const data: CreateRequirementTypeRequest = {
@@ -60,11 +72,36 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
     }
   };
 
+  const handleDelete = async (type: RequirementType) => {
+    if (isBuiltInType(type.code)) {
+      message.error('内置类型不能删除');
+      return;
+    }
+
+    try {
+      await requirementTypeApi.delete(type.id);
+      message.success('删除成功');
+      fetchTypes();
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        message.error('内置类型不能删除');
+      } else {
+        message.error('删除失败');
+      }
+    }
+  };
+
   const columns = [
     {
       title: '代码',
       dataIndex: 'code',
       key: 'code',
+      render: (code: string) => (
+        <Space>
+          <span>{code}</span>
+          {isBuiltInType(code) && <Tag color="blue">内置</Tag>}
+        </Space>
+      ),
     },
     {
       title: '名称',
@@ -77,35 +114,31 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       key: 'description',
     },
     {
-      title: '图标',
-      dataIndex: 'icon',
-      key: 'icon',
-    },
-    {
       title: '颜色',
       dataIndex: 'color',
       key: 'color',
-    },
-    {
-      title: '排序',
-      dataIndex: 'sort_order',
-      key: 'sort_order',
+      render: (color: string) => color ? <Tag color={color}>{color}</Tag> : '-',
     },
     {
       title: '操作',
       key: 'action',
-      render: (_: unknown) => (
-        <Popconfirm
-          title="确定删除此需求类型？"
-          onConfirm={() => message.info('删除功能待实现')}
-          okText="确定"
-          cancelText="取消"
-        >
-          <Button size="small" danger icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>
-      ),
+      render: (_: unknown, record: RequirementType) => {
+        if (isBuiltInType(record.code)) {
+          return <span style={{ color: '#999' }}>不可删除</span>;
+        }
+        return (
+          <Popconfirm
+            title="确定删除此需求类型？"
+            onConfirm={() => handleDelete(record)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        );
+      },
     },
   ];
 

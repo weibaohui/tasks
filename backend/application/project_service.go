@@ -33,12 +33,17 @@ type UpdateProjectCommand struct {
 }
 
 type ProjectApplicationService struct {
-	projectRepo domain.ProjectRepository
-	idGenerator domain.IDGenerator
+	projectRepo           domain.ProjectRepository
+	requirementTypeRepo  domain.RequirementTypeEntityRepository
+	idGenerator          domain.IDGenerator
 }
 
-func NewProjectApplicationService(projectRepo domain.ProjectRepository, idGenerator domain.IDGenerator) *ProjectApplicationService {
-	return &ProjectApplicationService{projectRepo: projectRepo, idGenerator: idGenerator}
+func NewProjectApplicationService(projectRepo domain.ProjectRepository, requirementTypeRepo domain.RequirementTypeEntityRepository, idGenerator domain.IDGenerator) *ProjectApplicationService {
+	return &ProjectApplicationService{
+		projectRepo:          projectRepo,
+		requirementTypeRepo:  requirementTypeRepo,
+		idGenerator:          idGenerator,
+	}
 }
 
 func (s *ProjectApplicationService) CreateProject(ctx context.Context, cmd CreateProjectCommand) (*domain.Project, error) {
@@ -55,7 +60,59 @@ func (s *ProjectApplicationService) CreateProject(ctx context.Context, cmd Creat
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err
 	}
+
+	// 为项目创建默认的需求类型
+	if err := s.ensureDefaultRequirementTypes(ctx, project.ID()); err != nil {
+		// 日志记录错误，但不阻塞项目创建
+		// 可能是需求类型表不存在或其他原因
+	}
+
 	return project, nil
+}
+
+// ensureDefaultRequirementTypes 确保项目有所需的默认类型（normal, heartbeat）
+func (s *ProjectApplicationService) ensureDefaultRequirementTypes(ctx context.Context, projectID domain.ProjectID) error {
+	if s.requirementTypeRepo == nil {
+		return nil
+	}
+
+	defaultTypes := []struct {
+		code        string
+		name        string
+		description string
+		color       string
+	}{
+		{"normal", "普通需求", "普通流程需求，需要人工触发", "blue"},
+		{"heartbeat", "心跳需求", "自动触发的心跳任务", "green"},
+	}
+
+	for _, dt := range defaultTypes {
+		// 检查是否已存在
+		existing, err := s.requirementTypeRepo.FindByCode(ctx, projectID, dt.code)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			continue
+		}
+
+		// 创建默认类型
+		rt, err := domain.NewRequirementTypeEntity(
+			domain.NewRequirementTypeEntityID(s.idGenerator.Generate()),
+			projectID,
+			dt.code,
+			dt.name,
+			dt.description,
+		)
+		if err != nil {
+			return err
+		}
+		rt.SetColor(dt.color)
+		if err := s.requirementTypeRepo.Save(ctx, rt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *ProjectApplicationService) GetProject(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {

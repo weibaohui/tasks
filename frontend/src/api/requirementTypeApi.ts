@@ -41,4 +41,8 @@ export const requirementTypeApi = {
     );
     return response.data;
   },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/requirement-types?id=${id}`);
+  },
 };

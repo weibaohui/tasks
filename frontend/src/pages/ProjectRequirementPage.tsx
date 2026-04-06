@@ -497,16 +497,27 @@ export const ProjectRequirementPage: React.FC = () => {
     },
   ];
 
+  // 获取类型配置（用于显示）
+  const getTypeDisplay = (code: string): { label: string; color: string } => {
+    const typeConfig = requirementTypes.find((t) => t.code === code);
+    if (typeConfig) {
+      return { label: typeConfig.name || code, color: typeConfig.color || 'default' };
+    }
+    // 默认配置
+    if (code === 'heartbeat') return { label: '心跳', color: 'orange' };
+    if (code === 'normal') return { label: '普通', color: 'default' };
+    return { label: code, color: 'default' };
+  };
+
   const requirementColumns = [
     { title: '标题', dataIndex: 'title', key: 'title' },
     {
       title: '类型',
       key: 'requirement_type',
-      render: (_: unknown, item: Requirement) => (
-        <Tag color={item.requirement_type === 'heartbeat' ? 'orange' : 'default'}>
-          {item.requirement_type === 'heartbeat' ? '心跳' : '普通'}
-        </Tag>
-      ),
+      render: (_: unknown, item: Requirement) => {
+        const display = getTypeDisplay(item.requirement_type || 'normal');
+        return <Tag color={display.color}>{display.label}</Tag>;
+      },
     },
     {
       title: '状态',
@@ -629,8 +640,9 @@ export const ProjectRequirementPage: React.FC = () => {
                       value={typeFilter || undefined}
                       options={[
                         { label: '全部类型', value: '' },
-                        { label: '普通', value: 'normal' },
-                        { label: '心跳', value: 'heartbeat' },
+                        { label: '普通 (normal)', value: 'normal' },
+                        { label: '心跳 (heartbeat)', value: 'heartbeat' },
+                        ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
                       ]}
                       onChange={(value) => setTypeFilter(value || '')}
                       allowClear
