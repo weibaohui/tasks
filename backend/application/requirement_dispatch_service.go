@@ -401,22 +401,24 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 
 %s
 
-【执行流程】
-请按以下顺序执行：
-1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
-2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
-3. 基于需求与验收标准，使用 taskmanager / gh 等 CLI 工具完成调度工作
-4. **严禁**修改任何源代码、**严禁**执行 git commit、**严禁**执行 git push、**严禁**创建 PR
-5. 所有需要代码改动的事项，必须使用 taskmanager requirement create 生成新需求，让其他 CodingAgent 完成
-6. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
-7. 工作完成后，输出本次心跳的执行结果摘要
+【执行流程 - 心跳任务】
+你是调度员，负责编排任务而非直接修改代码。请按照以下心跳任务定义执行：
+
+%s
+
+【调度员核心守则】
+1. **严禁**直接修改任何源代码文件
+2. **严禁**执行 git commit、git push、创建 PR
+3. 所有代码改动必须通过 "taskmanager requirement create" 创建新需求，交由 CodingAgent 完成
+4. 根据工作结果，使用状态机命令更新需求状态
+5. 工作完成后，输出本次心跳的执行结果摘要
 `, requirement.ID().String(), requirementType, requirement.Status(), firstNonEmpty(currentState, "未初始化"), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成调度工作"),
 			project.GitRepoURL(), project.DefaultBranch(), workspacePath,
 			stateAIGuide,
 			stateMachineGuide,
-			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch())
+			project.HeartbeatMDContent())
 	} else {
 		initSteps := project.InitSteps()
 		initStepsText := "无"
