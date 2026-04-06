@@ -177,15 +177,46 @@ UPDATE_RESULT=$(taskmanager requirement update-state --id "$REQ_ID" --status "$N
 echo "$UPDATE_RESULT"
 ```
 
+## 推荐：一键状态转换命令
+
+最简单的方式是使用封装好的 `transition` 命令，它会自动完成状态机转换和需求状态同步：
+
+```bash
+taskmanager requirement transition --id <req-id> --trigger <trigger> [--metadata '{...}']
+```
+
+**输出示例：**
+```json
+{
+  "success": true,
+  "requirement_id": "req-abc-123",
+  "from_state": "coding",
+  "to_state": "completed",
+  "to_state_name": "已完成",
+  "trigger": "finish",
+  "message": "状态已从 'coding' 转换为 'completed'"
+}
+```
+
+**完整示例：**
+```bash
+# 查看当前状态和可用触发器
+taskmanager requirement get-state --id req-abc-123
+
+# 执行转换（自动同步到需求状态）
+taskmanager requirement transition --id req-abc-123 --trigger finish --metadata '{"operator":"ai-agent"}'
+```
+
 ## 命令速查
 
 | 命令 | 用途 | 示例 |
 |------|------|------|
+| `requirement transition` | **一键状态转换**（推荐） | `taskmanager requirement transition -i req-123 -t complete` |
 | `requirement get-state` | 获取需求当前状态 | `taskmanager requirement get-state -i req-123` |
-| `requirement update-state` | 更新需求状态 | `taskmanager requirement update-state -i req-123 -s completed` |
+| `requirement update-state` | 手动更新需求状态 | `taskmanager requirement update-state -i req-123 -s completed` |
 | `statemachine triggers` | 查询可用触发器 | `taskmanager statemachine triggers -m "workflow" -f todo` |
 | `statemachine validate` | 验证转换合法性 | `taskmanager statemachine validate -m "workflow" -f todo -t completed` |
-| `statemachine execute` | 执行状态转换 | `taskmanager statemachine execute -m "workflow" -f todo -t complete` |
+| `statemachine execute` | 执行状态转换计算 | `taskmanager statemachine execute -m "workflow" -f todo -t complete` |
 
 ## 注意事项
 

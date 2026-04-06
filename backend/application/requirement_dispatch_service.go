@@ -446,6 +446,11 @@ func buildStateMachineGuide(stateMachineName string) string {
 
 你可以使用以下命令管理需求状态：
 
+【推荐】一键状态转换（自动同步状态机+需求状态）：
+   taskmanager requirement transition --id <需求ID> --trigger=<触发器>
+
+【分步操作】如需更细粒度控制：
+
 1. 查看当前需求状态：
    taskmanager requirement get-state --id <需求ID>
 
@@ -455,11 +460,8 @@ func buildStateMachineGuide(stateMachineName string) string {
 3. 验证状态转换是否合法：
    taskmanager statemachine validate --machine=%s --from=<当前状态> --to=<目标状态>
 
-4. 执行状态转换（根据工作结果选择正确的触发器）：
-   taskmanager statemachine execute --machine=%s --from=<当前状态> --trigger=<触发器>
-
-5. 同步状态到需求（执行成功后更新需求状态）：
-   taskmanager requirement update-state --id <需求ID> --status <新状态>
+4. 执行状态转换并同步需求状态：
+   taskmanager requirement transition --id <需求ID> --trigger=<触发器>
 
 【典型工作流示例】
 # 假设你完成了当前阶段的任务，需要推进到下一阶段：
@@ -471,14 +473,11 @@ echo "当前状态: $CURRENT_STATE"
 # 步骤2：查看可用触发器
 taskmanager statemachine triggers --machine=%s --from="$CURRENT_STATE"
 
-# 步骤3：根据工作结果选择合适的触发器执行
-# 例如，如果任务完成，执行 complete 触发器：
-RESULT=$(taskmanager statemachine execute --machine=%s --from="$CURRENT_STATE" --trigger=complete)
-echo "转换结果: $RESULT"
+# 步骤3：根据工作结果选择合适的触发器，执行一键转换
+# 例如，如果任务完成，执行 finish 触发器：
+taskmanager requirement transition --id "${REQUIREMENT_ID}" --trigger=finish --metadata '{"result":"success"}'
 
-# 步骤4：获取新状态并更新需求
-NEW_STATE=$(echo "$RESULT" | jq -r '.to_state')
-taskmanager requirement update-state --id "${REQUIREMENT_ID}" --status "$NEW_STATE"
+# 注意：transition 命令会自动完成状态机转换并同步更新需求状态
 
 【环境变量】
 以下环境变量已自动注入，可在命令中使用：
@@ -486,5 +485,5 @@ taskmanager requirement update-state --id "${REQUIREMENT_ID}" --status "$NEW_STA
 - PROJECT_ID: 当前项目ID
 - STATE_MACHINE_NAME: 关联的状态机名称
 - REQUIREMENT_TYPE: 需求类型（normal/heartbeat）`,
-		stateMachineName, stateMachineName, stateMachineName, stateMachineName, stateMachineName, stateMachineName)
+		stateMachineName, stateMachineName, stateMachineName)
 }
