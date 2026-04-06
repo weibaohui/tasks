@@ -33,4 +33,5 @@ backend/bin/taskmanager-web
 backend/web
 backend/internal/embed/ui/dist/assets
 backend/internal/embed/ui/dist/index.html
+backend/.wechat-token-wechat_1775389538232_k32apr28x.json
 .claude/scheduled_tasks.lock
