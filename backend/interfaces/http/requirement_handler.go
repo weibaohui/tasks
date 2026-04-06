@@ -28,6 +28,7 @@ type CreateRequirementRequest struct {
 	Description        string `json:"description"`
 	AcceptanceCriteria string `json:"acceptance_criteria"`
 	TempWorkspaceRoot  string `json:"temp_workspace_root"`
+	RequirementType    string `json:"requirement_type"`
 }
 
 type UpdateRequirementRequest struct {
@@ -62,6 +63,7 @@ func (h *RequirementHandler) CreateRequirement(w http.ResponseWriter, r *http.Re
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
 		TempWorkspaceRoot:  req.TempWorkspaceRoot,
+		RequirementType:    req.RequirementType,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

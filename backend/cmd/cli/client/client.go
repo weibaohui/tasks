@@ -164,6 +164,7 @@ type CreateRequirementRequest struct {
 	Description        string `json:"description"`
 	AcceptanceCriteria string `json:"acceptance_criteria"`
 	TempWorkspaceRoot  string `json:"temp_workspace_root,omitempty"`
+	RequirementType    string `json:"requirement_type,omitempty"`
 }
 
 // CreateRequirement 创建需求
@@ -910,4 +911,73 @@ func (c *Client) DeleteRequirement(ctx context.Context, requirementID string) er
 	}
 
 	return nil
+}
+
+// ==================== Requirement Type APIs ====================
+
+// RequirementType 需求类型响应结构
+type RequirementType struct {
+	ID             string `json:"id"`
+	ProjectID      string `json:"project_id"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	Icon           string `json:"icon"`
+	Color          string `json:"color"`
+	SortOrder      int    `json:"sort_order"`
+	StateMachineID string `json:"state_machine_id"`
+	CreatedAt      int64  `json:"created_at"`
+	UpdatedAt      int64  `json:"updated_at"`
+}
+
+// ListRequirementTypes 获取项目下的需求类型列表
+func (c *Client) ListRequirementTypes(ctx context.Context, projectID string) ([]RequirementType, error) {
+	path := "/requirement-types?project_id=" + projectID
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.handleError(resp)
+	}
+
+	var result []RequirementType
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return result, nil
+}
+
+// CreateRequirementTypeRequest 创建需求类型请求
+type CreateRequirementTypeRequest struct {
+	ProjectID   string `json:"project_id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	Color       string `json:"color"`
+}
+
+// CreateRequirementType 创建需求类型
+func (c *Client) CreateRequirementType(ctx context.Context, req CreateRequirementTypeRequest) (*RequirementType, error) {
+	path := "/requirement-types"
+	resp, err := c.doRequest(ctx, http.MethodPost, path, req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.handleError(resp)
+	}
+
+	var result RequirementType
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
 }

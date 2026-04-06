@@ -73,6 +73,7 @@ export interface CreateRequirementRequest {
   description: string;
   acceptance_criteria: string;
   temp_workspace_root: string;
+  requirement_type?: string;
 }
 
 export interface UpdateRequirementRequest {

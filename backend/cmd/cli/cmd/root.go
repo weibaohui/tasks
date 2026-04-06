@@ -27,6 +27,10 @@ var rootCmd = &cobra.Command{
   taskmanager requirement complete 完成需求
   taskmanager requirement reset    重置需求
 
+需求类型管理:
+  taskmanager requirement-type list   列出需求类型
+  taskmanager requirement-type create 创建需求类型
+
 状态机管理:
   taskmanager statemachine create      创建状态机
   taskmanager statemachine list        列出状态机

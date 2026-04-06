@@ -152,6 +152,9 @@ func main() {
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 
+	// 初始化需求类型仓储
+	requirementTypeRepo := _persistence.NewSQLiteRequirementTypeEntityRepository(db)
+
 	// 6. 初始化技能加载器（gateway 需要）
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 
@@ -223,11 +226,15 @@ func main() {
 	projectStateMachineService := application.NewProjectStateMachineApplicationService(stateMachineRepo)
 	projectStateMachineHandler := httpHandler.NewProjectStateMachineHandler(projectStateMachineService)
 
+	// 初始化需求类型 handler
+	requirementTypeHandler := httpHandler.NewRequirementTypeHandler(requirementTypeRepo)
+
 	mux := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
 		requirementHandler, stateMachineHandler, projectStateMachineHandler,
+		requirementTypeHandler,
 	)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）

@@ -105,7 +105,6 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 
 	// 设置分配信息和 session key
 	requirement.SetDispatchSessionKey(cmd.SessionKey)
-	requirement.SetReplicaAgentCode(cmd.AgentCode)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
@@ -123,8 +122,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, err
 	}
 
-	// 设置工作空间信息
+	// 设置工作空间信息和分身 Agent code
 	requirement.SetWorkspacePath(workspacePath)
+	requirement.SetReplicaAgentCode(replicaAgent.AgentCode().String())
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}

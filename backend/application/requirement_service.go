@@ -18,6 +18,7 @@ type CreateRequirementCommand struct {
 	Description        string
 	AcceptanceCriteria string
 	TempWorkspaceRoot  string
+	RequirementType    string // 可选，默认为 "normal"
 }
 
 type UpdateRequirementCommand struct {
@@ -75,6 +76,10 @@ func (s *RequirementApplicationService) CreateRequirement(ctx context.Context, c
 	)
 	if err != nil {
 		return nil, err
+	}
+	// 设置需求类型（默认为 normal）
+	if cmd.RequirementType != "" {
+		requirement.SetRequirementType(domain.RequirementType(cmd.RequirementType))
 	}
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err

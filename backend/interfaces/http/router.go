@@ -13,11 +13,11 @@ import (
 // SetupRoutes 设置路由
 // 注意：Go 标准库 http.ServeMux 不支持路径参数，路由按最长前缀匹配
 func SetupRoutes() *http.ServeMux {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *http.ServeMux {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -34,6 +34,7 @@ func SetupRoutesWithManagement(
 	requirementHandler *RequirementHandler,
 	stateMachineHandler *StateMachineHandler,
 	projectStateMachineHandler *ProjectStateMachineHandler,
+	requirementTypeHandler *RequirementTypeHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -429,6 +430,20 @@ func SetupRoutesWithManagement(
 				requirementHandler.UpdateRequirement(w, r)
 			case http.MethodDelete:
 				requirementHandler.DeleteRequirement(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))
+	}
+
+	// 需求类型路由
+	if requirementTypeHandler != nil {
+		mux.HandleFunc("/api/v1/requirement-types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				requirementTypeHandler.ListRequirementTypes(w, r)
+			case http.MethodPost:
+				requirementTypeHandler.CreateRequirementType(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}

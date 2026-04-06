@@ -11,6 +11,8 @@ import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { ProjectStateMachineConfig } from '../components/ProjectStateMachineConfig';
+import { RequirementTypeManagementPage } from '../components/RequirementTypeManagement';
+import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -78,6 +80,9 @@ export const ProjectRequirementPage: React.FC = () => {
 
   // 需求类型过滤
   const [typeFilter, setTypeFilter] = useState<string>('');
+
+  // 需求类型列表（用于创建需求时选择）
+  const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
 
   // 根据状态和类型过滤后的需求列表
   const filteredRequirements = useMemo(() => {
@@ -166,11 +171,26 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   }, [user?.user_code]);
 
+  const fetchRequirementTypes = useCallback(async (projectId: string) => {
+    try {
+      const data = await requirementTypeApi.list(projectId);
+      setRequirementTypes(data);
+    } catch (_error) {
+      // 忽略错误，不影响其他功能
+    }
+  }, []);
+
   useEffect(() => {
     fetchProjects();
     fetchAgents();
     fetchChannels();
   }, [fetchAgents, fetchChannels, fetchProjects]);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchRequirementTypes(selectedProjectId);
+    }
+  }, [fetchRequirementTypes, selectedProjectId]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -235,13 +255,14 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const submitRequirement = async (values: { project_id: string; title: string; description: string; acceptance_criteria: string; temp_workspace_root: string }) => {
+  const submitRequirement = async (values: { project_id: string; title: string; description: string; acceptance_criteria: string; temp_workspace_root: string; requirement_type?: string }) => {
     const payload: CreateRequirementRequest = {
       project_id: values.project_id,
       title: values.title,
       description: values.description || '',
       acceptance_criteria: values.acceptance_criteria || '',
       temp_workspace_root: values.temp_workspace_root || '',
+      requirement_type: values.requirement_type || 'normal',
     };
     try {
       if (editingRequirement) {
@@ -280,7 +301,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const openCreateRequirement = () => {
     setEditingRequirement(null);
     requirementForm.resetFields();
-    requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops' });
+    requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops', requirement_type: 'normal' });
     setRequirementModalOpen(true);
   };
 
@@ -298,6 +319,7 @@ export const ProjectRequirementPage: React.FC = () => {
       description: item.description,
       acceptance_criteria: item.acceptance_criteria,
       temp_workspace_root: item.temp_workspace_root,
+      requirement_type: item.requirement_type || 'normal',
     });
     setRequirementModalOpen(true);
   };
@@ -726,6 +748,15 @@ export const ProjectRequirementPage: React.FC = () => {
           <Form.Item label="验收标准" name="acceptance_criteria">
             <Input.TextArea rows={4} />
           </Form.Item>
+          <Form.Item label="需求类型" name="requirement_type" initialValue="normal">
+            <Select
+              options={[
+                { label: '普通 (normal)', value: 'normal' },
+                ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
+              ]}
+              placeholder="选择需求类型"
+            />
+          </Form.Item>
           <Form.Item label="临时工作目录根路径" name="temp_workspace_root" rules={[{ required: true, message: '请输入临时工作目录根路径' }]}>
             <Input placeholder="/tmp/ai-devops" />
           </Form.Item>
@@ -946,6 +977,11 @@ export const ProjectRequirementPage: React.FC = () => {
               key: 'stateMachine',
               label: '状态机配置',
               children: configProject ? <ProjectStateMachineConfig projectId={configProject.id} /> : null,
+            },
+            {
+              key: 'requirementTypes',
+              label: '需求类型',
+              children: configProject ? <RequirementTypeManagementPage projectId={configProject.id} /> : null,
             },
           ]}
         />

@@ -13,17 +13,24 @@ var requirementCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "创建新需求",
 	Example: `  taskmanager requirement create --project-id <id> --title <title> --description <desc>
-  taskmanager requirement create -p <id> -t <title> -d <desc> -a <acceptance>`,
+  taskmanager requirement create -p <id> -t <title> -d <desc> -a <acceptance>
+  taskmanager requirement create -p <id> -t <title> --type normal`,
 	Run: func(cmd *cobra.Command, args []string) {
 		projectID, _ := cmd.Flags().GetString("project-id")
 		title, _ := cmd.Flags().GetString("title")
 		description, _ := cmd.Flags().GetString("description")
 		acceptance, _ := cmd.Flags().GetString("acceptance-criteria")
 		tempWorkspace, _ := cmd.Flags().GetString("temp-workspace-root")
+		requirementType, _ := cmd.Flags().GetString("type")
 
 		if projectID == "" || title == "" {
 			fmt.Print(`{"error":"--project-id and --title are required"}`)
 			return
+		}
+
+		// 默认类型为 normal
+		if requirementType == "" {
+			requirementType = "normal"
 		}
 
 		ctx := context.Background()
@@ -35,6 +42,7 @@ var requirementCreateCmd = &cobra.Command{
 			Description:        description,
 			AcceptanceCriteria: acceptance,
 			TempWorkspaceRoot:  tempWorkspace,
+			RequirementType:    requirementType,
 		})
 		if err != nil {
 			printJSONError("create requirement failed: %v", err)
@@ -58,4 +66,5 @@ func init() {
 	requirementCreateCmd.Flags().StringP("description", "d", "", "需求描述")
 	requirementCreateCmd.Flags().StringP("acceptance-criteria", "a", "", "验收标准")
 	requirementCreateCmd.Flags().StringP("temp-workspace-root", "", "", "临时工作目录根路径")
+	requirementCreateCmd.Flags().StringP("type", "", "normal", "需求类型 (如: normal, heartbeat, pr_review, optimization)")
 }
