@@ -48,6 +48,22 @@ const TEMPLATE_VARIABLES = [
   { key: 'hook_type', label: 'hook_type', desc: 'Hook类型' },
 ];
 
+// 需求元数据变量（由分身Agent注入）
+const METADATA_VARIABLES = [
+  { key: 'REQUIREMENT_ID', label: 'REQUIREMENT_ID', desc: '需求ID（环境变量格式）' },
+  { key: 'PROJECT_ID', label: 'PROJECT_ID', desc: '项目ID（环境变量格式）' },
+  { key: 'STATE_MACHINE_NAME', label: 'STATE_MACHINE_NAME', desc: '状态机名称' },
+  { key: 'REQUIREMENT_TYPE', label: 'REQUIREMENT_TYPE', desc: '需求类型（normal/heartbeat）' },
+  { key: 'REQUIREMENT_STATUS', label: 'REQUIREMENT_STATUS', desc: '需求当前状态' },
+  { key: 'REQUIREMENT_TITLE', label: 'REQUIREMENT_TITLE', desc: '需求标题' },
+];
+
+// CLI 注入的自定义元数据
+const CLI_METADATA_VARIABLES = [
+  { key: 'operator', label: 'operator', desc: '操作人（通过 --metadata 注入）' },
+  { key: 'source', label: 'source', desc: '触发来源（通过 --metadata 注入）' },
+];
+
 interface TransitionWithHooks {
   from: string;
   to: string;
@@ -877,21 +893,65 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                 icon={<InfoCircleOutlined />}
                 message="可用模板变量"
                 description={
-                  <div>
-                    <p style={{ marginBottom: 8 }}>
-                      点击以下变量可插入到 {currentHook.type === 'webhook' ? 'URL' : '命令'} 中：
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {TEMPLATE_VARIABLES.map((v) => (
-                        <Tag
-                          key={v.key}
-                          color="cyan"
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
-                        >
-                          {`{{${v.key}}}`}
-                        </Tag>
-                      ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* 基础变量 */}
+                    <div>
+                      <p style={{ marginBottom: 8, fontWeight: 500 }}>
+                        基础变量（点击插入）：
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {TEMPLATE_VARIABLES.map((v) => (
+                          <Tag
+                            key={v.key}
+                            color="cyan"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          >
+                            {`{{${v.key}}}`}
+                          </Tag>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 需求元数据变量 */}
+                    <div>
+                      <p style={{ marginBottom: 8, fontWeight: 500 }}>
+                        需求元数据（由分身Agent自动注入）：
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {METADATA_VARIABLES.map((v) => (
+                          <Tag
+                            key={v.key}
+                            color="blue"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          >
+                            {`{{${v.key}}}`}
+                          </Tag>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* CLI 自定义元数据 */}
+                    <div>
+                      <p style={{ marginBottom: 8, fontWeight: 500 }}>
+                        CLI 注入的自定义变量（通过 --metadata 参数）：
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {CLI_METADATA_VARIABLES.map((v) => (
+                          <Tag
+                            key={v.key}
+                            color="orange"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => insertVariable(currentHook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          >
+                            {`{{${v.key}}}`}
+                          </Tag>
+                        ))}
+                      </div>
+                      <p style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        {'示例：taskmanager statemachine execute --machine=workflow --from=todo --trigger=complete --metadata=\'{"operator":"zhangsan"}\''}
+                      </p>
                     </div>
                   </div>
                 }

@@ -15,9 +15,14 @@ var stateMachineExecuteCmd = &cobra.Command{
 	Long: `执行状态转换计算：输入状态机模板、当前状态、触发器，返回目标状态。
 
 纯通用引擎：不管理业务实例ID，不做数据存储，只负责规则计算。
-业务层自行管理实例ID和状态存储。`,
+业务层自行管理实例ID和状态存储。
+
+可通过 --metadata 注入自定义元数据，这些元数据会在状态转换时传递给 hook 执行上下文。`,
 	Example: `  # 执行转换：从 build 状态 + 触发器 build_success
   taskmanager statemachine execute --machine=dev-release --from=build --trigger=build_success
+
+  # 执行转换并注入元数据（供 hook 使用）
+  taskmanager statemachine execute --machine=dev-release --from=build --trigger=build_success --metadata '{"requirement_id":"req-123","operator":"zhangsan"}'
 
   # 返回目标状态（业务层自行保存）
   # 输出: testing`,
@@ -25,6 +30,7 @@ var stateMachineExecuteCmd = &cobra.Command{
 		machineName, _ := cmd.Flags().GetString("machine")
 		currentState, _ := cmd.Flags().GetString("from")
 		trigger, _ := cmd.Flags().GetString("trigger")
+		metadataJSON, _ := cmd.Flags().GetString("metadata")
 
 		if machineName == "" {
 			printJSONError("必须指定 --machine 参数")
@@ -37,6 +43,15 @@ var stateMachineExecuteCmd = &cobra.Command{
 		if trigger == "" {
 			printJSONError("必须指定 --trigger 参数")
 			return
+		}
+
+		// 解析 metadata
+		var metadata map[string]interface{}
+		if metadataJSON != "" {
+			if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+				printJSONError("解析 metadata 失败: %v", err)
+				return
+			}
 		}
 
 		ctx := context.Background()
@@ -110,6 +125,11 @@ var stateMachineExecuteCmd = &cobra.Command{
 			"description": description,
 		}
 
+		// 如果提供了 metadata，包含在输出中
+		if metadata != nil {
+			result["metadata"] = metadata
+		}
+
 		jsonBytes, _ := json.Marshal(result)
 		fmt.Print(string(jsonBytes))
 	},
@@ -119,6 +139,7 @@ func init() {
 	stateMachineExecuteCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineExecuteCmd.Flags().StringP("from", "f", "", "当前状态ID (必填)")
 	stateMachineExecuteCmd.Flags().StringP("trigger", "t", "", "触发器名称 (必填)")
+	stateMachineExecuteCmd.Flags().StringP("metadata", "d", "", "自定义元数据JSON字符串（供hook使用）")
 	stateMachineExecuteCmd.MarkFlagRequired("machine")
 	stateMachineExecuteCmd.MarkFlagRequired("from")
 	stateMachineExecuteCmd.MarkFlagRequired("trigger")

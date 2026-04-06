@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/domain/state_machine"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -38,6 +39,7 @@ type RequirementDispatchService struct {
 	requirementRepo      domain.RequirementRepository
 	projectRepo          domain.ProjectRepository
 	agentRepo            domain.AgentRepository
+	stateMachineRepo     state_machine.Repository
 	taskService          interface{} // TaskApplicationService - no longer used
 	sessionService       *SessionApplicationService
 	idGenerator          domain.IDGenerator
@@ -55,6 +57,7 @@ func NewRequirementDispatchService(
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 	replicaAgentManager *domain.ReplicaAgentManager,
+	stateMachineRepo state_machine.Repository,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
 		requirementRepo:      requirementRepo,
@@ -64,6 +67,7 @@ func NewRequirementDispatchService(
 		sessionService:      sessionService,
 		idGenerator:         idGenerator,
 		replicaAgentManager: replicaAgentManager,
+		stateMachineRepo:    stateMachineRepo,
 	}
 }
 
@@ -141,12 +145,31 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
-	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath)
+	// 查询项目关联的状态机
+	stateMachineName := s.getProjectStateMachineName(ctx, project.ID().String(), requirement.RequirementType())
+
+	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName)
 
 	// 保存 Claude Runtime 执行提示词
 	requirement.SetClaudeRuntimePrompt(dispatchPrompt)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
+	}
+
+	// 构建元数据，包含环境变量供hook使用
+	reqMetadata := map[string]any{
+		"agent_code":       replicaAgent.AgentCode().String(),
+		"user_code":        replicaAgent.UserCode(),
+		"channel_code":     cmd.ChannelCode,
+		"requirement_id":   requirement.ID().String(),
+		"project_id":       project.ID().String(),
+		"dispatch_source":  "requirement",
+		"REQUIREMENT_ID":   requirement.ID().String(),
+		"PROJECT_ID":       project.ID().String(),
+		"STATE_MACHINE_NAME": stateMachineName,
+		"REQUIREMENT_TYPE": string(requirement.RequirementType()),
+		"REQUIREMENT_STATUS": string(requirement.Status()),
+		"REQUIREMENT_TITLE": requirement.Title(),
 	}
 
 	s.inboundPublisher.PublishInbound(&channelBus.InboundMessage{
@@ -156,14 +179,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		Content:   dispatchPrompt,
 		Timestamp: time.Now(),
 		Media:     []string{},
-		Metadata: map[string]any{
-			"agent_code":      replicaAgent.AgentCode().String(),
-			"user_code":       replicaAgent.UserCode(),
-			"channel_code":    cmd.ChannelCode,
-			"requirement_id":  requirement.ID().String(),
-			"project_id":      project.ID().String(),
-			"dispatch_source": "requirement",
-		},
+		Metadata:  reqMetadata,
 	})
 	dispatchID := "dispatch_" + s.idGenerator.Generate()
 	return &DispatchRequirementResult{
@@ -246,6 +262,25 @@ func (s *RequirementDispatchService) createReplicaAgent(ctx context.Context, bas
 	return replica, nil
 }
 
+func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Context, projectID string, reqType domain.RequirementType) string {
+	if s.stateMachineRepo == nil {
+		return ""
+	}
+
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	if err != nil {
+		return ""
+	}
+
+	snap := psm.ToSnapshot()
+	sm, err := s.stateMachineRepo.GetStateMachine(ctx, snap.StateMachineID)
+	if err != nil {
+		return ""
+	}
+
+	return sm.Name
+}
+
 func workspaceRootPath() string {
 	if p := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); p != "" {
 		return p
@@ -292,41 +327,57 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 	return channelType, chatID, nil
 }
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
+	requirementType := "普通需求"
+	if isHeartbeat {
+		requirementType = "心跳需求"
+	}
+
+	// 构建状态机使用指南
+	stateMachineGuide := buildStateMachineGuide(stateMachineName)
 
 	// 心跳需求：调度员角色，不直接修改代码
 	var prompt string
 	if isHeartbeat {
-		prompt = fmt.Sprintf(`你是当前项目的调度员心跳（Heartbeat Agent），职责是 orchestrate 任务而非直接写代码。
+		prompt = fmt.Sprintf(`你是当前项目的调度员心跳（Heartbeat Agent），职责是 orchestrate 任务而非直接修改代码。
 
-【需求信息】
+【需求元信息】
 - 需求ID：%s
-- 标题：%s
-- 描述：%s
+- 需求类型：%s
+- 当前状态：%s
+- 需求标题：%s
+- 需求描述：%s
+- 项目ID：%s
+- 项目名称：%s
+- 关联状态机：%s
 
 【验收标准】
 %s
 
 【项目信息】
-- 项目ID：%s
-- 项目名称：%s
 - 仓库地址：%s
 - 默认分支：%s
 
 【工作目录】
 - 当前工作目录：%s
 
+%s
+
+【执行流程】
 请按以下顺序执行：
 1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
 2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
 3. 基于需求与验收标准，使用 taskmanager / gh 等 CLI 工具完成调度工作
 4. **严禁**修改任何源代码、**严禁**执行 git commit、**严禁**执行 git push、**严禁**创建 PR
 5. 所有需要代码改动的事项，必须使用 taskmanager requirement create 生成新需求，让其他 CodingAgent 完成
-6. 工作完成后，直接输出本次心跳的执行结果摘要
-`, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+6. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
+7. 工作完成后，输出本次心跳的执行结果摘要
+`, requirement.ID().String(), requirementType, requirement.Status(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成调度工作"),
-			project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), workspacePath,
+			project.GitRepoURL(), project.DefaultBranch(), workspacePath,
+			stateMachineGuide,
 			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch())
 	} else {
 		initSteps := project.InitSteps()
@@ -336,17 +387,20 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 		}
 		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
 
-【需求信息】
+【需求元信息】
 - 需求ID：%s
-- 标题：%s
-- 描述：%s
+- 需求类型：%s
+- 当前状态：%s
+- 需求标题：%s
+- 需求描述：%s
+- 项目ID：%s
+- 项目名称：%s
+- 关联状态机：%s
 
 【验收标准】
 %s
 
 【项目信息】
-- 项目ID：%s
-- 项目名称：%s
 - 仓库地址：%s
 - 默认分支：%s
 - 初始化步骤：
@@ -356,6 +410,9 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 当前工作目录：%s
 - 要求：必须在该目录内完成代码操作
 
+%s
+
+【执行流程】
 请按以下顺序执行：
 1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
 2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
@@ -365,11 +422,69 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 6. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
 7. 推送代码：git push origin feature/%s
 8. 创建 PR 或输出 PR 信息
-`, requirement.ID().String(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+9. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
+`, requirement.ID().String(), requirementType, requirement.Status(), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
-			project.ID().String(), project.Name(), project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
+			project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
+			stateMachineGuide,
 			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
 			requirement.ID().String(), requirement.ID().String())
 	}
 	return prompt
+}
+
+// buildStateMachineGuide 构建状态机使用指南
+func buildStateMachineGuide(stateMachineName string) string {
+	if stateMachineName == "" {
+		return `【状态机使用指南】
+当前需求未配置状态机。如需使用状态机管理工作流，请联系管理员配置。`
+	}
+
+	return fmt.Sprintf(`【状态机使用指南】
+本需求关联的状态机：%s
+
+你可以使用以下命令管理需求状态：
+
+1. 查看当前需求状态：
+   taskmanager requirement get-state --id <需求ID>
+
+2. 查看当前状态可用触发器：
+   taskmanager statemachine triggers --machine=%s --from=<当前状态>
+
+3. 验证状态转换是否合法：
+   taskmanager statemachine validate --machine=%s --from=<当前状态> --to=<目标状态>
+
+4. 执行状态转换（根据工作结果选择正确的触发器）：
+   taskmanager statemachine execute --machine=%s --from=<当前状态> --trigger=<触发器>
+
+5. 同步状态到需求（执行成功后更新需求状态）：
+   taskmanager requirement update-state --id <需求ID> --status <新状态>
+
+【典型工作流示例】
+# 假设你完成了当前阶段的任务，需要推进到下一阶段：
+
+# 步骤1：查看当前需求状态和可用触发器
+CURRENT_STATE=$(taskmanager requirement get-state --id "${REQUIREMENT_ID}" | jq -r '.current_state')
+echo "当前状态: $CURRENT_STATE"
+
+# 步骤2：查看可用触发器
+taskmanager statemachine triggers --machine=%s --from="$CURRENT_STATE"
+
+# 步骤3：根据工作结果选择合适的触发器执行
+# 例如，如果任务完成，执行 complete 触发器：
+RESULT=$(taskmanager statemachine execute --machine=%s --from="$CURRENT_STATE" --trigger=complete)
+echo "转换结果: $RESULT"
+
+# 步骤4：获取新状态并更新需求
+NEW_STATE=$(echo "$RESULT" | jq -r '.to_state')
+taskmanager requirement update-state --id "${REQUIREMENT_ID}" --status "$NEW_STATE"
+
+【环境变量】
+以下环境变量已自动注入，可在命令中使用：
+- REQUIREMENT_ID: 当前需求ID
+- PROJECT_ID: 当前项目ID
+- STATE_MACHINE_NAME: 关联的状态机名称
+- REQUIREMENT_TYPE: 需求类型（normal/heartbeat）`,
+		stateMachineName, stateMachineName, stateMachineName, stateMachineName, stateMachineName, stateMachineName)
 }

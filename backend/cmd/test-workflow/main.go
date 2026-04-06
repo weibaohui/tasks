@@ -85,6 +85,26 @@ func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, req
 	return result, nil
 }
 
+func (r *MockStateMachineRepository) SaveProjectStateMachine(ctx context.Context, psm *state_machine.ProjectStateMachine) error {
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetProjectStateMachine(ctx context.Context, projectID string, requirementType state_machine.RequirementType) (*state_machine.ProjectStateMachine, error) {
+	return nil, state_machine.ErrProjectStateMachineNotFound
+}
+
+func (r *MockStateMachineRepository) ListProjectStateMachines(ctx context.Context, projectID string) ([]*state_machine.ProjectStateMachine, error) {
+	return nil, nil
+}
+
+func (r *MockStateMachineRepository) DeleteProjectStateMachine(ctx context.Context, id string) error {
+	return nil
+}
+
+func (r *MockStateMachineRepository) DeleteProjectStateMachinesByProject(ctx context.Context, projectID string) error {
+	return nil
+}
+
 // 简化版状态机 YAML
 const yamlConfig = `
 name: simple_workflow

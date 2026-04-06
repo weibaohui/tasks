@@ -137,6 +137,9 @@ func main() {
 	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
 	logger.Info("ReplicaAgentManager 初始化完成")
 
+	// 初始化状态机仓库（提前初始化，供 requirementDispatchService 使用）
+	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
+
 	requirementDispatchService := application.NewRequirementDispatchService(
 		requirementRepo,
 		projectRepo,
@@ -145,6 +148,7 @@ func main() {
 		sessionService,
 		idGenerator,
 		replicaAgentManager,
+		stateMachineRepo,
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 
@@ -208,7 +212,7 @@ func main() {
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
 	// 初始化状态机
-	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
+	// stateMachineRepo 已在前面的初始化块中定义
 	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
 	stateMachineService := application.NewStateMachineService(stateMachineRepo, transitionExecutor, logger)
 	stateMachineHandler := httpHandler.NewStateMachineHandler(stateMachineService)
