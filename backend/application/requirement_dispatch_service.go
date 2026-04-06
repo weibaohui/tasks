@@ -21,29 +21,29 @@ var (
 )
 
 type DispatchRequirementCommand struct {
-	RequirementID  domain.RequirementID
+	RequirementID domain.RequirementID
 	AgentCode     string
 	ChannelCode   string
 	SessionKey    string
 }
 
 type DispatchRequirementResult struct {
-	RequirementID   string `json:"requirement_id"`
-	Status          string `json:"status"`
-	WorkspacePath   string `json:"workspace_path"`
+	RequirementID    string `json:"requirement_id"`
+	Status           string `json:"status"`
+	WorkspacePath    string `json:"workspace_path"`
 	ReplicaAgentCode string `json:"replica_agent_code"`
-	TaskID          string `json:"task_id"`
+	TaskID           string `json:"task_id"`
 }
 
 type RequirementDispatchService struct {
-	requirementRepo      domain.RequirementRepository
-	projectRepo          domain.ProjectRepository
-	agentRepo            domain.AgentRepository
-	stateMachineRepo     state_machine.Repository
-	taskService          interface{} // TaskApplicationService - no longer used
-	sessionService       *SessionApplicationService
-	idGenerator          domain.IDGenerator
-	inboundPublisher     interface {
+	requirementRepo  domain.RequirementRepository
+	projectRepo      domain.ProjectRepository
+	agentRepo        domain.AgentRepository
+	stateMachineRepo state_machine.Repository
+	taskService      interface{} // TaskApplicationService - no longer used
+	sessionService   *SessionApplicationService
+	idGenerator      domain.IDGenerator
+	inboundPublisher interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	replicaAgentManager *domain.ReplicaAgentManager
@@ -60,7 +60,7 @@ func NewRequirementDispatchService(
 	stateMachineRepo state_machine.Repository,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
-		requirementRepo:      requirementRepo,
+		requirementRepo:     requirementRepo,
 		projectRepo:         projectRepo,
 		agentRepo:           agentRepo,
 		taskService:         taskService,
@@ -161,18 +161,16 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 
 	// 构建元数据，包含环境变量供hook使用
 	reqMetadata := map[string]any{
-		"agent_code":       replicaAgent.AgentCode().String(),
-		"user_code":        replicaAgent.UserCode(),
-		"channel_code":     cmd.ChannelCode,
-		"requirement_id":   requirement.ID().String(),
-		"project_id":       project.ID().String(),
-		"dispatch_source":  "requirement",
-		"REQUIREMENT_ID":   requirement.ID().String(),
-		"PROJECT_ID":       project.ID().String(),
-		"STATE_MACHINE_NAME": stateMachineName,
-		"REQUIREMENT_TYPE": string(requirement.RequirementType()),
-		"REQUIREMENT_STATUS": string(requirement.Status()),
-		"REQUIREMENT_TITLE": requirement.Title(),
+		"agent_code":         replicaAgent.AgentCode().String(),
+		"user_code":          replicaAgent.UserCode(),
+		"channel_code":       cmd.ChannelCode,
+		"requirement_id":     requirement.ID().String(),
+		"project_id":         project.ID().String(),
+		"dispatch_source":    "requirement",
+		"state_machine_name": stateMachineName,
+		"requirement_type":   string(requirement.RequirementType()),
+		"requirement_status": string(requirement.Status()),
+		"requirement_title":  requirement.Title(),
 	}
 
 	s.inboundPublisher.PublishInbound(&channelBus.InboundMessage{
@@ -186,11 +184,11 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	})
 	dispatchID := "dispatch_" + s.idGenerator.Generate()
 	return &DispatchRequirementResult{
-		RequirementID:   requirement.ID().String(),
-		Status:          string(requirement.Status()),
-		WorkspacePath:   requirement.WorkspacePath(),
+		RequirementID:    requirement.ID().String(),
+		Status:           string(requirement.Status()),
+		WorkspacePath:    requirement.WorkspacePath(),
 		ReplicaAgentCode: requirement.ReplicaAgentCode(),
-		TaskID:          dispatchID,
+		TaskID:           dispatchID,
 	}, nil
 }
 
@@ -436,7 +434,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 - 需求描述：%s
 - 项目ID：%s
 - 项目名称：%s
-- 关联状态机：%s
+- 关联状态机名称：%s
 
 【验收标准】
 %s
@@ -486,7 +484,7 @@ func buildStateMachineGuide(stateMachineName string) string {
 	}
 
 	return fmt.Sprintf(`【状态机使用指南】
-本需求关联的状态机：%s
+本需求关联的状态机名称：%s
 
 你可以使用以下命令管理需求状态：
 
@@ -499,37 +497,15 @@ func buildStateMachineGuide(stateMachineName string) string {
    taskmanager requirement get-state --id <需求ID>
 
 2. 查看当前状态可用触发器：
-   taskmanager statemachine triggers --machine=%s --from=<当前状态>
+   taskmanager statemachine triggers --machine=<状态机名称> --from=<当前状态>
 
 3. 验证状态转换是否合法：
-   taskmanager statemachine validate --machine=%s --from=<当前状态> --to=<目标状态>
+   taskmanager statemachine validate --machine=<状态机名称> --from=<当前状态> --to=<目标状态>
 
 4. 执行状态转换并同步需求状态：
    taskmanager requirement transition --id <需求ID> --trigger=<触发器>
-
-【典型工作流示例】
-# 假设你完成了当前阶段的任务，需要推进到下一阶段：
-
-# 步骤1：查看当前需求状态和可用触发器
-CURRENT_STATE=$(taskmanager requirement get-state --id "${REQUIREMENT_ID}" | jq -r '.current_state')
-echo "当前状态: $CURRENT_STATE"
-
-# 步骤2：查看可用触发器
-taskmanager statemachine triggers --machine=%s --from="$CURRENT_STATE"
-
-# 步骤3：根据工作结果选择合适的触发器，执行一键转换
-# 例如，如果任务完成，执行 finish 触发器：
-taskmanager requirement transition --id "${REQUIREMENT_ID}" --trigger=finish --metadata '{"result":"success"}'
-
-# 注意：transition 命令会自动完成状态机转换并同步更新需求状态
-
-【环境变量】
-以下环境变量已自动注入，可在命令中使用：
-- REQUIREMENT_ID: 当前需求ID
-- PROJECT_ID: 当前项目ID
-- STATE_MACHINE_NAME: 关联的状态机名称
-- REQUIREMENT_TYPE: 需求类型（normal/heartbeat）`,
-		stateMachineName, stateMachineName, stateMachineName)
+`,
+		stateMachineName)
 }
 
 // buildStateAIGuide 构建状态的 AI 指南
