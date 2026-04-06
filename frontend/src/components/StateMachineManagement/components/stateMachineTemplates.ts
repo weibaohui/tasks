@@ -336,7 +336,7 @@ transitions:
   {
     id: 'heartbeat',
     name: '心跳任务流程',
-    description: '适用于心跳任务的简单流程：待处理 → 已完成',
+    description: '简单心跳任务流程：待处理 → 处理中 → 已完成',
     yaml: `name: heartbeat_workflow
 description: 心跳任务专用流程
 
@@ -346,22 +346,30 @@ states:
   - id: todo
     name: 待处理
     is_final: false
+    ai_guide: |
+      立即执行转换到 processing 状态，防止重复调度。
+      使用命令: taskmanager requirement transition {{requirement_id}} --to-state=processing
+
+  - id: processing
+    name: 处理中
+    is_final: false
+    ai_guide: |
+      执行心跳任务逻辑，完成后标记为完成。
+      使用命令: taskmanager requirement transition {{requirement_id}} --to-state=completed
+
   - id: completed
     name: 已完成
     is_final: true
 
 transitions:
   - from: todo
+    to: processing
+    trigger: start
+    description: 开始处理
+
+  - from: processing
     to: completed
     trigger: complete
-    description: 心跳任务完成
-    hooks:
-      - name: 发送完成通知
-        type: webhook
-        config:
-          url: https://httpbin.org/post
-          method: POST
-        timeout: 30
-        retry: 1`,
+    description: 处理完成`,
   },
 ];

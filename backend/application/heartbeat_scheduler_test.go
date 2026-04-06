@@ -145,6 +145,7 @@ func TestHeartbeatScheduler_ExecuteHeartbeat(t *testing.T) {
 		idGen,
 		nil,
 		nil,
+		nil, // stateMachineService
 	)
 
 	// 执行心跳
@@ -190,6 +191,7 @@ func TestHeartbeatScheduler_RenderTemplate(t *testing.T) {
 		idGen,
 		nil,
 		nil,
+		nil, // stateMachineService
 	)
 
 	template := "项目: ${project.name}, ID: ${project.id}, 仓库: ${project.git_repo_url}, 分支: ${project.default_branch}, 时间: ${timestamp}"

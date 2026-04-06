@@ -159,6 +159,10 @@ func main() {
 	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
+	// 初始化状态机执行器和服务（供心跳调度器使用）
+	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
+	stateMachineService := application.NewStateMachineService(stateMachineRepo, transitionExecutor, logger)
+
 	// 8. 初始化心跳调度器
 	heartbeatScheduler := application.NewHeartbeatScheduler(
 		projectRepo,
@@ -167,6 +171,7 @@ func main() {
 		idGenerator,
 		gateway.messageBus,
 		requirementDispatchService,
+		stateMachineRepo,
 	)
 
 	// 启动心跳调度器
@@ -211,10 +216,7 @@ func main() {
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 
-	// 初始化状态机
-	// stateMachineRepo 已在前面的初始化块中定义
-	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
-	stateMachineService := application.NewStateMachineService(stateMachineRepo, transitionExecutor, logger)
+	// 初始化状态机 handler（stateMachineService 已在前面初始化）
 	stateMachineHandler := httpHandler.NewStateMachineHandler(stateMachineService)
 
 	// 初始化项目状态机应用服务

@@ -82,6 +82,35 @@ interface TransitionWithHooks {
   hooks: TransitionHook[];
 }
 
+// 扩展 State 类型，包含 AI Guide 字段
+interface StateWithAIGuide {
+  id: string;
+  name: string;
+  isFinal: boolean;
+  aiGuide?: string;
+  autoInit?: string;
+  successCriteria?: string;
+  failureCriteria?: string;
+  triggers?: { trigger: string; description?: string; condition?: string }[];
+}
+
+// YAML 解析后的原始状态类型（snake_case）
+interface YamlParsedState {
+  id: string;
+  name: string;
+  is_final?: boolean;
+  isFinal?: boolean;
+  ai_guide?: string;
+  aiGuide?: string;
+  auto_init?: string;
+  autoInit?: string;
+  success_criteria?: string;
+  successCriteria?: string;
+  failure_criteria?: string;
+  failureCriteria?: string;
+  triggers?: { trigger: string; description?: string; condition?: string }[];
+}
+
 interface StateMachineEditDrawerProps {
   open: boolean;
   editing: StateMachine | null;
@@ -99,9 +128,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
 }) => {
   const [form] = Form.useForm<{ name: string; description: string; config: string }>();
   const [activeTab, setActiveTab] = React.useState('visual');
-  const [visualStates, setVisualStates] = React.useState<
-    { id: string; name: string; isFinal: boolean }[]
-  >([]);
+  const [visualStates, setVisualStates] = React.useState<StateWithAIGuide[]>([]);
   const [visualTransitions, setVisualTransitions] = React.useState<TransitionWithHooks[]>([]);
   const [hookModalOpen, setHookModalOpen] = React.useState(false);
   const [editingHook, setEditingHook] = React.useState<{ transitionIndex: number; hookIndex: number } | null>(null);
@@ -114,6 +141,20 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
   });
   const [selectedExample, setSelectedExample] = React.useState<HookExample | null>(null);
   const [selectedTemplate, setSelectedTemplate] = React.useState<StateMachineTemplate | null>(null);
+
+  // AI Guide 编辑弹窗状态
+  const [aiGuideModalOpen, setAiGuideModalOpen] = React.useState(false);
+  const [editingStateIndex, setEditingStateIndex] = React.useState<number | null>(null);
+  const [currentAIGuide, setCurrentAIGuide] = React.useState<StateWithAIGuide>({
+    id: '',
+    name: '',
+    isFinal: false,
+    aiGuide: '',
+    autoInit: '',
+    successCriteria: '',
+    failureCriteria: '',
+    triggers: [],
+  });
 
   // 应用 Hook 示例模板
   const applyExample = (example: HookExample) => {
@@ -174,10 +215,15 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
 
     if (parsed.states && Array.isArray(parsed.states)) {
       setVisualStates(
-        parsed.states.map((s: { id: string; name: string; is_final: boolean }) => ({
+        parsed.states.map((s: YamlParsedState) => ({
           id: s.id,
           name: s.name,
-          isFinal: s.is_final,
+          isFinal: s.is_final ?? s.isFinal ?? false,
+          aiGuide: s.ai_guide ?? s.aiGuide ?? '',
+          autoInit: s.auto_init ?? s.autoInit ?? '',
+          successCriteria: s.success_criteria ?? s.successCriteria ?? '',
+          failureCriteria: s.failure_criteria ?? s.failureCriteria ?? '',
+          triggers: s.triggers || [],
         })),
       );
     }
@@ -242,6 +288,11 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
               id: s.id,
               name: s.name,
               isFinal: s.is_final,
+              aiGuide: (s as YamlParsedState).ai_guide ?? (s as YamlParsedState).aiGuide ?? '',
+              autoInit: (s as YamlParsedState).auto_init ?? (s as YamlParsedState).autoInit ?? '',
+              successCriteria: (s as YamlParsedState).success_criteria ?? (s as YamlParsedState).successCriteria ?? '',
+              failureCriteria: (s as YamlParsedState).failure_criteria ?? (s as YamlParsedState).failureCriteria ?? '',
+              triggers: (s as YamlParsedState).triggers || [],
             })),
           );
           setVisualTransitions(
@@ -298,10 +349,15 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
 
     if (parsed.states && Array.isArray(parsed.states)) {
       setVisualStates(
-        parsed.states.map((s: { id: string; name: string; is_final: boolean }) => ({
+        parsed.states.map((s: YamlParsedState) => ({
           id: s.id,
           name: s.name,
-          isFinal: s.is_final,
+          isFinal: s.is_final ?? s.isFinal ?? false,
+          aiGuide: s.ai_guide ?? s.aiGuide ?? '',
+          autoInit: s.auto_init ?? s.autoInit ?? '',
+          successCriteria: s.success_criteria ?? s.successCriteria ?? '',
+          failureCriteria: s.failure_criteria ?? s.failureCriteria ?? '',
+          triggers: s.triggers || [],
         })),
       );
     }
@@ -339,6 +395,57 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
 
   const removeState = (index: number) => {
     setVisualStates((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // AI Guide management
+  const openEditAIGuide = (stateIndex: number) => {
+    const state = visualStates[stateIndex];
+    setEditingStateIndex(stateIndex);
+    setCurrentAIGuide({
+      id: state.id,
+      name: state.name,
+      isFinal: state.isFinal,
+      aiGuide: state.aiGuide || '',
+      autoInit: state.autoInit || '',
+      successCriteria: state.successCriteria || '',
+      failureCriteria: state.failureCriteria || '',
+      triggers: state.triggers || [],
+    });
+    setAiGuideModalOpen(true);
+  };
+
+  const saveAIGuide = () => {
+    if (editingStateIndex === null) return;
+
+    setVisualStates((prev) => {
+      const updated = [...prev];
+      updated[editingStateIndex] = { ...currentAIGuide };
+      return updated;
+    });
+    setAiGuideModalOpen(false);
+    setEditingStateIndex(null);
+  };
+
+  const addTriggerGuide = () => {
+    setCurrentAIGuide((prev) => ({
+      ...prev,
+      triggers: [...(prev.triggers || []), { trigger: '', description: '', condition: '' }],
+    }));
+  };
+
+  const removeTriggerGuide = (index: number) => {
+    setCurrentAIGuide((prev) => ({
+      ...prev,
+      triggers: (prev.triggers || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateTriggerGuide = (index: number, field: 'trigger' | 'description' | 'condition', value: string) => {
+    setCurrentAIGuide((prev) => {
+      const updatedTriggers = [...(prev.triggers || [])];
+      updatedTriggers[index] = { ...updatedTriggers[index], [field]: value };
+      return { ...prev, triggers: updatedTriggers };
+    });
   };
 
   const addTransition = () => {
@@ -437,11 +544,20 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
       name,
       description,
       initial_state: visualStates.find((s) => !s.isFinal)?.id || visualStates[0]?.id || '',
-      states: visualStates.map((s) => ({
-        id: s.id,
-        name: s.name,
-        is_final: s.isFinal,
-      })),
+      states: visualStates.map((s) => {
+        const state: Record<string, unknown> = {
+          id: s.id,
+          name: s.name,
+          is_final: s.isFinal,
+        };
+        // 只在有值时添加 AI Guide 字段
+        if (s.aiGuide) state.ai_guide = s.aiGuide;
+        if (s.autoInit) state.auto_init = s.autoInit;
+        if (s.successCriteria) state.success_criteria = s.successCriteria;
+        if (s.failureCriteria) state.failure_criteria = s.failureCriteria;
+        if (s.triggers && s.triggers.length > 0) state.triggers = s.triggers;
+        return state;
+      }),
       transitions: visualTransitions.map((t) => ({
         from: t.from,
         to: t.to,
@@ -585,6 +701,21 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                                 handleVisualStateChange(index, 'isFinal', e.target.checked)
                               }
                             />
+                          ),
+                        },
+                        {
+                          title: 'AI Guide',
+                          key: 'aiGuide',
+                          width: 100,
+                          render: (_, record, index: number) => (
+                            <Button
+                              size="small"
+                              type={record.aiGuide ? 'primary' : 'default'}
+                              ghost={!!record.aiGuide}
+                              onClick={() => openEditAIGuide(index)}
+                            >
+                              {record.aiGuide ? '已配置' : '配置'}
+                            </Button>
                           ),
                         },
                         {
@@ -975,6 +1106,106 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
               />
             </div>
           </div>
+        </div>
+      </Modal>
+
+      {/* AI Guide 编辑 Modal */}
+      <Modal
+        title={editingStateIndex !== null ? `编辑 AI Guide: ${visualStates[editingStateIndex]?.name || ''}` : '编辑 AI Guide'}
+        open={aiGuideModalOpen}
+        onOk={saveAIGuide}
+        onCancel={() => {
+          setAiGuideModalOpen(false);
+          setEditingStateIndex(null);
+        }}
+        okText="保存"
+        cancelText="取消"
+        width={800}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '70vh', overflow: 'auto' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="AI Guide 配置"
+            description="配置当前状态的 AI 执行指南，包括任务说明、成功/失败判断标准、可用触发器等。"
+          />
+
+          <Form layout="vertical">
+            <Form.Item label="AI 操作指南 (ai_guide)" extra="Markdown 格式，告诉 AI 当前阶段应该做什么">
+              <Input.TextArea
+                value={currentAIGuide.aiGuide}
+                onChange={(e) => setCurrentAIGuide({ ...currentAIGuide, aiGuide: e.target.value })}
+                placeholder="## 当前阶段任务\n1. 分析需求\n2. 编写代码\n3. 运行测试"
+                rows={8}
+              />
+            </Form.Item>
+
+            <Form.Item label="自动初始化命令 (auto_init)" extra="进入此状态时自动执行的 Shell 命令（可选）">
+              <Input.TextArea
+                value={currentAIGuide.autoInit}
+                onChange={(e) => setCurrentAIGuide({ ...currentAIGuide, autoInit: e.target.value })}
+                placeholder="#!/bin/bash\ngit clone {{git_repo_url}} ."
+                rows={4}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </Form.Item>
+
+            <Form.Item label="成功判断标准 (success_criteria)" extra="AI 根据此标准判断任务是否成功完成">
+              <Input.TextArea
+                value={currentAIGuide.successCriteria}
+                onChange={(e) => setCurrentAIGuide({ ...currentAIGuide, successCriteria: e.target.value })}
+                placeholder="测试全部通过，代码符合规范"
+                rows={2}
+              />
+            </Form.Item>
+
+            <Form.Item label="失败判断标准 (failure_criteria)" extra="AI 根据此标准判断任务是否失败">
+              <Input.TextArea
+                value={currentAIGuide.failureCriteria}
+                onChange={(e) => setCurrentAIGuide({ ...currentAIGuide, failureCriteria: e.target.value })}
+                placeholder="无法实现需求或遇到技术障碍"
+                rows={2}
+              />
+            </Form.Item>
+
+            <Divider style={{ margin: '8px 0' }} />
+
+            <Form.Item label="可用触发器">
+              <div style={{ marginBottom: 8 }}>
+                <Button size="small" onClick={addTriggerGuide} icon={<PlusOutlined />}>
+                  添加触发器
+                </Button>
+              </div>
+              {(currentAIGuide.triggers || []).map((t, index) => (
+                <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
+                  <Input
+                    placeholder="触发器名称"
+                    value={t.trigger}
+                    onChange={(e) => updateTriggerGuide(index, 'trigger', e.target.value)}
+                    style={{ width: 120 }}
+                  />
+                  <Input
+                    placeholder="描述"
+                    value={t.description}
+                    onChange={(e) => updateTriggerGuide(index, 'description', e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <Input
+                    placeholder="触发条件"
+                    value={t.condition}
+                    onChange={(e) => updateTriggerGuide(index, 'condition', e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <Button size="small" danger onClick={() => removeTriggerGuide(index)}>
+                    删除
+                  </Button>
+                </div>
+              ))}
+              {(currentAIGuide.triggers || []).length === 0 && (
+                <div style={{ color: '#999', fontSize: 12 }}>暂无触发器配置</div>
+              )}
+            </Form.Item>
+          </Form>
         </div>
       </Modal>
     </>

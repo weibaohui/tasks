@@ -47,7 +47,10 @@ func (s RequirementStatus) IsValid() bool {
 	case RequirementStatusTodo, RequirementStatusPreparing, RequirementStatusCoding, RequirementStatusPROpened, RequirementStatusFailed, RequirementStatusCompleted, RequirementStatusDone:
 		return true
 	// 兼容旧状态值
-	case "in_progress":
+	case "in_progress", "doing":
+		return true
+	// 空字符串会被 Normalize 为 todo
+	case "":
 		return true
 	default:
 		return false
@@ -57,8 +60,10 @@ func (s RequirementStatus) IsValid() bool {
 // Normalize 规范化状态值，将旧值转换为新值
 func (s RequirementStatus) Normalize() RequirementStatus {
 	switch s {
-	case "in_progress":
+	case "in_progress", "doing":
 		return RequirementStatusPreparing
+	case "": // 空字符串视为 todo
+		return RequirementStatusTodo
 	default:
 		return s
 	}

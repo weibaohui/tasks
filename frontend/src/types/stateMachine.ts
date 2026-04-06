@@ -2,11 +2,24 @@
  * State Machine Types
  */
 
+// StateTriggerGuide 状态触发器指南
+export interface StateTriggerGuide {
+  trigger: string;
+  description?: string;
+  condition?: string;
+}
+
 // State 状态节点
 export interface State {
   id: string;
   name: string;
   is_final: boolean;
+  // AI 指南相关字段（可选）
+  ai_guide?: string;
+  auto_init?: string;
+  success_criteria?: string;
+  failure_criteria?: string;
+  triggers?: StateTriggerGuide[];
 }
 
 // TransitionHook 转换钩子
