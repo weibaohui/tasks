@@ -68,7 +68,7 @@ func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirement
 	projRepo := newSharedMockProjectRepo()
 	idGen := &mockRequirementIDGen{}
 
-	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil, nil)
+	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil)
 	return svc, reqRepo, projRepo
 }
 
@@ -358,7 +358,7 @@ func TestRequirementService_ReportRequirementPROpened(t *testing.T) {
 		t.Fatalf("期望无错误, 实际为 %v", err)
 	}
 
-	if updated.Status() != domain.RequirementStatusPROpened {
+	if updated.Status() != domain.RequirementStatus("pr_opened") {
 		t.Errorf("期望 status 为 'pr_opened', 实际为 '%s'", updated.Status())
 	}
 }

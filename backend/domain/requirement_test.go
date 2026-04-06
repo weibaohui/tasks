@@ -133,14 +133,14 @@ func TestRequirementStatus_IsValid(t *testing.T) {
 		expected bool
 	}{
 		{"todo 状态有效", RequirementStatusTodo, true},
-		{"preparing 状态有效", RequirementStatusPreparing, true},
-		{"coding 状态有效", RequirementStatusCoding, true},
-		{"pr_opened 状态有效", RequirementStatusPROpened, true},
-		{"failed 状态有效", RequirementStatusFailed, true},
-		{"completed 状态有效", RequirementStatusCompleted, true},
-		{"done 状态有效", RequirementStatusDone, true},
+		{"preparing 状态有效", "preparing", true},
+		{"coding 状态有效", "coding", true},
+		{"pr_opened 状态有效", "pr_opened", true},
+		{"failed 状态有效", "failed", true},
+		{"completed 状态有效", "completed", true},
+		{"done 状态有效", "done", true},
 		{"旧状态 in_progress 兼容", "in_progress", true},
-		{"无效状态", "invalid_status", false},
+		{"任意非空字符串都有效（状态由状态机定义）", "invalid_status", true},
 		{"空字符串无效", "", false},
 	}
 
@@ -160,14 +160,14 @@ func TestRequirementStatus_Normalize(t *testing.T) {
 		status   RequirementStatus
 		expected RequirementStatus
 	}{
-		{"旧状态 in_progress 转换为 preparing", "in_progress", RequirementStatusPreparing},
+		{"旧状态 in_progress 转换为 preparing", "in_progress", RequirementStatus("preparing")},
 		{"todo 保持不变", RequirementStatusTodo, RequirementStatusTodo},
-		{"preparing 保持不变", RequirementStatusPreparing, RequirementStatusPreparing},
-		{"coding 保持不变", RequirementStatusCoding, RequirementStatusCoding},
-		{"pr_opened 保持不变", RequirementStatusPROpened, RequirementStatusPROpened},
-		{"failed 保持不变", RequirementStatusFailed, RequirementStatusFailed},
-		{"completed 保持不变", RequirementStatusCompleted, RequirementStatusCompleted},
-		{"done 保持不变", RequirementStatusDone, RequirementStatusDone},
+		{"preparing 保持不变", "preparing", RequirementStatus("preparing")},
+		{"coding 保持不变", "coding", RequirementStatus("coding")},
+		{"pr_opened 保持不变", "pr_opened", RequirementStatus("pr_opened")},
+		{"failed 保持不变", "failed", RequirementStatus("failed")},
+		{"completed 保持不变", "completed", RequirementStatus("completed")},
+		{"done 保持不变", "done", RequirementStatus("done")},
 		{"无效状态保持不变", "invalid", "invalid"},
 	}
 
@@ -188,12 +188,12 @@ func TestRequirement_CanDispatch(t *testing.T) {
 		expected bool
 	}{
 		{"todo 状态可以派发", RequirementStatusTodo, true},
-		{"preparing 状态不可派发", RequirementStatusPreparing, false},
-		{"coding 状态不可派发", RequirementStatusCoding, false},
-		{"pr_opened 状态不可派发", RequirementStatusPROpened, false},
-		{"failed 状态不可派发", RequirementStatusFailed, false},
-		{"completed 状态不可派发", RequirementStatusCompleted, false},
-		{"done 状态不可派发", RequirementStatusDone, false},
+		{"preparing 状态不可派发", RequirementStatus("preparing"), false},
+		{"coding 状态不可派发", RequirementStatus("coding"), false},
+		{"pr_opened 状态不可派发", RequirementStatus("pr_opened"), false},
+		{"failed 状态不可派发", RequirementStatus("failed"), false},
+		{"completed 状态不可派发", RequirementStatus("completed"), false},
+		{"done 状态不可派发", RequirementStatus("done"), false},
 	}
 
 	for _, tt := range tests {
@@ -214,12 +214,12 @@ func TestRequirement_CanRedispatch(t *testing.T) {
 		expected bool
 	}{
 		{"todo 状态不可重新派发", RequirementStatusTodo, false},
-		{"preparing 状态可以重新派发", RequirementStatusPreparing, true},
-		{"coding 状态可以重新派发", RequirementStatusCoding, true},
-		{"pr_opened 状态可以重新派发", RequirementStatusPROpened, true},
-		{"failed 状态可以重新派发", RequirementStatusFailed, true},
-		{"completed 状态可以重新派发", RequirementStatusCompleted, true},
-		{"done 状态可以重新派发", RequirementStatusDone, true},
+		{"preparing 状态可以重新派发", RequirementStatus("preparing"), true},
+		{"coding 状态可以重新派发", RequirementStatus("coding"), true},
+		{"pr_opened 状态可以重新派发", RequirementStatus("pr_opened"), true},
+		{"failed 状态可以重新派发", RequirementStatus("failed"), true},
+		{"completed 状态可以重新派发", RequirementStatus("completed"), true},
+		{"done 状态可以重新派发", RequirementStatus("done"), true},
 	}
 
 	for _, tt := range tests {
@@ -251,7 +251,7 @@ func TestRequirement_StartDispatch_Success(t *testing.T) {
 	}
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusPreparing {
+	if req.Status() != "preparing" {
 		t.Errorf("期望状态变为 preparing, 实际为 %s", req.Status())
 	}
 
@@ -276,12 +276,12 @@ func TestRequirement_StartDispatch_InvalidState(t *testing.T) {
 		name   string
 		status RequirementStatus
 	}{
-		{"preparing 状态", RequirementStatusPreparing},
-		{"coding 状态", RequirementStatusCoding},
-		{"pr_opened 状态", RequirementStatusPROpened},
-		{"failed 状态", RequirementStatusFailed},
-		{"completed 状态", RequirementStatusCompleted},
-		{"done 状态", RequirementStatusDone},
+		{"preparing 状态", "preparing"},
+		{"coding 状态", RequirementStatus("coding")},
+		{"pr_opened 状态", RequirementStatus("pr_opened")},
+		{"failed 状态", RequirementStatus("failed")},
+		{"completed 状态", RequirementStatus("completed")},
+		{"done 状态", RequirementStatus("done")},
 	}
 
 	for _, tt := range tests {
@@ -297,7 +297,7 @@ func TestRequirement_StartDispatch_InvalidState(t *testing.T) {
 }
 
 func TestRequirement_MarkCoding_Success(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusPreparing)
+	req := createRequirementWithStatus("preparing")
 
 	time.Sleep(10 * time.Millisecond)
 	err := req.MarkCoding("/workspace/test", "replica-001")
@@ -307,7 +307,7 @@ func TestRequirement_MarkCoding_Success(t *testing.T) {
 	}
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusCoding {
+	if req.Status() != RequirementStatus("coding") {
 		t.Errorf("期望状态变为 coding, 实际为 %s", req.Status())
 	}
 
@@ -325,11 +325,11 @@ func TestRequirement_MarkCoding_Success(t *testing.T) {
 func TestRequirement_MarkCoding_InvalidState(t *testing.T) {
 	invalidStates := []RequirementStatus{
 		RequirementStatusTodo,
-		RequirementStatusCoding,
-		RequirementStatusPROpened,
-		RequirementStatusFailed,
-		RequirementStatusCompleted,
-		RequirementStatusDone,
+		RequirementStatus("coding"),
+		RequirementStatus("pr_opened"),
+		RequirementStatus("failed"),
+		RequirementStatus("completed"),
+		RequirementStatus("done"),
 	}
 
 	for _, status := range invalidStates {
@@ -345,13 +345,13 @@ func TestRequirement_MarkCoding_InvalidState(t *testing.T) {
 }
 
 func TestRequirement_MarkPROpened(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	time.Sleep(10 * time.Millisecond)
 	req.MarkPROpened()
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusPROpened {
+	if req.Status() != RequirementStatus("pr_opened") {
 		t.Errorf("期望状态变为 pr_opened, 实际为 %s", req.Status())
 	}
 
@@ -367,13 +367,13 @@ func TestRequirement_MarkPROpened(t *testing.T) {
 }
 
 func TestRequirement_MarkFailed(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	time.Sleep(10 * time.Millisecond)
 	req.MarkFailed("执行失败: 网络错误")
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusFailed {
+	if req.Status() != RequirementStatus("failed") {
 		t.Errorf("期望状态变为 failed, 实际为 %s", req.Status())
 	}
 
@@ -384,13 +384,13 @@ func TestRequirement_MarkFailed(t *testing.T) {
 }
 
 func TestRequirement_MarkCompleted(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	time.Sleep(10 * time.Millisecond)
 	req.MarkCompleted()
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusCompleted {
+	if req.Status() != RequirementStatus("completed") {
 		t.Errorf("期望状态变为 completed, 实际为 %s", req.Status())
 	}
 
@@ -402,7 +402,7 @@ func TestRequirement_MarkCompleted(t *testing.T) {
 
 func TestRequirement_Redispatch_Success(t *testing.T) {
 	// 创建一个非 todo 状态的需求
-	req := createRequirementWithStatus(RequirementStatusFailed)
+	req := createRequirementWithStatus(RequirementStatus("failed"))
 	req.SetDispatchSessionKey("session-001")
 	req.SetWorkspacePath("/workspace/test")
 	req.SetReplicaAgentCode("replica-001")
@@ -1003,7 +1003,7 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 		Description:            "快照描述",
 		AcceptanceCriteria:     "快照验收标准",
 		TempWorkspaceRoot:      "/tmp/snapshot",
-		Status:                 RequirementStatusCoding,
+		Status:                 RequirementStatus("coding"),
 		AssigneeAgentCode:      "agent-001",
 		ReplicaAgentCode:       "replica-001",
 		DispatchSessionKey:     "session-001",
@@ -1058,7 +1058,7 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 		t.Errorf("TempWorkspaceRoot 期望 '/tmp/snapshot', 实际 %s", req.TempWorkspaceRoot())
 	}
 
-	if req.Status() != RequirementStatusCoding {
+	if req.Status() != RequirementStatus("coding") {
 		t.Errorf("Status 期望 coding, 实际 %s", req.Status())
 	}
 
@@ -1136,13 +1136,14 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 	}
 }
 
-func TestRequirement_FromSnapshot_InvalidStatus(t *testing.T) {
+func TestRequirement_FromSnapshot_AnyStatusAccepted(t *testing.T) {
+	// 状态现在由状态机定义，FromSnapshot 接受任何非空状态
 	snap := RequirementSnapshot{
 		ID:          NewRequirementID("req-001"),
 		ProjectID:   NewProjectID("proj-001"),
 		Title:       "快照标题",
 		Description: "快照描述",
-		Status:      "invalid_status",
+		Status:      "custom_state_from_sm",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -1150,8 +1151,11 @@ func TestRequirement_FromSnapshot_InvalidStatus(t *testing.T) {
 	req := &Requirement{}
 	err := req.FromSnapshot(snap)
 
-	if err != ErrRequirementInvalidStatus {
-		t.Errorf("期望返回 ErrRequirementInvalidStatus, 实际返回 %v", err)
+	if err != nil {
+		t.Errorf("期望不返回错误, 实际返回 %v", err)
+	}
+	if req.Status() != "custom_state_from_sm" {
+		t.Errorf("期望状态 custom_state_from_sm, 实际 %s", req.Status())
 	}
 }
 
@@ -1174,7 +1178,7 @@ func TestRequirement_FromSnapshot_NormalizeOldStatus(t *testing.T) {
 	}
 
 	// 验证旧状态被转换为新状态
-	if req.Status() != RequirementStatusPreparing {
+	if req.Status() != "preparing" {
 		t.Errorf("旧状态 in_progress 应转换为 preparing, 实际为 %s", req.Status())
 	}
 }
@@ -1195,7 +1199,7 @@ func TestRequirement_SnapshotRoundTrip(t *testing.T) {
 		Description:            "原始描述",
 		AcceptanceCriteria:     "原始验收标准",
 		TempWorkspaceRoot:      "/tmp/original",
-		Status:                 RequirementStatusCoding,
+		Status:                 RequirementStatus("coding"),
 		AssigneeAgentCode:      "agent-001",
 		ReplicaAgentCode:       "replica-001",
 		DispatchSessionKey:     "session-001",
@@ -1282,7 +1286,7 @@ func TestRequirement_ClaudeRuntimeTimeCopy(t *testing.T) {
 }
 
 func TestRequirement_TimeCopy(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusPreparing)
+	req := createRequirementWithStatus("preparing")
 
 	startedAt1 := req.StartedAt()
 	startedAt2 := req.StartedAt()
@@ -1307,7 +1311,7 @@ func TestRequirement_TimeCopy(t *testing.T) {
 }
 
 func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	// 设置 replicaAgentCode 和 workspacePath
 	req.SetReplicaAgentCode("replica-001")
@@ -1321,7 +1325,7 @@ func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
 	req.MarkPROpened()
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusPROpened {
+	if req.Status() != RequirementStatus("pr_opened") {
 		t.Errorf("期望状态变为 pr_opened, 实际为 %s", req.Status())
 	}
 
@@ -1336,7 +1340,7 @@ func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
 }
 
 func TestRequirement_MarkFailed_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	// 设置 replicaAgentCode 和 workspacePath
 	req.SetReplicaAgentCode("replica-001")
@@ -1349,7 +1353,7 @@ func TestRequirement_MarkFailed_WithManager(t *testing.T) {
 	req.MarkFailed("执行失败")
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusFailed {
+	if req.Status() != RequirementStatus("failed") {
 		t.Errorf("期望状态变为 failed, 实际为 %s", req.Status())
 	}
 
@@ -1364,7 +1368,7 @@ func TestRequirement_MarkFailed_WithManager(t *testing.T) {
 }
 
 func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	// 设置 replicaAgentCode 和 workspacePath
 	req.SetReplicaAgentCode("replica-001")
@@ -1377,7 +1381,7 @@ func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
 	req.MarkCompleted()
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusCompleted {
+	if req.Status() != RequirementStatus("completed") {
 		t.Errorf("期望状态变为 completed, 实际为 %s", req.Status())
 	}
 
@@ -1392,7 +1396,7 @@ func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
 }
 
 func TestRequirement_MarkPROpened_WithManager_EmptyCodes(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatusCoding)
+	req := createRequirementWithStatus(RequirementStatus("coding"))
 
 	// 不设置 replicaAgentCode 和 workspacePath（为空）
 	// 创建一个 mock agent repository
@@ -1404,7 +1408,7 @@ func TestRequirement_MarkPROpened_WithManager_EmptyCodes(t *testing.T) {
 	req.MarkPROpened()
 
 	// 验证状态变更
-	if req.Status() != RequirementStatusPROpened {
+	if req.Status() != RequirementStatus("pr_opened") {
 		t.Errorf("期望状态变为 pr_opened, 实际为 %s", req.Status())
 	}
 }
@@ -1489,16 +1493,16 @@ func TestRequirement_UpdateContent_WithWhitespaceWorkspace(t *testing.T) {
 
 func TestRequirement_FromSnapshot_WithWhitespaceWorkspace(t *testing.T) {
 	snap := RequirementSnapshot{
-		ID:                  NewRequirementID("req-001"),
-		ProjectID:           NewProjectID("proj-001"),
-		Title:               "快照标题",
-		Description:         "快照描述",
-		AcceptanceCriteria:  "快照验收标准",
-		TempWorkspaceRoot:   "  /tmp/workspace  ", // 带空格
-		DispatchSessionKey:  "  session-001  ",     // 带空格
-		Status:              RequirementStatusTodo,
-		CreatedAt:           time.Now(),
-		UpdatedAt:           time.Now(),
+		ID:                 NewRequirementID("req-001"),
+		ProjectID:          NewProjectID("proj-001"),
+		Title:              "快照标题",
+		Description:        "快照描述",
+		AcceptanceCriteria: "快照验收标准",
+		TempWorkspaceRoot:  "  /tmp/workspace  ", // 带空格
+		DispatchSessionKey: "  session-001  ",    // 带空格
+		Status:             RequirementStatusTodo,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 
 	req := &Requirement{}
@@ -1559,24 +1563,24 @@ func createRequirementWithStatus(status RequirementStatus) *Requirement {
 	switch status {
 	case RequirementStatusTodo:
 		// 默认状态
-	case RequirementStatusPreparing:
+	case "preparing":
 		req.StartDispatch("agent-001")
-	case RequirementStatusCoding:
+	case RequirementStatus("coding"):
 		req.StartDispatch("agent-001")
 		req.MarkCoding("/workspace", "replica-001")
-	case RequirementStatusPROpened:
+	case RequirementStatus("pr_opened"):
 		req.StartDispatch("agent-001")
 		req.MarkCoding("/workspace", "replica-001")
 		req.MarkPROpened()
-	case RequirementStatusFailed:
+	case RequirementStatus("failed"):
 		req.StartDispatch("agent-001")
 		req.MarkCoding("/workspace", "replica-001")
 		req.MarkFailed("执行失败")
-	case RequirementStatusCompleted:
+	case RequirementStatus("completed"):
 		req.StartDispatch("agent-001")
 		req.MarkCoding("/workspace", "replica-001")
 		req.MarkCompleted()
-	case RequirementStatusDone:
+	case RequirementStatus("done"):
 		// Done 状态需要手动设置或通过其他流程
 		req.StartDispatch("agent-001")
 		req.MarkCoding("/workspace", "replica-001")

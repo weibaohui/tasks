@@ -32,36 +32,25 @@ func (id RequirementID) String() string {
 
 type RequirementStatus string
 
-const (
-	RequirementStatusTodo        RequirementStatus = "todo"
-	RequirementStatusPreparing  RequirementStatus = "preparing"
-	RequirementStatusCoding     RequirementStatus = "coding"
-	RequirementStatusPROpened  RequirementStatus = "pr_opened"
-	RequirementStatusFailed     RequirementStatus = "failed"
-	RequirementStatusCompleted  RequirementStatus = "completed"
-	RequirementStatusDone       RequirementStatus = "done"
-)
+// 注意：状态值现在由状态机定义，不再硬编码。
+// 这里只保留 todo 作为默认值，其他状态从状态机获取。
+const RequirementStatusTodo RequirementStatus = "todo"
 
+// IsValid 检查状态是否有效（兼容旧数据）
 func (s RequirementStatus) IsValid() bool {
-	switch s {
-	case RequirementStatusTodo, RequirementStatusPreparing, RequirementStatusCoding, RequirementStatusPROpened, RequirementStatusFailed, RequirementStatusCompleted, RequirementStatusDone:
-		return true
-	// 兼容旧状态值
-	case "in_progress", "doing":
-		return true
-	// 空字符串会被 Normalize 为 todo
-	case "":
-		return true
-	default:
-		return false
-	}
+	// 任何非空字符串都是有效状态（状态由状态机定义）
+	return s != ""
 }
 
-// Normalize 规范化状态值，将旧值转换为新值
+// Normalize 规范化状态值，将旧值转换为 todo
+// 注意：其他状态不再自动转换，改为由状态机定义
 func (s RequirementStatus) Normalize() RequirementStatus {
 	switch s {
 	case "in_progress", "doing":
-		return RequirementStatusPreparing
+		return RequirementStatus("preparing")
+	case "preparing", "coding", "pr_opened", "failed", "completed", "done":
+		// 这些旧状态保持不变（由状态机定义）
+		return s
 	case "": // 空字符串视为 todo
 		return RequirementStatusTodo
 	default:
@@ -72,37 +61,37 @@ func (s RequirementStatus) Normalize() RequirementStatus {
 type RequirementType string
 
 const (
-	RequirementTypeNormal   RequirementType = "normal"
+	RequirementTypeNormal    RequirementType = "normal"
 	RequirementTypeHeartbeat RequirementType = "heartbeat"
 )
 
 type Requirement struct {
-	id                  RequirementID
-	projectID           ProjectID
-	title               string
-	description         string
-	acceptanceCriteria  string
-	tempWorkspaceRoot   string
-	status              RequirementStatus
-	assigneeAgentCode   string
-	replicaAgentCode    string
-	dispatchSessionKey  string
-	workspacePath       string
-	lastError           string
-	startedAt           *time.Time
-	completedAt         *time.Time
-	createdAt           time.Time
-	updatedAt           time.Time
+	id                 RequirementID
+	projectID          ProjectID
+	title              string
+	description        string
+	acceptanceCriteria string
+	tempWorkspaceRoot  string
+	status             RequirementStatus
+	assigneeAgentCode  string
+	replicaAgentCode   string
+	dispatchSessionKey string
+	workspacePath      string
+	lastError          string
+	startedAt          *time.Time
+	completedAt        *time.Time
+	createdAt          time.Time
+	updatedAt          time.Time
 	// 需求类型：normal（普通需求，不自动触发）| heartbeat（心跳需求，自动触发）
-	requirementType     RequirementType
+	requirementType RequirementType
 	// Claude Runtime 状态（持久化）
-	claudeRuntimeStatus    string        // running, completed, failed, ""
+	claudeRuntimeStatus    string // running, completed, failed, ""
 	claudeRuntimeStartedAt *time.Time
-	claudeRuntimeEndedAt  *time.Time
-	claudeRuntimeError    string
-	claudeRuntimeResult   string        // Claude Code 执行结果摘要
-	claudeRuntimePrompt   string        // Claude Code 执行提示词
-	traceId               string        // Claude Code 执行时的 trace_id，用于关联对话记录
+	claudeRuntimeEndedAt   *time.Time
+	claudeRuntimeError     string
+	claudeRuntimeResult    string // Claude Code 执行结果摘要
+	claudeRuntimePrompt    string // Claude Code 执行提示词
+	traceId                string // Claude Code 执行时的 trace_id，用于关联对话记录
 	// Token 消耗统计（从对话记录计算）
 	promptTokens     int
 	completionTokens int
@@ -202,26 +191,28 @@ func NewRequirement(id RequirementID, projectID ProjectID, title, description, a
 	}, nil
 }
 
-func (r *Requirement) ID() RequirementID              { return r.id }
-func (r *Requirement) ProjectID() ProjectID           { return r.projectID }
-func (r *Requirement) Title() string                  { return r.title }
-func (r *Requirement) Description() string            { return r.description }
-func (r *Requirement) AcceptanceCriteria() string     { return r.acceptanceCriteria }
-func (r *Requirement) TempWorkspaceRoot() string      { return r.tempWorkspaceRoot }
-func (r *Requirement) Status() RequirementStatus { return r.status }
-func (r *Requirement) AssigneeAgentCode() string      { return r.assigneeAgentCode }
-func (r *Requirement) ReplicaAgentCode() string       { return r.replicaAgentCode }
-func (r *Requirement) DispatchSessionKey() string     { return r.dispatchSessionKey }
-func (r *Requirement) WorkspacePath() string          { return r.workspacePath }
-func (r *Requirement) LastError() string              { return r.lastError }
-func (r *Requirement) StartedAt() *time.Time          { return copyTimePtr(r.startedAt) }
-func (r *Requirement) CompletedAt() *time.Time        { return copyTimePtr(r.completedAt) }
-func (r *Requirement) CreatedAt() time.Time           { return r.createdAt }
-func (r *Requirement) UpdatedAt() time.Time           { return r.updatedAt }
+func (r *Requirement) ID() RequirementID                { return r.id }
+func (r *Requirement) ProjectID() ProjectID             { return r.projectID }
+func (r *Requirement) Title() string                    { return r.title }
+func (r *Requirement) Description() string              { return r.description }
+func (r *Requirement) AcceptanceCriteria() string       { return r.acceptanceCriteria }
+func (r *Requirement) TempWorkspaceRoot() string        { return r.tempWorkspaceRoot }
+func (r *Requirement) Status() RequirementStatus        { return r.status }
+func (r *Requirement) AssigneeAgentCode() string        { return r.assigneeAgentCode }
+func (r *Requirement) ReplicaAgentCode() string         { return r.replicaAgentCode }
+func (r *Requirement) DispatchSessionKey() string       { return r.dispatchSessionKey }
+func (r *Requirement) WorkspacePath() string            { return r.workspacePath }
+func (r *Requirement) LastError() string                { return r.lastError }
+func (r *Requirement) StartedAt() *time.Time            { return copyTimePtr(r.startedAt) }
+func (r *Requirement) CompletedAt() *time.Time          { return copyTimePtr(r.completedAt) }
+func (r *Requirement) CreatedAt() time.Time             { return r.createdAt }
+func (r *Requirement) UpdatedAt() time.Time             { return r.updatedAt }
 func (r *Requirement) RequirementType() RequirementType { return r.requirementType }
-func (r *Requirement) ClaudeRuntimeStatus() string     { return r.claudeRuntimeStatus }
-func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time { return copyTimePtr(r.claudeRuntimeStartedAt) }
-func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time  { return copyTimePtr(r.claudeRuntimeEndedAt) }
+func (r *Requirement) ClaudeRuntimeStatus() string      { return r.claudeRuntimeStatus }
+func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time {
+	return copyTimePtr(r.claudeRuntimeStartedAt)
+}
+func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time { return copyTimePtr(r.claudeRuntimeEndedAt) }
 func (r *Requirement) ClaudeRuntimeError() string       { return r.claudeRuntimeError }
 func (r *Requirement) ClaudeRuntimeResult() string      { return r.claudeRuntimeResult }
 func (r *Requirement) ClaudeRuntimePrompt() string      { return r.claudeRuntimePrompt }
@@ -234,6 +225,11 @@ func (r *Requirement) SetClaudeRuntimeResult(result string) {
 // SetClaudeRuntimePrompt 设置 Claude Code 执行提示词
 func (r *Requirement) SetClaudeRuntimePrompt(prompt string) {
 	r.claudeRuntimePrompt = prompt
+}
+
+// SetClaudeRuntimeError 设置 Claude Code 错误信息
+func (r *Requirement) SetClaudeRuntimeError(errMsg string) {
+	r.claudeRuntimeError = errMsg
 }
 
 func (r *Requirement) TraceID() string { return r.traceId }
@@ -257,6 +253,13 @@ func (r *Requirement) SetTokenUsage(promptTokens, completionTokens, totalTokens 
 // SetRequirementType 设置需求类型
 func (r *Requirement) SetRequirementType(t RequirementType) {
 	r.requirementType = t
+}
+
+// SyncStatusFromStateMachine 从状态机同步状态
+// 这是状态机的值同步到需求的推荐方式
+func (r *Requirement) SyncStatusFromStateMachine(stateID string) {
+	r.status = RequirementStatus(stateID)
+	r.updatedAt = time.Now()
 }
 
 func (r *Requirement) CanDispatch() bool {
@@ -295,6 +298,8 @@ func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
 }
 
 // Redispatch 重置需求状态，允许重新派发
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 保留此方法用于向后兼容，新代码应使用状态机服务
 func (r *Requirement) Redispatch() error {
 	if !r.CanRedispatch() {
 		return ErrRequirementCannotDispatch
@@ -326,13 +331,15 @@ func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, temp
 	return nil
 }
 
+// StartDispatch 开始派发
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	if !r.CanDispatch() {
 		return ErrRequirementCannotDispatch
 	}
 
 	now := time.Now()
-	r.status = RequirementStatusPreparing
+	r.status = RequirementStatus("preparing")
 	r.assigneeAgentCode = assigneeAgentCode
 	r.startedAt = &now
 	r.lastError = ""
@@ -341,12 +348,14 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	return nil
 }
 
+// MarkCoding 标记编码中
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
-	if r.status != RequirementStatusPreparing {
+	if r.status != "preparing" {
 		return ErrRequirementCannotDispatch
 	}
 
-	r.status = RequirementStatusCoding
+	r.status = RequirementStatus("coding")
 	r.workspacePath = workspacePath
 	r.replicaAgentCode = replicaAgentCode
 	now := time.Now()
@@ -355,9 +364,11 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 	return nil
 }
 
+// MarkPROpened 标记 PR 已打开
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 func (r *Requirement) MarkPROpened() {
 	now := time.Now()
-	r.status = RequirementStatusPROpened
+	r.status = RequirementStatus("pr_opened")
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
@@ -370,8 +381,10 @@ func (r *Requirement) MarkPROpened() {
 	}
 }
 
+// MarkFailed 标记失败
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 func (r *Requirement) MarkFailed(lastError string) {
-	r.status = RequirementStatusFailed
+	r.status = RequirementStatus("failed")
 	r.lastError = lastError
 	now := time.Now()
 	r.updatedAt = now
@@ -385,8 +398,9 @@ func (r *Requirement) MarkFailed(lastError string) {
 }
 
 // MarkCompleted 标记需求为已完成（Claude Code 正常结束）
+// 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 func (r *Requirement) MarkCompleted() {
-	r.status = RequirementStatusCompleted
+	r.status = RequirementStatus("completed")
 	now := time.Now()
 	r.completedAt = &now
 	r.updatedAt = now
@@ -450,8 +464,8 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		ProjectID:              r.projectID,
 		Title:                  r.title,
 		Description:            r.description,
-		AcceptanceCriteria:    r.acceptanceCriteria,
-		TempWorkspaceRoot:     r.tempWorkspaceRoot,
+		AcceptanceCriteria:     r.acceptanceCriteria,
+		TempWorkspaceRoot:      r.tempWorkspaceRoot,
 		Status:                 r.status,
 		AssigneeAgentCode:      r.assigneeAgentCode,
 		ReplicaAgentCode:       r.replicaAgentCode,

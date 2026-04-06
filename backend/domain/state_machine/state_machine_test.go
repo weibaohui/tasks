@@ -209,15 +209,12 @@ func TestNewStateMachine(t *testing.T) {
 		t.Fatalf("解析失败: %v", err)
 	}
 
-	sm := NewStateMachine("project-1", "test", "测试状态机", cfg)
+	sm := NewStateMachine("test", "测试状态机", cfg)
 
 	if sm.ID == "" {
 		t.Error("期望ID不为空")
 	}
 
-	if sm.ProjectID != "project-1" {
-		t.Errorf("期望项目ID为 project-1, 实际为 %s", sm.ProjectID)
-	}
 
 	if sm.Name != "test" {
 		t.Errorf("期望名称为 test, 实际为 %s", sm.Name)

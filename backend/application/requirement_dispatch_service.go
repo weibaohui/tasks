@@ -102,54 +102,61 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if baseAgent == nil {
 		return nil, ErrBaseAgentNotFound
 	}
-	if err := requirement.StartDispatch(cmd.AgentCode); err != nil {
-		return nil, err
-	}
+
+	// 设置分配信息和 session key
 	requirement.SetDispatchSessionKey(cmd.SessionKey)
+	requirement.SetReplicaAgentCode(cmd.AgentCode)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
+
 	workspacePath := filepath.Join(requirementWorkspaceRoot(requirement), requirement.ProjectID().String(), requirement.ID().String())
 	if err := os.MkdirAll(workspacePath, 0o755); err != nil {
 		return nil, err
 	}
 	replicaAgent, err := s.createReplicaAgent(ctx, baseAgent, requirement, workspacePath)
 	if err != nil {
-		requirement.MarkFailed(err.Error())
+		requirement.SetWorkspacePath(workspacePath)
+		requirement.SetClaudeRuntimeError(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
-	if err := requirement.MarkCoding(workspacePath, replicaAgent.AgentCode().String()); err != nil {
-		return nil, err
-	}
+
+	// 设置工作空间信息
+	requirement.SetWorkspacePath(workspacePath)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
+
 	channelType, chatID, err := parseSessionKey(cmd.SessionKey)
 	if err != nil {
-		requirement.MarkFailed(err.Error())
+		requirement.SetClaudeRuntimeError(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
 	if s.inboundPublisher == nil {
-		requirement.MarkFailed(ErrInboundPublisherNotConfigured.Error())
+		requirement.SetClaudeRuntimeError(ErrInboundPublisherNotConfigured.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
 		return nil, ErrInboundPublisherNotConfigured
 	}
 	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
-		requirement.MarkFailed(err.Error())
+		requirement.SetClaudeRuntimeError(err.Error())
 		_ = s.requirementRepo.Save(ctx, requirement)
 		_ = os.RemoveAll(workspacePath)
 		return nil, err
 	}
-	// 查询项目关联的状态机
+
+	// 获取状态机信息
 	stateMachineName := s.getProjectStateMachineName(ctx, project.ID().String(), requirement.RequirementType())
 
 	// 获取当前状态机状态和 AI Guide
 	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
+
+	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
+	requirement.SyncStatusFromStateMachine(currentState)
 
 	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide)
 

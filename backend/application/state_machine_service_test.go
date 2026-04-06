@@ -12,16 +12,18 @@ import (
 
 // MockStateMachineRepository Mock 仓储
 type MockStateMachineRepository struct {
-	stateMachines      map[string]*state_machine.StateMachine
-	requirementStates map[string]*state_machine.RequirementState
-	transitionLogs    []*state_machine.TransitionLog
+	stateMachines        map[string]*state_machine.StateMachine
+	requirementStates    map[string]*state_machine.RequirementState
+	transitionLogs       []*state_machine.TransitionLog
+	projectStateMachines map[string]*state_machine.ProjectStateMachine
 }
 
 func NewMockStateMachineRepository() *MockStateMachineRepository {
 	return &MockStateMachineRepository{
-		stateMachines:      make(map[string]*state_machine.StateMachine),
-		requirementStates: make(map[string]*state_machine.RequirementState),
-		transitionLogs:    []*state_machine.TransitionLog{},
+		stateMachines:        make(map[string]*state_machine.StateMachine),
+		requirementStates:    make(map[string]*state_machine.RequirementState),
+		transitionLogs:       []*state_machine.TransitionLog{},
+		projectStateMachines: make(map[string]*state_machine.ProjectStateMachine),
 	}
 }
 
@@ -82,6 +84,50 @@ func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, req
 		}
 	}
 	return result, nil
+}
+
+func (r *MockStateMachineRepository) SaveProjectStateMachine(ctx context.Context, psm *state_machine.ProjectStateMachine) error {
+	key := psm.ProjectID() + "_" + string(psm.RequirementType())
+	r.projectStateMachines[key] = psm
+	return nil
+}
+
+func (r *MockStateMachineRepository) GetProjectStateMachine(ctx context.Context, projectID string, requirementType state_machine.RequirementType) (*state_machine.ProjectStateMachine, error) {
+	key := projectID + "_" + string(requirementType)
+	psm, ok := r.projectStateMachines[key]
+	if !ok {
+		return nil, state_machine.ErrProjectStateMachineNotFound
+	}
+	return psm, nil
+}
+
+func (r *MockStateMachineRepository) ListProjectStateMachines(ctx context.Context, projectID string) ([]*state_machine.ProjectStateMachine, error) {
+	var result []*state_machine.ProjectStateMachine
+	for _, psm := range r.projectStateMachines {
+		if psm.ProjectID() == projectID {
+			result = append(result, psm)
+		}
+	}
+	return result, nil
+}
+
+func (r *MockStateMachineRepository) DeleteProjectStateMachine(ctx context.Context, id string) error {
+	for key, psm := range r.projectStateMachines {
+		if psm.ID() == id {
+			delete(r.projectStateMachines, key)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *MockStateMachineRepository) DeleteProjectStateMachinesByProject(ctx context.Context, projectID string) error {
+	for key, psm := range r.projectStateMachines {
+		if psm.ProjectID() == projectID {
+			delete(r.projectStateMachines, key)
+		}
+	}
+	return nil
 }
 
 func (r *MockStateMachineRepository) Clear() {

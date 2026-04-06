@@ -111,6 +111,35 @@ func (m *mockConversationRecordRepo) List(ctx context.Context, filter domain.Con
 	return result[start:end], nil
 }
 
+func (m *mockConversationRecordRepo) Count(ctx context.Context, filter domain.ConversationRecordListFilter) (int, error) {
+	count := 0
+	for _, record := range m.records {
+		if filter.TraceID != "" && record.TraceID() != filter.TraceID {
+			continue
+		}
+		if filter.SessionKey != "" && record.SessionKey() != filter.SessionKey {
+			continue
+		}
+		if filter.UserCode != "" && record.UserCode() != filter.UserCode {
+			continue
+		}
+		if filter.AgentCode != "" && record.AgentCode() != filter.AgentCode {
+			continue
+		}
+		if filter.ChannelCode != "" && record.ChannelCode() != filter.ChannelCode {
+			continue
+		}
+		if filter.EventType != "" && record.EventType() != filter.EventType {
+			continue
+		}
+		if filter.Role != "" && record.Role() != filter.Role {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (m *mockConversationRecordRepo) GetStats(ctx context.Context, filter domain.ConversationStatsFilter) (*domain.ConversationStats, error) {
 	return m.stats, nil
 }
