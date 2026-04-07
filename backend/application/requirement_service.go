@@ -38,23 +38,23 @@ type RedispatchRequirementCommand struct {
 }
 
 type RequirementApplicationService struct {
-	requirementRepo     domain.RequirementRepository
-	projectRepo         domain.ProjectRepository
-	idGenerator         domain.IDGenerator
-	replicaAgentManager *domain.ReplicaAgentManager
+	requirementRepo    domain.RequirementRepository
+	projectRepo        domain.ProjectRepository
+	idGenerator        domain.IDGenerator
+	replicaCleanupSvc  domain.ReplicaCleanupService
 }
 
 func NewRequirementApplicationService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc domain.ReplicaCleanupService,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
-		requirementRepo:     requirementRepo,
-		projectRepo:         projectRepo,
-		idGenerator:         idGenerator,
-		replicaAgentManager: replicaAgentManager,
+		requirementRepo:   requirementRepo,
+		projectRepo:       projectRepo,
+		idGenerator:       idGenerator,
+		replicaCleanupSvc: replicaCleanupSvc,
 	}
 }
 
@@ -153,8 +153,10 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 		return nil, ErrRequirementNotFound
 	}
 
-	// 设置分身管理器（用于清理）
-	requirement.SetReplicaAgentManager(s.replicaAgentManager)
+	// 先清理分身和工作区（应用层职责）
+	if s.replicaCleanupSvc != nil {
+		_ = s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
+	}
 
 	requirement.MarkPROpened()
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {

@@ -134,8 +134,8 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 
-	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
-	logger.Info("ReplicaAgentManager 初始化完成")
+	replicaCleanupSvc := application.NewReplicaCleanupService(agentRepo)
+	logger.Info("ReplicaCleanupService 初始化完成")
 
 	// 初始化状态机仓库（提前初始化，供 requirementDispatchService 使用）
 	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
@@ -147,7 +147,7 @@ func main() {
 		nil, // taskService - no longer used
 		sessionService,
 		idGenerator,
-		replicaAgentManager,
+		replicaCleanupSvc,
 		stateMachineRepo,
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
@@ -159,7 +159,7 @@ func main() {
 	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
 
 	// 7. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 初始化状态机执行器和服务（供心跳调度器使用）
@@ -207,7 +207,7 @@ func main() {
 		requirementRepo,
 		projectRepo,
 		idGenerator,
-		replicaAgentManager,
+		replicaCleanupSvc,
 	)
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
@@ -439,7 +439,7 @@ func initGateway(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRecordRepo domain.ConversationRecordRepository,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc *application.ReplicaCleanupService,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,
@@ -452,7 +452,7 @@ func initGateway(
 	hookManager.Register(feishuThinkingHook)
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	gw.channelManager = channel.NewManager(gw.messageBus)
 	gw.loadChannels(channelService)
 

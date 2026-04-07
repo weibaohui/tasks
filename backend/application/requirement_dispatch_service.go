@@ -36,17 +36,17 @@ type DispatchRequirementResult struct {
 }
 
 type RequirementDispatchService struct {
-	requirementRepo  domain.RequirementRepository
-	projectRepo      domain.ProjectRepository
-	agentRepo        domain.AgentRepository
-	stateMachineRepo state_machine.Repository
-	taskService      interface{} // TaskApplicationService - no longer used
-	sessionService   *SessionApplicationService
-	idGenerator      domain.IDGenerator
-	inboundPublisher interface {
+	requirementRepo    domain.RequirementRepository
+	projectRepo        domain.ProjectRepository
+	agentRepo          domain.AgentRepository
+	stateMachineRepo   state_machine.Repository
+	taskService        interface{} // TaskApplicationService - no longer used
+	sessionService     *SessionApplicationService
+	idGenerator        domain.IDGenerator
+	inboundPublisher   interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
-	replicaAgentManager *domain.ReplicaAgentManager
+	replicaCleanupSvc  domain.ReplicaCleanupService
 }
 
 func NewRequirementDispatchService(
@@ -56,18 +56,18 @@ func NewRequirementDispatchService(
 	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc domain.ReplicaCleanupService,
 	stateMachineRepo state_machine.Repository,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
-		requirementRepo:     requirementRepo,
-		projectRepo:         projectRepo,
-		agentRepo:           agentRepo,
-		taskService:         taskService,
-		sessionService:      sessionService,
-		idGenerator:         idGenerator,
-		replicaAgentManager: replicaAgentManager,
-		stateMachineRepo:    stateMachineRepo,
+		requirementRepo:   requirementRepo,
+		projectRepo:        projectRepo,
+		agentRepo:          agentRepo,
+		taskService:        taskService,
+		sessionService:     sessionService,
+		idGenerator:        idGenerator,
+		replicaCleanupSvc:  replicaCleanupSvc,
+		stateMachineRepo:   stateMachineRepo,
 	}
 }
 
@@ -86,8 +86,6 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, ErrRequirementNotFound
 	}
 
-	// 设置分身管理器
-	requirement.SetReplicaAgentManager(s.replicaAgentManager)
 	project, err := s.projectRepo.FindByID(ctx, requirement.ProjectID())
 	if err != nil {
 		return nil, err

@@ -137,7 +137,7 @@ type ClaudeCodeProcessor struct {
 	idGenerator         domain.IDGenerator
 	requirementRepo     domain.RequirementRepository
 	conversationRepo    domain.ConversationRecordRepository
-	replicaAgentManager *domain.ReplicaAgentManager
+	replicaCleanupSvc   domain.ReplicaCleanupService
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -159,7 +159,7 @@ func NewClaudeCodeProcessor(
 	providerRepo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
 	requirementRepo domain.RequirementRepository,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc domain.ReplicaCleanupService,
 	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
@@ -169,7 +169,7 @@ func NewClaudeCodeProcessor(
 		idGenerator:         idGenerator,
 		requirementRepo:     requirementRepo,
 		conversationRepo:    conversationRepo,
-		replicaAgentManager: replicaAgentManager,
+		replicaCleanupSvc:  replicaCleanupSvc,
 	}
 }
 
@@ -1084,8 +1084,8 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 
 	// **立即清理分身**（代码约束，不是 Hook）
 	// 在触发任何 hook 之前清理分身，确保清理一定会执行
-	if p.replicaAgentManager != nil {
-		p.replicaAgentManager.EnsureDisposed(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
+	if p.replicaCleanupSvc != nil {
+		_ = p.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
 		requirement.SetReplicaAgentCode("")
 		requirement.SetWorkspacePath("")
 		if err := p.requirementRepo.Save(ctx, requirement); err != nil {

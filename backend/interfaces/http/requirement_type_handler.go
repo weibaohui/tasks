@@ -109,7 +109,7 @@ func (h *RequirementTypeHandler) CreateRequirementType(w http.ResponseWriter, r 
 		rt.SetColor(req.Color)
 	}
 
-	if err := h.requirementTypeRepo.Save(context.Background(), rt); err != nil {
+	if err := h.requirementTypeRepo.Save(r.Context(), rt); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
@@ -126,7 +126,7 @@ func (h *RequirementTypeHandler) ListRequirementTypes(w http.ResponseWriter, r *
 		return
 	}
 
-	types, err := h.requirementTypeRepo.FindByProjectID(context.Background(), domain.NewProjectID(projectIDStr))
+	types, err := h.requirementTypeRepo.FindByProjectID(r.Context(), domain.NewProjectID(projectIDStr))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
@@ -149,7 +149,7 @@ func (h *RequirementTypeHandler) DeleteRequirementType(w http.ResponseWriter, r 
 	}
 
 	// 先查询获取类型信息，检查是否为内置类型
-	rt, err := h.requirementTypeRepo.FindByID(context.Background(), domain.NewRequirementTypeEntityID(id))
+	rt, err := h.requirementTypeRepo.FindByID(r.Context(), domain.NewRequirementTypeEntityID(id))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
@@ -168,7 +168,7 @@ func (h *RequirementTypeHandler) DeleteRequirementType(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := h.requirementTypeRepo.Delete(context.Background(), domain.NewRequirementTypeEntityID(id)); err != nil {
+	if err := h.requirementTypeRepo.Delete(r.Context(), domain.NewRequirementTypeEntityID(id)); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
