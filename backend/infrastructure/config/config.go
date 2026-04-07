@@ -13,9 +13,10 @@ import (
 // Config 配置结构
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig  `yaml:"database"`
+	Database DatabaseConfig `yaml:"database"`
 	API      APIConfig      `yaml:"api"`
-	Logging  LoggingConfig   `yaml:"logging"`
+	Logging  LoggingConfig  `yaml:"logging"`
+	Agent    AgentConfig    `yaml:"agent"`
 }
 
 // ServerConfig 服务器配置
@@ -37,6 +38,11 @@ type APIConfig struct {
 // LoggingConfig 日志配置
 type LoggingConfig struct {
 	Level string `yaml:"level"`
+}
+
+// AgentConfig Agent 配置
+type AgentConfig struct {
+	AIWorkSpaceRoot string `yaml:"ai_workspace_root"` // AI 工作区根目录
 }
 
 // Load 加载配置
@@ -75,6 +81,9 @@ func defaultConfig() *Config {
 		},
 		Logging: LoggingConfig{
 			Level: "info",
+		},
+		Agent: AgentConfig{
+			AIWorkSpaceRoot: "/tmp/ai-devops",
 		},
 	}
 }
@@ -145,6 +154,11 @@ func applyEnvOverrides(cfg *Config) {
 	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
 		cfg.Database.Path = dbPath
 	}
+
+	// AI_DEVOPS_WORKSPACE_ROOT 环境变量
+	if workspaceRoot := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); workspaceRoot != "" {
+		cfg.Agent.AIWorkSpaceRoot = workspaceRoot
+	}
 }
 
 // GetDatabasePath 获取数据库路径
@@ -175,6 +189,15 @@ func GetAPIToken() string {
 		return ""
 	}
 	return cfg.API.Token
+}
+
+// GetAgentAIWorkSpaceRoot 获取 AI 工作区根目录
+func GetAgentAIWorkSpaceRoot() string {
+	cfg, err := Load()
+	if err != nil {
+		return "/tmp/ai-devops"
+	}
+	return cfg.Agent.AIWorkSpaceRoot
 }
 
 // EnsureConfigDir 确保配置目录存在

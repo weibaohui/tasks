@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/weibh/taskmanager/domain"
@@ -118,14 +117,8 @@ func applyDefaultAgentCreateConfig(cmd *CreateAgentCommand) {
 	}
 }
 
-// defaultAgentModelFromEnv 从环境变量中推断默认模型名称
+// defaultAgentModelFromEnv 获取默认模型名称
 func defaultAgentModelFromEnv() string {
-	if v := strings.TrimSpace(os.Getenv("LLM_MODEL")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(os.Getenv("OPENAI_MODEL")); v != "" {
-		return v
-	}
 	return domain.DefaultModel
 }
 

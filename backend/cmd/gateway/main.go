@@ -18,7 +18,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
-	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -87,9 +86,9 @@ func main() {
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 	logger.Info("Session 服务初始化完成")
 
-	// 6.5 初始化 ReplicaAgentManager
-	replicaAgentManager := domain.NewReplicaAgentManager(agentRepo)
-	logger.Info("ReplicaAgentManager 初始化完成")
+	// 6.5 初始化 ReplicaCleanupService
+	replicaCleanupSvc := application.NewReplicaCleanupService(agentRepo)
+	logger.Info("ReplicaCleanupService 初始化完成")
 
 	// 7. 初始化 Hook Manager
 	hookManager := hook.NewManager(logger, nil)
@@ -105,7 +104,7 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, replicaAgentManager)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务

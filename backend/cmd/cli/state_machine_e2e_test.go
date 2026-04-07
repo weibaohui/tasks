@@ -51,21 +51,14 @@ func TestStateMachineE2E(t *testing.T) {
 	// 测试完整的流程
 	t.Run("完整流程测试", func(t *testing.T) {
 		// 1. 创建状态机
-		sm, err := svc.CreateStateMachine(ctx, "project-1", "test_flow", "测试流程", testFlowYAML)
+		sm, err := svc.CreateStateMachine(ctx, "test_flow", "测试流程", testFlowYAML)
 		if err != nil {
 			t.Fatalf("创建状态机失败: %v", err)
 		}
 		t.Logf("创建状态机成功: %s", sm.ID)
 
-		// 2. 绑定类型
-		err = svc.BindType(ctx, sm.ID, "normal")
-		if err != nil {
-			t.Fatalf("绑定类型失败: %v", err)
-		}
-		t.Log("绑定类型成功")
-
-		// 3. 创建需求状态
-		rs, err := svc.InitializeRequirementState(ctx, "req-001", "project-1", "normal")
+		// 2. 创建需求状态
+		rs, err := svc.InitializeRequirementState(ctx, "req-001", sm.ID)
 		if err != nil {
 			t.Fatalf("初始化需求状态失败: %v", err)
 		}
@@ -115,8 +108,11 @@ func TestStateMachineE2E(t *testing.T) {
 	})
 
 	t.Run("无效触发器测试", func(t *testing.T) {
+		// 创建新的状态机用于无效触发器测试
+		sm2, _ := svc.CreateStateMachine(ctx, "test_flow_2", "测试流程2", testFlowYAML)
+
 		// 重新初始化一个需求
-		rs, _ := svc.InitializeRequirementState(ctx, "req-002", "project-1", "normal")
+		svc.InitializeRequirementState(ctx, "req-002", sm2.ID)
 
 		// 尝试无效的触发器
 		_, err := svc.TriggerTransition(ctx, "req-002", "invalid_trigger", "user", "")
@@ -126,7 +122,7 @@ func TestStateMachineE2E(t *testing.T) {
 		t.Logf("无效触发器被正确拒绝: %v", err)
 
 		// 清理
-		repo.DeleteStateMachine(ctx, rs.StateMachineID)
+		repo.DeleteStateMachine(ctx, sm2.ID)
 	})
 }
 
@@ -226,16 +222,13 @@ transitions:
 	ctx := context.Background()
 
 	// 创建状态机
-	sm, err := svc.CreateStateMachine(ctx, "project-1", "hook_test", "Hook测试", yamlWithHook)
+	sm, err := svc.CreateStateMachine(ctx, "hook_test", "Hook测试", yamlWithHook)
 	if err != nil {
 		t.Fatalf("创建状态机失败: %v", err)
 	}
 
-	// 绑定类型
-	svc.BindType(ctx, sm.ID, "normal")
-
 	// 初始化需求
-	svc.InitializeRequirementState(ctx, "req-hook-001", "project-1", "normal")
+	svc.InitializeRequirementState(ctx, "req-hook-001", sm.ID)
 
 	// 触发第一次转换
 	svc.TriggerTransition(ctx, "req-hook-001", "start", "user", "开始")
@@ -331,19 +324,13 @@ transitions:
 `
 
 	// 创建状态机
-	sm, err := svc.CreateStateMachine(ctx, "project-1", "heartbeat", "心跳流程", heartbeatYAML)
+	sm, err := svc.CreateStateMachine(ctx, "heartbeat", "心跳流程", heartbeatYAML)
 	if err != nil {
 		t.Fatalf("创建状态机失败: %v", err)
 	}
 
-	// 绑定 heartbeat 类型
-	err = svc.BindType(ctx, sm.ID, "heartbeat")
-	if err != nil {
-		t.Fatalf("绑定类型失败: %v", err)
-	}
-
 	// 初始化心跳需求
-	rs, err := svc.InitializeRequirementState(ctx, "heartbeat-001", "project-1", "heartbeat")
+	rs, err := svc.InitializeRequirementState(ctx, "heartbeat-001", sm.ID)
 	if err != nil {
 		t.Fatalf("初始化需求状态失败: %v", err)
 	}

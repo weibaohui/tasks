@@ -20,7 +20,7 @@ func (m *mockProjectIDGen) Generate() string {
 func setupTestProjectSvc() *ProjectApplicationService {
 	repo := newSharedMockProjectRepo()
 	idGen := &mockProjectIDGen{}
-	return NewProjectApplicationService(repo, idGen)
+	return NewProjectApplicationService(repo, nil, idGen)
 }
 
 func TestProjectService_CreateProject(t *testing.T) {

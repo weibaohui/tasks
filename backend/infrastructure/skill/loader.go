@@ -63,14 +63,7 @@ func (s *SkillsLoader) GetSearchPaths() []string {
 func detectDefaultSearchPaths(workspace string) []string {
 	var paths []string
 
-	// 1. 环境变量指定的路径（最高优先级，如果存在）
-	if envPath := os.Getenv("TASKMANAGER_SKILLS_DIR"); envPath != "" {
-		if isDir(envPath) {
-			paths = append(paths, envPath)
-		}
-	}
-
-	// 2. 内置技能目录（从可执行文件所在目录推断）
+	// 1. 内置技能目录（从可执行文件所在目录推断）
 	if exePath := detectExecutableDir(); exePath != "" {
 		builtinPath := filepath.Join(exePath, "skills")
 		if isDir(builtinPath) {

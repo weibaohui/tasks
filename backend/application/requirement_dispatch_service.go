@@ -11,6 +11,7 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -36,17 +37,17 @@ type DispatchRequirementResult struct {
 }
 
 type RequirementDispatchService struct {
-	requirementRepo  domain.RequirementRepository
-	projectRepo      domain.ProjectRepository
-	agentRepo        domain.AgentRepository
-	stateMachineRepo state_machine.Repository
-	taskService      interface{} // TaskApplicationService - no longer used
-	sessionService   *SessionApplicationService
-	idGenerator      domain.IDGenerator
-	inboundPublisher interface {
+	requirementRepo    domain.RequirementRepository
+	projectRepo        domain.ProjectRepository
+	agentRepo          domain.AgentRepository
+	stateMachineRepo   state_machine.Repository
+	taskService        interface{} // TaskApplicationService - no longer used
+	sessionService     *SessionApplicationService
+	idGenerator        domain.IDGenerator
+	inboundPublisher   interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
-	replicaAgentManager *domain.ReplicaAgentManager
+	replicaCleanupSvc  domain.ReplicaCleanupService
 }
 
 func NewRequirementDispatchService(
@@ -56,18 +57,18 @@ func NewRequirementDispatchService(
 	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc domain.ReplicaCleanupService,
 	stateMachineRepo state_machine.Repository,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
-		requirementRepo:     requirementRepo,
-		projectRepo:         projectRepo,
-		agentRepo:           agentRepo,
-		taskService:         taskService,
-		sessionService:      sessionService,
-		idGenerator:         idGenerator,
-		replicaAgentManager: replicaAgentManager,
-		stateMachineRepo:    stateMachineRepo,
+		requirementRepo:   requirementRepo,
+		projectRepo:        projectRepo,
+		agentRepo:          agentRepo,
+		taskService:        taskService,
+		sessionService:     sessionService,
+		idGenerator:        idGenerator,
+		replicaCleanupSvc:  replicaCleanupSvc,
+		stateMachineRepo:   stateMachineRepo,
 	}
 }
 
@@ -86,8 +87,6 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, ErrRequirementNotFound
 	}
 
-	// 设置分身管理器
-	requirement.SetReplicaAgentManager(s.replicaAgentManager)
 	project, err := s.projectRepo.FindByID(ctx, requirement.ProjectID())
 	if err != nil {
 		return nil, err
@@ -322,10 +321,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 }
 
 func workspaceRootPath() string {
-	if p := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); p != "" {
-		return p
-	}
-	return "/tmp/ai-devops"
+	return config.GetAgentAIWorkSpaceRoot()
 }
 
 func requirementWorkspaceRoot(requirement *domain.Requirement) string {

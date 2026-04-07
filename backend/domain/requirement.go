@@ -1,11 +1,8 @@
 package domain
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"strings"
 	"time"
 )
@@ -96,57 +93,6 @@ type Requirement struct {
 	promptTokens     int
 	completionTokens int
 	totalTokens      int
-
-	// replicaAgentManager 分身管理器（不持久化）
-	// 通过 SetReplicaAgentManager 设置
-	replicaAgentManager *ReplicaAgentManager
-}
-
-// ReplicaAgentManager 分身管理器
-// 负责强制销毁分身，这是代码约束而非 Hook
-type ReplicaAgentManager struct {
-	agentRepo AgentRepository
-}
-
-// NewReplicaAgentManager 创建分身管理器
-func NewReplicaAgentManager(agentRepo AgentRepository) *ReplicaAgentManager {
-	return &ReplicaAgentManager{agentRepo: agentRepo}
-}
-
-// EnsureDisposed 确保分身已销毁（幂等方法）
-// 这是一个幂等操作，调用多次和调用一次效果相同
-func (m *ReplicaAgentManager) EnsureDisposed(ctx context.Context, replicaAgentCode, workspacePath string) {
-	if replicaAgentCode == "" {
-		return
-	}
-
-	// 1. 根据 agent code 查找分身 agent
-	agent, err := m.agentRepo.FindByAgentCode(ctx, NewAgentCode(replicaAgentCode))
-	if err != nil || agent == nil {
-		log.Printf("failed to find replica agent %s: %v", replicaAgentCode, err)
-		return
-	}
-
-	// 2. 删除分身 Agent
-	if err := m.agentRepo.Delete(ctx, agent.ID()); err != nil {
-		log.Printf("failed to delete replica agent %s: %v", agent.AgentCode().String(), err)
-	} else {
-		log.Printf("replica agent %s disposed", agent.AgentCode().String())
-	}
-
-	// 3. 清理工作目录
-	if workspacePath != "" {
-		if err := os.RemoveAll(workspacePath); err != nil {
-			log.Printf("failed to cleanup workspace %s: %v", workspacePath, err)
-		} else {
-			log.Printf("workspace %s cleaned", workspacePath)
-		}
-	}
-}
-
-// SetReplicaAgentManager 设置分身管理器
-func (r *Requirement) SetReplicaAgentManager(manager *ReplicaAgentManager) {
-	r.replicaAgentManager = manager
 }
 
 // NewRedispatchedRequirement 创建重新派发的需求副本
@@ -366,51 +312,39 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 
 // MarkPROpened 标记 PR 已打开
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
 func (r *Requirement) MarkPROpened() {
 	now := time.Now()
 	r.status = RequirementStatus("pr_opened")
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
-
-	// 强制销毁分身（代码约束）
-	if r.replicaAgentManager != nil {
-		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
-		r.replicaAgentCode = ""
-		r.workspacePath = ""
-	}
+	r.replicaAgentCode = ""
+	r.workspacePath = ""
 }
 
 // MarkFailed 标记失败
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
 func (r *Requirement) MarkFailed(lastError string) {
 	r.status = RequirementStatus("failed")
 	r.lastError = lastError
 	now := time.Now()
 	r.updatedAt = now
-
-	// 强制销毁分身（代码约束）
-	if r.replicaAgentManager != nil {
-		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
-		r.replicaAgentCode = ""
-		r.workspacePath = ""
-	}
+	r.replicaAgentCode = ""
+	r.workspacePath = ""
 }
 
 // MarkCompleted 标记需求为已完成（Claude Code 正常结束）
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
 func (r *Requirement) MarkCompleted() {
 	r.status = RequirementStatus("completed")
 	now := time.Now()
 	r.completedAt = &now
 	r.updatedAt = now
-
-	// 强制销毁分身（代码约束）
-	if r.replicaAgentManager != nil {
-		r.replicaAgentManager.EnsureDisposed(context.Background(), r.replicaAgentCode, r.workspacePath)
-		r.replicaAgentCode = ""
-		r.workspacePath = ""
-	}
+	r.replicaAgentCode = ""
+	r.workspacePath = ""
 }
 
 func (r *Requirement) SetDispatchSessionKey(sessionKey string) {

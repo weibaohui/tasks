@@ -227,7 +227,7 @@ func main() {
 	svc := application.NewStateMachineService(repo, executor, logger)
 	ctx := context.Background()
 
-	fmt.Println("=== 状态机 E2E 测试 ===\n")
+	fmt.Println("=== 状态机 E2E 测试 ===")
 
 	// 1. 创建状态机
 	fmt.Println("Step 1: 创建状态机")

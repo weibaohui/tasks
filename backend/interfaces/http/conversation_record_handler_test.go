@@ -262,10 +262,13 @@ func TestListConversationRecords(t *testing.T) {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 
-	var resp []map[string]interface{}
+	var resp struct {
+		Items []map[string]interface{} `json:"items"`
+		Total int                      `json:"total"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if len(resp) < 1 {
+	if len(resp.Items) < 1 {
 		t.Error("期望至少有一条记录")
 	}
 }
@@ -300,15 +303,18 @@ func TestListConversationRecords_WithFilters(t *testing.T) {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 
-	var resp []map[string]interface{}
+	var resp struct {
+		Items []map[string]interface{} `json:"items"`
+		Total int                      `json:"total"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if len(resp) != 1 {
-		t.Errorf("期望 1 条记录, 实际为 %d", len(resp))
+	if len(resp.Items) != 1 {
+		t.Errorf("期望 1 条记录, 实际为 %d", len(resp.Items))
 	}
 
-	if resp[0]["event_type"] != "llm_call" {
-		t.Errorf("期望 event_type 为 'llm_call', 实际为 '%v'", resp[0]["event_type"])
+	if resp.Items[0]["event_type"] != "llm_call" {
+		t.Errorf("期望 event_type 为 'llm_call', 实际为 '%v'", resp.Items[0]["event_type"])
 	}
 }
 

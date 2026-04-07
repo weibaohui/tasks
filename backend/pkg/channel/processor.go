@@ -231,7 +231,7 @@ type MessageProcessor struct {
 	skillsLoader         *skill.SkillsLoader
 	requirementRepo      domain.RequirementRepository
 	conversationRepo     domain.ConversationRecordRepository
-	replicaAgentManager  *domain.ReplicaAgentManager
+	replicaCleanupSvc   domain.ReplicaCleanupService
 	claudeCodeProcessor  claudecode.ClaudeCodeProcessorInterface
 	commandProcessor     *CommandProcessor
 }
@@ -253,7 +253,7 @@ func NewMessageProcessor(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRepo domain.ConversationRecordRepository,
-	replicaAgentManager *domain.ReplicaAgentManager,
+	replicaCleanupSvc domain.ReplicaCleanupService,
 ) *MessageProcessor {
 	registry := llm.NewToolRegistry()
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
@@ -280,8 +280,8 @@ func NewMessageProcessor(
 		skillsLoader:         skillsLoader,
 		requirementRepo:      requirementRepo,
 		conversationRepo:     conversationRepo,
-		replicaAgentManager:  replicaAgentManager,
-		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, replicaAgentManager, conversationRepo),
+		replicaCleanupSvc:   replicaCleanupSvc,
+		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, replicaCleanupSvc, conversationRepo),
 		commandProcessor:     commandProcessor,
 	}
 }
@@ -386,7 +386,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	// 获取 Agent 和 LLM 配置
-	agent, provider, err := p.getAgentAndProvider(msg)
+	agent, provider, err := p.getAgentAndProvider(ctx, msg)
 	if err != nil {
 		p.logger.Debug("获取 Agent/LLM 配置失败", zap.Error(err))
 		return fmt.Sprintf("收到消息: %s\n(Agent 或 LLM 配置未找到)", content)
@@ -410,24 +410,24 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 		// 创建流式回调
 		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
-		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "running", "")
+		p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "running", "")
 		// 更新需求的 Claude Runtime 状态
 		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-			p.updateRequirementClaudeRuntimeStatus(requirementID, "running", "")
+			p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "running", "")
 		}
 		// 使用流式处理
 		err := p.claudeCodeProcessor.ProcessWithStreaming(ctx, msg, ccSession, agent, callback)
 		if err != nil {
-			p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "failed", err.Error())
+			p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "failed", err.Error())
 			if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-				p.updateRequirementClaudeRuntimeStatus(requirementID, "failed", err.Error())
+				p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "failed", err.Error())
 			}
 			p.logger.Error("ClaudeCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
 		}
-		p.updateClaudeCodeRuntimeStatus(msg.SessionKey(), "completed", "")
+		p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "completed", "")
 		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-			p.updateRequirementClaudeRuntimeStatus(requirementID, "completed", "")
+			p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "completed", "")
 		}
 		// 更新 session 的 CLI Session ID
 		if ccSession.CliSessionID != "" {
@@ -473,7 +473,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	// 构建对话历史 prompt
-	prompt := p.buildPrompt(session, content, agent)
+	prompt := p.buildPrompt(ctx, session, content, agent)
 
 	// 开始 LLM 调用 span
 	ctx, llmSpanID := trace.StartSpan(ctx)
@@ -599,7 +599,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 				contextParams["channelCode"] = v
 			}
 		}
-		if agentToolsRegistry := p.buildAgentToolsRegistry(agent, contextParams); agentToolsRegistry != nil {
+		if agentToolsRegistry := p.buildAgentToolsRegistry(ctx, agent, contextParams); agentToolsRegistry != nil {
 			toolRegistries = append(toolRegistries, agentToolsRegistry)
 		}
 	}
@@ -685,12 +685,12 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	return response
 }
 
-func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(sessionKey, status, lastError string) {
+func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, sessionKey, status, lastError string) {
 	if p.sessionService == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
 
-	metadata, err := p.sessionService.GetSessionMetadata(context.Background(), sessionKey)
+	metadata, err := p.sessionService.GetSessionMetadata(ctx, sessionKey)
 	if err != nil {
 		p.logger.Debug("更新 Claude Code 运行状态时读取会话失败",
 			zap.String("session_key", sessionKey),
@@ -725,7 +725,7 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(sessionKey, status, las
 	}
 	merged["claude_code_runtime"] = runtime
 
-	if err := p.sessionService.UpdateSessionMetadata(context.Background(), application.UpdateSessionMetadataCommand{
+	if err := p.sessionService.UpdateSessionMetadata(ctx, application.UpdateSessionMetadataCommand{
 		SessionKey: sessionKey,
 		Metadata:   merged,
 	}); err != nil {
@@ -738,12 +738,12 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(sessionKey, status, las
 }
 
 // updateRequirementClaudeRuntimeStatus 更新需求的 Claude Runtime 状态
-func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(requirementID string, status string, lastError string) {
+func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(ctx context.Context, requirementID string, status string, lastError string) {
 	if p.requirementRepo == nil || strings.TrimSpace(requirementID) == "" {
 		return
 	}
 
-	req, err := p.requirementRepo.FindByID(context.Background(), domain.NewRequirementID(requirementID))
+	req, err := p.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 	if err != nil || req == nil {
 		p.logger.Debug("更新需求 Claude Runtime 状态时查找需求失败",
 			zap.String("requirement_id", requirementID),
@@ -767,7 +767,7 @@ func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(requirementID st
 		return
 	}
 
-	if err := p.requirementRepo.Save(context.Background(), req); err != nil {
+	if err := p.requirementRepo.Save(ctx, req); err != nil {
 		p.logger.Warn("更新需求 Claude Runtime 状态失败",
 			zap.String("requirement_id", requirementID),
 			zap.String("status", status),
@@ -777,7 +777,7 @@ func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(requirementID st
 }
 
 // getAgentAndProvider 根据消息获取 Agent 和 LLMProvider
-func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain.Agent, *domain.LLMProvider, error) {
+func (p *MessageProcessor) getAgentAndProvider(ctx context.Context, msg *bus.InboundMessage) (*domain.Agent, *domain.LLMProvider, error) {
 	if msg.Metadata == nil {
 		return nil, nil, fmt.Errorf("消息元数据为空")
 	}
@@ -791,7 +791,7 @@ func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain
 	}
 
 	// 获取 Agent
-	agent, err := p.agentRepo.FindByAgentCode(context.Background(), domain.NewAgentCode(agentCode))
+	agent, err := p.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
 	if err != nil || agent == nil {
 		p.logger.Debug("获取 Agent 失败", zap.String("agent_code", agentCode), zap.Error(err))
 		return nil, nil, err
@@ -799,7 +799,7 @@ func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain
 
 	// 获取用户的默认 LLM Provider
 	userCode := agent.UserCode()
-	provider, err := p.providerRepo.FindDefaultActive(context.Background(), userCode)
+	provider, err := p.providerRepo.FindDefaultActive(ctx, userCode)
 	if err != nil || provider == nil {
 		p.logger.Debug("获取 LLM Provider 失败", zap.String("user_code", userCode), zap.Error(err))
 		return agent, nil, err
@@ -809,7 +809,7 @@ func (p *MessageProcessor) getAgentAndProvider(msg *bus.InboundMessage) (*domain
 }
 
 // buildPrompt 构建 LLM prompt
-func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent *domain.Agent) string {
+func (p *MessageProcessor) buildPrompt(ctx context.Context, session *Session, userInput string, agent *domain.Agent) string {
 	var sb strings.Builder
 
 	// 添加 Agent 人格信息
@@ -829,7 +829,7 @@ func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent
 
 	// 添加 MCP Server 列表（如果有绑定）
 	if agent != nil && p.mcpService != nil {
-		mcpInfo := p.getAgentMCPServers(agent)
+		mcpInfo := p.getAgentMCPServers(ctx, agent)
 		if mcpInfo != "" {
 			sb.WriteString(mcpInfo)
 			sb.WriteString("\n")
@@ -856,12 +856,11 @@ func (p *MessageProcessor) buildPrompt(session *Session, userInput string, agent
 }
 
 // getAgentMCPServers 获取 Agent 绑定的 MCP Server 列表，生成提示词
-func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
+func (p *MessageProcessor) getAgentMCPServers(ctx context.Context, agent *domain.Agent) string {
 	if agent == nil {
 		return ""
 	}
 
-	ctx := context.Background()
 	bindings, err := p.mcpService.ListAgentBindings(ctx, agent.ID())
 	if err != nil || len(bindings) == 0 {
 		return ""
@@ -906,7 +905,7 @@ func (p *MessageProcessor) getAgentMCPServers(agent *domain.Agent) string {
 // 包括 Bash（按 agent.ToolsList 配置）、MCP（按 agent 绑定）、Skills（按 agent.SkillsList 配置）
 // 如果各项配置都为空，则不注册任何工具
 // contextParams 包含: agentCode, userCode, channelCode, sessionKey, traceID, spanID
-func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextParams map[string]string) *llm.ToolRegistry {
+func (p *MessageProcessor) buildAgentToolsRegistry(ctx context.Context, agent *domain.Agent, contextParams map[string]string) *llm.ToolRegistry {
 	if agent == nil {
 		return nil
 	}
@@ -926,7 +925,7 @@ func (p *MessageProcessor) buildAgentToolsRegistry(agent *domain.Agent, contextP
 
 	// 2. 注册 MCP 工具（如果 agent 有 MCP 绑定）
 	if p.mcpService != nil {
-		bindings, err := p.mcpService.ListAgentBindings(context.Background(), agent.ID())
+		bindings, err := p.mcpService.ListAgentBindings(ctx, agent.ID())
 		if err == nil && len(bindings) > 0 {
 			// 检查是否有任何启用的绑定
 			hasActiveBinding := false

@@ -1,8 +1,6 @@
 package domain
 
 import (
-	"context"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -1310,125 +1308,6 @@ func TestRequirement_TimeCopy(t *testing.T) {
 	}
 }
 
-func TestRequirement_MarkPROpened_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatus("coding"))
-
-	// 设置 replicaAgentCode 和 workspacePath
-	req.SetReplicaAgentCode("replica-001")
-	req.SetWorkspacePath("/tmp/test_workspace")
-
-	// 创建一个 mock agent repository
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-	req.SetReplicaAgentManager(manager)
-
-	req.MarkPROpened()
-
-	// 验证状态变更
-	if req.Status() != RequirementStatus("pr_opened") {
-		t.Errorf("期望状态变为 pr_opened, 实际为 %s", req.Status())
-	}
-
-	// 验证 replicaAgentCode 和 workspacePath 被清空
-	if req.ReplicaAgentCode() != "" {
-		t.Errorf("期望 ReplicaAgentCode 被清空, 实际为 %s", req.ReplicaAgentCode())
-	}
-
-	if req.WorkspacePath() != "" {
-		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
-	}
-}
-
-func TestRequirement_MarkFailed_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatus("coding"))
-
-	// 设置 replicaAgentCode 和 workspacePath
-	req.SetReplicaAgentCode("replica-001")
-	req.SetWorkspacePath("/tmp/test_workspace")
-
-	// 创建一个 mock agent repository
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-	req.SetReplicaAgentManager(manager)
-	req.MarkFailed("执行失败")
-
-	// 验证状态变更
-	if req.Status() != RequirementStatus("failed") {
-		t.Errorf("期望状态变为 failed, 实际为 %s", req.Status())
-	}
-
-	// 验证 replicaAgentCode 和 workspacePath 被清空
-	if req.ReplicaAgentCode() != "" {
-		t.Errorf("期望 ReplicaAgentCode 被清空, 实际为 %s", req.ReplicaAgentCode())
-	}
-
-	if req.WorkspacePath() != "" {
-		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
-	}
-}
-
-func TestRequirement_MarkCompleted_WithManager(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatus("coding"))
-
-	// 设置 replicaAgentCode 和 workspacePath
-	req.SetReplicaAgentCode("replica-001")
-	req.SetWorkspacePath("/tmp/test_workspace")
-
-	// 创建一个 mock agent repository
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-	req.SetReplicaAgentManager(manager)
-	req.MarkCompleted()
-
-	// 验证状态变更
-	if req.Status() != RequirementStatus("completed") {
-		t.Errorf("期望状态变为 completed, 实际为 %s", req.Status())
-	}
-
-	// 验证 replicaAgentCode 和 workspacePath 被清空
-	if req.ReplicaAgentCode() != "" {
-		t.Errorf("期望 ReplicaAgentCode 被清空, 实际为 %s", req.ReplicaAgentCode())
-	}
-
-	if req.WorkspacePath() != "" {
-		t.Errorf("期望 WorkspacePath 被清空, 实际为 %s", req.WorkspacePath())
-	}
-}
-
-func TestRequirement_MarkPROpened_WithManager_EmptyCodes(t *testing.T) {
-	req := createRequirementWithStatus(RequirementStatus("coding"))
-
-	// 不设置 replicaAgentCode 和 workspacePath（为空）
-	// 创建一个 mock agent repository
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-	req.SetReplicaAgentManager(manager)
-
-	// 不应 panic
-	req.MarkPROpened()
-
-	// 验证状态变更
-	if req.Status() != RequirementStatus("pr_opened") {
-		t.Errorf("期望状态变为 pr_opened, 实际为 %s", req.Status())
-	}
-}
-
-func TestNewReplicaAgentManager(t *testing.T) {
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-
-	if manager == nil {
-		t.Error("NewReplicaAgentManager 不应返回 nil")
-	}
-}
-
-func TestReplicaAgentManager_EnsureDisposed_EmptyCode(t *testing.T) {
-	mockRepo := &mockAgentRepository{}
-	manager := NewReplicaAgentManager(mockRepo)
-
-	// 空 code 不应 panic 或出错
-	manager.EnsureDisposed(context.Background(), "", "/tmp/workspace")
-}
 
 func TestNewRequirement_Success_WithEmptyWorkspace(t *testing.T) {
 	req, err := NewRequirement(
@@ -1522,32 +1401,6 @@ func TestRequirement_FromSnapshot_WithWhitespaceWorkspace(t *testing.T) {
 	}
 }
 
-// mockAgentRepository 是一个模拟的 AgentRepository
-type mockAgentRepository struct{}
-
-func (m *mockAgentRepository) FindByAgentCode(ctx context.Context, code AgentCode) (*Agent, error) {
-	return nil, errors.New("agent not found")
-}
-
-func (m *mockAgentRepository) Save(ctx context.Context, agent *Agent) error {
-	return nil
-}
-
-func (m *mockAgentRepository) FindByID(ctx context.Context, id AgentID) (*Agent, error) {
-	return nil, nil
-}
-
-func (m *mockAgentRepository) FindByUserCode(ctx context.Context, userCode string) ([]*Agent, error) {
-	return nil, nil
-}
-
-func (m *mockAgentRepository) FindAll(ctx context.Context) ([]*Agent, error) {
-	return nil, nil
-}
-
-func (m *mockAgentRepository) Delete(ctx context.Context, id AgentID) error {
-	return nil
-}
 
 // 辅助函数：创建指定状态的需求
 func createRequirementWithStatus(status RequirementStatus) *Requirement {

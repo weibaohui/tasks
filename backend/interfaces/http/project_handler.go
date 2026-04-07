@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -119,7 +118,7 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	// 刷新心跳调度
 	if h.heartbeatScheduler != nil {
-		if err := h.heartbeatScheduler.RefreshSchedule(context.Background()); err != nil {
+		if err := h.heartbeatScheduler.RefreshSchedule(r.Context()); err != nil {
 			log.Printf("failed to refresh heartbeat schedule: %v", err)
 		}
 	}
