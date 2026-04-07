@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/weibh/taskmanager/infrastructure/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,8 +64,8 @@ func (s *SkillsLoader) GetSearchPaths() []string {
 func detectDefaultSearchPaths(workspace string) []string {
 	var paths []string
 
-	// 1. 环境变量指定的路径（最高优先级，如果存在）
-	if envPath := os.Getenv("TASKMANAGER_SKILLS_DIR"); envPath != "" {
+	// 1. 配置文件或环境变量指定的路径（最高优先级，如果存在）
+	if envPath := config.GetSkillsDir(); envPath != "" {
 		if isDir(envPath) {
 			paths = append(paths, envPath)
 		}

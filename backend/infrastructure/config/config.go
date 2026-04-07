@@ -13,9 +13,11 @@ import (
 // Config 配置结构
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig  `yaml:"database"`
+	Database DatabaseConfig `yaml:"database"`
 	API      APIConfig      `yaml:"api"`
-	Logging  LoggingConfig   `yaml:"logging"`
+	Logging  LoggingConfig  `yaml:"logging"`
+	Agent    AgentConfig    `yaml:"agent"`
+	Skills   SkillsConfig   `yaml:"skills"`
 }
 
 // ServerConfig 服务器配置
@@ -37,6 +39,17 @@ type APIConfig struct {
 // LoggingConfig 日志配置
 type LoggingConfig struct {
 	Level string `yaml:"level"`
+}
+
+// AgentConfig Agent 配置
+type AgentConfig struct {
+	DefaultModel       string `yaml:"default_model"`        // 默认模型名称
+	AIWorkSpaceRoot   string `yaml:"ai_workspace_root"`   // AI 工作区根目录
+}
+
+// SkillsConfig Skills 配置
+type SkillsConfig struct {
+	Dir string `yaml:"dir"` // Skills 搜索目录
 }
 
 // Load 加载配置
@@ -75,6 +88,13 @@ func defaultConfig() *Config {
 		},
 		Logging: LoggingConfig{
 			Level: "info",
+		},
+		Agent: AgentConfig{
+			DefaultModel:     "",
+			AIWorkSpaceRoot: "/tmp/ai-devops",
+		},
+		Skills: SkillsConfig{
+			Dir: "",
 		},
 	}
 }
@@ -145,6 +165,26 @@ func applyEnvOverrides(cfg *Config) {
 	if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
 		cfg.Database.Path = dbPath
 	}
+
+	// LLM_MODEL 环境变量
+	if model := strings.TrimSpace(os.Getenv("LLM_MODEL")); model != "" {
+		cfg.Agent.DefaultModel = model
+	}
+
+	// OPENAI_MODEL 环境变量（备用）
+	if model := strings.TrimSpace(os.Getenv("OPENAI_MODEL")); model != "" && cfg.Agent.DefaultModel == "" {
+		cfg.Agent.DefaultModel = model
+	}
+
+	// AI_DEVOPS_WORKSPACE_ROOT 环境变量
+	if workspaceRoot := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); workspaceRoot != "" {
+		cfg.Agent.AIWorkSpaceRoot = workspaceRoot
+	}
+
+	// TASKMANAGER_SKILLS_DIR 环境变量
+	if skillsDir := os.Getenv("TASKMANAGER_SKILLS_DIR"); skillsDir != "" {
+		cfg.Skills.Dir = skillsDir
+	}
 }
 
 // GetDatabasePath 获取数据库路径
@@ -175,6 +215,33 @@ func GetAPIToken() string {
 		return ""
 	}
 	return cfg.API.Token
+}
+
+// GetAgentDefaultModel 获取 Agent 默认模型
+func GetAgentDefaultModel() string {
+	cfg, err := Load()
+	if err != nil {
+		return ""
+	}
+	return cfg.Agent.DefaultModel
+}
+
+// GetAgentAIWorkSpaceRoot 获取 AI 工作区根目录
+func GetAgentAIWorkSpaceRoot() string {
+	cfg, err := Load()
+	if err != nil {
+		return "/tmp/ai-devops"
+	}
+	return cfg.Agent.AIWorkSpaceRoot
+}
+
+// GetSkillsDir 获取 Skills 搜索目录
+func GetSkillsDir() string {
+	cfg, err := Load()
+	if err != nil {
+		return ""
+	}
+	return cfg.Skills.Dir
 }
 
 // EnsureConfigDir 确保配置目录存在

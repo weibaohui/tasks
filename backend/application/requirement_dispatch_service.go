@@ -11,6 +11,7 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -320,10 +321,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 }
 
 func workspaceRootPath() string {
-	if p := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); p != "" {
-		return p
-	}
-	return "/tmp/ai-devops"
+	return config.GetAgentAIWorkSpaceRoot()
 }
 
 func requirementWorkspaceRoot(requirement *domain.Requirement) string {
