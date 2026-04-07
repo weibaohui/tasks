@@ -11,7 +11,6 @@ var (
 	ErrRequirementIDRequired        = errors.New("requirement id is required")
 	ErrRequirementProjectIDRequired = errors.New("requirement project id is required")
 	ErrRequirementTitleRequired     = errors.New("requirement title is required")
-	ErrRequirementInvalidStatus     = errors.New("requirement status is invalid")
 	ErrRequirementCannotDispatch    = errors.New("requirement cannot be dispatched in current state")
 )
 
@@ -425,16 +424,13 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 }
 
 func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
-	if !s.Status.IsValid() {
-		return ErrRequirementInvalidStatus
-	}
 	r.id = s.ID
 	r.projectID = s.ProjectID
 	r.title = s.Title
 	r.description = s.Description
 	r.acceptanceCriteria = s.AcceptanceCriteria
 	r.tempWorkspaceRoot = strings.TrimSpace(s.TempWorkspaceRoot)
-	r.status = s.Status.Normalize() // 规范化状态值，兼容旧数据
+	r.status = s.Status.Normalize() // 规范化状态值，兼容旧数据（空字符串 -> todo）
 	r.assigneeAgentCode = s.AssigneeAgentCode
 	r.replicaAgentCode = s.ReplicaAgentCode
 	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)
