@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
 var (
@@ -120,9 +119,6 @@ func applyDefaultAgentCreateConfig(cmd *CreateAgentCommand) {
 
 // defaultAgentModelFromEnv 获取默认模型名称
 func defaultAgentModelFromEnv() string {
-	if v := config.GetAgentDefaultModel(); v != "" {
-		return v
-	}
 	return domain.DefaultModel
 }
 

@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -690,79 +689,6 @@ func TestAgentService_CreateAgent_DuplicateCode(t *testing.T) {
 
 	if err != ErrAgentCodeDuplicated {
 		t.Errorf("期望 ErrAgentCodeDuplicated, 实际为 %v", err)
-	}
-}
-
-// TestDefaultAgentModelFromEnv 测试从环境变量读取默认模型
-func TestDefaultAgentModelFromEnv(t *testing.T) {
-	tests := []struct {
-		name        string
-		llmModel    string
-		openaiModel string
-		expected    string
-	}{
-		{
-			name:        "LLM_MODEL优先",
-			llmModel:    "claude-3-opus",
-			openaiModel: "gpt-4",
-			expected:    "claude-3-opus",
-		},
-		{
-			name:        "OPENAI_MODEL作为回退",
-			llmModel:    "",
-			openaiModel: "gpt-4-turbo",
-			expected:    "gpt-4-turbo",
-		},
-		{
-			name:        "两者都为空使用domain默认值",
-			llmModel:    "",
-			openaiModel: "",
-			expected:    domain.DefaultModel,
-		},
-		{
-			name:        "空白字符被trim",
-			llmModel:    "  claude-3-sonnet  ",
-			openaiModel: "",
-			expected:    "claude-3-sonnet",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// 使用 LookupEnv 捕获原始值
-			origLLMModel, llmModelExists := os.LookupEnv("LLM_MODEL")
-			origOpenaiModel, openaiModelExists := os.LookupEnv("OPENAI_MODEL")
-
-			t.Cleanup(func() {
-				if llmModelExists {
-					os.Setenv("LLM_MODEL", origLLMModel)
-				} else {
-					os.Unsetenv("LLM_MODEL")
-				}
-				if openaiModelExists {
-					os.Setenv("OPENAI_MODEL", origOpenaiModel)
-				} else {
-					os.Unsetenv("OPENAI_MODEL")
-				}
-			})
-
-			// 根据测试用例设置/清除环境变量
-			if tt.llmModel != "" {
-				os.Setenv("LLM_MODEL", tt.llmModel)
-			} else {
-				os.Unsetenv("LLM_MODEL")
-			}
-			if tt.openaiModel != "" {
-				os.Setenv("OPENAI_MODEL", tt.openaiModel)
-			} else {
-				os.Unsetenv("OPENAI_MODEL")
-			}
-
-			result := defaultAgentModelFromEnv()
-			if result != tt.expected {
-				t.Errorf("期望 %s, 实际为 %s", tt.expected, result)
-			}
-		})
 	}
 }
 

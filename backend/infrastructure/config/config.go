@@ -42,7 +42,6 @@ type LoggingConfig struct {
 
 // AgentConfig Agent 配置
 type AgentConfig struct {
-	DefaultModel     string `yaml:"default_model"`      // 默认模型名称
 	AIWorkSpaceRoot string `yaml:"ai_workspace_root"` // AI 工作区根目录
 }
 
@@ -84,7 +83,6 @@ func defaultConfig() *Config {
 			Level: "info",
 		},
 		Agent: AgentConfig{
-			DefaultModel:     "",
 			AIWorkSpaceRoot: "/tmp/ai-devops",
 		},
 	}
@@ -157,16 +155,6 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Database.Path = dbPath
 	}
 
-	// LLM_MODEL 环境变量
-	if model := strings.TrimSpace(os.Getenv("LLM_MODEL")); model != "" {
-		cfg.Agent.DefaultModel = model
-	}
-
-	// OPENAI_MODEL 环境变量（备用）
-	if model := strings.TrimSpace(os.Getenv("OPENAI_MODEL")); model != "" && cfg.Agent.DefaultModel == "" {
-		cfg.Agent.DefaultModel = model
-	}
-
 	// AI_DEVOPS_WORKSPACE_ROOT 环境变量
 	if workspaceRoot := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); workspaceRoot != "" {
 		cfg.Agent.AIWorkSpaceRoot = workspaceRoot
@@ -201,15 +189,6 @@ func GetAPIToken() string {
 		return ""
 	}
 	return cfg.API.Token
-}
-
-// GetAgentDefaultModel 获取 Agent 默认模型
-func GetAgentDefaultModel() string {
-	cfg, err := Load()
-	if err != nil {
-		return ""
-	}
-	return cfg.Agent.DefaultModel
 }
 
 // GetAgentAIWorkSpaceRoot 获取 AI 工作区根目录
