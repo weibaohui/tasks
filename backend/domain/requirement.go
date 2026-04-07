@@ -70,6 +70,7 @@ type Requirement struct {
 	acceptanceCriteria string
 	tempWorkspaceRoot  string
 	status             RequirementStatus
+	previousStatus     RequirementStatus // 前一个状态，用于追踪状态转换历史
 	assigneeAgentCode  string
 	replicaAgentCode   string
 	dispatchSessionKey string
@@ -144,6 +145,8 @@ func (r *Requirement) Description() string              { return r.description }
 func (r *Requirement) AcceptanceCriteria() string       { return r.acceptanceCriteria }
 func (r *Requirement) TempWorkspaceRoot() string        { return r.tempWorkspaceRoot }
 func (r *Requirement) Status() RequirementStatus        { return r.status }
+// PreviousStatus 返回前一个状态（用于追踪状态转换历史）
+func (r *Requirement) PreviousStatus() RequirementStatus { return r.previousStatus }
 func (r *Requirement) AssigneeAgentCode() string        { return r.assigneeAgentCode }
 func (r *Requirement) ReplicaAgentCode() string         { return r.replicaAgentCode }
 func (r *Requirement) DispatchSessionKey() string       { return r.dispatchSessionKey }
@@ -203,9 +206,14 @@ func (r *Requirement) SetRequirementType(t RequirementType) {
 
 // SyncStatusFromStateMachine 从状态机同步状态
 // 这是状态机的值同步到需求的推荐方式
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) SyncStatusFromStateMachine(stateID string) {
-	r.status = RequirementStatus(stateID)
-	r.updatedAt = time.Now()
+	newStatus := RequirementStatus(stateID)
+	if r.status != newStatus {
+		r.previousStatus = r.status
+		r.status = newStatus
+		r.updatedAt = time.Now()
+	}
 }
 
 func (r *Requirement) CanDispatch() bool {
@@ -246,12 +254,16 @@ func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
 // Redispatch 重置需求状态，允许重新派发
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 保留此方法用于向后兼容，新代码应使用状态机服务
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) Redispatch() error {
 	if !r.CanRedispatch() {
 		return ErrRequirementCannotDispatch
 	}
 
 	now := time.Now()
+	if r.status != RequirementStatusTodo {
+		r.previousStatus = r.status
+	}
 	r.status = RequirementStatusTodo
 	r.assigneeAgentCode = ""
 	r.replicaAgentCode = ""
@@ -279,13 +291,18 @@ func (r *Requirement) UpdateContent(title, description, acceptanceCriteria, temp
 
 // StartDispatch 开始派发
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	if !r.CanDispatch() {
 		return ErrRequirementCannotDispatch
 	}
 
 	now := time.Now()
-	r.status = RequirementStatus("preparing")
+	newStatus := RequirementStatus("preparing")
+	if r.status != newStatus {
+		r.previousStatus = r.status
+	}
+	r.status = newStatus
 	r.assigneeAgentCode = assigneeAgentCode
 	r.startedAt = &now
 	r.lastError = ""
@@ -296,12 +313,17 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 
 // MarkCoding 标记编码中
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 	if r.status != "preparing" {
 		return ErrRequirementCannotDispatch
 	}
 
-	r.status = RequirementStatus("coding")
+	newStatus := RequirementStatus("coding")
+	if r.status != newStatus {
+		r.previousStatus = r.status
+	}
+	r.status = newStatus
 	r.workspacePath = workspacePath
 	r.replicaAgentCode = replicaAgentCode
 	now := time.Now()
@@ -313,9 +335,14 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 // MarkPROpened 标记 PR 已打开
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkPROpened() {
 	now := time.Now()
-	r.status = RequirementStatus("pr_opened")
+	newStatus := RequirementStatus("pr_opened")
+	if r.status != newStatus {
+		r.previousStatus = r.status
+	}
+	r.status = newStatus
 	r.lastError = ""
 	r.completedAt = &now
 	r.updatedAt = now
@@ -326,8 +353,13 @@ func (r *Requirement) MarkPROpened() {
 // MarkFailed 标记失败
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkFailed(lastError string) {
-	r.status = RequirementStatus("failed")
+	newStatus := RequirementStatus("failed")
+	if r.status != newStatus {
+		r.previousStatus = r.status
+	}
+	r.status = newStatus
 	r.lastError = lastError
 	now := time.Now()
 	r.updatedAt = now
@@ -338,8 +370,13 @@ func (r *Requirement) MarkFailed(lastError string) {
 // MarkCompleted 标记需求为已完成（Claude Code 正常结束）
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
+// 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkCompleted() {
-	r.status = RequirementStatus("completed")
+	newStatus := RequirementStatus("completed")
+	if r.status != newStatus {
+		r.previousStatus = r.status
+	}
+	r.status = newStatus
 	now := time.Now()
 	r.completedAt = &now
 	r.updatedAt = now

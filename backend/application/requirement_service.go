@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/domain/state_machine"
 )
 
 var (
@@ -27,6 +28,12 @@ type UpdateRequirementCommand struct {
 	Description        *string
 	AcceptanceCriteria *string
 	TempWorkspaceRoot  *string
+	RequirementType    *string
+}
+
+type UpdateRequirementStatusCommand struct {
+	ID        domain.RequirementID
+	NewStatus string
 }
 
 type ReportRequirementPRCommand struct {
@@ -38,10 +45,11 @@ type RedispatchRequirementCommand struct {
 }
 
 type RequirementApplicationService struct {
-	requirementRepo    domain.RequirementRepository
-	projectRepo        domain.ProjectRepository
-	idGenerator        domain.IDGenerator
-	replicaCleanupSvc  domain.ReplicaCleanupService
+	requirementRepo   domain.RequirementRepository
+	projectRepo       domain.ProjectRepository
+	idGenerator       domain.IDGenerator
+	replicaCleanupSvc domain.ReplicaCleanupService
+	stateMachineRepo  state_machine.Repository
 }
 
 func NewRequirementApplicationService(
@@ -49,12 +57,34 @@ func NewRequirementApplicationService(
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
 	replicaCleanupSvc domain.ReplicaCleanupService,
+	stateMachineRepo state_machine.Repository,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
 		requirementRepo:   requirementRepo,
 		projectRepo:       projectRepo,
 		idGenerator:       idGenerator,
 		replicaCleanupSvc: replicaCleanupSvc,
+		stateMachineRepo:  stateMachineRepo,
+	}
+}
+
+// recordTransitionIfNeeded 如果状态发生变化，记录转换日志
+func (s *RequirementApplicationService) recordTransitionIfNeeded(ctx context.Context, requirement *domain.Requirement, trigger, triggeredBy, remark string) {
+	if s.stateMachineRepo == nil {
+		return
+	}
+	previousStatus := requirement.PreviousStatus()
+	currentStatus := requirement.Status()
+	if previousStatus != "" && previousStatus != currentStatus {
+		log := state_machine.NewTransitionLog(
+			requirement.ID().String(),
+			string(previousStatus),
+			string(currentStatus),
+			trigger,
+			triggeredBy,
+			remark,
+		)
+		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
 	}
 }
 

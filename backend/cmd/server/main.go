@@ -208,6 +208,7 @@ func main() {
 		projectRepo,
 		idGenerator,
 		replicaCleanupSvc,
+		stateMachineRepo,
 	)
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
