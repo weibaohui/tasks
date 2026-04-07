@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
+import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
@@ -510,10 +510,51 @@ export const ProjectRequirementPage: React.FC = () => {
   };
 
   const requirementColumns = [
-    { title: '标题', dataIndex: 'title', key: 'title' },
+    {
+      title: '操作',
+      key: 'action',
+      fixed: 'left' as const,
+      width: 120,
+      render: (_: unknown, item: Requirement) => {
+        const menuItems: MenuProps['items'] = [
+          { key: 'detail', label: '详情', onClick: () => openRequirementDetail(item) },
+          { key: 'edit', label: '编辑', onClick: () => openEditRequirement(item) },
+          { key: 'dispatch', label: '派发', disabled: item.status !== 'todo', onClick: () => openDispatchModal(item) },
+          { key: 'copy', label: '复制并派发', disabled: item.status === 'todo', onClick: () => handleCopyAndDispatch(item) },
+        ];
+        if (item.trace_id) {
+          menuItems.push({ key: 'trace', label: '对话链路', onClick: () => { setCurrentTraceId(item.trace_id!); setTraceViewerVisible(true); } });
+        }
+        menuItems.push(
+          { type: 'divider' },
+          {
+            key: 'delete',
+            label: (
+              <Popconfirm
+                title="确认删除"
+                description={`确定要删除需求 "${item.title}" 吗？`}
+                onConfirm={() => handleDeleteRequirement(item)}
+                okText="确认"
+                cancelText="取消"
+              >
+                <span style={{ color: '#ff4d4f' }}>删除</span>
+              </Popconfirm>
+            ),
+            danger: true,
+          }
+        );
+        return (
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Button type="link">操作</Button>
+          </Dropdown>
+        );
+      },
+    },
+    { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
     {
       title: '类型',
       key: 'requirement_type',
+      width: 90,
       render: (_: unknown, item: Requirement) => {
         const display = getTypeDisplay(item.requirement_type || 'normal');
         return <Tag color={display.color}>{display.label}</Tag>;
@@ -522,26 +563,25 @@ export const ProjectRequirementPage: React.FC = () => {
     {
       title: '状态',
       key: 'status',
+      width: 120,
       render: (_: unknown, item: Requirement) => (
-        <Space>
-          <Tag color={statusColorMap[item.status] || 'default'}>{item.status}</Tag>
-        </Space>
+        <Tag color={statusColorMap[item.status] || 'default'}>{item.status}</Tag>
       ),
     },
     {
       title: 'Claude状态',
       key: 'claude_runtime',
+      width: 140,
       render: (_: unknown, item: Requirement) => {
         const runtimeStatus = item.claude_runtime?.status || '';
         if (!runtimeStatus) {
           return <span>-</span>;
         }
-        // 根据 status 字段计算 is_running
         const isRunning = runtimeStatus === 'running';
         return (
-          <Space>
+          <Space size={4}>
             <Tag color={claudeRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
-            {isRunning ? <Tag color="processing">运行中</Tag> : <Tag>已停止</Tag>}
+            {isRunning && <Tag color="processing">运行中</Tag>}
           </Space>
         );
       },
@@ -549,6 +589,7 @@ export const ProjectRequirementPage: React.FC = () => {
     {
       title: 'Token消耗',
       key: 'tokens',
+      width: 100,
       render: (_: unknown, item: Requirement) => {
         const totalTokens = item.total_tokens || 0;
         if (totalTokens === 0) {
@@ -562,40 +603,11 @@ export const ProjectRequirementPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, item: Requirement) => (
-        <Space>
-          <Button type="link" onClick={() => openRequirementDetail(item)}>
-            详情
-          </Button>
-          <Button type="link" onClick={() => openEditRequirement(item)}>
-            编辑
-          </Button>
-          <Button type="link" disabled={item.status !== 'todo'} onClick={() => openDispatchModal(item)}>
-            派发
-          </Button>
-          <Button type="link" disabled={item.status === 'todo'} onClick={() => handleCopyAndDispatch(item)}>
-            复制并派发
-          </Button>
-          {item.trace_id && (
-            <Button type="link" onClick={() => { setCurrentTraceId(item.trace_id!); setTraceViewerVisible(true); }}>
-              对话链路
-            </Button>
-          )}
-          <Popconfirm
-            title="确认删除"
-            description={`确定要删除需求 "${item.title}" 吗？`}
-            onConfirm={() => handleDeleteRequirement(item)}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Button type="link" danger>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 160,
+      render: (createdAt: string) => createdAt ? new Date(createdAt).toLocaleString() : '-',
     },
   ];
 
