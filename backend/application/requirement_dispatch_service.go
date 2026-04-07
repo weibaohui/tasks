@@ -154,7 +154,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 获取当前状态机状态和 AI Guide
 	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
 
-	// 记录状态转换日志（如果状态发生变化）
+	// 记录状态转换日志
 	if s.stateMachineRepo != nil && currentState != "" {
 		fromStatus := string(requirement.Status())
 		log := state_machine.NewTransitionLog(
@@ -166,6 +166,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 			"派发需求",
 		)
 		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+
+		// 保存/更新 RequirementState
+		s.saveRequirementState(ctx, requirement, currentState)
 	}
 
 	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
@@ -332,6 +335,33 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 
 	// 返回当前状态和 AI Guide
 	return reqState.CurrentState, sm.Config.GetStateAIGuide(reqState.CurrentState)
+}
+
+// saveRequirementState 保存需求状态到状态机
+func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, requirement *domain.Requirement, currentState string) {
+	// 获取项目状态机映射
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+	if err != nil {
+		return
+	}
+
+	snap := psm.ToSnapshot()
+
+	// 获取状态机配置
+	sm, err := s.stateMachineRepo.GetStateMachine(ctx, snap.StateMachineID)
+	if err != nil {
+		return
+	}
+
+	// 获取状态信息
+	stateInfo := sm.Config.GetState(currentState)
+	if stateInfo == nil {
+		return
+	}
+
+	// 创建或更新 RequirementState
+	rs := state_machine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
+	_ = s.stateMachineRepo.SaveRequirementState(ctx, rs)
 }
 
 func workspaceRootPath() string {
