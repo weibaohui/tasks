@@ -124,34 +124,6 @@ func TestNewRequirement_TitleWithOnlySpaces(t *testing.T) {
 	}
 }
 
-func TestRequirementStatus_IsValid(t *testing.T) {
-	tests := []struct {
-		name     string
-		status   RequirementStatus
-		expected bool
-	}{
-		{"todo 状态有效", RequirementStatusTodo, true},
-		{"preparing 状态有效", "preparing", true},
-		{"coding 状态有效", "coding", true},
-		{"pr_opened 状态有效", "pr_opened", true},
-		{"failed 状态有效", "failed", true},
-		{"completed 状态有效", "completed", true},
-		{"done 状态有效", "done", true},
-		{"旧状态 in_progress 兼容", "in_progress", true},
-		{"任意非空字符串都有效（状态由状态机定义）", "invalid_status", true},
-		{"空字符串无效", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.status.IsValid()
-			if result != tt.expected {
-				t.Errorf("状态 %s: 期望 %v, 实际 %v", tt.status, tt.expected, result)
-			}
-		})
-	}
-}
-
 func TestRequirementStatus_Normalize(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1308,7 +1280,6 @@ func TestRequirement_TimeCopy(t *testing.T) {
 	}
 }
 
-
 func TestNewRequirement_Success_WithEmptyWorkspace(t *testing.T) {
 	req, err := NewRequirement(
 		NewRequirementID("req-001"),
@@ -1400,7 +1371,6 @@ func TestRequirement_FromSnapshot_WithWhitespaceWorkspace(t *testing.T) {
 		t.Errorf("期望 DispatchSessionKey 去除空格, 实际为 '%s'", req.DispatchSessionKey())
 	}
 }
-
 
 // 辅助函数：创建指定状态的需求
 func createRequirementWithStatus(status RequirementStatus) *Requirement {

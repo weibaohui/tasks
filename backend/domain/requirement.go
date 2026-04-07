@@ -32,12 +32,6 @@ type RequirementStatus string
 // 这里只保留 todo 作为默认值，其他状态从状态机获取。
 const RequirementStatusTodo RequirementStatus = "todo"
 
-// IsValid 检查状态是否有效（兼容旧数据）
-func (s RequirementStatus) IsValid() bool {
-	// 任何非空字符串都是有效状态（状态由状态机定义）
-	return s != ""
-}
-
 // Normalize 规范化状态值，将旧值转换为 todo
 // 注意：其他状态不再自动转换，改为由状态机定义
 func (s RequirementStatus) Normalize() RequirementStatus {
