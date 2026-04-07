@@ -255,11 +255,20 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
       name,
       description,
       initial_state: visualStates.find((s) => !s.isFinal)?.id || visualStates[0]?.id || '',
-      states: visualStates.map((s) => ({
-        id: s.id,
-        name: s.name,
-        is_final: s.isFinal,
-      })),
+      states: visualStates.map((s) => {
+        const state: Record<string, unknown> = {
+          id: s.id,
+          name: s.name,
+          is_final: s.isFinal,
+        };
+        // 只在有值时添加 AI Guide 字段
+        if (s.aiGuide) state.ai_guide = s.aiGuide;
+        if (s.autoInit) state.auto_init = s.autoInit;
+        if (s.successCriteria) state.success_criteria = s.successCriteria;
+        if (s.failureCriteria) state.failure_criteria = s.failureCriteria;
+        if (s.triggers && s.triggers.length > 0) state.triggers = s.triggers;
+        return state;
+      }),
       transitions: visualTransitions.map((t) => ({
         from: t.from,
         to: t.to,
