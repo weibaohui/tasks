@@ -163,6 +163,7 @@ states:
       3. 确认：任务目标、验收标准、工作分支
 
       理解完毕后 → 转换到 analyzing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger understood
 
   - id: analyzing
     name: 分析实现方案
@@ -181,6 +182,7 @@ states:
       - 应用服务是贫血模型（不含业务逻辑）
 
       分析完毕后 → 转换到 implementing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger analyzed
 
   - id: implementing
     name: 编写代码
@@ -199,6 +201,7 @@ states:
       - 先写测试再写实现（推荐）
 
       代码完成后 → 转换到 submitting
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger implemented
 
   - id: submitting
     name: 提交PR
@@ -214,7 +217,7 @@ states:
       5. gh pr create --title "<标题>" --body "<描述>"
 
       PR 创建成功 → 转换到 completed
-      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger pr_submitted
 
   - id: completed
     name: 已完成
@@ -271,6 +274,7 @@ states:
     ai_guide: |
       ## 状态：处理中
       进入 PR 审查阶段，按子状态执行。
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start_review
 
   - id: pr_fetching
     name: 获取PR信息
@@ -283,6 +287,7 @@ states:
       3. 查看 PR 描述和变更内容
 
       理解 PR 的背景和目的后 → 转换到 reviewing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger pr_fetched
 
   - id: reviewing
     name: 审查代码
@@ -302,6 +307,7 @@ states:
       - 代码是否有明显问题？
 
       审查完毕 → 转换到 deciding
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger review_completed
 
   - id: deciding
     name: 做出决策
@@ -313,14 +319,17 @@ states:
       **情况1 - 可以评论 lgtm**：
       - 所有评论已解决、CI 通过、代码审查通过
       → 转换到 commenting
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger need_lgtm
 
       **情况2 - 需要修复**：
       - 有未解决的评论、CI 失败、代码有问题
       → 转换到 creating_fix_requirement
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger needs_fix
 
       **情况3 - 可以直接合并**：
       - 已有 /lgtm 评论
       → 转换到 merging
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger can_merge
 
   - id: commenting
     name: 写入lgtm评论
@@ -329,6 +338,7 @@ states:
       ## 子状态：写入 /lgtm 评论
       执行步骤：gh pr comment <PR_NUMBER> --body "/lgtm"
       评论成功后 → 转换到 deciding（再次检查是否可以直接合并）
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger lgtm_posted
 
   - id: merging
     name: 合并PR
@@ -337,6 +347,7 @@ states:
       ## 子状态：合并 PR
       执行步骤：gh pr merge <PR_NUMBER> --squash --delete-branch
       合并成功后 → 转换到 completed
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger merged
 
   - id: creating_fix_requirement
     name: 创建修复需求
@@ -352,7 +363,7 @@ states:
 
       **重要**：不合并此 PR，创建需求让其他 AI 修复
       创建需求后 → 转换到 completed
-      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger requirement_created
 
   - id: completed
     name: 已完成
@@ -439,6 +450,7 @@ states:
     ai_guide: |
       ## 状态：处理中
       进入优化点分析阶段，按子状态执行。
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start_analysis
 
   - id: selecting_direction
     name: 选择优化方向
@@ -469,6 +481,7 @@ states:
       → 使用 grep/vexor 分析
 
       选择方向后 → 转换到 analyzing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger direction_selected
 
   - id: analyzing
     name: 深入分析
@@ -487,6 +500,7 @@ states:
       - 优先优化影响大的点
 
       分析完毕后 → 转换到 creating_requirement
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger analysis_completed
 
   - id: creating_requirement
     name: 创建优化需求
@@ -501,7 +515,7 @@ states:
       - acceptance: 优化完成并验证通过
 
       创建需求后 → 转换到 completed
-      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger requirement_created
   - id: completed
     name: 已完成
     is_final: true
