@@ -17,7 +17,6 @@ type Config struct {
 	API      APIConfig      `yaml:"api"`
 	Logging  LoggingConfig  `yaml:"logging"`
 	Agent    AgentConfig    `yaml:"agent"`
-	Skills   SkillsConfig   `yaml:"skills"`
 }
 
 // ServerConfig 服务器配置
@@ -43,13 +42,8 @@ type LoggingConfig struct {
 
 // AgentConfig Agent 配置
 type AgentConfig struct {
-	DefaultModel       string `yaml:"default_model"`        // 默认模型名称
-	AIWorkSpaceRoot   string `yaml:"ai_workspace_root"`   // AI 工作区根目录
-}
-
-// SkillsConfig Skills 配置
-type SkillsConfig struct {
-	Dir string `yaml:"dir"` // Skills 搜索目录
+	DefaultModel     string `yaml:"default_model"`      // 默认模型名称
+	AIWorkSpaceRoot string `yaml:"ai_workspace_root"` // AI 工作区根目录
 }
 
 // Load 加载配置
@@ -92,9 +86,6 @@ func defaultConfig() *Config {
 		Agent: AgentConfig{
 			DefaultModel:     "",
 			AIWorkSpaceRoot: "/tmp/ai-devops",
-		},
-		Skills: SkillsConfig{
-			Dir: "",
 		},
 	}
 }
@@ -180,11 +171,6 @@ func applyEnvOverrides(cfg *Config) {
 	if workspaceRoot := os.Getenv("AI_DEVOPS_WORKSPACE_ROOT"); workspaceRoot != "" {
 		cfg.Agent.AIWorkSpaceRoot = workspaceRoot
 	}
-
-	// TASKMANAGER_SKILLS_DIR 环境变量
-	if skillsDir := os.Getenv("TASKMANAGER_SKILLS_DIR"); skillsDir != "" {
-		cfg.Skills.Dir = skillsDir
-	}
 }
 
 // GetDatabasePath 获取数据库路径
@@ -233,15 +219,6 @@ func GetAgentAIWorkSpaceRoot() string {
 		return "/tmp/ai-devops"
 	}
 	return cfg.Agent.AIWorkSpaceRoot
-}
-
-// GetSkillsDir 获取 Skills 搜索目录
-func GetSkillsDir() string {
-	cfg, err := Load()
-	if err != nil {
-		return ""
-	}
-	return cfg.Skills.Dir
 }
 
 // EnsureConfigDir 确保配置目录存在
