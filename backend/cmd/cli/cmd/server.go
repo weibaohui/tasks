@@ -66,6 +66,10 @@ var serverStartCmd = &cobra.Command{
 		if port != 0 {
 			env = append(env, fmt.Sprintf("SERVER_PORT=%d", port))
 		}
+		// 传递 TASKMANAGER_DB_PATH（如果存在）
+		if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
+			env = append(env, fmt.Sprintf("TASKMANAGER_DB_PATH=%s", dbPath))
+		}
 
 		// 打开日志文件
 		logFile := filepath.Join(configDir, logFileName)

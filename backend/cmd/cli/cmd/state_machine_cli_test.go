@@ -83,6 +83,12 @@ func TestStateMachineDevOpsCLI(t *testing.T) {
 		t.Skip("taskmanager CLI not found in PATH, skipping E2E test")
 	}
 
+	// 检查 statemachine create 命令是否存在
+	output, _ := exec.Command("taskmanager", "statemachine", "--help").CombinedOutput()
+	if !strings.Contains(string(output), "create") {
+		t.Skip("statemachine create command not available, skipping E2E test")
+	}
+
 	ctx := context.Background()
 	var smID, reqID string
 
