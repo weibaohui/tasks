@@ -92,3 +92,8 @@ export async function deleteRequirement(id: string): Promise<void> {
 export async function batchDeleteRequirements(ids: string[]): Promise<void> {
   await apiClient.post('/requirements/batch-delete', { ids });
 }
+
+// updateRequirementStatus 更新需求状态（用于修复异常状态）
+export async function updateRequirementStatus(id: string, newStatus: string): Promise<void> {
+  await apiClient.put('/requirements/status', { id, new_status: newStatus });
+}

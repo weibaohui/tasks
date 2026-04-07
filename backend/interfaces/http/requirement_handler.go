@@ -37,6 +37,12 @@ type UpdateRequirementRequest struct {
 	Description        *string `json:"description"`
 	AcceptanceCriteria *string `json:"acceptance_criteria"`
 	TempWorkspaceRoot  *string `json:"temp_workspace_root"`
+	RequirementType    *string `json:"requirement_type"`
+}
+
+type UpdateRequirementStatusRequest struct {
+	ID        string `json:"id"`
+	NewStatus string `json:"new_status"`
 }
 
 type DispatchRequirementRequest struct {
@@ -123,6 +129,26 @@ func (h *RequirementHandler) UpdateRequirement(w http.ResponseWriter, r *http.Re
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
 		TempWorkspaceRoot:  req.TempWorkspaceRoot,
+		RequirementType:     req.RequirementType,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
+}
+
+func (h *RequirementHandler) UpdateRequirementStatus(w http.ResponseWriter, r *http.Request) {
+	var req UpdateRequirementStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+	requirement, err := h.requirementService.UpdateRequirementStatus(r.Context(), application.UpdateRequirementStatusCommand{
+		ID:        domain.NewRequirementID(req.ID),
+		NewStatus: req.NewStatus,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

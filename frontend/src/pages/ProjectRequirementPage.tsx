@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
-import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement } from '../api/projectRequirementApi';
+import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
@@ -13,6 +13,9 @@ import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { ProjectStateMachineConfig } from '../components/ProjectStateMachineConfig';
 import { RequirementTypeManagementPage } from '../components/RequirementTypeManagement';
 import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
+import { getProjectStateMachineByType } from '../api/projectStateMachineApi';
+import { getStateMachine } from '../api/stateMachineApi';
+import type { State } from '../types/stateMachine';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -83,6 +86,36 @@ export const ProjectRequirementPage: React.FC = () => {
 
   // 需求类型列表（用于创建需求时选择）
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
+
+  // 可选状态列表（根据需求类型）
+  const [availableStates, setAvailableStates] = useState<State[]>([]);
+
+  // 当项目变化时，预加载所有需求类型的状态机
+  useEffect(() => {
+    const fetchAllStateMachines = async () => {
+      if (!selectedProjectId) return;
+      const types = ['normal', 'heartbeat', ...requirementTypes.map(t => t.code)];
+      const allStates: State[] = [];
+      for (const type of types) {
+        try {
+          const mapping = await getProjectStateMachineByType(selectedProjectId, type);
+          if (mapping?.state_machine_id) {
+            const sm = await getStateMachine(mapping.state_machine_id);
+            // 使用 normal 类型的状态作为通用状态（其他类型可能没有独立状态机）
+            if (type === 'normal') {
+              allStates.push(...sm.config.states);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (allStates.length > 0) {
+        setAvailableStates(allStates);
+      }
+    };
+    fetchAllStateMachines();
+  }, [selectedProjectId, requirementTypes]);
 
   // 根据状态和类型过滤后的需求列表
   const filteredRequirements = useMemo(() => {
@@ -272,6 +305,7 @@ export const ProjectRequirementPage: React.FC = () => {
           description: payload.description,
           acceptance_criteria: payload.acceptance_criteria,
           temp_workspace_root: payload.temp_workspace_root,
+          requirement_type: payload.requirement_type,
         });
         message.success('更新需求成功');
       } else {
@@ -516,9 +550,30 @@ export const ProjectRequirementPage: React.FC = () => {
       fixed: 'left' as const,
       width: 120,
       render: (_: unknown, item: Requirement) => {
+        // 构建状态子菜单
+        const statusSubMenuItems: MenuProps['items'] = availableStates.map((state) => ({
+          key: `status-${state.id}`,
+          label: state.name,
+          disabled: item.status === state.id,
+          onClick: async () => {
+            try {
+              await updateRequirementStatus(item.id, state.id);
+              message.success(`状态已修改为: ${state.name}`);
+              await fetchRequirements(selectedProjectId);
+            } catch {
+              message.error('修改状态失败');
+            }
+          },
+        }));
+
         const menuItems: MenuProps['items'] = [
           { key: 'detail', label: '详情', onClick: () => openRequirementDetail(item) },
           { key: 'edit', label: '编辑', onClick: () => openEditRequirement(item) },
+          {
+            key: 'status',
+            label: '修改状态',
+            children: statusSubMenuItems.length > 0 ? statusSubMenuItems : [{ key: 'no-status', label: '暂无可用状态', disabled: true }],
+          },
           { key: 'dispatch', label: '派发', disabled: item.status !== 'todo', onClick: () => openDispatchModal(item) },
           { key: 'copy', label: '复制并派发', disabled: item.status === 'todo', onClick: () => handleCopyAndDispatch(item) },
         ];

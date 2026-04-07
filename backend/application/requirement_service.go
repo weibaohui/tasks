@@ -27,6 +27,12 @@ type UpdateRequirementCommand struct {
 	Description        *string
 	AcceptanceCriteria *string
 	TempWorkspaceRoot  *string
+	RequirementType    *string
+}
+
+type UpdateRequirementStatusCommand struct {
+	ID        domain.RequirementID
+	NewStatus string
 }
 
 type ReportRequirementPRCommand struct {
@@ -114,7 +120,7 @@ func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, c
 		return nil, ErrRequirementNotFound
 	}
 
-	if cmd.Title != nil || cmd.Description != nil || cmd.AcceptanceCriteria != nil || cmd.TempWorkspaceRoot != nil {
+	if cmd.Title != nil || cmd.Description != nil || cmd.AcceptanceCriteria != nil || cmd.TempWorkspaceRoot != nil || cmd.RequirementType != nil {
 		title := requirement.Title()
 		description := requirement.Description()
 		acceptanceCriteria := requirement.AcceptanceCriteria()
@@ -137,6 +143,30 @@ func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, c
 			return nil, err
 		}
 	}
+
+	// 更新需求类型
+	if cmd.RequirementType != nil {
+		requirement.SetRequirementType(domain.RequirementType(*cmd.RequirementType))
+	}
+	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
+		return nil, err
+	}
+	return requirement, nil
+}
+
+// UpdateRequirementStatus 直接更新需求状态（用于修复异常状态）
+func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Context, cmd UpdateRequirementStatusCommand) (*domain.Requirement, error) {
+	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
+	if err != nil {
+		return nil, err
+	}
+	if requirement == nil {
+		return nil, ErrRequirementNotFound
+	}
+
+	// 使用 SyncStatusFromStateMachine 直接设置状态
+	requirement.SyncStatusFromStateMachine(cmd.NewStatus)
+
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
