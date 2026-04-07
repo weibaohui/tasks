@@ -347,11 +347,11 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	}
 
 	// 流式调用 Claude Code
-	newCliSessionID, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
+	newCliSessionID, capturedUsage, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
 	if err != nil {
 		p.logger.Error("Claude Code 流式调用失败", zap.Error(err))
 		// 即使出错也要触发清理 hook
-		p.triggerClaudeCodeFinishedHook(ctx, msg, agent, false, "")
+		p.triggerClaudeCodeFinishedHook(ctx, msg, agent, false, "", nil)
 		return fmt.Errorf("Claude Code 调用失败: %w", err)
 	}
 
@@ -371,13 +371,14 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	}
 
 	// Claude Code 执行完成，触发 claude_code_finished hook
-	p.triggerClaudeCodeFinishedHook(ctx, msg, agent, true, finalResult)
+	p.triggerClaudeCodeFinishedHook(ctx, msg, agent, true, finalResult, capturedUsage)
 
 	return nil
 }
 
 // queryClaudeCodeStreaming 流式调用 Claude Code SDK
-func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, error) {
+// 返回 sessionID, 捕获的 token usage, error
+func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, *domain.Usage, error) {
 	sessionKey := msg.SessionKey()
 
 	// 创建工具钩子适配器
@@ -483,7 +484,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			zap.Duration("duration", time.Since(startTime)),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("Claude Code Connect 失败: %w", err)
+		return "", nil, fmt.Errorf("Claude Code Connect 失败: %w", err)
 	}
 	defer client.Disconnect()
 
@@ -503,7 +504,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			zap.Duration("duration", time.Since(startTime)),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
+		return "", nil, fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
 	}
 
 	// 流式接收消息
@@ -581,7 +582,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			}
 			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
 			callback.OnComplete(result)
-			return cliSessionIDResult, nil
+			return cliSessionIDResult, llmUsage, nil
 		case *claudecode.UserMessage:
 			// 用户消息，不处理
 		}
@@ -594,7 +595,7 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 
 	// 如果循环正常结束（channel 关闭）但没有收到 ResultMessage，也调用 OnComplete
 	callback.OnComplete(result)
-	return cliSessionIDResult, nil
+	return cliSessionIDResult, llmUsage, nil
 }
 
 // queryClaudeCode 调用 Claude Code SDK
@@ -1048,7 +1049,8 @@ func (p *ClaudeCodeProcessor) resolveProvider(ctx context.Context, agent *domain
 // triggerClaudeCodeFinishedHook 触发 Claude Code 完成 hook
 // success 参数表示 Claude Code 是否成功完成（不是错误退出）
 // finalResult 参数是 Claude Code 的最终执行结果
-func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context, msg *bus.InboundMessage, agent *domain.Agent, success bool, finalResult string) {
+// capturedUsage 是从 ResultMessage 捕获的 token usage，如果不为 nil 且有有效数据，直接使用而不从 conversation records 重新聚合
+func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context, msg *bus.InboundMessage, agent *domain.Agent, success bool, finalResult string, capturedUsage *domain.Usage) {
 	// 检查是否有 requirement_id 元数据
 	if msg.Metadata == nil {
 		p.logger.Debug("Claude Code 完成，无 requirement_id 元数据")
@@ -1113,7 +1115,26 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 
 	// 按 trace_id 查询对话记录并计算 token
 	traceID := requirement.TraceID()
-	if traceID != "" && p.conversationRepo != nil {
+
+	// 优先使用 capturedUsage（从 ResultMessage 直接捕获的 token usage）
+	// 只有当 capturedUsage 无效（nil 或 totalTokens 为 0）时，才从 conversation records 聚合
+	if capturedUsage != nil && capturedUsage.TotalTokens > 0 {
+		// 直接使用捕获的 token usage
+		requirement.SetTokenUsage(capturedUsage.PromptTokens, capturedUsage.CompletionTokens, capturedUsage.TotalTokens)
+		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+			p.logger.Warn("保存 token 使用量到需求表失败", zap.Error(err))
+		} else {
+			p.logger.Info("已保存捕获的 token 使用量",
+				zap.String("requirement_id", requirementIDStr),
+				zap.String("trace_id", traceID),
+				zap.Int("prompt_tokens", capturedUsage.PromptTokens),
+				zap.Int("completion_tokens", capturedUsage.CompletionTokens),
+				zap.Int("total_tokens", capturedUsage.TotalTokens),
+				zap.String("source", "ResultMessage"),
+			)
+		}
+	} else if traceID != "" && p.conversationRepo != nil {
+		// capturedUsage 无效，从 conversation records 聚合作为 fallback
 		records, err := p.conversationRepo.FindByTraceID(ctx, traceID, defaultTokenAggregationLimit) // 最多查询1000条
 		if err != nil {
 			p.logger.Warn("查询对话记录失败", zap.String("trace_id", traceID), zap.Error(err))
@@ -1124,6 +1145,16 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 				totalCompletion += record.CompletionTokens()
 				totalTokens += record.TotalTokens()
 			}
+
+			// 如果 token 为 0 但有对话记录，说明可能 ResultMessage 没有送达
+			if totalTokens == 0 && len(records) > 0 {
+				p.logger.Warn("token usage 为 0 但存在对话记录，可能 ResultMessage 未送达",
+					zap.String("requirement_id", requirementIDStr),
+					zap.String("trace_id", traceID),
+					zap.Int("records_count", len(records)),
+				)
+			}
+
 			requirement.SetTokenUsage(totalPrompt, totalCompletion, totalTokens)
 			if err := p.requirementRepo.Save(ctx, requirement); err != nil {
 				p.logger.Warn("保存 token 使用量到需求表失败", zap.Error(err))
@@ -1135,6 +1166,7 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 					zap.Int("completion_tokens", totalCompletion),
 					zap.Int("total_tokens", totalTokens),
 					zap.Int("records_count", len(records)),
+					zap.String("source", "conversation_records"),
 				)
 			}
 		}
