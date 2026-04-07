@@ -37,17 +37,17 @@ type DispatchRequirementResult struct {
 }
 
 type RequirementDispatchService struct {
-	requirementRepo    domain.RequirementRepository
-	projectRepo        domain.ProjectRepository
-	agentRepo          domain.AgentRepository
-	stateMachineRepo   state_machine.Repository
-	taskService        interface{} // TaskApplicationService - no longer used
-	sessionService     *SessionApplicationService
-	idGenerator        domain.IDGenerator
-	inboundPublisher   interface {
+	requirementRepo  domain.RequirementRepository
+	projectRepo      domain.ProjectRepository
+	agentRepo        domain.AgentRepository
+	stateMachineRepo state_machine.Repository
+	taskService      interface{} // TaskApplicationService - no longer used
+	sessionService   *SessionApplicationService
+	idGenerator      domain.IDGenerator
+	inboundPublisher interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
-	replicaCleanupSvc  domain.ReplicaCleanupService
+	replicaCleanupSvc domain.ReplicaCleanupService
 }
 
 func NewRequirementDispatchService(
@@ -62,13 +62,13 @@ func NewRequirementDispatchService(
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
 		requirementRepo:   requirementRepo,
-		projectRepo:        projectRepo,
-		agentRepo:          agentRepo,
-		taskService:        taskService,
-		sessionService:     sessionService,
-		idGenerator:        idGenerator,
-		replicaCleanupSvc:  replicaCleanupSvc,
-		stateMachineRepo:   stateMachineRepo,
+		projectRepo:       projectRepo,
+		agentRepo:         agentRepo,
+		taskService:       taskService,
+		sessionService:    sessionService,
+		idGenerator:       idGenerator,
+		replicaCleanupSvc: replicaCleanupSvc,
+		stateMachineRepo:  stateMachineRepo,
 	}
 }
 
@@ -500,16 +500,23 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 		}
 		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
 
+【执行契约 - 严格遵守】
+当前阶段：%s
+下一步动作：执行状态转换进入下一阶段
+
+执行规则：
+1. 必须执行命令，不输出解释性长文本
+2. 每个 PHASE 完成后必须执行 ON_PHASE_COMPLETE 命令
+3. 命令失败自动修复重试（最多3次）
+4. 优先执行操作，不做过多分析
+
 【需求元信息】
 - 需求ID：%s
 - 需求类型：%s
-- 当前状态：%s
-- 状态机当前状态：%s
 - 需求标题：%s
 - 需求描述：%s
 - 项目ID：%s
 - 项目名称：%s
-- 关联状态机名称：%s
 
 【验收标准】
 %s
@@ -526,25 +533,40 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 
 %s
 
+【工作循环 - 持续执行】
+1. 规划当前阶段任务
+2. 执行命令
+3. 验证执行结果
+4. 若失败 → 自动修复 → 重试
+5. 进入下一 PHASE
+
+【禁止行为】
+- 修改与需求无关的文件
+- 跳过测试或验证步骤
+- 提交未通过验证的代码
+- 创建额外分支
+
+【失败处理】
+若命令失败：
+1. 分析错误输出
+2. 自动修复
+3. 重试最多3次
+4. 仍失败则输出阻塞原因并停止
+
+
+【执行流水线 - PIPELINE】
 %s
 
-【执行流程】
-请严格按照以下步骤执行，**每个步骤完成后必须立即执行对应的状态转换命令**：
-
+【状态机附录 - 调试参考】
 %s
-
-【重要提醒】
-- 每个步骤完成后必须**立即**执行状态转换命令，不要等到最后统一转换
-- 状态转换命令格式：taskmanager requirement transition --id %s --trigger=<触发器>
-- 具体触发器见上方各步骤后的命令
-`, requirement.ID().String(), requirementType, requirement.Status(), firstNonEmpty(currentState, "未初始化"), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
-			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
+`, firstNonEmpty(currentState, "未初始化"),
+			requirement.ID().String(), requirementType, requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
+			project.ID().String(), project.Name(),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
 			project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
 			stateAIGuide,
-			stateMachineGuide,
-			buildExecutionFlowFromStateMachine(smConfig, requirement.ID().String()),
-			requirement.ID().String())
+			buildExecutionPipeline(smConfig, requirement.ID().String(), project.GitRepoURL(), project.DefaultBranch()),
+			stateMachineGuide)
 	}
 	return prompt
 }
@@ -664,27 +686,46 @@ func getStateName(smConfig *state_machine.Config, stateID string) string {
 	return stateID
 }
 
-// buildExecutionFlowFromStateMachine 根据状态机配置动态生成执行流程
-// 遍历状态链，每个状态生成一个执行步骤，步骤中包含该状态的AI指南和转换命令
-func buildExecutionFlowFromStateMachine(smConfig *state_machine.Config, requirementID string) string {
+// buildExecutionPipeline 根据状态机配置动态生成执行流水线
+// 使用 PHASE 结构和 ON_PHASE_COMPLETE Hook
+func buildExecutionPipeline(smConfig *state_machine.Config, requirementID, gitRepo, branch string) string {
 	if smConfig == nil || len(smConfig.Transitions) == 0 {
-		return "1. 按照需求描述和验收标准完成开发工作\n"
+		return `PHASE 1 — EXECUTE
+执行需求开发工作
+ON_PHASE_COMPLETE:
+taskmanager requirement transition --id ` + requirementID + ` --trigger=completed
+`
 	}
 
-	// 构建状态链：从 initial_state 出发，沿着 transitions 构建完整的状态路径
+	// 构建状态链
 	stateChain := buildStateChain(smConfig)
 	if len(stateChain) == 0 {
-		return "1. 按照需求描述和验收标准完成开发工作\n"
+		return `PHASE 1 — EXECUTE
+执行需求开发工作
+ON_PHASE_COMPLETE:
+taskmanager requirement transition --id ` + requirementID + ` --trigger=completed
+`
 	}
 
 	var sb strings.Builder
-	stepNum := 1
+	phaseNum := 1
 
+	// PHASE 0: 初始化环境（总是第一阶段）
+	sb.WriteString(`PHASE 0 — INIT
+执行：
+`)
+	sb.WriteString(fmt.Sprintf("git clone %s . && git checkout %s\n", gitRepo, branch))
+	sb.WriteString(fmt.Sprintf("git checkout %s && git pull\n", branch))
+	sb.WriteString(`ON_PHASE_COMPLETE:
+`)
+	sb.WriteString(fmt.Sprintf("taskmanager requirement transition --id %s --trigger=%s\n\n",
+		requirementID, getFirstTrigger(smConfig)))
+
+	// 遍历状态链生成 PHASE
 	for i := 0; i < len(stateChain)-1; i++ {
 		currentStateID := stateChain[i]
 		nextStateID := stateChain[i+1]
 
-		// 获取当前状态信息
 		currentState := smConfig.GetState(currentStateID)
 		if currentState == nil {
 			continue
@@ -695,8 +736,8 @@ func buildExecutionFlowFromStateMachine(smConfig *state_machine.Config, requirem
 			continue
 		}
 
-		// 查找当前状态到下一个状态的转换
-		var trigger string
+		// 查找转换获取触发器
+		trigger := ""
 		for _, t := range smConfig.Transitions {
 			if t.FromState == currentStateID && t.ToState == nextStateID {
 				trigger = t.Trigger
@@ -704,44 +745,67 @@ func buildExecutionFlowFromStateMachine(smConfig *state_machine.Config, requirem
 			}
 		}
 
-		// 获取状态的 AI 指南内容（去除 markdown 格式）
+		// PHASE 头部
+		phaseName := strings.ToUpper(strings.ReplaceAll(currentState.Name, " ", "_"))
+		sb.WriteString(fmt.Sprintf("PHASE %d — %s\n", phaseNum, phaseName))
+
+		// 添加 AI 指南中的执行指令（提取命令，排除状态转换命令）
 		aiGuide := strings.TrimSpace(currentState.AIGuide)
-		// 提取命令（如果有的话）
-		guideLines := strings.Split(aiGuide, "\n")
-
-		// 生成步骤
-		sb.WriteString(fmt.Sprintf("**【第%d步：%s】**\n", stepNum, currentState.Name))
-
-		// 添加 AI 指南中的执行内容（如果有）
 		if aiGuide != "" {
-			// 提取除了第一行（标题）和最后一行（命令）之外的内容
+			guideLines := strings.Split(aiGuide, "\n")
 			for _, line := range guideLines {
 				trimmed := strings.TrimSpace(line)
-				// 跳过包含 "命令：" 或 "taskmanager" 的行（因为我们会在下面单独显示转换命令）
-				if strings.Contains(trimmed, "命令：") || strings.HasPrefix(trimmed, "taskmanager") {
+				// 跳过包含"命令："、taskmanager、## 标题、**标记的行
+				if strings.Contains(trimmed, "命令：") ||
+					strings.HasPrefix(trimmed, "taskmanager") ||
+					strings.HasPrefix(trimmed, "## ") ||
+					strings.HasPrefix(trimmed, "**") ||
+					trimmed == "" {
 					continue
 				}
-				if trimmed != "" && !strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "**") {
-					sb.WriteString(trimmed + "\n")
-				}
+				sb.WriteString(trimmed + "\n")
 			}
 		}
 
-		// 添加状态转换命令
+		// 如果是第一个业务 PHASE，添加环境初始化提示
+		if phaseNum == 1 {
+			sb.WriteString("\n执行环境初始化（已在 PHASE 0 完成）\n")
+		}
+
+		// ON_PHASE_COMPLETE Hook
 		if trigger != "" {
-			sb.WriteString(fmt.Sprintf("\n完成本步骤后，执行：\n```bash\ntaskmanager requirement transition --id %s --trigger=%s\n```\n\n",
+			sb.WriteString("\nON_PHASE_COMPLETE:\n")
+			sb.WriteString(fmt.Sprintf("taskmanager requirement transition --id %s --trigger=%s\n",
 				requirementID, trigger))
 		}
 
-		stepNum++
+		sb.WriteString("\n")
+		phaseNum++
 	}
 
-	// 如果没有生成任何步骤，返回默认提示
-	if stepNum == 1 {
-		return "1. 按照需求描述和验收标准完成开发工作\n"
+	// 如果没有生成任何 PHASE
+	if phaseNum == 1 {
+		return `PHASE 1 — EXECUTE
+执行需求开发工作
+ON_PHASE_COMPLETE:
+taskmanager requirement transition --id ` + requirementID + ` --trigger=completed
+`
 	}
 
 	return sb.String()
+}
+
+// getFirstTrigger 获取状态机的第一个触发器（从 initial_state 出发）
+func getFirstTrigger(smConfig *state_machine.Config) string {
+	if smConfig == nil {
+		return "start"
+	}
+	for _, t := range smConfig.Transitions {
+		if t.FromState == smConfig.InitialState {
+			return t.Trigger
+		}
+	}
+	return "start"
 }
 
 // buildStateChain 从状态机构建状态链

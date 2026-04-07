@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/domain/state_machine"
 	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"go.uber.org/zap"
@@ -10,17 +11,19 @@ import (
 
 // StateMachineService 应用服务
 type StateMachineService struct {
-	repo     state_machine.Repository
-	executor *infra_sm.TransitionExecutor
-	logger   *zap.Logger
+	repo            state_machine.Repository
+	requirementRepo domain.RequirementRepository
+	executor        *infra_sm.TransitionExecutor
+	logger          *zap.Logger
 }
 
 // NewStateMachineService 创建服务
-func NewStateMachineService(repo state_machine.Repository, executor *infra_sm.TransitionExecutor, logger *zap.Logger) *StateMachineService {
+func NewStateMachineService(repo state_machine.Repository, requirementRepo domain.RequirementRepository, executor *infra_sm.TransitionExecutor, logger *zap.Logger) *StateMachineService {
 	return &StateMachineService{
-		repo:     repo,
-		executor: executor,
-		logger:   logger,
+		repo:            repo,
+		requirementRepo: requirementRepo,
+		executor:        executor,
+		logger:          logger,
 	}
 }
 
@@ -126,6 +129,15 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 	// 保存日志
 	if err := s.repo.SaveTransitionLog(ctx, log); err != nil {
 		s.logger.Warn("failed to save transition log", zap.Error(err))
+	}
+
+	// 同步更新 Requirement 的状态
+	if s.requirementRepo != nil {
+		requirement, err := s.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
+		if err == nil && requirement != nil {
+			requirement.SyncStatusFromStateMachine(toState.ID)
+			_ = s.requirementRepo.Save(ctx, requirement)
+		}
 	}
 
 	// 异步执行 hooks
