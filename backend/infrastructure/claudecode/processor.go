@@ -131,13 +131,13 @@ func boolPtr(b bool) *bool {
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger              *zap.Logger
-	hookManager         *hook.Manager
-	providerRepo        domain.LLMProviderRepository
-	idGenerator         domain.IDGenerator
-	requirementRepo     domain.RequirementRepository
-	conversationRepo    domain.ConversationRecordRepository
-	replicaCleanupSvc   domain.ReplicaCleanupService
+	logger            *zap.Logger
+	hookManager       *hook.Manager
+	providerRepo      domain.LLMProviderRepository
+	idGenerator       domain.IDGenerator
+	requirementRepo   domain.RequirementRepository
+	conversationRepo  domain.ConversationRecordRepository
+	replicaCleanupSvc domain.ReplicaCleanupService
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -163,13 +163,13 @@ func NewClaudeCodeProcessor(
 	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:              logger,
-		hookManager:         hookManager,
-		providerRepo:        providerRepo,
-		idGenerator:         idGenerator,
-		requirementRepo:     requirementRepo,
-		conversationRepo:    conversationRepo,
-		replicaCleanupSvc:  replicaCleanupSvc,
+		logger:            logger,
+		hookManager:       hookManager,
+		providerRepo:      providerRepo,
+		idGenerator:       idGenerator,
+		requirementRepo:   requirementRepo,
+		conversationRepo:  conversationRepo,
+		replicaCleanupSvc: replicaCleanupSvc,
 	}
 }
 
@@ -230,7 +230,7 @@ func (p *ClaudeCodeProcessor) Process(ctx context.Context, msg *bus.InboundMessa
 	}
 
 	// 获取超时配置
-	timeout := 120
+	timeout := 180 * 60 // 180分钟
 	if agent != nil && agent.ClaudeCodeConfig() != nil && agent.ClaudeCodeConfig().Timeout > 0 {
 		timeout = agent.ClaudeCodeConfig().Timeout
 	}
@@ -332,7 +332,7 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 	}
 
 	// 获取超时配置
-	timeout := 120
+	timeout := 180 * 60 // 180分钟
 	if agent != nil && agent.ClaudeCodeConfig() != nil && agent.ClaudeCodeConfig().Timeout > 0 {
 		timeout = agent.ClaudeCodeConfig().Timeout
 	}
@@ -1113,62 +1113,25 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 			zap.Any("result_length", len(finalResult)))
 	}
 
-	// 按 trace_id 查询对话记录并计算 token
+	// 使用 capturedUsage（从 ResultMessage 直接捕获的 token usage）
 	traceID := requirement.TraceID()
-
-	// 优先使用 capturedUsage（从 ResultMessage 直接捕获的 token usage）
-	// 只有当 capturedUsage 无效（nil 或 totalTokens 为 0）时，才从 conversation records 聚合
-	if capturedUsage != nil && capturedUsage.TotalTokens > 0 {
-		// 直接使用捕获的 token usage
-		requirement.SetTokenUsage(capturedUsage.PromptTokens, capturedUsage.CompletionTokens, capturedUsage.TotalTokens)
+	if capturedUsage != nil {
+		// 计算 total：如果 TotalTokens 为 0，用 prompt + completion 作为 total
+		total := capturedUsage.TotalTokens
+		if total == 0 {
+			total = capturedUsage.PromptTokens + capturedUsage.CompletionTokens
+		}
+		requirement.SetTokenUsage(capturedUsage.PromptTokens, capturedUsage.CompletionTokens, total)
 		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
 			p.logger.Warn("保存 token 使用量到需求表失败", zap.Error(err))
 		} else {
-			p.logger.Info("已保存捕获的 token 使用量",
+			p.logger.Info("已保存 token 使用量",
 				zap.String("requirement_id", requirementIDStr),
 				zap.String("trace_id", traceID),
 				zap.Int("prompt_tokens", capturedUsage.PromptTokens),
 				zap.Int("completion_tokens", capturedUsage.CompletionTokens),
-				zap.Int("total_tokens", capturedUsage.TotalTokens),
-				zap.String("source", "ResultMessage"),
+				zap.Int("total_tokens", total),
 			)
-		}
-	} else if traceID != "" && p.conversationRepo != nil {
-		// capturedUsage 无效，从 conversation records 聚合作为 fallback
-		records, err := p.conversationRepo.FindByTraceID(ctx, traceID, defaultTokenAggregationLimit) // 最多查询1000条
-		if err != nil {
-			p.logger.Warn("查询对话记录失败", zap.String("trace_id", traceID), zap.Error(err))
-		} else {
-			var totalPrompt, totalCompletion, totalTokens int
-			for _, record := range records {
-				totalPrompt += record.PromptTokens()
-				totalCompletion += record.CompletionTokens()
-				totalTokens += record.TotalTokens()
-			}
-
-			// 如果 token 为 0 但有对话记录，说明可能 ResultMessage 没有送达
-			if totalTokens == 0 && len(records) > 0 {
-				p.logger.Warn("token usage 为 0 但存在对话记录，可能 ResultMessage 未送达",
-					zap.String("requirement_id", requirementIDStr),
-					zap.String("trace_id", traceID),
-					zap.Int("records_count", len(records)),
-				)
-			}
-
-			requirement.SetTokenUsage(totalPrompt, totalCompletion, totalTokens)
-			if err := p.requirementRepo.Save(ctx, requirement); err != nil {
-				p.logger.Warn("保存 token 使用量到需求表失败", zap.Error(err))
-			} else {
-				p.logger.Info("已计算并保存 token 使用量",
-					zap.String("requirement_id", requirementIDStr),
-					zap.String("trace_id", traceID),
-					zap.Int("prompt_tokens", totalPrompt),
-					zap.Int("completion_tokens", totalCompletion),
-					zap.Int("total_tokens", totalTokens),
-					zap.Int("records_count", len(records)),
-					zap.String("source", "conversation_records"),
-				)
-			}
 		}
 	}
 }
