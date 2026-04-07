@@ -529,24 +529,22 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 %s
 
 【执行流程】
-请按以下顺序执行：
-1. 如果工作目录为空，先克隆代码仓库：git clone %s . && git checkout %s
-2. 如果仓库已存在，先拉取最新代码：git checkout %s && git pull
-3. 严格执行初始化步骤
-4. 基于需求与验收标准完成实现
-5. 运行必要的校验命令
-6. 提交代码：git add . && git commit -m "feat: 完成需求 %s"
-7. 推送代码：git push origin feature/%s
-8. 创建 PR 或输出 PR 信息
-9. 根据工作结果，使用状态机命令更新需求状态（详见上面的【状态机使用指南】）
+请严格按照以下步骤执行，**每个步骤完成后必须立即执行对应的状态转换命令**：
+
+%s
+
+【重要提醒】
+- 每个步骤完成后必须**立即**执行状态转换命令，不要等到最后统一转换
+- 状态转换命令格式：taskmanager requirement transition --id %s --trigger=<触发器>
+- 具体触发器见上方各步骤后的命令
 `, requirement.ID().String(), requirementType, requirement.Status(), firstNonEmpty(currentState, "未初始化"), requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 			project.ID().String(), project.Name(), firstNonEmpty(stateMachineName, "未配置"),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),
 			project.GitRepoURL(), project.DefaultBranch(), initStepsText, workspacePath,
 			stateAIGuide,
 			stateMachineGuide,
-			project.GitRepoURL(), project.DefaultBranch(), project.DefaultBranch(),
-			requirement.ID().String(), requirement.ID().String())
+			buildExecutionFlowFromStateMachine(smConfig, requirement.ID().String()),
+			requirement.ID().String())
 	}
 	return prompt
 }
@@ -664,6 +662,119 @@ func getStateName(smConfig *state_machine.Config, stateID string) string {
 		}
 	}
 	return stateID
+}
+
+// buildExecutionFlowFromStateMachine 根据状态机配置动态生成执行流程
+// 遍历状态链，每个状态生成一个执行步骤，步骤中包含该状态的AI指南和转换命令
+func buildExecutionFlowFromStateMachine(smConfig *state_machine.Config, requirementID string) string {
+	if smConfig == nil || len(smConfig.Transitions) == 0 {
+		return "1. 按照需求描述和验收标准完成开发工作\n"
+	}
+
+	// 构建状态链：从 initial_state 出发，沿着 transitions 构建完整的状态路径
+	stateChain := buildStateChain(smConfig)
+	if len(stateChain) == 0 {
+		return "1. 按照需求描述和验收标准完成开发工作\n"
+	}
+
+	var sb strings.Builder
+	stepNum := 1
+
+	for i := 0; i < len(stateChain)-1; i++ {
+		currentStateID := stateChain[i]
+		nextStateID := stateChain[i+1]
+
+		// 获取当前状态信息
+		currentState := smConfig.GetState(currentStateID)
+		if currentState == nil {
+			continue
+		}
+
+		// 跳过终态
+		if currentState.IsFinal {
+			continue
+		}
+
+		// 查找当前状态到下一个状态的转换
+		var trigger string
+		for _, t := range smConfig.Transitions {
+			if t.FromState == currentStateID && t.ToState == nextStateID {
+				trigger = t.Trigger
+				break
+			}
+		}
+
+		// 获取状态的 AI 指南内容（去除 markdown 格式）
+		aiGuide := strings.TrimSpace(currentState.AIGuide)
+		// 提取命令（如果有的话）
+		guideLines := strings.Split(aiGuide, "\n")
+
+		// 生成步骤
+		sb.WriteString(fmt.Sprintf("**【第%d步：%s】**\n", stepNum, currentState.Name))
+
+		// 添加 AI 指南中的执行内容（如果有）
+		if aiGuide != "" {
+			// 提取除了第一行（标题）和最后一行（命令）之外的内容
+			for _, line := range guideLines {
+				trimmed := strings.TrimSpace(line)
+				// 跳过包含 "命令：" 或 "taskmanager" 的行（因为我们会在下面单独显示转换命令）
+				if strings.Contains(trimmed, "命令：") || strings.HasPrefix(trimmed, "taskmanager") {
+					continue
+				}
+				if trimmed != "" && !strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "**") {
+					sb.WriteString(trimmed + "\n")
+				}
+			}
+		}
+
+		// 添加状态转换命令
+		if trigger != "" {
+			sb.WriteString(fmt.Sprintf("\n完成本步骤后，执行：\n```bash\ntaskmanager requirement transition --id %s --trigger=%s\n```\n\n",
+				requirementID, trigger))
+		}
+
+		stepNum++
+	}
+
+	// 如果没有生成任何步骤，返回默认提示
+	if stepNum == 1 {
+		return "1. 按照需求描述和验收标准完成开发工作\n"
+	}
+
+	return sb.String()
+}
+
+// buildStateChain 从状态机构建状态链
+// 根据 transitions 构建从 initial_state 开始的完整状态路径
+func buildStateChain(smConfig *state_machine.Config) []string {
+	if smConfig == nil {
+		return nil
+	}
+
+	// 构建转换映射：from_state -> to_state
+	transitionMap := make(map[string]string)
+	for _, t := range smConfig.Transitions {
+		transitionMap[t.FromState] = t.ToState
+	}
+
+	// 从 initial_state 开始，沿着转换链构建状态数组
+	var chain []string
+	currentState := smConfig.InitialState
+
+	for i := 0; i < len(smConfig.States)+1; i++ { // 防止无限循环
+		chain = append(chain, currentState)
+		nextState, exists := transitionMap[currentState]
+		if !exists {
+			break
+		}
+		// 防止循环
+		if contains(chain, nextState) {
+			break
+		}
+		currentState = nextState
+	}
+
+	return chain
 }
 
 // buildStateAIGuide 构建状态的 AI 指南
