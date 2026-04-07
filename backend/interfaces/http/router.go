@@ -442,6 +442,14 @@ func SetupRoutesWithManagement(
 			}
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}))
+		// 需求状态转换历史
+		mux.HandleFunc("/api/v1/requirements/transition-history", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				requirementHandler.GetRequirementTransitionHistory(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}))
 	}
 
 	// 需求类型路由

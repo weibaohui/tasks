@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/domain/state_machine"
 )
 
 var (
@@ -48,6 +49,7 @@ type RequirementApplicationService struct {
 	projectRepo        domain.ProjectRepository
 	idGenerator        domain.IDGenerator
 	replicaCleanupSvc  domain.ReplicaCleanupService
+	stateMachineRepo   state_machine.Repository
 }
 
 func NewRequirementApplicationService(
@@ -55,12 +57,14 @@ func NewRequirementApplicationService(
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
 	replicaCleanupSvc domain.ReplicaCleanupService,
+	stateMachineRepo state_machine.Repository,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
 		requirementRepo:   requirementRepo,
 		projectRepo:       projectRepo,
 		idGenerator:       idGenerator,
 		replicaCleanupSvc: replicaCleanupSvc,
+		stateMachineRepo:  stateMachineRepo,
 	}
 }
 
@@ -164,13 +168,36 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 		return nil, ErrRequirementNotFound
 	}
 
+	// 记录状态转换日志
+	fromStatus := requirement.Status()
+	toStatus := cmd.NewStatus
+	if string(fromStatus) != toStatus && s.stateMachineRepo != nil {
+		log := state_machine.NewTransitionLog(
+			requirement.ID().String(),
+			string(fromStatus),
+			toStatus,
+			"manual_update",
+			"system",
+			"手动修改状态",
+		)
+		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+	}
+
 	// 使用 SyncStatusFromStateMachine 直接设置状态
-	requirement.SyncStatusFromStateMachine(cmd.NewStatus)
+	requirement.SyncStatusFromStateMachine(toStatus)
 
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
 	return requirement, nil
+}
+
+// GetRequirementTransitionHistory 获取需求的状态转换历史
+func (s *RequirementApplicationService) GetRequirementTransitionHistory(ctx context.Context, requirementID domain.RequirementID) ([]*state_machine.TransitionLog, error) {
+	if s.stateMachineRepo == nil {
+		return nil, nil
+	}
+	return s.stateMachineRepo.ListTransitionLogs(ctx, requirementID.String())
 }
 
 func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Context, cmd ReportRequirementPRCommand) (*domain.Requirement, error) {
@@ -188,6 +215,23 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 		_ = s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
 	}
 
+	// 记录状态转换日志
+	if s.stateMachineRepo != nil {
+		fromStatus := string(requirement.Status())
+		toStatus := "pr_opened"
+		if fromStatus != toStatus {
+			log := state_machine.NewTransitionLog(
+				requirement.ID().String(),
+				fromStatus,
+				toStatus,
+				"pr_opened",
+				"system",
+				"PR已打开",
+			)
+			_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		}
+	}
+
 	requirement.MarkPROpened()
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
@@ -203,6 +247,23 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 	}
 	if requirement == nil {
 		return nil, ErrRequirementNotFound
+	}
+
+	// 记录状态转换日志
+	if s.stateMachineRepo != nil {
+		fromStatus := string(requirement.Status())
+		toStatus := "todo"
+		if fromStatus != toStatus {
+			log := state_machine.NewTransitionLog(
+				requirement.ID().String(),
+				fromStatus,
+				toStatus,
+				"redispatch",
+				"system",
+				"重新派发",
+			)
+			_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		}
 	}
 
 	if err := requirement.Redispatch(); err != nil {

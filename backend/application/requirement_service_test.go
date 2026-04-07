@@ -68,7 +68,7 @@ func setupTestRequirementSvc() (*RequirementApplicationService, *mockRequirement
 	projRepo := newSharedMockProjectRepo()
 	idGen := &mockRequirementIDGen{}
 
-	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil)
+	svc := NewRequirementApplicationService(reqRepo, projRepo, idGen, nil, nil)
 	return svc, reqRepo, projRepo
 }
 

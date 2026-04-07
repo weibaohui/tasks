@@ -440,7 +440,7 @@ func TestCLI_RequirementGet(t *testing.T) {
 	idGen := utils.NewNanoIDGenerator(21)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
-	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil)
+	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil, nil)
 
 	ctx := context.Background()
 
@@ -657,7 +657,7 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	idGen := utils.NewNanoIDGenerator(21)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
-	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil)
+	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil, nil)
 
 	ctx := context.Background()
 

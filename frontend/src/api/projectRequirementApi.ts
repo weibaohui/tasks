@@ -97,3 +97,25 @@ export async function batchDeleteRequirements(ids: string[]): Promise<void> {
 export async function updateRequirementStatus(id: string, newStatus: string): Promise<void> {
   await apiClient.put('/requirements/status', { id, new_status: newStatus });
 }
+
+// 状态转换历史记录
+export interface TransitionLog {
+  id: string;
+  requirement_id: string;
+  from_state: string;
+  to_state: string;
+  trigger: string;
+  triggered_by: string;
+  remark: string;
+  result: string;
+  error_message: string;
+  created_at: number;
+}
+
+// 获取需求的状态转换历史
+export async function getRequirementTransitionHistory(id: string): Promise<TransitionLog[]> {
+  const response = await apiClient.get<TransitionLog[]>('/requirements/transition-history', {
+    params: { id },
+  });
+  return response.data;
+}

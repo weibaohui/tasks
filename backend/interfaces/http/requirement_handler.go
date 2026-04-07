@@ -158,6 +158,38 @@ func (h *RequirementHandler) UpdateRequirementStatus(w http.ResponseWriter, r *h
 	_ = json.NewEncoder(w).Encode(h.requirementToMap(r, requirement))
 }
 
+func (h *RequirementHandler) GetRequirementTransitionHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	history, err := h.requirementService.GetRequirementTransitionHistory(r.Context(), domain.NewRequirementID(id))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	// 转换为响应格式
+	resp := make([]map[string]interface{}, 0, len(history))
+	for _, log := range history {
+		resp = append(resp, map[string]interface{}{
+			"id":             log.ID,
+			"requirement_id":  log.RequirementID,
+			"from_state":     log.FromState,
+			"to_state":       log.ToState,
+			"trigger":        log.Trigger,
+			"triggered_by":   log.TriggeredBy,
+			"remark":         log.Remark,
+			"result":         log.Result,
+			"error_message":  log.ErrorMessage,
+			"created_at":     log.CreatedAt.UnixMilli(),
+		})
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.Request) {
 
 	var req DispatchRequirementRequest

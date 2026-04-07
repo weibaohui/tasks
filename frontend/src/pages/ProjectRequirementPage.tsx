@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
-import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus } from '../api/projectRequirementApi';
+import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, type TransitionLog } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
@@ -74,6 +74,8 @@ export const ProjectRequirementPage: React.FC = () => {
   const [traceViewerVisible, setTraceViewerVisible] = useState(false);
   const [currentTraceId, setCurrentTraceId] = useState<string>('');
   const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null);
+  // 需求状态转换历史
+  const [transitionHistory, setTransitionHistory] = useState<TransitionLog[]>([]);
 
   // 需求状态过滤
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -87,32 +89,34 @@ export const ProjectRequirementPage: React.FC = () => {
   // 需求类型列表（用于创建需求时选择）
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
 
-  // 可选状态列表（根据需求类型）
-  const [availableStates, setAvailableStates] = useState<State[]>([]);
+  // 可选状态列表（按需求类型存储）
+  const [statesByType, setStatesByType] = useState<Record<string, State[]>>({});
+  // 标记是否尝试加载过状态机（用于显示更准确的提示）
+  const [stateMachineLoadAttempted, setStateMachineLoadAttempted] = useState(false);
 
   // 当项目变化时，预加载所有需求类型的状态机
   useEffect(() => {
     const fetchAllStateMachines = async () => {
-      if (!selectedProjectId) return;
+      if (!selectedProjectId) {
+        setStateMachineLoadAttempted(false);
+        return;
+      }
       const types = ['normal', 'heartbeat', ...requirementTypes.map(t => t.code)];
-      const allStates: State[] = [];
+      const newStatesByType: Record<string, State[]> = {};
       for (const type of types) {
         try {
           const mapping = await getProjectStateMachineByType(selectedProjectId, type);
           if (mapping?.state_machine_id) {
             const sm = await getStateMachine(mapping.state_machine_id);
-            // 使用 normal 类型的状态作为通用状态（其他类型可能没有独立状态机）
-            if (type === 'normal') {
-              allStates.push(...sm.config.states);
-            }
+            // 按类型存储状态
+            newStatesByType[type] = sm.config.states;
           }
         } catch {
-          // ignore
+          // ignore - API返回404表示该类型未配置状态机
         }
       }
-      if (allStates.length > 0) {
-        setAvailableStates(allStates);
-      }
+      setStateMachineLoadAttempted(true);
+      setStatesByType(newStatesByType);
     };
     fetchAllStateMachines();
   }, [selectedProjectId, requirementTypes]);
@@ -434,9 +438,16 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const openRequirementDetail = (item: Requirement) => {
+  const openRequirementDetail = async (item: Requirement) => {
     setDetailRequirement(item);
     setRequirementDetailDrawerOpen(true);
+    // 获取状态转换历史
+    try {
+      const history = await getRequirementTransitionHistory(item.id);
+      setTransitionHistory(history);
+    } catch {
+      setTransitionHistory([]);
+    }
   };
 
   // 项目配置相关处理
@@ -550,6 +561,10 @@ export const ProjectRequirementPage: React.FC = () => {
       fixed: 'left' as const,
       width: 120,
       render: (_: unknown, item: Requirement) => {
+        // 根据需求类型获取对应的状态
+        const reqType = item.requirement_type || 'normal';
+        const availableStates = statesByType[reqType] || [];
+
         // 构建状态子菜单
         const statusSubMenuItems: MenuProps['items'] = availableStates.map((state) => ({
           key: `status-${state.id}`,
@@ -572,7 +587,17 @@ export const ProjectRequirementPage: React.FC = () => {
           {
             key: 'status',
             label: '修改状态',
-            children: statusSubMenuItems.length > 0 ? statusSubMenuItems : [{ key: 'no-status', label: '暂无可用状态', disabled: true }],
+            children: statusSubMenuItems.length > 0
+              ? statusSubMenuItems
+              : [
+                  {
+                    key: 'no-status',
+                    label: stateMachineLoadAttempted && selectedProjectId
+                      ? '请在项目设置中配置状态机'
+                      : '暂无可用状态',
+                    disabled: true,
+                  },
+                ],
           },
           { key: 'dispatch', label: '派发', disabled: item.status !== 'todo', onClick: () => openDispatchModal(item) },
           { key: 'copy', label: '复制并派发', disabled: item.status === 'todo', onClick: () => handleCopyAndDispatch(item) },
@@ -1284,6 +1309,77 @@ export const ProjectRequirementPage: React.FC = () => {
                           {detailRequirement.claude_runtime.last_error}
                         </pre>
                       </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'transition-history',
+                label: '状态变更历史',
+                children: (
+                  <div>
+                    {transitionHistory.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
+                        暂无状态变更记录
+                      </div>
+                    ) : (
+                      <Table
+                        size="small"
+                        dataSource={transitionHistory.map((log, index) => ({
+                          key: index,
+                          ...log,
+                        }))}
+                        columns={[
+                          {
+                            title: '序号',
+                            dataIndex: 'key',
+                            width: 60,
+                            render: (_: unknown, __: unknown, index: number) => index + 1,
+                          },
+                          {
+                            title: '从状态',
+                            dataIndex: 'from_state',
+                            width: 120,
+                            render: (val: string) => <Tag>{val || '-'}</Tag>,
+                          },
+                          {
+                            title: '到状态',
+                            dataIndex: 'to_state',
+                            width: 120,
+                            render: (val: string) => <Tag color="blue">{val}</Tag>,
+                          },
+                          {
+                            title: '触发方式',
+                            dataIndex: 'trigger',
+                            width: 100,
+                          },
+                          {
+                            title: '触发者',
+                            dataIndex: 'triggered_by',
+                            width: 80,
+                          },
+                          {
+                            title: '结果',
+                            dataIndex: 'result',
+                            width: 80,
+                            render: (val: string) => (
+                              <Tag color={val === 'success' ? 'green' : 'red'}>{val}</Tag>
+                            ),
+                          },
+                          {
+                            title: '说明',
+                            dataIndex: 'remark',
+                          },
+                          {
+                            title: '时间',
+                            dataIndex: 'created_at',
+                            width: 180,
+                            render: (val: number) => new Date(val).toLocaleString(),
+                          },
+                        ]}
+                        pagination={false}
+                        scroll={{ y: 400 }}
+                      />
                     )}
                   </div>
                 ),

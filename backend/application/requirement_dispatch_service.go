@@ -154,6 +154,22 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 获取当前状态机状态和 AI Guide
 	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
 
+	// 记录状态转换日志（如果状态发生变化）
+	if s.stateMachineRepo != nil && currentState != "" {
+		fromStatus := string(requirement.Status())
+		if fromStatus != currentState {
+			log := state_machine.NewTransitionLog(
+				requirement.ID().String(),
+				fromStatus,
+				currentState,
+				"dispatch",
+				"system",
+				"派发需求",
+			)
+			_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		}
+	}
+
 	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
 	requirement.SyncStatusFromStateMachine(currentState)
 
