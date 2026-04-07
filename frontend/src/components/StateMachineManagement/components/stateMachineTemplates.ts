@@ -26,272 +26,7 @@ export interface StateMachineTemplate {
 
 // 预定义的状态机模板
 export const stateMachineTemplates: StateMachineTemplate[] = [
-  {
-    id: 'basic-universal',
-    name: '通用基础流程',
-    description: '标准三状态流程：todo(待处理) → processing(处理中) → completed(已完成)，适用于所有场景',
-    yaml: `name: basic_universal
-description: |
-  通用基础流程 - 标准三状态模型
-  状态：todo → processing → completed
-  特点：处理时立即进入 processing，避免 todo 重复进入
 
-initial_state: todo
-
-states:
-  - id: todo
-    name: 待处理
-    is_final: false
-    ai_guide: |
-      ## 状态：待处理
-
-      这是任务的初始状态。当任务被创建或刚被派发时，处于此状态。
-
-      **重要**：一旦开始处理，必须立即转换到 processing 状态！
-      执行命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
-
-      **禁止**：不要在 processing 或 completed 状态后再转回 todo，这会导致重复处理。
-
-  - id: processing
-    name: 处理中
-    is_final: false
-    ai_guide: |
-      ## 状态：处理中
-
-      任务正在处理中。此时应该执行业务逻辑。
-
-      执行步骤（根据实际需求调整）：
-      1. 获取任务详情
-      2. 执行相关操作
-      3. 完成后转换到 completed
-
-      **注意**：此状态不应被重复进入。完成后直接到 completed。
-
-  - id: completed
-    name: 已完成
-    is_final: true
-    ai_guide: |
-      ## 状态：已完成
-
-      任务已成功完成。状态机退出。
-
-transitions:
-  - from: todo
-    to: processing
-    trigger: start
-    description: 开始处理（必须立即执行，防止重复调度）
-
-  - from: processing
-    to: completed
-    trigger: complete
-    description: 处理完成`,
-  },
-  {
-    id: 'simple-workflow',
-    name: '简化开发流程',
-    description: '最小化的软件开发流程：todo → processing → review → completed',
-    yaml: `name: simple_workflow
-description: |
-  简化版开发流程
-  标准三状态：todo(待处理) → processing(处理中) → completed(已完成)
-
-initial_state: todo
-
-states:
-  - id: todo
-    name: 待处理
-    is_final: false
-    ai_guide: |
-      ## 状态：待处理
-      任务初始状态。立即转换到 processing 开始处理。
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
-
-  - id: processing
-    name: 处理中
-    is_final: false
-    ai_guide: |
-      ## 状态：处理中
-      执行编码工作，完成后转换到 completed。
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=completed
-
-  - id: review
-    name: 审查中
-    is_final: false
-    ai_guide: |
-      ## 状态：审查中
-      代码审查阶段。
-
-  - id: completed
-    name: 已完成
-    is_final: true
-    ai_guide: |
-      ## 状态：已完成
-      任务完成，状态机退出。
-
-transitions:
-  - from: todo
-    to: processing
-    trigger: start
-    description: 开始处理（必须立即执行）
-
-  - from: processing
-    to: review
-    trigger: submit_review
-    description: 提交审查
-
-  - from: processing
-    to: completed
-    trigger: complete
-    description: 处理完成（无需审查时）
-
-  - from: review
-    to: completed
-    trigger: approve
-    description: 审查通过
-
-  - from: review
-    to: processing
-    trigger: reject
-    description: 审查拒绝，需修复`,
-  },
-  {
-    id: 'full-workflow',
-    name: '完整开发流程',
-    description: '完整的软件开发流程：todo → processing(含多阶段) → completed',
-    yaml: `name: full_development_workflow
-description: |
-  完整的软件开发流程 - 标准三状态模型
-  状态：todo → processing(含子阶段) → completed
-  processing 子阶段：code_commit → code_review → build → testing → staging → production
-
-initial_state: todo
-
-states:
-  - id: todo
-    name: 待处理
-    is_final: false
-    ai_guide: |
-      ## 状态：待处理
-      **重要**：必须立即转换到 processing 状态，防止重复调度！
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
-
-  - id: processing
-    name: 处理中
-    is_final: false
-    ai_guide: |
-      ## 状态：处理中
-      进入开发流程阶段。
-
-  - id: code_commit
-    name: 代码已提交
-    is_final: false
-    ai_guide: |
-      ## 子状态：代码已提交
-      等待提交代码审查。
-
-  - id: code_review
-    name: 代码审查中
-    is_final: false
-    ai_guide: |
-      ## 子状态：代码审查中
-      等待审查通过或拒绝。
-
-  - id: build
-    name: 构建中
-    is_final: false
-    ai_guide: |
-      ## 子状态：构建中
-      CI 构建执行中。
-
-  - id: testing
-    name: 测试中
-    is_final: false
-    ai_guide: |
-      ## 子状态：测试中
-      测试执行中。
-
-  - id: staging
-    name: 预发布环境
-    is_final: false
-    ai_guide: |
-      ## 子状态：预发布环境
-      部署到预发布环境验证。
-
-  - id: production
-    name: 生产环境
-    is_final: false
-    ai_guide: |
-      ## 子状态：生产环境
-      部署到生产环境。
-
-  - id: completed
-    name: 已完成
-    is_final: true
-    ai_guide: |
-      ## 状态：已完成
-      开发流程完成，状态机退出。
-
-transitions:
-  - from: todo
-    to: processing
-    trigger: start
-    description: 开始处理
-
-  - from: processing
-    to: code_commit
-    trigger: start_development
-    description: 开始开发
-
-  - from: code_commit
-    to: code_review
-    trigger: submit_review
-    description: 提交代码审查
-
-  - from: code_review
-    to: build
-    trigger: approve
-    description: 审查通过
-
-  - from: code_review
-    to: code_commit
-    trigger: reject
-    description: 审查拒绝
-
-  - from: build
-    to: testing
-    trigger: build_success
-    description: 构建成功
-
-  - from: build
-    to: code_commit
-    trigger: build_failed
-    description: 构建失败
-
-  - from: testing
-    to: staging
-    trigger: test_pass
-    description: 测试通过
-
-  - from: testing
-    to: build
-    trigger: test_failed
-    description: 测试失败
-
-  - from: staging
-    to: production
-    trigger: promote_production
-    description: 上线生产
-
-  - from: staging
-    to: code_commit
-    trigger: rollback
-    description: 回滚
-
-  - from: production
-    to: completed
-    trigger: confirm_production
-    description: 确认上线完成`,
-  },
   {
     id: 'basic',
     name: '基础流程（标准三状态）',
@@ -310,7 +45,7 @@ states:
     ai_guide: |
       ## 状态：待处理
       任务初始状态。立即转换到 processing 开始处理。
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start
 
   - id: processing
     name: 处理中
@@ -318,7 +53,7 @@ states:
     ai_guide: |
       ## 状态：处理中
       执行任务。完成后转换到 completed。
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=completed
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
 
   - id: completed
     name: 已完成
@@ -357,7 +92,7 @@ states:
     ai_guide: |
       ## 状态：待处理
       **重要**：必须立即转换到 processing 状态，防止重复调度！
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start
 
   - id: processing
     name: 处理中
@@ -368,7 +103,7 @@ states:
       1. 检查任务状态和环境
       2. 执行心跳检测或监控
       3. 完成后转换到 completed
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=completed
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
 
   - id: completed
     name: 已完成
@@ -407,7 +142,7 @@ states:
     ai_guide: |
       ## 状态：待处理
       **重要**：必须立即转换到 processing 状态，防止重复调度！
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start
 
   - id: processing
     name: 处理中
@@ -479,6 +214,7 @@ states:
       5. gh pr create --title "<标题>" --body "<描述>"
 
       PR 创建成功 → 转换到 completed
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
 
   - id: completed
     name: 已完成
@@ -527,7 +263,7 @@ states:
     ai_guide: |
       ## 状态：待处理
       **重要**：必须立即转换到 processing 状态，防止重复调度！
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start
 
   - id: processing
     name: 处理中
@@ -616,6 +352,7 @@ states:
 
       **重要**：不合并此 PR，创建需求让其他 AI 修复
       创建需求后 → 转换到 completed
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
 
   - id: completed
     name: 已完成
@@ -694,7 +431,7 @@ states:
     ai_guide: |
       ## 状态：待处理
       **重要**：必须立即转换到 processing 状态，防止重复调度！
-      命令：taskmanager requirement transition {{requirement_id}} --to-state=processing
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start
 
   - id: processing
     name: 处理中
@@ -764,7 +501,7 @@ states:
       - acceptance: 优化完成并验证通过
 
       创建需求后 → 转换到 completed
-
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger complete
   - id: completed
     name: 已完成
     is_final: true
