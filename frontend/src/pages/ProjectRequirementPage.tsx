@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, type TransitionLog } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
@@ -1257,7 +1258,19 @@ export const ProjectRequirementPage: React.FC = () => {
                     </div>
 
                     <div style={{ marginBottom: 16 }}>
-                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行提示词</div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>执行提示词</span>
+                        <Button
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => {
+                            navigator.clipboard.writeText(detailRequirement.claude_runtime?.prompt || '');
+                            message.success('已复制到剪贴板');
+                          }}
+                        >
+                          复制
+                        </Button>
+                      </div>
                       <pre
                         style={{
                           background: '#f0f5ff',
