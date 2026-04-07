@@ -150,7 +150,8 @@ states:
     ai_guide: |
       ## 状态：处理中
       进入处理阶段，按子状态执行：understanding → analyzing → implementing → submitting
-      完成后转换到 completed
+      先转换到 understanding 开始执行
+      命令：taskmanager requirement transition --id {{requirement_id}} --trigger start_execution
 
   - id: understanding
     name: 理解需求
@@ -227,6 +228,16 @@ states:
       任务完成，状态机退出。
 
 transitions:
+  - from: todo
+    to: processing
+    trigger: start
+    description: 开始处理
+
+  - from: processing
+    to: understanding
+    trigger: start_execution
+    description: 开始理解需求
+
   - from: understanding
     to: analyzing
     trigger: understood
