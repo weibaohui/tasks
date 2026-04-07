@@ -45,11 +45,11 @@ type RedispatchRequirementCommand struct {
 }
 
 type RequirementApplicationService struct {
-	requirementRepo    domain.RequirementRepository
-	projectRepo        domain.ProjectRepository
-	idGenerator        domain.IDGenerator
-	replicaCleanupSvc  domain.ReplicaCleanupService
-	stateMachineRepo   state_machine.Repository
+	requirementRepo   domain.RequirementRepository
+	projectRepo       domain.ProjectRepository
+	idGenerator       domain.IDGenerator
+	replicaCleanupSvc domain.ReplicaCleanupService
+	stateMachineRepo  state_machine.Repository
 }
 
 func NewRequirementApplicationService(
@@ -65,6 +65,26 @@ func NewRequirementApplicationService(
 		idGenerator:       idGenerator,
 		replicaCleanupSvc: replicaCleanupSvc,
 		stateMachineRepo:  stateMachineRepo,
+	}
+}
+
+// recordTransitionIfNeeded 如果状态发生变化，记录转换日志
+func (s *RequirementApplicationService) recordTransitionIfNeeded(ctx context.Context, requirement *domain.Requirement, trigger, triggeredBy, remark string) {
+	if s.stateMachineRepo == nil {
+		return
+	}
+	previousStatus := requirement.PreviousStatus()
+	currentStatus := requirement.Status()
+	if previousStatus != "" && previousStatus != currentStatus {
+		log := state_machine.NewTransitionLog(
+			requirement.ID().String(),
+			string(previousStatus),
+			string(currentStatus),
+			trigger,
+			triggeredBy,
+			remark,
+		)
+		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
 	}
 }
 
@@ -213,23 +233,6 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 	// 先清理分身和工作区（应用层职责）
 	if s.replicaCleanupSvc != nil {
 		_ = s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
-	}
-
-	// 记录状态转换日志
-	if s.stateMachineRepo != nil {
-		fromStatus := string(requirement.Status())
-		toStatus := "pr_opened"
-		if fromStatus != toStatus {
-			log := state_machine.NewTransitionLog(
-				requirement.ID().String(),
-				fromStatus,
-				toStatus,
-				"pr_opened",
-				"system",
-				"PR已打开",
-			)
-			_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
-		}
 	}
 
 	requirement.MarkPROpened()

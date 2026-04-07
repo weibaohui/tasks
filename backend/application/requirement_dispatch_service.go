@@ -154,6 +154,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 获取当前状态机状态和 AI Guide
 	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
 
+	// 获取完整的状态机配置（用于注入触发器表）
+	smConfig := s.getStateMachineConfig(ctx, project.ID().String(), requirement.RequirementType())
+
 	// 记录状态转换日志
 	if s.stateMachineRepo != nil && currentState != "" {
 		fromStatus := string(requirement.Status())
@@ -174,7 +177,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
 	requirement.SyncStatusFromStateMachine(currentState)
 
-	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide)
+	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide, smConfig)
 
 	// 保存 Claude Runtime 执行提示词
 	requirement.SetClaudeRuntimePrompt(dispatchPrompt)
@@ -364,6 +367,29 @@ func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, r
 	_ = s.stateMachineRepo.SaveRequirementState(ctx, rs)
 }
 
+// getStateMachineConfig 获取完整的状态机配置
+func (s *RequirementDispatchService) getStateMachineConfig(ctx context.Context, projectID string, reqType domain.RequirementType) *state_machine.Config {
+	if s.stateMachineRepo == nil {
+		return nil
+	}
+
+	// 获取项目状态机映射
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	if err != nil {
+		return nil
+	}
+
+	snap := psm.ToSnapshot()
+
+	// 获取状态机
+	sm, err := s.stateMachineRepo.GetStateMachine(ctx, snap.StateMachineID)
+	if err != nil {
+		return nil
+	}
+
+	return sm.Config
+}
+
 func workspaceRootPath() string {
 	return config.GetAgentAIWorkSpaceRoot()
 }
@@ -407,7 +433,7 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 	return channelType, chatID, nil
 }
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *state_machine.Config) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 	requirementType := "普通需求"
 	if isHeartbeat {
@@ -415,7 +441,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 	}
 
 	// 构建状态机使用指南和 AI 指南
-	stateMachineGuide := buildStateMachineGuide(stateMachineName)
+	stateMachineGuide := buildStateMachineGuide(stateMachineName, smConfig)
 	stateAIGuide := buildStateAIGuide(aiGuide)
 
 	// 心跳需求：调度员角色，不直接修改代码
@@ -526,13 +552,13 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 }
 
 // buildStateMachineGuide 构建状态机使用指南
-func buildStateMachineGuide(stateMachineName string) string {
+func buildStateMachineGuide(stateMachineName string, smConfig *state_machine.Config) string {
 	if stateMachineName == "" {
 		return `【状态机使用指南】
 当前需求未配置状态机。如需使用状态机管理工作流，请联系管理员配置。`
 	}
 
-	return fmt.Sprintf(`【状态机使用指南】
+	guide := fmt.Sprintf(`【状态机使用指南】
 本需求关联的状态机名称：%s
 
 你可以使用以下命令管理需求状态：
@@ -555,6 +581,89 @@ func buildStateMachineGuide(stateMachineName string) string {
    taskmanager requirement transition --id <需求ID> --trigger=<触发器>
 `,
 		stateMachineName)
+
+	// 如果有状态机配置，注入完整触发器表
+	if smConfig != nil {
+		triggerTable := buildTriggerTable(smConfig)
+		if triggerTable != "" {
+			guide += fmt.Sprintf(`【状态机触发器表】
+%s
+
+`, triggerTable)
+		}
+	}
+
+	return guide
+}
+
+// buildTriggerTable 构建状态机的完整触发器表（Markdown格式）
+// 包含所有状态和从该状态出发可用的所有触发器
+func buildTriggerTable(smConfig *state_machine.Config) string {
+	if smConfig == nil || len(smConfig.States) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("| 源状态 | 触发器 | 目标状态 | 说明 |\n")
+	sb.WriteString("|--------|--------|----------|------|\n")
+
+	// 按状态分组，显示每个状态可用的触发器
+	for _, state := range smConfig.States {
+		if state.IsFinal {
+			// 终态不显示触发器（不会有从终态出发的转换）
+			continue
+		}
+
+		triggers := smConfig.GetAvailableTriggers(state.ID)
+		if len(triggers) == 0 {
+			// 没有触发器的状态显示为 -
+			sb.WriteString(fmt.Sprintf("| %s | - | - | 无可用触发器 |\n", state.Name))
+			continue
+		}
+
+		// 每个触发器一行
+		for i, trigger := range triggers {
+			// 查找对应的转换获取目标状态
+			transition := findTransitionByTrigger(smConfig, state.ID, trigger.Trigger)
+			toState := ""
+			description := trigger.Description
+			if transition != nil {
+				toState = getStateName(smConfig, transition.ToState)
+			}
+
+			// 第一行显示状态名，后续行留空
+			fromState := state.Name
+			if i > 0 {
+				fromState = ""
+			}
+
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n",
+				fromState, trigger.Trigger, toState, description))
+		}
+	}
+
+	return sb.String()
+}
+
+// findTransitionByTrigger 根据触发器查找转换
+func findTransitionByTrigger(smConfig *state_machine.Config, fromState, trigger string) *state_machine.Transition {
+	for i := range smConfig.Transitions {
+		t := &smConfig.Transitions[i]
+		if t.FromState == fromState && t.Trigger == trigger {
+			return t
+		}
+	}
+	return nil
+}
+
+// getStateName 根据状态ID获取状态名称
+func getStateName(smConfig *state_machine.Config, stateID string) string {
+	for _, s := range smConfig.States {
+		if s.ID == stateID {
+			return s.Name
+		}
+	}
+	return stateID
 }
 
 // buildStateAIGuide 构建状态的 AI 指南

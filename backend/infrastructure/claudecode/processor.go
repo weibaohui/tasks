@@ -131,13 +131,13 @@ func boolPtr(b bool) *bool {
 
 // ClaudeCodeProcessor 处理 CodingAgent 类型消息的 Claude Code 会话
 type ClaudeCodeProcessor struct {
-	logger            *zap.Logger
-	hookManager       *hook.Manager
-	providerRepo      domain.LLMProviderRepository
-	idGenerator       domain.IDGenerator
-	requirementRepo   domain.RequirementRepository
-	conversationRepo  domain.ConversationRecordRepository
-	replicaCleanupSvc domain.ReplicaCleanupService
+	logger              *zap.Logger
+	hookManager         *hook.Manager
+	providerRepo        domain.LLMProviderRepository
+	idGenerator         domain.IDGenerator
+	requirementRepo     domain.RequirementRepository
+	conversationRepo    domain.ConversationRecordRepository
+	replicaCleanupSvc   domain.ReplicaCleanupService
 }
 
 // ClaudeCodeProcessorInterface 定义 Claude Code 处理器的接口
@@ -163,13 +163,13 @@ func NewClaudeCodeProcessor(
 	conversationRepo domain.ConversationRecordRepository,
 ) *ClaudeCodeProcessor {
 	return &ClaudeCodeProcessor{
-		logger:            logger,
-		hookManager:       hookManager,
-		providerRepo:      providerRepo,
-		idGenerator:       idGenerator,
-		requirementRepo:   requirementRepo,
-		conversationRepo:  conversationRepo,
-		replicaCleanupSvc: replicaCleanupSvc,
+		logger:              logger,
+		hookManager:         hookManager,
+		providerRepo:        providerRepo,
+		idGenerator:         idGenerator,
+		requirementRepo:     requirementRepo,
+		conversationRepo:    conversationRepo,
+		replicaCleanupSvc:   replicaCleanupSvc,
 	}
 }
 
