@@ -683,7 +683,8 @@ export const ProjectRequirementPage: React.FC = () => {
             <Col xs={24} sm={12} md={8} lg={6} key={project.id}>
               <Card
                 hoverable
-                style={{ height: '100%' }}
+                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                styles={{ body: { flex: 1 } }}
                 onClick={() => handleViewRequirements(project.id)}
                 actions={[
                   <SettingOutlined key="config" onClick={(e) => { e.stopPropagation(); openProjectConfig(project); }} />,
