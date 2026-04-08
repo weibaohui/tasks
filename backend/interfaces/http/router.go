@@ -450,6 +450,15 @@ func SetupRoutesWithManagement(
 			}
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}))
+
+		// 需求状态统计（动态从数据库提取）
+		mux.HandleFunc("/api/v1/requirements/status-stats", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				requirementHandler.GetStatusStats(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}))
 	}
 
 	// 需求类型路由

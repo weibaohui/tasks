@@ -190,6 +190,24 @@ func (h *RequirementHandler) GetRequirementTransitionHistory(w http.ResponseWrit
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// GetStatusStats 获取状态统计数据（动态从数据库提取）
+func (h *RequirementHandler) GetStatusStats(w http.ResponseWriter, r *http.Request) {
+	projectIDStr := r.URL.Query().Get("project_id")
+	var projectID *domain.ProjectID
+	if projectIDStr != "" {
+		id := domain.NewProjectID(projectIDStr)
+		projectID = &id
+	}
+
+	stats, err := h.requirementService.GetStatusStats(r.Context(), projectID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(stats)
+}
+
 func (h *RequirementHandler) DispatchRequirement(w http.ResponseWriter, r *http.Request) {
 
 	var req DispatchRequirementRequest

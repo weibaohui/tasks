@@ -7,6 +7,7 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/infrastructure/persistence"
 )
 
 var (
@@ -218,6 +219,18 @@ func (s *RequirementApplicationService) GetRequirementTransitionHistory(ctx cont
 		return nil, nil
 	}
 	return s.stateMachineRepo.ListTransitionLogs(ctx, requirementID.String())
+}
+
+// StatusStat 状态统计数据
+// GetStatusStats 获取所有状态的统计数据（动态从数据库提取）
+func (s *RequirementApplicationService) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]persistence.StatusStat, error) {
+	// 使用类型断言调用 repository 的自定义方法
+	repo, ok := s.requirementRepo.(*persistence.SQLiteRequirementRepository)
+	if !ok {
+		// 如果不是 SQLite repository，返回空
+		return []persistence.StatusStat{}, nil
+	}
+	return repo.GetStatusStats(ctx, projectID)
 }
 
 func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Context, cmd ReportRequirementPRCommand) (*domain.Requirement, error) {

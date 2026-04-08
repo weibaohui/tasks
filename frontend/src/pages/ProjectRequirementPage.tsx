@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
-import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, type TransitionLog } from '../api/projectRequirementApi';
+import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
@@ -44,6 +44,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const { user } = useAuthStore();
   const [projects, setProjects] = useState<Project[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [statusStats, setStatusStats] = useState<StatusStat[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -176,8 +177,12 @@ export const ProjectRequirementPage: React.FC = () => {
   const fetchRequirements = useCallback(async (projectId?: string) => {
     setLoadingRequirements(true);
     try {
-      const data = await listRequirements(projectId || selectedProjectId || undefined);
+      const [data, stats] = await Promise.all([
+        listRequirements(projectId || selectedProjectId || undefined),
+        getStatusStats(projectId || selectedProjectId || undefined),
+      ]);
       setRequirements(data);
+      setStatusStats(stats);
     } catch (_error) {
       message.error('获取需求列表失败');
     } finally {
@@ -704,7 +709,7 @@ export const ProjectRequirementPage: React.FC = () => {
             children: (
               <>
                 <RequirementStatusStats
-                  requirements={requirements}
+                  statusStats={statusStats}
                   statusFilter={statusFilter}
                   onStatusClick={(status) => setStatusFilter(status)}
                 />
