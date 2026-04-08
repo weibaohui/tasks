@@ -676,6 +676,22 @@ export const ProjectRequirementPage: React.FC = () => {
         </Space>
       </div>
       <Row gutter={[16, 16]}>
+        {loadingProjects && projects.length === 0 && (
+          [1, 2, 3, 4].map((i) => (
+            <Col xs={24} sm={12} md={8} lg={6} key={i}>
+              <Card loading style={{ height: 220 }} />
+            </Col>
+          ))
+        )}
+        {!loadingProjects && projects.length === 0 && (
+          <Col span={24}>
+            <Card>
+              <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
+                暂无项目，点击"新建项目"创建第一个项目
+              </div>
+            </Card>
+          </Col>
+        )}
         {projects.map((project) => {
           const stats = projectStatsMap[project.id] || [];
           const total = stats.reduce((sum, s) => sum + s.count, 0);
@@ -717,7 +733,7 @@ export const ProjectRequirementPage: React.FC = () => {
                               const colors = getStatusColor(stat.status);
                               const label = statusLabels[stat.status] || stat.status;
                               return (
-                                <Tag key={stat.status} style={{ fontSize: 11, margin: 0 }} color={colors.color}>
+                                <Tag key={stat.status} style={{ fontSize: 11, margin: 0, color: colors.color, backgroundColor: colors.bgColor, borderColor: colors.borderColor }}>
                                   {label}: {stat.count}
                                 </Tag>
                               );
