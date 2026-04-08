@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS agents (
     enable_thinking_process INTEGER NOT NULL,
     agent_type TEXT NOT NULL DEFAULT 'BareLLM',
     shadow_from TEXT,
+    claude_code_config TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -212,6 +213,8 @@ CREATE TABLE IF NOT EXISTS requirements (
     prompt_tokens INTEGER DEFAULT 0,
     completion_tokens INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0,
+    requirement_type TEXT NOT NULL DEFAULT 'normal',
+    previous_status TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
