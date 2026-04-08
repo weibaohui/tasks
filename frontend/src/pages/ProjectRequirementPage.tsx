@@ -17,6 +17,7 @@ import { requirementTypeApi, type RequirementType } from '../api/requirementType
 import { getProjectStateMachineByType } from '../api/projectStateMachineApi';
 import { getStateMachine } from '../api/stateMachineApi';
 import type { State } from '../types/stateMachine';
+import { statusLabels } from '../constants/requirementStatus';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -147,21 +148,6 @@ export const ProjectRequirementPage: React.FC = () => {
     () => projects.map((project) => ({ label: project.name, value: project.id })),
     [projects],
   );
-
-  // 状态中文名映射（与 RequirementStatusStats 保持一致）
-  const statusLabels: Record<string, string> = {
-    todo: '待处理',
-    preparing: '准备中',
-    understanding: '理解需求',
-    analyzing: '分析方案',
-    implementing: '编写代码',
-    submitting: '提交PR',
-    coding: '编码中',
-    pr_opened: 'PR已开',
-    failed: '失败',
-    completed: '已完成',
-    done: '完成',
-  };
 
   // 动态生成状态选项
   const statusOptions = [

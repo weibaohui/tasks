@@ -145,6 +145,13 @@ type RequirementRepository interface {
 	FindByProjectID(ctx context.Context, projectID ProjectID) ([]*Requirement, error)
 	FindAll(ctx context.Context) ([]*Requirement, error)
 	Delete(ctx context.Context, id RequirementID) error
+	GetStatusStats(ctx context.Context, projectID *ProjectID) ([]StatusStat, error)
+}
+
+// StatusStat 状态统计数据
+type StatusStat struct {
+	Status string `json:"status"`
+	Count  int    `json:"count"`
 }
 
 // EventStore 事件存储接口

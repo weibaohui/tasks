@@ -133,14 +133,8 @@ func (r *SQLiteRequirementRepository) Delete(ctx context.Context, id domain.Requ
 	return err
 }
 
-// StatusStat 状态统计数据
-type StatusStat struct {
-	Status string `json:"status"`
-	Count  int    `json:"count"`
-}
-
 // GetStatusStats 获取所有状态的统计数据（动态从数据库提取）
-func (r *SQLiteRequirementRepository) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]StatusStat, error) {
+func (r *SQLiteRequirementRepository) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]domain.StatusStat, error) {
 	var query string
 	var args []interface{}
 
@@ -157,9 +151,9 @@ func (r *SQLiteRequirementRepository) GetStatusStats(ctx context.Context, projec
 	}
 	defer rows.Close()
 
-	var stats []StatusStat
+	var stats []domain.StatusStat
 	for rows.Next() {
-		var stat StatusStat
+		var stat domain.StatusStat
 		if err := rows.Scan(&stat.Status, &stat.Count); err != nil {
 			return nil, err
 		}
