@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip } from 'antd';
-import { CopyOutlined } from '@ant-design/icons';
+import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col } from 'antd';
+import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
@@ -17,7 +17,7 @@ import { requirementTypeApi, type RequirementType } from '../api/requirementType
 import { getProjectStateMachineByType } from '../api/projectStateMachineApi';
 import { getStateMachine } from '../api/stateMachineApi';
 import type { State } from '../types/stateMachine';
-import { statusLabels } from '../constants/requirementStatus';
+import { statusLabels, getStatusColor } from '../constants/requirementStatus';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -50,8 +50,9 @@ export const ProjectRequirementPage: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [activeTabKey, setActiveTabKey] = useState<string>('requirements');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const selectedProjectId = selectedProject?.id || '';
+  const [projectStatsMap, setProjectStatsMap] = useState<Record<string, StatusStat[]>>({});
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [requirementModalOpen, setRequirementModalOpen] = useState(false);
@@ -163,15 +164,25 @@ export const ProjectRequirementPage: React.FC = () => {
     try {
       const data = await listProjects();
       setProjects(data);
-      if (!selectedProjectId && data.length > 0) {
-        setSelectedProjectId(data[0].id);
-      }
+      // 获取每个项目的状态统计
+      const statsMap: Record<string, StatusStat[]> = {};
+      await Promise.all(
+        data.map(async (project) => {
+          try {
+            const stats = await getStatusStats(project.id);
+            statsMap[project.id] = stats;
+          } catch {
+            statsMap[project.id] = [];
+          }
+        }),
+      );
+      setProjectStatsMap(statsMap);
     } catch (_error) {
       message.error('获取项目列表失败');
     } finally {
       setLoadingProjects(false);
     }
-  }, [selectedProjectId]);
+  }, []);
 
   const fetchRequirements = useCallback(async (projectId?: string) => {
     setLoadingRequirements(true);
@@ -333,7 +344,7 @@ export const ProjectRequirementPage: React.FC = () => {
       await deleteProject(id);
       message.success('删除项目成功');
       if (selectedProjectId === id) {
-        setSelectedProjectId('');
+        setSelectedProject(null);
       }
       await fetchProjects();
     } catch (_error) {
@@ -349,9 +360,11 @@ export const ProjectRequirementPage: React.FC = () => {
   };
 
   const handleViewRequirements = async (projectId: string) => {
-    setSelectedProjectId(projectId);
-    setActiveTabKey('requirements');
-    await fetchRequirements(projectId);
+    const project = projects.find((p) => p.id === projectId);
+    if (project) {
+      setSelectedProject(project);
+      await fetchRequirements(projectId);
+    }
   };
 
   const openEditRequirement = (item: Requirement) => {
@@ -503,50 +516,6 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const projectColumns = [
-    { title: '项目名称', dataIndex: 'name', key: 'name' },
-    { title: '仓库地址', dataIndex: 'git_repo_url', key: 'git_repo_url' },
-    { title: '默认分支', dataIndex: 'default_branch', key: 'default_branch' },
-    {
-      title: '初始化步骤',
-      key: 'init_steps',
-      render: (_: unknown, project: Project) => (project.init_steps || []).length,
-    },
-    {
-      title: '心跳',
-      key: 'heartbeat',
-      width: 80,
-      render: (_: unknown, project: Project) =>
-        project.heartbeat_enabled ? (
-          <Tag color="green">启用</Tag>
-        ) : (
-          <Tag color="default">未启用</Tag>
-        ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, project: Project) => (
-        <Space>
-          <Button type="link" onClick={() => openProjectConfig(project)}>
-            配置
-          </Button>
-          <Button type="link" onClick={() => handleViewRequirements(project.id)}>
-            查看需求
-          </Button>
-          <Button type="link" onClick={() => openEditProject(project)}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除该项目？" onConfirm={() => handleDeleteProject(project.id)}>
-            <Button type="link" danger>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
   // 获取类型配置（用于显示）
   const getTypeDisplay = (code: string): { label: string; color: string } => {
     const typeConfig = requirementTypes.find((t) => t.code === code);
@@ -696,111 +665,176 @@ export const ProjectRequirementPage: React.FC = () => {
     },
   ];
 
-  return (
-    <div style={{ padding: 0 }}>
-      <Tabs
-        activeKey={activeTabKey}
-        onChange={(key) => setActiveTabKey(key)}
+  // 渲染项目卡片列表
+  const renderProjectCards = () => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>项目列表</h2>
+        <Space>
+          <Button onClick={() => fetchProjects()} loading={loadingProjects}>刷新</Button>
+          <Button type="primary" onClick={openCreateProject}>新建项目</Button>
+        </Space>
+      </div>
+      <Row gutter={[16, 16]}>
+        {loadingProjects && projects.length === 0 && (
+          [1, 2, 3, 4].map((i) => (
+            <Col xs={24} sm={12} md={8} lg={6} key={i}>
+              <Card loading style={{ height: 220 }} />
+            </Col>
+          ))
+        )}
+        {!loadingProjects && projects.length === 0 && (
+          <Col span={24}>
+            <Card>
+              <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
+                暂无项目，点击"新建项目"创建第一个项目
+              </div>
+            </Card>
+          </Col>
+        )}
+        {projects.map((project) => {
+          const stats = projectStatsMap[project.id] || [];
+          const total = stats.reduce((sum, s) => sum + s.count, 0);
+          return (
+            <Col xs={24} sm={12} md={8} lg={6} key={project.id}>
+              <Card
+                hoverable
+                style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                styles={{ body: { flex: 1 } }}
+                onClick={() => handleViewRequirements(project.id)}
+                actions={[
+                  <SettingOutlined key="config" onClick={(e) => { e.stopPropagation(); openProjectConfig(project); }} />,
+                  <EditOutlined key="edit" onClick={(e) => { e.stopPropagation(); openEditProject(project); }} />,
+                  <Popconfirm key="delete" title="确认删除该项目？" description="删除后不可恢复，该项目下所有需求仍会保留" onConfirm={(e) => { e?.stopPropagation(); handleDeleteProject(project.id); }} onCancel={(e) => e?.stopPropagation()}>
+                    <DeleteOutlined onClick={(e) => e.stopPropagation()} />
+                  </Popconfirm>,
+                ]}
+              >
+                <Card.Meta
+                  title={project.name}
+                  description={
+                    <div>
+                      <div style={{ fontSize: 12, color: '#999', marginBottom: 8, wordBreak: 'break-all' }}>
+                        {project.git_repo_url}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666' }}>
+                        分支: {project.default_branch}
+                      </div>
+                      {project.heartbeat_enabled && (
+                        <Tag color="green" style={{ marginTop: 4, fontSize: 11 }}>心跳</Tag>
+                      )}
+                      <div style={{ marginTop: 8, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
+                          需求总数: {total}
+                        </div>
+                        {stats.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {stats.map((stat) => {
+                              const colors = getStatusColor(stat.status);
+                              const label = statusLabels[stat.status] || stat.status;
+                              return (
+                                <Tag key={stat.status} style={{ fontSize: 11, margin: 0, color: colors.color, backgroundColor: colors.bgColor, borderColor: colors.borderColor }}>
+                                  {label}: {stat.count}
+                                </Tag>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  }
+                />
+              </Card>
+            </Col>
+          );
+        })}
+      </Row>
+    </div>
+  );
+
+  // 渲染需求管理视图
+  const renderRequirements = () => (
+    <div>
+      <Breadcrumb
+        style={{ marginBottom: 16 }}
         items={[
           {
-            key: 'requirements',
-            label: '需求管理',
-            children: (
-              <>
-                <RequirementStatusStats
-                  statusStats={statusStats}
-                  statusFilter={statusFilter}
-                  onStatusClick={(status) => setStatusFilter(status)}
-                />
-                <Card
-                  title={`需求列表 (${filteredRequirements.length})`}
-                  extra={
-                  <Space>
-                    <Select
-                      style={{ width: 280 }}
-                      placeholder="选择项目"
-                      value={selectedProjectId || undefined}
-                      options={projectOptions}
-                      onChange={(value) => setSelectedProjectId(value)}
-                    />
-                    <Select
-                      style={{ width: 180 }}
-                      placeholder="按状态过滤"
-                      value={statusFilter || undefined}
-                      options={statusOptions}
-                      onChange={(value) => setStatusFilter(value || '')}
-                      allowClear
-                    />
-                    <Select
-                      style={{ width: 150 }}
-                      placeholder="按类型过滤"
-                      value={typeFilter || undefined}
-                      options={[
-                        { label: '全部类型', value: '' },
-                        { label: '普通 (normal)', value: 'normal' },
-                        { label: '心跳 (heartbeat)', value: 'heartbeat' },
-                        ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
-                      ]}
-                      onChange={(value) => setTypeFilter(value || '')}
-                      allowClear
-                    />
-                    <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
-                    <Button type="primary" disabled={!selectedProjectId} onClick={openCreateRequirement}>
-                      新建需求
-                    </Button>
-                    <Popconfirm
-                      title="批量删除"
-                      description={`确定要删除选中的 ${selectedRequirementKeys.length} 个需求吗？`}
-                      onConfirm={handleBatchDeleteRequirements}
-                      okText="确认"
-                      cancelText="取消"
-                      disabled={selectedRequirementKeys.length === 0}
-                    >
-                      <Button danger disabled={selectedRequirementKeys.length === 0}>
-                        批量删除 ({selectedRequirementKeys.length})
-                      </Button>
-                    </Popconfirm>
-                  </Space>
-                }
-              >
-                <Table<Requirement>
-                  rowKey="id"
-                  loading={loadingRequirements}
-                  dataSource={filteredRequirements}
-                  columns={requirementColumns}
-                  rowSelection={{
-                    type: 'checkbox',
-                    selectedRowKeys: selectedRequirementKeys,
-                    onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
-                  }}
-                />
-              </Card>
-              </>
-            ),
+            title: <a onClick={() => { setSelectedProject(null); setStatusFilter(''); setTypeFilter(''); setSelectedRequirementKeys([]); }}>项目列表</a>,
           },
           {
-            key: 'projects',
-            label: '项目管理',
-            children: (
-              <Card
-                title={`项目列表 (${projects.length})`}
-                extra={
-                  <Space>
-                    <Button onClick={() => fetchProjects()}>刷新</Button>
-                    <Button type="primary" onClick={openCreateProject}>
-                      新建项目
-                    </Button>
-                  </Space>
-                }
-              >
-                <Table<Project> rowKey="id" loading={loadingProjects} dataSource={projects} columns={projectColumns} />
-              </Card>
-            ),
+            title: selectedProject?.name || '',
           },
         ]}
       />
+      <RequirementStatusStats
+        statusStats={statusStats}
+        statusFilter={statusFilter}
+        onStatusClick={(status) => setStatusFilter(status)}
+      />
+      <Card
+        title={`需求列表 (${filteredRequirements.length})`}
+        extra={
+          <Space>
+            <Select
+              style={{ width: 180 }}
+              placeholder="按状态过滤"
+              value={statusFilter || undefined}
+              options={statusOptions}
+              onChange={(value) => setStatusFilter(value || '')}
+              allowClear
+            />
+            <Select
+              style={{ width: 150 }}
+              placeholder="按类型过滤"
+              value={typeFilter || undefined}
+              options={[
+                { label: '全部类型', value: '' },
+                { label: '普通 (normal)', value: 'normal' },
+                { label: '心跳 (heartbeat)', value: 'heartbeat' },
+                ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
+              ]}
+              onChange={(value) => setTypeFilter(value || '')}
+              allowClear
+            />
+            <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
+            <Button type="primary" onClick={openCreateRequirement}>
+              新建需求
+            </Button>
+            <Popconfirm
+              title="批量删除"
+              description={`确定要删除选中的 ${selectedRequirementKeys.length} 个需求吗？`}
+              onConfirm={handleBatchDeleteRequirements}
+              okText="确认"
+              cancelText="取消"
+              disabled={selectedRequirementKeys.length === 0}
+            >
+              <Button danger disabled={selectedRequirementKeys.length === 0}>
+                批量删除 ({selectedRequirementKeys.length})
+              </Button>
+            </Popconfirm>
+          </Space>
+        }
+      >
+        <Table<Requirement>
+          rowKey="id"
+          loading={loadingRequirements}
+          dataSource={filteredRequirements}
+          columns={requirementColumns}
+          rowSelection={{
+            type: 'checkbox',
+            selectedRowKeys: selectedRequirementKeys,
+            onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
+          }}
+        />
+      </Card>
+    </div>
+  );
 
-      <Modal title={editingProject ? '编辑项目' : '新建项目'} open={projectModalOpen} footer={null} onCancel={() => setProjectModalOpen(false)}>
+  return (
+    <div style={{ padding: 0 }}>
+      {selectedProject ? renderRequirements() : renderProjectCards()}
+
+      <Drawer title={editingProject ? '编辑项目' : '新建项目'} open={projectModalOpen} onClose={() => setProjectModalOpen(false)} width={480}>
         <Form layout="vertical" form={projectForm} onFinish={submitProject}>
           <Form.Item label="项目名称" name="name" rules={[{ required: true, message: '请输入项目名称' }]}>
             <Input />
@@ -841,7 +875,7 @@ export const ProjectRequirementPage: React.FC = () => {
             保存
           </Button>
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal title={editingRequirement ? '编辑需求' : '新建需求'} open={requirementModalOpen} footer={null} onCancel={() => setRequirementModalOpen(false)}>
         <Form layout="vertical" form={requirementForm} onFinish={submitRequirement}>
