@@ -148,15 +148,28 @@ export const ProjectRequirementPage: React.FC = () => {
     [projects],
   );
 
+  // 状态中文名映射（与 RequirementStatusStats 保持一致）
+  const statusLabels: Record<string, string> = {
+    todo: '待处理',
+    preparing: '准备中',
+    understanding: '理解需求',
+    analyzing: '分析方案',
+    implementing: '编写代码',
+    submitting: '提交PR',
+    coding: '编码中',
+    pr_opened: 'PR已开',
+    failed: '失败',
+    completed: '已完成',
+    done: '完成',
+  };
+
+  // 动态生成状态选项
   const statusOptions = [
     { label: '全部状态', value: '' },
-    { label: '待处理 (todo)', value: 'todo' },
-    { label: '准备中 (preparing)', value: 'preparing' },
-    { label: '编码中 (coding)', value: 'coding' },
-    { label: 'PR已开 (pr_opened)', value: 'pr_opened' },
-    { label: '失败 (failed)', value: 'failed' },
-    { label: '已完成 (completed)', value: 'completed' },
-    { label: '完成 (done)', value: 'done' },
+    ...statusStats.map((stat) => ({
+      label: `${statusLabels[stat.status] || stat.status} (${stat.status})`,
+      value: stat.status,
+    })),
   ];
 
   const fetchProjects = useCallback(async () => {
