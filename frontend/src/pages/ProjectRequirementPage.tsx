@@ -688,7 +688,9 @@ export const ProjectRequirementPage: React.FC = () => {
                 actions={[
                   <SettingOutlined key="config" onClick={(e) => { e.stopPropagation(); openProjectConfig(project); }} />,
                   <EditOutlined key="edit" onClick={(e) => { e.stopPropagation(); openEditProject(project); }} />,
-                  <DeleteOutlined key="delete" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} />,
+                  <Popconfirm key="delete" title="确认删除该项目？" description="删除后不可恢复，该项目下所有需求仍会保留" onConfirm={(e) => { e?.stopPropagation(); handleDeleteProject(project.id); }} onCancel={(e) => e?.stopPropagation()}>
+                    <DeleteOutlined onClick={(e) => e.stopPropagation()} />
+                  </Popconfirm>,
                 ]}
               >
                 <Card.Meta
