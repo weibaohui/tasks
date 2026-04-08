@@ -220,6 +220,11 @@ func (s *RequirementApplicationService) GetRequirementTransitionHistory(ctx cont
 	return s.stateMachineRepo.ListTransitionLogs(ctx, requirementID.String())
 }
 
+// GetStatusStats 获取所有状态的统计数据（动态从数据库提取）
+func (s *RequirementApplicationService) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]domain.StatusStat, error) {
+	return s.requirementRepo.GetStatusStats(ctx, projectID)
+}
+
 func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Context, cmd ReportRequirementPRCommand) (*domain.Requirement, error) {
 	fmt.Printf("[DEBUG] ReportRequirementPROpened CALLED: id=%s\n", cmd.ID)
 	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)

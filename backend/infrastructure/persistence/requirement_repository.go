@@ -133,6 +133,35 @@ func (r *SQLiteRequirementRepository) Delete(ctx context.Context, id domain.Requ
 	return err
 }
 
+// GetStatusStats 获取所有状态的统计数据（动态从数据库提取）
+func (r *SQLiteRequirementRepository) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]domain.StatusStat, error) {
+	var query string
+	var args []interface{}
+
+	if projectID != nil {
+		query = `SELECT status, COUNT(*) as count FROM requirements WHERE project_id = ? GROUP BY status ORDER BY count DESC`
+		args = append(args, projectID.String())
+	} else {
+		query = `SELECT status, COUNT(*) as count FROM requirements GROUP BY status ORDER BY count DESC`
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []domain.StatusStat
+	for rows.Next() {
+		var stat domain.StatusStat
+		if err := rows.Scan(&stat.Status, &stat.Count); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+	return stats, rows.Err()
+}
+
 func scanRequirements(rows *sql.Rows) ([]*domain.Requirement, error) {
 	requirements := make([]*domain.Requirement, 0)
 	for rows.Next() {

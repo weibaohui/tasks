@@ -119,3 +119,17 @@ export async function getRequirementTransitionHistory(id: string): Promise<Trans
   });
   return response.data;
 }
+
+// 状态统计数据
+export interface StatusStat {
+  status: string;
+  count: number;
+}
+
+// 获取状态统计数据（动态从数据库提取）
+export async function getStatusStats(projectId?: string): Promise<StatusStat[]> {
+  const response = await apiClient.get<StatusStat[]>('/requirements/status-stats', {
+    params: projectId ? { project_id: projectId } : undefined,
+  });
+  return response.data;
+}

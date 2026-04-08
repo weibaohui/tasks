@@ -1,84 +1,21 @@
 import React from 'react';
 import { Card, Row, Col, Badge } from 'antd';
-import type { Requirement } from '../../types/projectRequirement';
+import type { StatusStat } from '../../api/projectRequirementApi';
+import { statusLabels, getStatusColor } from '../../constants/requirementStatus';
 
 interface RequirementStatusStatsProps {
-  requirements: Requirement[];
+  statusStats: StatusStat[];
   statusFilter: string;
   onStatusClick: (status: string) => void;
 }
 
-interface StatusConfig {
-  key: string;
-  label: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-}
-
-const statusConfigs: StatusConfig[] = [
-  {
-    key: 'todo',
-    label: '待处理',
-    color: '#666666',
-    bgColor: '#f5f5f5',
-    borderColor: '#d9d9d9',
-  },
-  {
-    key: 'preparing',
-    label: '准备中',
-    color: '#d48806',
-    bgColor: '#fffbe6',
-    borderColor: '#ffd666',
-  },
-  {
-    key: 'coding',
-    label: '编码中',
-    color: '#0958d9',
-    bgColor: '#e6f4ff',
-    borderColor: '#91caff',
-  },
-  {
-    key: 'pr_opened',
-    label: 'PR已开',
-    color: '#389e0d',
-    bgColor: '#f6ffed',
-    borderColor: '#b7eb8f',
-  },
-  {
-    key: 'failed',
-    label: '失败',
-    color: '#cf1322',
-    bgColor: '#fff2f0',
-    borderColor: '#ffccc7',
-  },
-  {
-    key: 'completed',
-    label: '已完成',
-    color: '#52c41a',
-    bgColor: '#f6ffed',
-    borderColor: '#b7eb8f',
-  },
-  {
-    key: 'done',
-    label: '完成',
-    color: '#237804',
-    bgColor: '#d9f7be',
-    borderColor: '#95de64',
-  },
-];
-
 export const RequirementStatusStats: React.FC<RequirementStatusStatsProps> = ({
-  requirements,
+  statusStats,
   statusFilter,
   onStatusClick,
 }) => {
-  const getStatusCount = (status: string) => {
-    return requirements.filter((req) => req.status === status).length;
-  };
-
   const getTotalCount = () => {
-    return requirements.length;
+    return statusStats.reduce((sum, stat) => sum + stat.count, 0);
   };
 
   const isActive = (status: string) => {
@@ -127,43 +64,44 @@ export const RequirementStatusStats: React.FC<RequirementStatusStatsProps> = ({
           </div>
         </Col>
 
-        {/* 各状态卡片 */}
-        {statusConfigs.map((config) => {
-          const count = getStatusCount(config.key);
-          const active = isActive(config.key);
+        {/* 各状态卡片 - 动态从数据库获取 */}
+        {statusStats.map((stat) => {
+          const colors = getStatusColor(stat.status);
+          const active = isActive(stat.status);
+          const label = statusLabels[stat.status] || stat.status;
 
           return (
-            <Col xs={12} sm={8} md={6} lg={4} key={config.key}>
+            <Col xs={12} sm={8} md={6} lg={4} key={stat.status}>
               <div
-                onClick={() => onStatusClick(config.key)}
+                onClick={() => onStatusClick(stat.status)}
                 style={{
                   cursor: 'pointer',
                   padding: '16px',
                   borderRadius: '8px',
-                  border: `2px solid ${active ? config.color : config.borderColor}`,
-                  backgroundColor: active ? config.bgColor : '#ffffff',
+                  border: `2px solid ${active ? colors.color : colors.borderColor}`,
+                  backgroundColor: active ? colors.bgColor : '#ffffff',
                   transition: 'all 0.3s ease',
                   textAlign: 'center',
-                  opacity: count === 0 ? 0.6 : 1,
+                  opacity: stat.count === 0 ? 0.6 : 1,
                 }}
               >
                 <div
                   style={{
                     fontSize: '24px',
                     fontWeight: 'bold',
-                    color: config.color,
+                    color: colors.color,
                     marginBottom: '4px',
                   }}
                 >
-                  {count}
+                  {stat.count}
                 </div>
                 <div
                   style={{
                     fontSize: '14px',
-                    color: active ? config.color : '#595959',
+                    color: active ? colors.color : '#595959',
                   }}
                 >
-                  <Badge color={config.color} text={config.label} />
+                  <Badge color={colors.color} text={label} />
                 </div>
               </div>
             </Col>
