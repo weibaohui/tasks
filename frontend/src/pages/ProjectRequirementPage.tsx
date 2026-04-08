@@ -818,7 +818,7 @@ export const ProjectRequirementPage: React.FC = () => {
     <div style={{ padding: 0 }}>
       {selectedProject ? renderRequirements() : renderProjectCards()}
 
-      <Modal title={editingProject ? '编辑项目' : '新建项目'} open={projectModalOpen} footer={null} onCancel={() => setProjectModalOpen(false)}>
+      <Drawer title={editingProject ? '编辑项目' : '新建项目'} open={projectModalOpen} onClose={() => setProjectModalOpen(false)} width={480}>
         <Form layout="vertical" form={projectForm} onFinish={submitProject}>
           <Form.Item label="项目名称" name="name" rules={[{ required: true, message: '请输入项目名称' }]}>
             <Input />
@@ -859,7 +859,7 @@ export const ProjectRequirementPage: React.FC = () => {
             保存
           </Button>
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal title={editingRequirement ? '编辑需求' : '新建需求'} open={requirementModalOpen} footer={null} onCancel={() => setRequirementModalOpen(false)}>
         <Form layout="vertical" form={requirementForm} onFinish={submitRequirement}>
