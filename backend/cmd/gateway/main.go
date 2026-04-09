@@ -141,6 +141,7 @@ func main() {
 	userService := application.NewUserApplicationService(nil, idGenerator)
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	engine := gin.New()
+	engine.Use(gin.Recovery())
 	engine.POST("/api/auth/login", authHandler.Login)
 
 	// 15. 启动 HTTP Server

@@ -123,7 +123,7 @@ func (h *StateMachineHandler) UpdateStateMachine(c *gin.Context) {
 		return
 	}
 
-	sm, err := h.service.CreateStateMachine(c.Request.Context(), req.Name, req.Description, req.Config)
+	sm, err := h.service.UpdateStateMachine(c.Request.Context(), id, req.Name, req.Description, req.Config)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
 			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
