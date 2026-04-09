@@ -61,11 +61,11 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
       {!isEditing ? (
         <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
           <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || '-'}</div>
-          <div><span style={{ color: '#999' }}>最大思考 Token：</span>{form.getFieldValue('claude_code_config')?.max_thinking_tokens ?? '-'}</div>
+          <div><span style={{ color: '#999' }}>最大思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
           <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
-          <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume ? '是' : '否'}</div>
+          <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
           <div><span style={{ color: '#999' }}>最大对话轮次：</span>{form.getFieldValue('claude_code_config')?.max_turns ?? '-'}</div>
-          <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd || '默认'}</div>
+          <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd ?? '-'}</div>
         </div>
       ) : (
         <div>

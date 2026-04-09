@@ -51,7 +51,7 @@ export const ClaudeCodeAdvancedCard: React.FC<ClaudeCodeAdvancedCardProps> = ({
           <div><span style={{ color: '#999' }}>文件检查点：</span>{form.getFieldValue('claude_code_config')?.file_checkpointing === true ? '是' : form.getFieldValue('claude_code_config')?.file_checkpointing === false ? '否' : '-'}</div>
           <div><span style={{ color: '#999' }}>继续会话：</span>{form.getFieldValue('claude_code_config')?.continue_conversation === true ? '是' : form.getFieldValue('claude_code_config')?.continue_conversation === false ? '否' : '-'}</div>
           <div><span style={{ color: '#999' }}>Fork 会话：</span>{form.getFieldValue('claude_code_config')?.fork_session === true ? '是' : form.getFieldValue('claude_code_config')?.fork_session === false ? '否' : '-'}</div>
-          <div><span style={{ color: '#999' }}>追加提示词：</span>{form.getFieldValue('claude_code_config')?.append_system_prompt || '-'}</div>
+          <div><span style={{ color: '#999' }}>追加提示词：</span>{form.getFieldValue('claude_code_config')?.append_system_prompt ?? '-'}</div>
           <div><span style={{ color: '#999' }}>CLI 路径：</span>{form.getFieldValue('claude_code_config')?.cli_path ?? '-'}</div>
           <div><span style={{ color: '#999' }}>最大预算 USD：</span>{form.getFieldValue('claude_code_config')?.max_budget_usd ?? '-'}</div>
           <div><span style={{ color: '#999' }}>部分消息：</span>{form.getFieldValue('claude_code_config')?.include_partial_messages === true ? '启用' : form.getFieldValue('claude_code_config')?.include_partial_messages === false ? '禁用' : '-'}</div>
