@@ -3,6 +3,8 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -126,6 +128,60 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 	}
 	defer rows.Close()
 	return scanRequirements(rows)
+}
+
+const requirementColumns = `id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
+	status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+	COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
+	COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
+	COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens`
+
+func (r *SQLiteRequirementRepository) List(ctx context.Context, filter domain.RequirementListFilter) ([]*domain.Requirement, error) {
+	where, args := r.buildWhereClause(filter)
+	query := fmt.Sprintf(`SELECT %s FROM requirements %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, requirementColumns, where)
+	args = append(args, filter.Limit, filter.Offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRequirements(rows)
+}
+
+func (r *SQLiteRequirementRepository) Count(ctx context.Context, filter domain.RequirementListFilter) (int, error) {
+	where, args := r.buildWhereClause(filter)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM requirements %s`, where)
+
+	var count int
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+func (r *SQLiteRequirementRepository) buildWhereClause(filter domain.RequirementListFilter) (string, []interface{}) {
+	var conditions []string
+	var args []interface{}
+
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "project_id = ?")
+		args = append(args, filter.ProjectID.String())
+	}
+	if len(filter.Statuses) == 1 {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Statuses[0])
+	} else if len(filter.Statuses) > 1 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = "?"
+			args = append(args, s)
+		}
+		conditions = append(conditions, "status IN ("+strings.Join(placeholders, ", ")+")")
+	}
+
+	if len(conditions) > 0 {
+		return "WHERE " + strings.Join(conditions, " AND "), args
+	}
+	return "", args
 }
 
 func (r *SQLiteRequirementRepository) Delete(ctx context.Context, id domain.RequirementID) error {

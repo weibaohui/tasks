@@ -100,6 +100,18 @@ func (m *MockRequirementRepository) Delete(ctx context.Context, id domain.Requir
 	return nil
 }
 
+func (m *MockRequirementRepository) List(ctx context.Context, filter domain.RequirementListFilter) ([]*domain.Requirement, error) {
+	return nil, nil
+}
+
+func (m *MockRequirementRepository) Count(ctx context.Context, filter domain.RequirementListFilter) (int, error) {
+	return 0, nil
+}
+
+func (m *MockRequirementRepository) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]domain.StatusStat, error) {
+	return nil, nil
+}
+
 // MockIDGenerator ID生成器模拟
 type MockIDGenerator struct {
 	id string
