@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col } from 'antd';
+import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col } from 'antd';
 import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
@@ -11,6 +11,7 @@ import type { CreateProjectRequest, CreateRequirementRequest, Project, Requireme
 import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
+import { RequirementKanban } from '../components/RequirementKanban';
 import { ProjectStateMachineConfig } from '../components/ProjectStateMachineConfig';
 import { RequirementTypeManagementPage } from '../components/RequirementTypeManagement';
 import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
@@ -89,6 +90,10 @@ export const ProjectRequirementPage: React.FC = () => {
 
   // 需求类型过滤
   const [typeFilter, setTypeFilter] = useState<string>('');
+
+  // 视图切换：表格 / 看板
+  const [viewMode, setViewMode] = useState<'表格' | '看板'>('表格');
+  const [kanbanRefreshTrigger, setKanbanRefreshTrigger] = useState(0);
 
   // 需求类型列表（用于创建需求时选择）
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
@@ -772,60 +777,90 @@ export const ProjectRequirementPage: React.FC = () => {
         onStatusClick={(status) => setStatusFilter(status)}
       />
       <Card
-        title={`需求列表 (${filteredRequirements.length})`}
+        title={viewMode === '表格' ? `需求列表 (${filteredRequirements.length})` : '需求看板'}
         extra={
           <Space>
-            <Select
-              style={{ width: 180 }}
-              placeholder="按状态过滤"
-              value={statusFilter || undefined}
-              options={statusOptions}
-              onChange={(value) => setStatusFilter(value || '')}
-              allowClear
+            <Segmented
+              value={viewMode}
+              onChange={(v) => setViewMode(v as '表格' | '看板')}
+              options={['表格', '看板']}
             />
-            <Select
-              style={{ width: 150 }}
-              placeholder="按类型过滤"
-              value={typeFilter || undefined}
-              options={[
-                { label: '全部类型', value: '' },
-                { label: '普通 (normal)', value: 'normal' },
-                { label: '心跳 (heartbeat)', value: 'heartbeat' },
-                ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
-              ]}
-              onChange={(value) => setTypeFilter(value || '')}
-              allowClear
-            />
-            <Button onClick={() => fetchRequirements(selectedProjectId)}>刷新</Button>
+            {viewMode === '表格' && (
+              <>
+                <Select
+                  style={{ width: 180 }}
+                  placeholder="按状态过滤"
+                  value={statusFilter || undefined}
+                  options={statusOptions}
+                  onChange={(value) => setStatusFilter(value || '')}
+                  allowClear
+                />
+                <Select
+                  style={{ width: 150 }}
+                  placeholder="按类型过滤"
+                  value={typeFilter || undefined}
+                  options={[
+                    { label: '全部类型', value: '' },
+                    { label: '普通 (normal)', value: 'normal' },
+                    { label: '心跳 (heartbeat)', value: 'heartbeat' },
+                    ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
+                  ]}
+                  onChange={(value) => setTypeFilter(value || '')}
+                  allowClear
+                />
+              </>
+            )}
+            <Button onClick={() => {
+              if (viewMode === '看板') {
+                setKanbanRefreshTrigger((t) => t + 1);
+              } else {
+                fetchRequirements(selectedProjectId);
+              }
+            }}>刷新</Button>
             <Button type="primary" onClick={openCreateRequirement}>
               新建需求
             </Button>
-            <Popconfirm
-              title="批量删除"
-              description={`确定要删除选中的 ${selectedRequirementKeys.length} 个需求吗？`}
-              onConfirm={handleBatchDeleteRequirements}
-              okText="确认"
-              cancelText="取消"
-              disabled={selectedRequirementKeys.length === 0}
-            >
-              <Button danger disabled={selectedRequirementKeys.length === 0}>
-                批量删除 ({selectedRequirementKeys.length})
-              </Button>
-            </Popconfirm>
+            {viewMode === '表格' && (
+              <Popconfirm
+                title="批量删除"
+                description={`确定要删除选中的 ${selectedRequirementKeys.length} 个需求吗？`}
+                onConfirm={handleBatchDeleteRequirements}
+                okText="确认"
+                cancelText="取消"
+                disabled={selectedRequirementKeys.length === 0}
+              >
+                <Button danger disabled={selectedRequirementKeys.length === 0}>
+                  批量删除 ({selectedRequirementKeys.length})
+                </Button>
+              </Popconfirm>
+            )}
           </Space>
         }
       >
-        <Table<Requirement>
-          rowKey="id"
-          loading={loadingRequirements}
-          dataSource={filteredRequirements}
-          columns={requirementColumns}
-          rowSelection={{
-            type: 'checkbox',
-            selectedRowKeys: selectedRequirementKeys,
-            onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
-          }}
-        />
+        {viewMode === '表格' ? (
+          <Table<Requirement>
+            rowKey="id"
+            loading={loadingRequirements}
+            dataSource={filteredRequirements}
+            columns={requirementColumns}
+            rowSelection={{
+              type: 'checkbox',
+              selectedRowKeys: selectedRequirementKeys,
+              onChange: (selectedKeys) => setSelectedRequirementKeys(selectedKeys),
+            }}
+          />
+        ) : (
+          <RequirementKanban
+            projectId={selectedProjectId}
+            statusStats={statusStats}
+            onRequirementClick={(req) => {
+              setDetailRequirement(req);
+              setRequirementDetailDrawerOpen(true);
+            }}
+            refreshTrigger={kanbanRefreshTrigger}
+            onRefresh={() => fetchRequirements(selectedProjectId)}
+          />
+        )}
       </Card>
     </div>
   );

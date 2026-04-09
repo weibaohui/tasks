@@ -54,6 +54,64 @@ func (m *mockRequirementRepo) Delete(ctx context.Context, id domain.RequirementI
 	return nil
 }
 
+func (m *mockRequirementRepo) List(ctx context.Context, filter domain.RequirementListFilter) ([]*domain.Requirement, error) {
+	var result []*domain.Requirement
+	for _, r := range m.requirements {
+		if filter.ProjectID != nil && r.ProjectID() != *filter.ProjectID {
+			continue
+		}
+		if len(filter.Statuses) > 0 {
+			found := false
+			for _, s := range filter.Statuses {
+				if string(r.Status()) == s {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		result = append(result, r)
+	}
+	if filter.Offset < len(result) {
+		result = result[filter.Offset:]
+	} else {
+		result = nil
+	}
+	if filter.Limit > 0 && len(result) > filter.Limit {
+		result = result[:filter.Limit]
+	}
+	return result, nil
+}
+
+func (m *mockRequirementRepo) Count(ctx context.Context, filter domain.RequirementListFilter) (int, error) {
+	var count int
+	for _, r := range m.requirements {
+		if filter.ProjectID != nil && r.ProjectID() != *filter.ProjectID {
+			continue
+		}
+		if len(filter.Statuses) > 0 {
+			found := false
+			for _, s := range filter.Statuses {
+				if string(r.Status()) == s {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (m *mockRequirementRepo) GetStatusStats(ctx context.Context, projectID *domain.ProjectID) ([]domain.StatusStat, error) {
+	return nil, nil
+}
+
 type mockRequirementIDGen struct {
 	count int
 }
