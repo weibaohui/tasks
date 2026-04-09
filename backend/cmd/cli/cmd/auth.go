@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/weibh/taskmanager/infrastructure/config"
@@ -39,9 +40,14 @@ var authCmd = &cobra.Command{
 
 		// 尝试加载现有配置
 		cfg, err := config.LoadFromPath(configPath)
-		if err != nil || cfg == nil {
-			// 创建默认配置
-			cfg = &config.Config{}
+		if err != nil {
+			if os.IsNotExist(err) {
+				// 文件不存在，使用默认配置
+				cfg = defaultConfigForAuth()
+			} else {
+				fmt.Printf("加载配置文件失败: %v\n", err)
+				os.Exit(1)
+			}
 		}
 
 		// 更新配置
@@ -64,4 +70,25 @@ var authCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(authCmd)
+}
+
+// defaultConfigForAuth 返回认证专用的默认配置
+func defaultConfigForAuth() *config.Config {
+	home, _ := os.UserHomeDir()
+	defaultDBPath := filepath.Join(home, ".taskmanager", "data.db")
+
+	return &config.Config{
+		Server: config.ServerConfig{
+			Port: 13618,
+		},
+		Database: config.DatabaseConfig{
+			Path: defaultDBPath,
+		},
+		API: config.APIConfig{
+			BaseURL: "http://localhost:13618/api/v1",
+		},
+		Logging: config.LoggingConfig{
+			Level: "info",
+		},
+	}
 }

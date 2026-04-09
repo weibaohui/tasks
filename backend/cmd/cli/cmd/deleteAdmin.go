@@ -36,27 +36,42 @@ var deleteAdminCmd = &cobra.Command{
 			return
 		}
 
-		// 检查是否存在 admin 用户
-		var exists int
-		err = db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", "admin").Scan(&exists)
+		// 开始事务
+		tx, err := db.Begin()
 		if err != nil {
-			fmt.Printf("检查用户失败: %v\n", err)
+			fmt.Printf("开启事务失败: %v\n", err)
 			return
 		}
-		if exists == 0 {
-			fmt.Println("管理员用户不存在，无需删除。")
+		defer tx.Rollback()
+
+		// 查询管理员 ID
+		var adminID string
+		if err := tx.QueryRow("SELECT id FROM users WHERE username = ?", "admin").Scan(&adminID); err != nil {
+			if err == sql.ErrNoRows {
+				fmt.Println("管理员用户不存在，无需删除。")
+				return
+			}
+			fmt.Printf("查询管理员失败: %v\n", err)
 			return
 		}
 
-		// 删除用户
-		_, err = db.Exec("DELETE FROM users WHERE username = ?", "admin")
-		if err != nil {
+		// 先删除 token
+		if _, err = tx.Exec("DELETE FROM user_tokens WHERE user_id = ?", adminID); err != nil {
+			fmt.Printf("删除 token 失败: %v\n", err)
+			return
+		}
+
+		// 再删除用户
+		if _, err = tx.Exec("DELETE FROM users WHERE id = ?", adminID); err != nil {
 			fmt.Printf("删除用户失败: %v\n", err)
 			return
 		}
 
-		// 同时删除该用户的 token
-		_, _ = db.Exec("DELETE FROM user_tokens WHERE user_id IN (SELECT id FROM users WHERE username = 'admin')")
+		// 提交事务
+		if err := tx.Commit(); err != nil {
+			fmt.Printf("提交事务失败: %v\n", err)
+			return
+		}
 
 		fmt.Println("管理员用户已删除。")
 	},

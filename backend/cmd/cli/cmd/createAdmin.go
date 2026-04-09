@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -9,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
+	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/config"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 )
@@ -57,7 +57,8 @@ var createAdminCmd = &cobra.Command{
 		// 生成 ID 和 Code
 		id := generateID()
 		code := generateCode()
-		passwordHash := hashPassword("admin123")
+		// 使用与 domain 一致的密码哈希方式
+		passwordHash := domain.BuildStoredPasswordValue("admin123", "")
 
 		// 插入用户记录
 		now := time.Now().Unix()
@@ -131,10 +132,4 @@ func generateCode() string {
 		result[i] = idChars[(int(result[i])+i+int(counterVal))%62]
 	}
 	return string(result)
-}
-
-// hashPassword 使用 SHA256 哈希密码
-func hashPassword(password string) string {
-	h := sha256.Sum256([]byte(password))
-	return fmt.Sprintf("%x", h)
 }
