@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/infrastructure/hook"
@@ -136,16 +137,16 @@ func main() {
 		authSecret = "taskmanager-dev-secret"
 	}
 
-	// 创建最小化的 mux 用于管理 API
+	// 创建 Gin Engine 用于管理 API
 	userService := application.NewUserApplicationService(nil, idGenerator)
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/auth/login", authHandler.Login)
+	engine := gin.New()
+	engine.POST("/api/auth/login", authHandler.Login)
 
 	// 15. 启动 HTTP Server
 	server := &http.Server{
 		Addr:         ":8889",
-		Handler:      mux,
+		Handler:      engine,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

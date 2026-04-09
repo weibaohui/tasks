@@ -1,9 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -27,7 +27,7 @@ type CreateAgentRequest struct {
 	UserContent           string   `json:"user_content"`
 	ToolsContent          string   `json:"tools_content"`
 	Model                 string   `json:"model"`
-	LLMProviderID         *string   `json:"llm_provider_id"`
+	LLMProviderID         *string  `json:"llm_provider_id"`
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`
@@ -60,15 +60,14 @@ type UpdateAgentRequest struct {
 	EnableThinkingProcess *bool     `json:"enable_thinking_process"`
 }
 
-func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+func (h *AgentHandler) CreateAgent(c *gin.Context) {
 	var req CreateAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	agent, err := h.agentService.CreateAgent(r.Context(), application.CreateAgentCommand{
+	agent, err := h.agentService.CreateAgent(c.Request.Context(), application.CreateAgentCommand{
 		UserCode:              req.UserCode,
 		Name:                  req.Name,
 		AgentType:             req.AgentType,
@@ -90,36 +89,32 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		EnableThinkingProcess: req.EnableThinkingProcess,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+	c.JSON(http.StatusCreated, agentToMap(agent))
 }
 
-func (h *AgentHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
-	userCode := r.URL.Query().Get("user_code")
-	agents, err := h.agentService.ListAgents(r.Context(), userCode)
+func (h *AgentHandler) ListAgents(c *gin.Context) {
+	userCode := c.Query("user_code")
+	agents, err := h.agentService.ListAgents(c.Request.Context(), userCode)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(agents))
 	for _, agent := range agents {
 		resp = append(resp, agentToMap(agent))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *AgentHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	code := r.URL.Query().Get("code")
+func (h *AgentHandler) GetAgent(c *gin.Context) {
+	id := c.Query("id")
+	code := c.Query("code")
 	if id == "" && code == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id or code is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id or code is required"})
 		return
 	}
 
@@ -128,33 +123,30 @@ func (h *AgentHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 		err   error
 	)
 	if id != "" {
-		agent, err = h.agentService.GetAgent(r.Context(), domain.NewAgentID(id))
+		agent, err = h.agentService.GetAgent(c.Request.Context(), domain.NewAgentID(id))
 	} else {
-		agent, err = h.agentService.GetAgentByCode(r.Context(), domain.NewAgentCode(code))
+		agent, err = h.agentService.GetAgentByCode(c.Request.Context(), domain.NewAgentCode(code))
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+	c.JSON(http.StatusOK, agentToMap(agent))
 }
 
-func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *AgentHandler) UpdateAgent(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 	var req UpdateAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	agent, err := h.agentService.UpdateAgent(r.Context(), application.UpdateAgentCommand{
+	agent, err := h.agentService.UpdateAgent(c.Request.Context(), application.UpdateAgentCommand{
 		ID:                    domain.NewAgentID(id),
 		Name:                  req.Name,
 		AgentType:             req.AgentType,
@@ -177,11 +169,10 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		EnableThinkingProcess: req.EnableThinkingProcess,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+	c.JSON(http.StatusOK, agentToMap(agent))
 }
 
 // PatchAgentRequest 局部更新请求，指针字段区分"未提供"与"零值"
@@ -208,21 +199,19 @@ type PatchAgentRequest struct {
 	ClaudeCodeConfig      *domain.ClaudeCodeConfig `json:"claude_code_config"`
 }
 
-func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *AgentHandler) PatchAgent(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 	var req PatchAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	agent, err := h.agentService.PatchAgent(r.Context(), application.PatchAgentCommand{
+	agent, err := h.agentService.PatchAgent(c.Request.Context(), application.PatchAgentCommand{
 		ID:                    domain.NewAgentID(id),
 		Name:                  req.Name,
 		AgentType:             req.AgentType,
@@ -246,26 +235,32 @@ func (h *AgentHandler) PatchAgent(w http.ResponseWriter, r *http.Request) {
 		ClaudeCodeConfig:      req.ClaudeCodeConfig,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(agentToMap(agent))
+	c.JSON(http.StatusOK, agentToMap(agent))
 }
 
-func (h *AgentHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *AgentHandler) DeleteAgent(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	if err := h.agentService.DeleteAgent(r.Context(), domain.NewAgentID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.agentService.DeleteAgent(c.Request.Context(), domain.NewAgentID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// handleGetAgents 根据 query 参数分发到 GetAgent 或 ListAgents
+func (h *AgentHandler) handleGetAgents(c *gin.Context) {
+	if c.Query("id") != "" || c.Query("code") != "" {
+		h.GetAgent(c)
+		return
+	}
+	h.ListAgents(c)
 }
 
 func agentToMap(agent *domain.Agent) map[string]interface{} {

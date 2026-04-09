@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -80,46 +81,30 @@ func (m *mockAgentIDGenerator) Generate() string {
 	return "agent-id-" + strconv.Itoa(m.count)
 }
 
-func setupTestAgentHandler() (*AgentHandler, *http.ServeMux) {
+func setupTestAgentHandler() (*AgentHandler, *gin.Engine) {
 	repo := newMockAgentRepository()
 	idGen := &mockAgentIDGenerator{}
 
 	agentService := application.NewAgentApplicationService(repo, idGen)
 	handler := NewAgentHandler(agentService)
-	mux := SetupAgentRoutes(handler)
+	engine := SetupAgentRoutes(handler)
 
-	return handler, mux
+	return handler, engine
 }
 
-func SetupAgentRoutes(handler *AgentHandler) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/agents", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.ListAgents(w, r)
-		case http.MethodPost:
-			handler.CreateAgent(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/v1/agents/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.GetAgent(w, r)
-		case http.MethodPut:
-			handler.UpdateAgent(w, r)
-		case http.MethodDelete:
-			handler.DeleteAgent(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	return mux
+func SetupAgentRoutes(handler *AgentHandler) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	agents := engine.Group("/api/v1/agents")
+	agents.POST("", handler.CreateAgent)
+	agents.GET("", handler.handleGetAgents)
+	agents.PUT("", handler.UpdateAgent)
+	agents.DELETE("", handler.DeleteAgent)
+	return engine
 }
 
 func TestCreateAgent(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	body := `{
 		"user_code": "usr_001",
@@ -132,7 +117,7 @@ func TestCreateAgent(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusCreated, w.Code)
@@ -159,13 +144,13 @@ func TestCreateAgent(t *testing.T) {
 }
 
 func TestCreateAgent_InvalidJSON(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -173,7 +158,7 @@ func TestCreateAgent_InvalidJSON(t *testing.T) {
 }
 
 func TestCreateAgent_EmptyName(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	body := `{
 		"user_code": "usr_001",
@@ -185,7 +170,7 @@ func TestCreateAgent_EmptyName(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -193,20 +178,20 @@ func TestCreateAgent_EmptyName(t *testing.T) {
 }
 
 func TestListAgents(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 先创建一个 agent
 	createBody := `{"user_code": "usr_001", "name": "Agent1", "model": "gpt-4"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
-	mux.ServeHTTP(createW, createReq)
+	engine.ServeHTTP(createW, createReq)
 
 	// 列出所有 agents
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil)
 	listW := httptest.NewRecorder()
 
-	mux.ServeHTTP(listW, listReq)
+	engine.ServeHTTP(listW, listReq)
 
 	if listW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, listW.Code)
@@ -221,26 +206,26 @@ func TestListAgents(t *testing.T) {
 }
 
 func TestListAgents_FilterByUserCode(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 创建两个不同 user_code 的 agents
 	createBody1 := `{"user_code": "usr_001", "name": "Agent1", "model": "gpt-4"}`
 	createReq1 := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody1))
 	createReq1.Header.Set("Content-Type", "application/json")
 	createW1 := httptest.NewRecorder()
-	mux.ServeHTTP(createW1, createReq1)
+	engine.ServeHTTP(createW1, createReq1)
 
 	createBody2 := `{"user_code": "usr_002", "name": "Agent2", "model": "gpt-4"}`
 	createReq2 := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody2))
 	createReq2.Header.Set("Content-Type", "application/json")
 	createW2 := httptest.NewRecorder()
-	mux.ServeHTTP(createW2, createReq2)
+	engine.ServeHTTP(createW2, createReq2)
 
 	// 按 user_code 过滤
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents?user_code=usr_001", nil)
 	listW := httptest.NewRecorder()
 
-	mux.ServeHTTP(listW, listReq)
+	engine.ServeHTTP(listW, listReq)
 
 	if listW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, listW.Code)
@@ -257,24 +242,24 @@ func TestListAgents_FilterByUserCode(t *testing.T) {
 }
 
 func TestGetAgent_ByID(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 先创建一个 agent
 	createBody := `{"user_code": "usr_001", "name": "测试Agent", "model": "gpt-4"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
-	mux.ServeHTTP(createW, createReq)
+	engine.ServeHTTP(createW, createReq)
 
 	var createResp map[string]interface{}
 	json.Unmarshal(createW.Body.Bytes(), &createResp)
 	agentID := createResp["id"].(string)
 
 	// 通过 ID 获取
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/?id="+agentID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents?id="+agentID, nil)
 	getW := httptest.NewRecorder()
 
-	mux.ServeHTTP(getW, getReq)
+	engine.ServeHTTP(getW, getReq)
 
 	if getW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, getW.Code)
@@ -289,24 +274,24 @@ func TestGetAgent_ByID(t *testing.T) {
 }
 
 func TestGetAgent_ByCode(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 先创建一个 agent
 	createBody := `{"user_code": "usr_001", "name": "测试Agent", "model": "gpt-4"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
-	mux.ServeHTTP(createW, createReq)
+	engine.ServeHTTP(createW, createReq)
 
 	var createResp map[string]interface{}
 	json.Unmarshal(createW.Body.Bytes(), &createResp)
 	agentCode := createResp["agent_code"].(string)
 
 	// 通过 code 获取
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/?code="+agentCode, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents?code="+agentCode, nil)
 	getW := httptest.NewRecorder()
 
-	mux.ServeHTTP(getW, getReq)
+	engine.ServeHTTP(getW, getReq)
 
 	if getW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, getW.Code)
@@ -321,12 +306,12 @@ func TestGetAgent_ByCode(t *testing.T) {
 }
 
 func TestGetAgent_NotFound(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents/?id=non-existent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents?id=non-existent", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
@@ -334,27 +319,28 @@ func TestGetAgent_NotFound(t *testing.T) {
 }
 
 func TestGetAgent_MissingIDAndCode(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
+	// Gin 路由: GET /api/v1/agents 无 id/code 参数时回退到 ListAgents
+	if w.Code != http.StatusOK {
+		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 }
 
 func TestUpdateAgent(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 先创建一个 agent
 	createBody := `{"user_code": "usr_001", "name": "原始名称", "model": "gpt-4"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
-	mux.ServeHTTP(createW, createReq)
+	engine.ServeHTTP(createW, createReq)
 
 	var createResp map[string]interface{}
 	json.Unmarshal(createW.Body.Bytes(), &createResp)
@@ -362,11 +348,11 @@ func TestUpdateAgent(t *testing.T) {
 
 	// 更新 agent
 	updateBody := `{"name": "新名称", "description": "新描述"}`
-	updateReq := httptest.NewRequest(http.MethodPut, "/api/v1/agents/?id="+agentID, bytes.NewBufferString(updateBody))
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/v1/agents?id="+agentID, bytes.NewBufferString(updateBody))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateW := httptest.NewRecorder()
 
-	mux.ServeHTTP(updateW, updateReq)
+	engine.ServeHTTP(updateW, updateReq)
 
 	if updateW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, updateW.Code)
@@ -381,14 +367,14 @@ func TestUpdateAgent(t *testing.T) {
 }
 
 func TestUpdateAgent_NotFound(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	updateBody := `{"name": "新名称"}`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/agents/?id=non-existent", bytes.NewBufferString(updateBody))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/agents?id=non-existent", bytes.NewBufferString(updateBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -396,14 +382,14 @@ func TestUpdateAgent_NotFound(t *testing.T) {
 }
 
 func TestUpdateAgent_MissingID(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	updateBody := `{"name": "新名称"}`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/agents/", bytes.NewBufferString(updateBody))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/agents", bytes.NewBufferString(updateBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -411,33 +397,33 @@ func TestUpdateAgent_MissingID(t *testing.T) {
 }
 
 func TestDeleteAgent(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
 	// 先创建一个 agent
 	createBody := `{"user_code": "usr_001", "name": "待删除Agent", "model": "gpt-4"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/agents", bytes.NewBufferString(createBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createW := httptest.NewRecorder()
-	mux.ServeHTTP(createW, createReq)
+	engine.ServeHTTP(createW, createReq)
 
 	var createResp map[string]interface{}
 	json.Unmarshal(createW.Body.Bytes(), &createResp)
 	agentID := createResp["id"].(string)
 
 	// 删除 agent
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/agents/?id="+agentID, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/agents?id="+agentID, nil)
 	deleteW := httptest.NewRecorder()
 
-	mux.ServeHTTP(deleteW, deleteReq)
+	engine.ServeHTTP(deleteW, deleteReq)
 
 	if deleteW.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, deleteW.Code)
 	}
 
 	// 验证已删除
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents/?id="+agentID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/agents?id="+agentID, nil)
 	getW := httptest.NewRecorder()
-	mux.ServeHTTP(getW, getReq)
+	engine.ServeHTTP(getW, getReq)
 
 	if getW.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, getW.Code)
@@ -445,12 +431,12 @@ func TestDeleteAgent(t *testing.T) {
 }
 
 func TestDeleteAgent_NotFound(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/agents/?id=non-existent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/agents?id=non-existent", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -458,12 +444,12 @@ func TestDeleteAgent_NotFound(t *testing.T) {
 }
 
 func TestDeleteAgent_MissingID(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/agents/", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/agents", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -471,14 +457,15 @@ func TestDeleteAgent_MissingID(t *testing.T) {
 }
 
 func TestAgent_MethodNotAllowed(t *testing.T) {
-	_, mux := setupTestAgentHandler()
+	_, engine := setupTestAgentHandler()
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/agents", nil)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/agents", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusMethodNotAllowed, w.Code)
+	if w.Code != http.StatusNotFound {
+		// Gin 返回 404 for unmatched routes (no PATCH route registered on "/api/v1/agents")
+		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
 	}
 }

@@ -1,9 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -22,12 +22,12 @@ type ChannelTypeOption struct {
 	Description string `json:"description,omitempty"`
 }
 
-func (h *ChannelHandler) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
+func (h *ChannelHandler) ListChannelTypes(c *gin.Context) {
 	resp := []ChannelTypeOption{
 		{Key: string(domain.ChannelTypeFeishu), Name: "飞书"},
 		{Key: string(domain.ChannelTypeWebSocket), Name: "WebSocket"},
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 type CreateChannelRequest struct {
@@ -47,15 +47,14 @@ type UpdateChannelRequest struct {
 	AgentCode *string                 `json:"agent_code"`
 }
 
-func (h *ChannelHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
+func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 	var req CreateChannelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	channel, err := h.channelService.CreateChannel(r.Context(), application.CreateChannelCommand{
+	channel, err := h.channelService.CreateChannel(c.Request.Context(), application.CreateChannelCommand{
 		UserCode:  req.UserCode,
 		Name:      req.Name,
 		Type:      domain.ChannelType(req.Type),
@@ -64,36 +63,32 @@ func (h *ChannelHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		AgentCode: req.AgentCode,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(channelToMap(channel))
+	c.JSON(http.StatusCreated, channelToMap(channel))
 }
 
-func (h *ChannelHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
-	userCode := r.URL.Query().Get("user_code")
-	channels, err := h.channelService.ListChannels(r.Context(), userCode)
+func (h *ChannelHandler) ListChannels(c *gin.Context) {
+	userCode := c.Query("user_code")
+	channels, err := h.channelService.ListChannels(c.Request.Context(), userCode)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(channels))
 	for _, channel := range channels {
 		resp = append(resp, channelToMap(channel))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChannelHandler) GetChannel(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	code := r.URL.Query().Get("code")
+func (h *ChannelHandler) GetChannel(c *gin.Context) {
+	id := c.Query("id")
+	code := c.Query("code")
 	if id == "" && code == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id or code is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id or code is required"})
 		return
 	}
 
@@ -102,33 +97,30 @@ func (h *ChannelHandler) GetChannel(w http.ResponseWriter, r *http.Request) {
 		err     error
 	)
 	if id != "" {
-		channel, err = h.channelService.GetChannel(r.Context(), domain.NewChannelID(id))
+		channel, err = h.channelService.GetChannel(c.Request.Context(), domain.NewChannelID(id))
 	} else {
-		channel, err = h.channelService.GetChannelByCode(r.Context(), domain.NewChannelCode(code))
+		channel, err = h.channelService.GetChannelByCode(c.Request.Context(), domain.NewChannelCode(code))
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(channelToMap(channel))
+	c.JSON(http.StatusOK, channelToMap(channel))
 }
 
-func (h *ChannelHandler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 	var req UpdateChannelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	channel, err := h.channelService.UpdateChannel(r.Context(), application.UpdateChannelCommand{
+	channel, err := h.channelService.UpdateChannel(c.Request.Context(), application.UpdateChannelCommand{
 		ID:        domain.NewChannelID(id),
 		Name:      req.Name,
 		Config:    req.Config,
@@ -137,26 +129,32 @@ func (h *ChannelHandler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		AgentCode: req.AgentCode,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(channelToMap(channel))
+	c.JSON(http.StatusOK, channelToMap(channel))
 }
 
-func (h *ChannelHandler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *ChannelHandler) DeleteChannel(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	if err := h.channelService.DeleteChannel(r.Context(), domain.NewChannelID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.channelService.DeleteChannel(c.Request.Context(), domain.NewChannelID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// handleGetChannels 根据 query 参数分发到 GetChannel 或 ListChannels
+func (h *ChannelHandler) handleGetChannels(c *gin.Context) {
+	if c.Query("id") != "" || c.Query("code") != "" {
+		h.GetChannel(c)
+		return
+	}
+	h.ListChannels(c)
 }
 
 func channelToMap(channel *domain.Channel) map[string]interface{} {

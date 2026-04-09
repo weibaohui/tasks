@@ -46,7 +46,7 @@ export type AgentFormValues = {
   claude_code_config?: ClaudeCodeConfig;
 };
 
-export function getDefaultAgentFormValues(defaultModel?: string): AgentFormValues {
+export function getDefaultAgentFormValues(_defaultModel?: string): AgentFormValues {
   return {
     name: '',
     agent_type: 'BareLLM',

@@ -4,14 +4,15 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -78,16 +79,31 @@ func (g *mockUserIDGenerator) Generate() string {
 	return g.prefix + "-id-" + strconv.Itoa(g.count)
 }
 
+// setupGinContext 创建用于测试的 Gin 上下文
+func setupGinContext(method, path string, body []byte) (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	var req *http.Request
+	if body != nil {
+		req = httptest.NewRequest(method, path, bytes.NewBuffer(body))
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+
+	return c, w
+}
+
 func TestUserHandler_CreateUser_InvalidJSON(t *testing.T) {
 	repo := newMockUserRepository()
 	svc := application.NewUserApplicationService(repo, newMockUserIDGenerator("u"))
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("POST", "/users", strings.NewReader("invalid json"))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.CreateUser(w, req)
+	c, w := setupGinContext("POST", "/users", []byte("invalid json"))
+	handler.CreateUser(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -105,11 +121,8 @@ func TestUserHandler_CreateUser_Success(t *testing.T) {
 		"display_name": "Test User",
 		"password": "password123"
 	}`
-	req := httptest.NewRequest("POST", "/users", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.CreateUser(w, req)
+	c, w := setupGinContext("POST", "/users", []byte(body))
+	handler.CreateUser(c)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusCreated, w.Code)
@@ -139,10 +152,8 @@ func TestUserHandler_ListUsers(t *testing.T) {
 
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("GET", "/users", nil)
-	w := httptest.NewRecorder()
-
-	handler.ListUsers(w, req)
+	c, w := setupGinContext("GET", "/users", nil)
+	handler.ListUsers(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -163,10 +174,8 @@ func TestUserHandler_GetUser_NoID(t *testing.T) {
 	svc := application.NewUserApplicationService(repo, newMockUserIDGenerator("u"))
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("GET", "/user", nil)
-	w := httptest.NewRecorder()
-
-	handler.GetUser(w, req)
+	c, w := setupGinContext("GET", "/user", nil)
+	handler.GetUser(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -178,10 +187,8 @@ func TestUserHandler_GetUser_NotFound(t *testing.T) {
 	svc := application.NewUserApplicationService(repo, newMockUserIDGenerator("u"))
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("GET", "/user?id=nonexistent", nil)
-	w := httptest.NewRecorder()
-
-	handler.GetUser(w, req)
+	c, w := setupGinContext("GET", "/user?id=nonexistent", nil)
+	handler.GetUser(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
@@ -193,10 +200,8 @@ func TestUserHandler_UpdateUser_NoID(t *testing.T) {
 	svc := application.NewUserApplicationService(repo, newMockUserIDGenerator("u"))
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("PUT", "/user", strings.NewReader("{}"))
-	w := httptest.NewRecorder()
-
-	handler.UpdateUser(w, req)
+	c, w := setupGinContext("PUT", "/user", []byte("{}"))
+	handler.UpdateUser(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -208,10 +213,8 @@ func TestUserHandler_DeleteUser_NoID(t *testing.T) {
 	svc := application.NewUserApplicationService(repo, newMockUserIDGenerator("u"))
 	handler := NewUserHandler(svc)
 
-	req := httptest.NewRequest("DELETE", "/user", nil)
-	w := httptest.NewRecorder()
-
-	handler.DeleteUser(w, req)
+	c, w := setupGinContext("DELETE", "/user", nil)
+	handler.DeleteUser(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)

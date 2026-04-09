@@ -12,10 +12,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
@@ -230,7 +230,7 @@ func main() {
 	// 初始化需求类型 handler
 	requirementTypeHandler := httpHandler.NewRequirementTypeHandler(requirementTypeRepo)
 
-	mux := httpHandler.SetupRoutesWithManagement(
+	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
@@ -241,28 +241,17 @@ func main() {
 	// 10. 初始化 WebSocket（用于前端实时通知）
 	wsHandler := ws.NewWebSocketHandler(eventBus)
 	wsHandler.SubscribeToEvents()
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler.HandleWebSocket(w, r)
-	})
+	ginEngine.GET("/ws", gin.WrapF(wsHandler.HandleWebSocket))
 
 	// 11. 添加前端静态文件路由（SPA）
-	frontendHandler := embed.SetupFrontendRoutes()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		// API 路由和 WebSocket 路由不走前端
-		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
-			http.NotFound(w, r)
-			return
-		}
-		frontendHandler.ServeHTTP(w, r)
-	})
+	embed.SetupFrontendRoutes(ginEngine)
 
 	// 12. 启动 HTTP Server
 	webPort := cfg.Server.Port
 	addr := fmt.Sprintf(":%d", webPort)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      ginEngine,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

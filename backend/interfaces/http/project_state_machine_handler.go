@@ -1,9 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 )
 
@@ -34,99 +34,99 @@ type ProjectStateMachineResponse struct {
 }
 
 // ListProjectStateMachines 列出项目的所有状态机映射
-func (h *ProjectStateMachineHandler) ListProjectStateMachines(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
+func (h *ProjectStateMachineHandler) ListProjectStateMachines(c *gin.Context) {
+	projectID := c.Param("project_id")
 	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
 		return
 	}
 
-	mappings, err := h.service.GetProjectStateMachines(r.Context(), application.GetProjectStateMachinesQuery{
+	mappings, err := h.service.GetProjectStateMachines(c.Request.Context(), application.GetProjectStateMachinesQuery{
 		ProjectID: projectID,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, mappings)
+	c.JSON(http.StatusOK, mappings)
 }
 
 // SetProjectStateMachine 设置项目状态机映射
-func (h *ProjectStateMachineHandler) SetProjectStateMachine(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
+func (h *ProjectStateMachineHandler) SetProjectStateMachine(c *gin.Context) {
+	projectID := c.Param("project_id")
 	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
 		return
 	}
 
 	var req SetProjectStateMachineRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request body"})
 		return
 	}
 
 	if req.RequirementType == "" || req.StateMachineID == "" {
-		writeError(w, http.StatusBadRequest, "requirement_type and state_machine_id are required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_type and state_machine_id are required"})
 		return
 	}
 
-	mapping, err := h.service.SetProjectStateMachine(r.Context(), application.SetProjectStateMachineCommand{
+	mapping, err := h.service.SetProjectStateMachine(c.Request.Context(), application.SetProjectStateMachineCommand{
 		ProjectID:       projectID,
 		RequirementType: req.RequirementType,
 		StateMachineID:  req.StateMachineID,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, mapping)
+	c.JSON(http.StatusOK, mapping)
 }
 
 // DeleteProjectStateMachine 删除项目状态机映射
-func (h *ProjectStateMachineHandler) DeleteProjectStateMachine(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (h *ProjectStateMachineHandler) DeleteProjectStateMachine(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
-	if err := h.service.DeleteProjectStateMachine(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.service.DeleteProjectStateMachine(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
 
 // GetProjectStateMachineByType 获取指定类型的项目状态机映射
-func (h *ProjectStateMachineHandler) GetProjectStateMachineByType(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("project_id")
+func (h *ProjectStateMachineHandler) GetProjectStateMachineByType(c *gin.Context) {
+	projectID := c.Param("project_id")
 	if projectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
 		return
 	}
 
-	requirementType := r.PathValue("requirement_type")
+	requirementType := c.Param("requirement_type")
 	if requirementType == "" {
-		writeError(w, http.StatusBadRequest, "requirement_type is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_type is required"})
 		return
 	}
 
-	mapping, err := h.service.GetProjectStateMachineByType(r.Context(), projectID, requirementType)
+	mapping, err := h.service.GetProjectStateMachineByType(c.Request.Context(), projectID, requirementType)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, mapping)
+	c.JSON(http.StatusOK, mapping)
 }
 
 // GetAvailableRequirementTypes 获取可用的需求类型列表
-func (h *ProjectStateMachineHandler) GetAvailableRequirementTypes(w http.ResponseWriter, r *http.Request) {
+func (h *ProjectStateMachineHandler) GetAvailableRequirementTypes(c *gin.Context) {
 	types := h.service.GetAvailableRequirementTypes()
-	writeJSON(w, map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"types": types,
 	})
 }

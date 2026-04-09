@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain/state_machine"
 	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
@@ -35,122 +36,122 @@ type TriggerTransitionRequest struct {
 }
 
 // ListStateMachines 列出状态机
-func (h *StateMachineHandler) ListStateMachines(w http.ResponseWriter, r *http.Request) {
-	sms, err := h.service.ListStateMachines(r.Context())
+func (h *StateMachineHandler) ListStateMachines(c *gin.Context) {
+	sms, err := h.service.ListStateMachines(c.Request.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, sms)
+	c.JSON(http.StatusOK, sms)
 }
 
 // CreateStateMachine 创建状态机
-func (h *StateMachineHandler) CreateStateMachine(w http.ResponseWriter, r *http.Request) {
+func (h *StateMachineHandler) CreateStateMachine(c *gin.Context) {
 	var req CreateStateMachineRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request body"})
 		return
 	}
 
 	if req.Name == "" || req.Config == "" {
-		writeError(w, http.StatusBadRequest, "name and config are required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "name and config are required"})
 		return
 	}
 
-	sm, err := h.service.CreateStateMachine(r.Context(), req.Name, req.Description, req.Config)
+	sm, err := h.service.CreateStateMachine(c.Request.Context(), req.Name, req.Description, req.Config)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
-			writeError(w, http.StatusBadRequest, smErr.Message)
+			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, sm)
+	c.JSON(http.StatusOK, sm)
 }
 
 // GetStateMachine 获取状态机
-func (h *StateMachineHandler) GetStateMachine(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (h *StateMachineHandler) GetStateMachine(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
-	sm, err := h.service.GetStateMachine(r.Context(), id)
+	sm, err := h.service.GetStateMachine(c.Request.Context(), id)
 	if err != nil {
 		if _, ok := err.(*state_machine.StateMachineError); ok {
-			writeError(w, http.StatusNotFound, err.Error())
+			c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, sm)
+	c.JSON(http.StatusOK, sm)
 }
 
 // DeleteStateMachine 删除状态机
-func (h *StateMachineHandler) DeleteStateMachine(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (h *StateMachineHandler) DeleteStateMachine(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
-	if err := h.service.DeleteStateMachine(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.service.DeleteStateMachine(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
 
 // UpdateStateMachine 更新状态机
-func (h *StateMachineHandler) UpdateStateMachine(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (h *StateMachineHandler) UpdateStateMachine(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
 	var req CreateStateMachineRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request body"})
 		return
 	}
 
-	sm, err := h.service.CreateStateMachine(r.Context(), req.Name, req.Description, req.Config)
+	sm, err := h.service.CreateStateMachine(c.Request.Context(), req.Name, req.Description, req.Config)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
-			writeError(w, http.StatusBadRequest, smErr.Message)
+			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, sm)
+	c.JSON(http.StatusOK, sm)
 }
 
 // TriggerTransition 触发转换
-func (h *StateMachineHandler) TriggerTransition(w http.ResponseWriter, r *http.Request) {
-	requirementID := r.PathValue("requirement_id")
+func (h *StateMachineHandler) TriggerTransition(c *gin.Context) {
+	requirementID := c.Param("requirement_id")
 	if requirementID == "" {
-		writeError(w, http.StatusBadRequest, "requirement_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_id is required"})
 		return
 	}
 
 	var req TriggerTransitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request body"})
 		return
 	}
 
 	if req.Trigger == "" {
-		writeError(w, http.StatusBadRequest, "trigger is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "trigger is required"})
 		return
 	}
 
@@ -159,7 +160,7 @@ func (h *StateMachineHandler) TriggerTransition(w http.ResponseWriter, r *http.R
 	}
 
 	// 将 metadata 存入 context
-	ctx := r.Context()
+	ctx := c.Request.Context()
 	if req.Metadata != nil {
 		ctx = infra_sm.WithMetadata(ctx, req.Metadata)
 	}
@@ -169,38 +170,38 @@ func (h *StateMachineHandler) TriggerTransition(w http.ResponseWriter, r *http.R
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
 			switch smErr.Code {
 			case "TRANSITION_NOT_FOUND", "STATE_NOT_FOUND":
-				writeError(w, http.StatusBadRequest, smErr.Message)
+				c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			default:
-				writeError(w, http.StatusInternalServerError, smErr.Message)
+				c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: smErr.Message})
 			}
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, rs)
+	c.JSON(http.StatusOK, rs)
 }
 
 // GetRequirementState 获取需求状态
-func (h *StateMachineHandler) GetRequirementState(w http.ResponseWriter, r *http.Request) {
-	requirementID := r.PathValue("requirement_id")
+func (h *StateMachineHandler) GetRequirementState(c *gin.Context) {
+	requirementID := c.Param("requirement_id")
 	if requirementID == "" {
-		writeError(w, http.StatusBadRequest, "requirement_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_id is required"})
 		return
 	}
 
-	rs, err := h.service.GetRequirementState(r.Context(), requirementID)
+	rs, err := h.service.GetRequirementState(c.Request.Context(), requirementID)
 	if err != nil {
 		if _, ok := err.(*state_machine.StateMachineError); ok {
-			writeError(w, http.StatusNotFound, err.Error())
+			c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, rs)
+	c.JSON(http.StatusOK, rs)
 }
 
 // InitializeRequirementStateRequest 初始化需求状态请求
@@ -209,70 +210,72 @@ type InitializeRequirementStateRequest struct {
 }
 
 // InitializeRequirementState 初始化需求状态
-func (h *StateMachineHandler) InitializeRequirementState(w http.ResponseWriter, r *http.Request) {
-	requirementID := r.PathValue("requirement_id")
+func (h *StateMachineHandler) InitializeRequirementState(c *gin.Context) {
+	requirementID := c.Param("requirement_id")
 	if requirementID == "" {
-		writeError(w, http.StatusBadRequest, "requirement_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_id is required"})
 		return
 	}
 
 	var req InitializeRequirementStateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request body"})
 		return
 	}
 
 	if req.StateMachineID == "" {
-		writeError(w, http.StatusBadRequest, "state_machine_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "state_machine_id is required"})
 		return
 	}
 
-	rs, err := h.service.InitializeRequirementState(r.Context(), requirementID, req.StateMachineID)
+	rs, err := h.service.InitializeRequirementState(c.Request.Context(), requirementID, req.StateMachineID)
 	if err != nil {
 		if smErr, ok := err.(*state_machine.StateMachineError); ok {
-			writeError(w, http.StatusBadRequest, smErr.Message)
+			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, rs)
+	c.JSON(http.StatusOK, rs)
 }
 
 // GetTransitionHistory 获取转换历史
-func (h *StateMachineHandler) GetTransitionHistory(w http.ResponseWriter, r *http.Request) {
-	requirementID := r.PathValue("requirement_id")
+func (h *StateMachineHandler) GetTransitionHistory(c *gin.Context) {
+	requirementID := c.Param("requirement_id")
 	if requirementID == "" {
-		writeError(w, http.StatusBadRequest, "requirement_id is required")
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "requirement_id is required"})
 		return
 	}
 
-	logs, err := h.service.GetTransitionHistory(r.Context(), requirementID)
+	logs, err := h.service.GetTransitionHistory(c.Request.Context(), requirementID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, logs)
+	c.JSON(http.StatusOK, logs)
 }
 
 // GetStateSummary 获取状态统计
-func (h *StateMachineHandler) GetStateSummary(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.service.GetStateSummary(r.Context())
+func (h *StateMachineHandler) GetStateSummary(c *gin.Context) {
+	summary, err := h.service.GetStateSummary(c.Request.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	writeJSON(w, summary)
+	c.JSON(http.StatusOK, summary)
 }
 
+// writeJSON 辅助函数，用于直接写 JSON（兼容性保留）
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
 
+// writeError 辅助函数，用于写错误响应（兼容性保留）
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

@@ -4,14 +4,15 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -49,28 +50,30 @@ func (r *mockSessionRepositoryForHandler) FindByID(ctx context.Context, id domai
 	return r.sessions[id], nil
 }
 
-func (r *mockSessionRepositoryForHandler) FindBySessionKey(ctx context.Context, key string) (*domain.Session, error) {
+func (r *mockSessionRepositoryForHandler) FindByKey(ctx context.Context, key string) (*domain.Session, error) {
 	if r.findByKeyErr != nil {
 		return nil, r.findByKeyErr
 	}
 	return r.sessionKeys[key], nil
 }
 
-func (r *mockSessionRepositoryForHandler) FindActiveByUserCode(ctx context.Context, userCode string) ([]*domain.Session, error) {
-	var result []*domain.Session
-	for _, s := range r.sessions {
-		if s.UserCode() == userCode {
-			result = append(result, s)
-		}
+func (r *mockSessionRepositoryForHandler) Delete(ctx context.Context, id domain.SessionID) error {
+	if r.deleteErr != nil {
+		return r.deleteErr
 	}
-	return result, nil
+	session, ok := r.sessions[id]
+	if ok {
+		delete(r.sessions, id)
+		delete(r.sessionKeys, session.SessionKey())
+	}
+	return nil
 }
 
 func (r *mockSessionRepositoryForHandler) FindByUserCode(ctx context.Context, userCode string) ([]*domain.Session, error) {
 	var result []*domain.Session
-	for _, s := range r.sessions {
-		if s.UserCode() == userCode {
-			result = append(result, s)
+	for _, session := range r.sessions {
+		if session.UserCode() == userCode {
+			result = append(result, session)
 		}
 	}
 	return result, nil
@@ -78,29 +81,58 @@ func (r *mockSessionRepositoryForHandler) FindByUserCode(ctx context.Context, us
 
 func (r *mockSessionRepositoryForHandler) FindByChannelCode(ctx context.Context, channelCode string) ([]*domain.Session, error) {
 	var result []*domain.Session
-	for _, s := range r.sessions {
-		if s.ChannelCode() == channelCode {
-			result = append(result, s)
+	for _, session := range r.sessions {
+		if session.ChannelCode() == channelCode {
+			result = append(result, session)
+		}
+	}
+	return result, nil
+}
+
+func (r *mockSessionRepositoryForHandler) FindAll(ctx context.Context) ([]*domain.Session, error) {
+	var result []*domain.Session
+	for _, session := range r.sessions {
+		result = append(result, session)
+	}
+	return result, nil
+}
+
+func (r *mockSessionRepositoryForHandler) Update(ctx context.Context, session *domain.Session) error {
+	r.sessions[session.ID()] = session
+	r.sessionKeys[session.SessionKey()] = session
+	return nil
+}
+
+func (r *mockSessionRepositoryForHandler) FindBySessionKey(ctx context.Context, sessionKey string) (*domain.Session, error) {
+	if r.findByKeyErr != nil {
+		return nil, r.findByKeyErr
+	}
+	return r.sessionKeys[sessionKey], nil
+}
+
+func (r *mockSessionRepositoryForHandler) FindActiveByUserCode(ctx context.Context, userCode string) ([]*domain.Session, error) {
+	var result []*domain.Session
+	for _, session := range r.sessions {
+		if session.UserCode() == userCode {
+			result = append(result, session)
 		}
 	}
 	return result, nil
 }
 
 func (r *mockSessionRepositoryForHandler) DeleteBySessionKey(ctx context.Context, sessionKey string) error {
-	if r.deleteErr != nil {
-		return r.deleteErr
-	}
-	// Find session by key and delete from both maps
-	if session, exists := r.sessionKeys[sessionKey]; exists {
+	session, ok := r.sessionKeys[sessionKey]
+	if ok {
 		delete(r.sessions, session.ID())
+		delete(r.sessionKeys, sessionKey)
 	}
-	delete(r.sessionKeys, sessionKey)
 	return nil
 }
 
 func (r *mockSessionRepositoryForHandler) DeleteByChannelCode(ctx context.Context, channelCode string) error {
-	for key, s := range r.sessionKeys {
-		if s.ChannelCode() == channelCode {
+	for key, session := range r.sessionKeys {
+		if session.ChannelCode() == channelCode {
+			delete(r.sessions, session.ID())
 			delete(r.sessionKeys, key)
 		}
 	}
@@ -127,11 +159,8 @@ func TestSessionHandler_CreateSession_InvalidJSON(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("POST", "/sessions", strings.NewReader("invalid json"))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.CreateSession(w, req)
+	c, w := setupGinContext("POST", "/sessions", []byte("invalid json"))
+	handler.CreateSession(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -149,11 +178,8 @@ func TestSessionHandler_CreateSession_Success(t *testing.T) {
 		"agent_code": "agent-001",
 		"session_key": "key-001"
 	}`
-	req := httptest.NewRequest("POST", "/sessions", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.CreateSession(w, req)
+	c, w := setupGinContext("POST", "/sessions", []byte(body))
+	handler.CreateSession(c)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusCreated, w.Code)
@@ -174,10 +200,8 @@ func TestSessionHandler_ListSessions_NoParams(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("GET", "/sessions", nil)
-	w := httptest.NewRecorder()
-
-	handler.ListSessions(w, req)
+	c, w := setupGinContext("GET", "/sessions", nil)
+	handler.ListSessions(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -200,10 +224,8 @@ func TestSessionHandler_ListSessions_ByUserCode(t *testing.T) {
 
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("GET", "/sessions?user_code=user-001", nil)
-	w := httptest.NewRecorder()
-
-	handler.ListSessions(w, req)
+	c, w := setupGinContext("GET", "/sessions?user_code=user-001", nil)
+	handler.ListSessions(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -224,10 +246,8 @@ func TestSessionHandler_GetSession_NoKey(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("GET", "/session", nil)
-	w := httptest.NewRecorder()
-
-	handler.GetSession(w, req)
+	c, w := setupGinContext("GET", "/session", nil)
+	handler.GetSession(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -239,10 +259,8 @@ func TestSessionHandler_GetSession_NotFound(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("GET", "/session?session_key=nonexistent", nil)
-	w := httptest.NewRecorder()
-
-	handler.GetSession(w, req)
+	c, w := setupGinContext("GET", "/session?session_key=nonexistent", nil)
+	handler.GetSession(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
@@ -254,10 +272,8 @@ func TestSessionHandler_DeleteSession_NoKey(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("DELETE", "/session", nil)
-	w := httptest.NewRecorder()
-
-	handler.DeleteSession(w, req)
+	c, w := setupGinContext("DELETE", "/session", nil)
+	handler.DeleteSession(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -269,10 +285,8 @@ func TestSessionHandler_TouchSession_NoKey(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("PUT", "/sessions//touch", nil)
-	w := httptest.NewRecorder()
-
-	handler.TouchSession(w, req)
+	c, w := setupGinContext("PUT", "/sessions//touch", nil)
+	handler.TouchSession(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -284,10 +298,8 @@ func TestSessionHandler_UpdateSessionMetadata_NoKey(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("PUT", "/sessions//metadata", strings.NewReader("{}"))
-	w := httptest.NewRecorder()
-
-	handler.UpdateSessionMetadata(w, req)
+	c, w := setupGinContext("PUT", "/sessions//metadata", []byte("{}"))
+	handler.UpdateSessionMetadata(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -299,33 +311,17 @@ func TestSessionHandler_UpdateSessionMetadata_InvalidJSON(t *testing.T) {
 	svc := application.NewSessionApplicationService(repo, newMockSessionIDGeneratorForHandler("sess"))
 	handler := NewSessionHandler(svc)
 
-	req := httptest.NewRequest("PUT", "/sessions/key-001/metadata", strings.NewReader("invalid json"))
+	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("PUT", "/sessions/key-001/metadata", bytes.NewBufferString("invalid json"))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "sessionKey", Value: "key-001"}}
 
-	handler.UpdateSessionMetadata(w, req)
+	handler.UpdateSessionMetadata(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
-	}
-}
-
-func TestExtractSessionKey(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected string
-	}{
-		{"/sessions/key-001", "key-001"},
-		{"/sessions/my-key/metadata", "my-key"},
-		{"/sessions/", ""},
-		{"/other/key", ""},
-		{"/sessions", ""},
-	}
-
-	for _, tt := range tests {
-		result := extractSessionKey(tt.path)
-		if result != tt.expected {
-			t.Errorf("extractSessionKey(%q) = %q, 期望 %q", tt.path, result, tt.expected)
-		}
 	}
 }
 
