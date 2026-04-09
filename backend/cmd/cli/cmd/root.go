@@ -47,9 +47,51 @@ var rootCmd = &cobra.Command{
 Hook管理:
   taskmanager hook list          列出 Hook 配置
 
+Agent管理:
+  taskmanager agent list         列出 Agent
+  taskmanager agent create       创建 Agent
+  taskmanager agent update       更新 Agent
+  taskmanager agent delete       删除 Agent
+  taskmanager agent enable       启用 Agent
+  taskmanager agent disable      禁用 Agent
+
+渠道管理:
+  taskmanager channel list       列出渠道
+  taskmanager channel create     创建渠道
+  taskmanager channel update     更新渠道
+  taskmanager channel delete     删除渠道
+
+Provider管理:
+  taskmanager provider list      列出 Provider
+  taskmanager provider create    创建 Provider
+  taskmanager provider update    更新 Provider
+  taskmanager provider delete    删除 Provider
+  taskmanager provider test      测试 Provider 连接
+
+MCP管理:
+  taskmanager mcp list           列出 MCP 服务器
+  taskmanager mcp create         创建 MCP 服务器
+  taskmanager mcp update         更新 MCP 服务器
+  taskmanager mcp delete         删除 MCP 服务器
+  taskmanager mcp test           测试 MCP 服务器连接
+  taskmanager mcp refresh        刷新 MCP 服务器工具
+
+会话管理:
+  taskmanager session list      列出会话
+  taskmanager session delete     删除会话
+
+用户管理:
+  taskmanager user list          列出用户
+  taskmanager user create        创建用户
+  taskmanager user update        更新用户
+  taskmanager user delete        删除用户
+
+技能管理:
+  taskmanager skill list         列出技能
+  taskmanager skill get          获取技能详情
+
 其他:
   taskmanager project list      列出项目
-  taskmanager agent list       列出 Agent
 
 配置:
   配置文件路径: ~/.taskmanager/config.yaml
