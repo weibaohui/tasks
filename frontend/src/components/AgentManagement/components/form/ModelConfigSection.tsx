@@ -27,7 +27,6 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
 
   const handleSave = () => {
     const values = form.getFieldsValue(['model', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
-    if (!values.model) return;
     // 过滤 undefined 值，避免传递给 API
     const filteredValues = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== undefined)
@@ -75,9 +74,9 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
               notFoundContent={llmProvidersLoading ? '正在加载...' : '没有可选 Provider'}
             />
           </Form.Item>
-          <Form.Item label="模型" name="model" rules={[{ required: true, message: '请选择模型' }]}>
+          <Form.Item label="模型" name="model">
             <Select showSearch allowClear options={modelOptions}
-              placeholder="请选择模型"
+              placeholder="请选择模型（可选）"
               notFoundContent="没有可选模型"
               filterOption={(input, option) => {
                 const q = input.toLowerCase();

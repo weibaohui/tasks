@@ -56,7 +56,7 @@ export function getDefaultAgentFormValues(defaultModel?: string): AgentFormValue
     agents_content: DEFAULT_AGENTS_CONTENT,
     user_content: DEFAULT_USER_CONTENT,
     tools_content: DEFAULT_TOOLS_CONTENT,
-    model: defaultModel || 'gpt-4',
+    model: '',  // 模型可为空，不设默认值
     llm_provider_id: '',
     max_tokens: 4096,
     temperature: 0.7,
