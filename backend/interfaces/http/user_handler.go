@@ -1,9 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -30,15 +30,14 @@ type UpdateUserRequest struct {
 	IsActive    *bool   `json:"is_active"`
 }
 
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	user, err := h.userService.CreateUser(r.Context(), application.CreateUserCommand{
+	user, err := h.userService.CreateUser(c.Request.Context(), application.CreateUserCommand{
 		Username:     req.Username,
 		Email:        req.Email,
 		DisplayName:  req.DisplayName,
@@ -46,20 +45,17 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Password:     req.Password,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(userToMap(user))
+	c.JSON(http.StatusCreated, userToMap(user))
 }
 
-func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.userService.ListUsers(r.Context())
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	users, err := h.userService.ListUsers(c.Request.Context())
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
@@ -67,68 +63,70 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for _, user := range users {
 		items = append(items, userToMap(user))
 	}
-	_ = json.NewEncoder(w).Encode(items)
+	c.JSON(http.StatusOK, items)
 }
 
-func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *UserHandler) GetUser(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
-	user, err := h.userService.GetUser(r.Context(), domain.NewUserID(id))
+	user, err := h.userService.GetUser(c.Request.Context(), domain.NewUserID(id))
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(userToMap(user))
+	c.JSON(http.StatusOK, userToMap(user))
 }
 
-func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
 	var req UpdateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	user, err := h.userService.UpdateUser(r.Context(), application.UpdateUserCommand{
+	user, err := h.userService.UpdateUser(c.Request.Context(), application.UpdateUserCommand{
 		ID:          domain.NewUserID(id),
 		Email:       req.Email,
 		DisplayName: req.DisplayName,
 		IsActive:    req.IsActive,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(userToMap(user))
+	c.JSON(http.StatusOK, userToMap(user))
 }
 
-func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	if err := h.userService.DeleteUser(r.Context(), domain.NewUserID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.userService.DeleteUser(c.Request.Context(), domain.NewUserID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// handleGetUsers 根据 query 参数分发到 GetUser 或 ListUsers
+func (h *UserHandler) handleGetUsers(c *gin.Context) {
+	if c.Query("id") != "" {
+		h.GetUser(c)
+		return
+	}
+	h.ListUsers(c)
 }
 
 func userToMap(user *domain.User) map[string]interface{} {

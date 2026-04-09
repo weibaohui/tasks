@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/utils"
@@ -90,16 +91,18 @@ func setupTestAuthHandler() (*AuthHandler, *mockAuthUserRepository) {
 	return handler, repo
 }
 
-func setupAuthMux(handler *AuthHandler) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/auth/login", handler.Login)
-	mux.HandleFunc("/api/v1/auth/me", handler.Me)
-	return mux
+func setupAuthEngine(handler *AuthHandler) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	auth := engine.Group("/api/v1/auth")
+	auth.POST("/login", handler.Login)
+	auth.GET("/me", handler.Me)
+	return engine
 }
 
 func TestLogin_Success(t *testing.T) {
 	handler, repo := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 	ctx := context.Background()
 
 	// 创建一个用户（密码是 "password123"）
@@ -118,7 +121,7 @@ func TestLogin_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -147,13 +150,13 @@ func TestLogin_Success(t *testing.T) {
 
 func TestLogin_InvalidJSON(t *testing.T) {
 	handler, _ := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -162,14 +165,14 @@ func TestLogin_InvalidJSON(t *testing.T) {
 
 func TestLogin_UserNotFound(t *testing.T) {
 	handler, _ := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 
 	body := `{"username": "nonexistent", "password": "password"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, w.Code)
@@ -178,7 +181,7 @@ func TestLogin_UserNotFound(t *testing.T) {
 
 func TestLogin_WrongPassword(t *testing.T) {
 	handler, repo := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 	ctx := context.Background()
 
 	// 创建一个用户
@@ -197,7 +200,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, w.Code)
@@ -206,7 +209,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 
 func TestLogin_InactiveUser(t *testing.T) {
 	handler, repo := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 	ctx := context.Background()
 
 	// 创建一个用户并停用它
@@ -226,7 +229,7 @@ func TestLogin_InactiveUser(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, w.Code)
@@ -241,12 +244,12 @@ func TestMe_WithValidToken(t *testing.T) {
 
 func TestMe_WithoutToken(t *testing.T) {
 	handler, _ := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, w.Code)
@@ -255,13 +258,13 @@ func TestMe_WithoutToken(t *testing.T) {
 
 func TestMe_InvalidToken(t *testing.T) {
 	handler, _ := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, w.Code)
@@ -270,7 +273,7 @@ func TestMe_InvalidToken(t *testing.T) {
 
 func TestMe_ExpiredToken(t *testing.T) {
 	handler, repo := setupTestAuthHandler()
-	mux := setupAuthMux(handler)
+	engine := setupAuthEngine(handler)
 	ctx := context.Background()
 
 	// 创建一个用户
@@ -293,10 +296,13 @@ func TestMe_ExpiredToken(t *testing.T) {
 	)
 
 	body := `{"username": "testuser", "password": "password"}`
+	gin.SetMode(gin.TestMode)
+	loginW := httptest.NewRecorder()
+	loginCtx, _ := gin.CreateTestContext(loginW)
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(body))
 	loginReq.Header.Set("Content-Type", "application/json")
-	loginW := httptest.NewRecorder()
-	expiredHandler.Login(loginW, loginReq)
+	loginCtx.Request = loginReq
+	expiredHandler.Login(loginCtx)
 
 	var loginResp map[string]interface{}
 	json.Unmarshal(loginW.Body.Bytes(), &loginResp)
@@ -307,7 +313,7 @@ func TestMe_ExpiredToken(t *testing.T) {
 	meReq.Header.Set("Authorization", "Bearer "+token)
 	meW := httptest.NewRecorder()
 
-	mux.ServeHTTP(meW, meReq)
+	engine.ServeHTTP(meW, meReq)
 
 	if meW.Code != http.StatusUnauthorized {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, meW.Code)

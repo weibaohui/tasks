@@ -46,6 +46,34 @@ func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, desc
 	return sm, nil
 }
 
+// UpdateStateMachine 更新状态机
+func (s *StateMachineService) UpdateStateMachine(ctx context.Context, id, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
+	cfg, err := state_machine.ParseConfig(yamlConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	// 验证状态机存在
+	_, err = s.repo.GetStateMachine(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 使用相同 ID 创建新对象（SaveStateMachine 使用 UPSERT）
+	sm := state_machine.NewStateMachine(name, description, cfg)
+	sm.ID = id
+
+	if err := s.repo.SaveStateMachine(ctx, sm); err != nil {
+		return nil, err
+	}
+
+	return sm, nil
+}
+
 // GetStateMachine 获取状态机
 func (s *StateMachineService) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
 	return s.repo.GetStateMachine(ctx, id)

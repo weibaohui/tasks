@@ -1,10 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
-	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -26,14 +25,13 @@ type CreateSessionRequest struct {
 	Metadata    map[string]interface{} `json:"metadata"`
 }
 
-func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+func (h *SessionHandler) CreateSession(c *gin.Context) {
 	var req CreateSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
-	session, err := h.sessionService.CreateSession(r.Context(), application.CreateSessionCommand{
+	session, err := h.sessionService.CreateSession(c.Request.Context(), application.CreateSessionCommand{
 		UserCode:    req.UserCode,
 		ChannelCode: req.ChannelCode,
 		AgentCode:   req.AgentCode,
@@ -42,133 +40,140 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		Metadata:    req.Metadata,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(sessionToMap(session))
+	c.JSON(http.StatusCreated, sessionToMap(session))
 }
 
-func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
-	userCode := r.URL.Query().Get("user_code")
-	channelCode := r.URL.Query().Get("channel_code")
+func (h *SessionHandler) ListSessions(c *gin.Context) {
+	userCode := c.Query("user_code")
+	channelCode := c.Query("channel_code")
 
 	var (
 		sessions []*domain.Session
 		err      error
 	)
 	if userCode != "" {
-		sessions, err = h.sessionService.ListUserSessions(r.Context(), userCode)
+		sessions, err = h.sessionService.ListUserSessions(c.Request.Context(), userCode)
 	} else if channelCode != "" {
-		sessions, err = h.sessionService.ListChannelSessions(r.Context(), channelCode)
+		sessions, err = h.sessionService.ListChannelSessions(c.Request.Context(), channelCode)
 	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "user_code or channel_code is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "user_code or channel_code is required"})
 		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(sessions))
 	for _, session := range sessions {
 		resp = append(resp, sessionToMap(session))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
-	sessionKey := r.URL.Query().Get("session_key")
+func (h *SessionHandler) GetSession(c *gin.Context) {
+	// 优先从 query 参数获取
+	sessionKey := c.Query("session_key")
+	// 其次从路径参数获取
 	if sessionKey == "" {
-		sessionKey = extractSessionKey(r.URL.Path)
+		sessionKey = c.Param("sessionKey")
 	}
 	if sessionKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
 		return
 	}
-	session, err := h.sessionService.GetSessionByKey(r.Context(), sessionKey)
+	session, err := h.sessionService.GetSessionByKey(c.Request.Context(), sessionKey)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(sessionToMap(session))
+	c.JSON(http.StatusOK, sessionToMap(session))
 }
 
-func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
-	sessionKey := r.URL.Query().Get("session_key")
+func (h *SessionHandler) DeleteSession(c *gin.Context) {
+	sessionKey := c.Query("session_key")
 	if sessionKey == "" {
-		sessionKey = extractSessionKey(r.URL.Path)
-	}
-	if sessionKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
 		return
 	}
-	if err := h.sessionService.DeleteSession(r.Context(), sessionKey); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.sessionService.DeleteSession(c.Request.Context(), sessionKey); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
-func (h *SessionHandler) TouchSession(w http.ResponseWriter, r *http.Request) {
-	sessionKey := extractSessionKey(r.URL.Path)
+// DeleteSessionByPath 通过路径参数删除 session
+func (h *SessionHandler) DeleteSessionByPath(c *gin.Context) {
+	sessionKey := c.Param("sessionKey")
 	if sessionKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
 		return
 	}
-	if err := h.sessionService.TouchSession(r.Context(), sessionKey); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.sessionService.DeleteSession(c.Request.Context(), sessionKey); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
-func (h *SessionHandler) GetSessionMetadata(w http.ResponseWriter, r *http.Request) {
-	sessionKey := extractSessionKey(r.URL.Path)
+func (h *SessionHandler) TouchSession(c *gin.Context) {
+	sessionKey := c.Param("sessionKey")
 	if sessionKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
 		return
 	}
-	metadata, err := h.sessionService.GetSessionMetadata(r.Context(), sessionKey)
+	if err := h.sessionService.TouchSession(c.Request.Context(), sessionKey); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+func (h *SessionHandler) GetSessionMetadata(c *gin.Context) {
+	sessionKey := c.Param("sessionKey")
+	if sessionKey == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		return
+	}
+	metadata, err := h.sessionService.GetSessionMetadata(c.Request.Context(), sessionKey)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(metadata)
+	c.JSON(http.StatusOK, metadata)
 }
 
-func (h *SessionHandler) UpdateSessionMetadata(w http.ResponseWriter, r *http.Request) {
-	sessionKey := extractSessionKey(r.URL.Path)
+func (h *SessionHandler) UpdateSessionMetadata(c *gin.Context) {
+	sessionKey := c.Param("sessionKey")
 	if sessionKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "session_key is required"})
 		return
 	}
 	metadata := map[string]interface{}{}
-	if err := json.NewDecoder(r.Body).Decode(&metadata); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&metadata); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
-	if err := h.sessionService.UpdateSessionMetadata(r.Context(), application.UpdateSessionMetadataCommand{
+	if err := h.sessionService.UpdateSessionMetadata(c.Request.Context(), application.UpdateSessionMetadataCommand{
 		SessionKey: sessionKey,
 		Metadata:   metadata,
 	}); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// handleGetSessions 根据 query 参数分发到 GetSession 或 ListSessions
+func (h *SessionHandler) handleGetSessions(c *gin.Context) {
+	if c.Query("session_key") != "" {
+		h.GetSession(c)
+		return
+	}
+	h.ListSessions(c)
 }
 
 func sessionToMap(session *domain.Session) map[string]interface{} {
@@ -188,17 +193,4 @@ func sessionToMap(session *domain.Session) map[string]interface{} {
 		"created_at":     session.CreatedAt().UnixMilli(),
 		"updated_at":     session.UpdatedAt().UnixMilli(),
 	}
-}
-
-func extractSessionKey(path string) string {
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if part == "sessions" && i+1 < len(parts) {
-			key := parts[i+1]
-			if key != "" {
-				return key
-			}
-		}
-	}
-	return ""
 }

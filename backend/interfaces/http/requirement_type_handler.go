@@ -2,10 +2,10 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/domain"
 )
 
@@ -75,17 +75,15 @@ type CreateRequirementTypeRequest struct {
 	Color       string `json:"color"`
 }
 
-func (h *RequirementTypeHandler) CreateRequirementType(w http.ResponseWriter, r *http.Request) {
+func (h *RequirementTypeHandler) CreateRequirementType(c *gin.Context) {
 	var req CreateRequirementTypeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
 	if req.ProjectID == "" || req.Code == "" || req.Name == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "project_id, code and name are required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id, code and name are required"})
 		return
 	}
 
@@ -97,8 +95,7 @@ func (h *RequirementTypeHandler) CreateRequirementType(w http.ResponseWriter, r 
 		req.Description,
 	)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 
@@ -109,27 +106,24 @@ func (h *RequirementTypeHandler) CreateRequirementType(w http.ResponseWriter, r 
 		rt.SetColor(req.Color)
 	}
 
-	if err := h.requirementTypeRepo.Save(r.Context(), rt); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+	if err := h.requirementTypeRepo.Save(c.Request.Context(), rt); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(h.requirementTypeToMap(rt))
+	c.JSON(http.StatusOK, h.requirementTypeToMap(rt))
 }
 
-func (h *RequirementTypeHandler) ListRequirementTypes(w http.ResponseWriter, r *http.Request) {
-	projectIDStr := r.URL.Query().Get("project_id")
+func (h *RequirementTypeHandler) ListRequirementTypes(c *gin.Context) {
+	projectIDStr := c.Query("project_id")
 	if projectIDStr == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
 		return
 	}
 
-	types, err := h.requirementTypeRepo.FindByProjectID(r.Context(), domain.NewProjectID(projectIDStr))
+	types, err := h.requirementTypeRepo.FindByProjectID(c.Request.Context(), domain.NewProjectID(projectIDStr))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
@@ -137,59 +131,54 @@ func (h *RequirementTypeHandler) ListRequirementTypes(w http.ResponseWriter, r *
 	for _, rt := range types {
 		resp = append(resp, h.requirementTypeToMap(rt))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *RequirementTypeHandler) DeleteRequirementType(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *RequirementTypeHandler) DeleteRequirementType(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
 	// 先查询获取类型信息，检查是否为内置类型
-	rt, err := h.requirementTypeRepo.FindByID(r.Context(), domain.NewRequirementTypeEntityID(id))
+	rt, err := h.requirementTypeRepo.FindByID(c.Request.Context(), domain.NewRequirementTypeEntityID(id))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	if rt == nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: "requirement type not found"})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "requirement type not found"})
 		return
 	}
 
 	// 检查是否为内置类型，不允许删除
 	if IsBuiltInRequirementType(rt.Code()) {
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusForbidden, Message: "cannot delete built-in requirement type"})
+		c.JSON(http.StatusForbidden, HTTPError{Code: http.StatusForbidden, Message: "cannot delete built-in requirement type"})
 		return
 	}
 
-	if err := h.requirementTypeRepo.Delete(r.Context(), domain.NewRequirementTypeEntityID(id)); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+	if err := h.requirementTypeRepo.Delete(c.Request.Context(), domain.NewRequirementTypeEntityID(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 func (h *RequirementTypeHandler) requirementTypeToMap(rt *domain.RequirementTypeEntity) map[string]interface{} {
 	return map[string]interface{}{
-		"id":              rt.ID().String(),
-		"project_id":      rt.ProjectID().String(),
-		"code":            rt.Code(),
-		"name":            rt.Name(),
-		"description":     rt.Description(),
-		"icon":            rt.Icon(),
-		"color":           rt.Color(),
-		"sort_order":      rt.SortOrder(),
+		"id":               rt.ID().String(),
+		"project_id":       rt.ProjectID().String(),
+		"code":             rt.Code(),
+		"name":             rt.Name(),
+		"description":      rt.Description(),
+		"icon":             rt.Icon(),
+		"color":            rt.Color(),
+		"sort_order":       rt.SortOrder(),
 		"state_machine_id": rt.StateMachineID(),
-		"created_at":      rt.CreatedAt().UnixMilli(),
-		"updated_at":      rt.UpdatedAt().UnixMilli(),
+		"created_at":       rt.CreatedAt().UnixMilli(),
+		"updated_at":       rt.UpdatedAt().UnixMilli(),
 	}
 }
 

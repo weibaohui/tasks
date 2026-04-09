@@ -1,8 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // BuiltInTool 内置工具信息
@@ -20,7 +21,7 @@ func NewToolsHandler() *ToolsHandler {
 }
 
 // ListBuiltInTools 返回内置工具列表
-func (h *ToolsHandler) ListBuiltInTools(w http.ResponseWriter, r *http.Request) {
+func (h *ToolsHandler) ListBuiltInTools(c *gin.Context) {
 	tools := []BuiltInTool{
 		{
 			Name:        "use_mcp",
@@ -40,6 +41,5 @@ func (h *ToolsHandler) ListBuiltInTools(w http.ResponseWriter, r *http.Request) 
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(tools)
+	c.JSON(http.StatusOK, tools)
 }

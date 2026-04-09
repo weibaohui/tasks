@@ -11,45 +11,27 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 )
 
 // setupTestSkillHandler 创建测试用的 SkillHandler 和路由
-func setupTestSkillHandler(tempDir string) (*SkillHandler, *http.ServeMux) {
+func setupTestSkillHandler(tempDir string) (*SkillHandler, *gin.Engine) {
 	loader := skill.NewSkillsLoaderWithPaths([]string{tempDir})
 	handler := NewSkillHandler(loader)
-	mux := SetupSkillRoutes(handler)
-	return handler, mux
+	engine := SetupSkillRoutes(handler)
+	return handler, engine
 }
 
 // SetupSkillRoutes 设置技能路由
-func SetupSkillRoutes(handler *SkillHandler) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/skills", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.ListSkills(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/v1/skills/detail", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.GetSkill(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/v1/skills/simple", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.ListSkillsSimple(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	return mux
+func SetupSkillRoutes(handler *SkillHandler) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	skills := engine.Group("/api/v1/skills")
+	skills.GET("", handler.ListSkills)
+	skills.GET("/detail", handler.GetSkill)
+	skills.GET("/simple", handler.ListSkillsSimple)
+	return engine
 }
 
 // createTestSkillDir 创建测试用的技能目录结构
@@ -91,20 +73,20 @@ requires_bins: go, git
 	tempDir := createTestSkillDir(t, "test-skill", skillContent)
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("期望 Content-Type 为 'application/json', 实际为 '%s'", contentType)
+	if contentType != "application/json; charset=utf-8" {
+		t.Errorf("期望 Content-Type 为 'application/json; charset=utf-8', 实际为 '%s'", contentType)
 	}
 
 	var resp map[string]interface{}
@@ -134,12 +116,12 @@ func TestListSkills_Empty(t *testing.T) {
 	}
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -174,19 +156,19 @@ requires_env: HOME
 	tempDir := createTestSkillDir(t, "test-skill-detail", skillContent)
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/detail?name=test-skill-detail", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType != "application/json; charset=utf-8" {
 		t.Errorf("期望 Content-Type 为 'application/json', 实际为 '%s'", contentType)
 	}
 
@@ -245,20 +227,23 @@ func TestGetSkill_MissingName(t *testing.T) {
 	}
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/detail", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
 	}
 
-	body := w.Body.String()
-	if body != "skill name is required\n" {
-		t.Errorf("期望错误信息为 'skill name is required', 实际为 '%s'", body)
+	var errResp HTTPError
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("解析错误响应失败: %v", err)
+	}
+	if errResp.Message != "skill name is required" {
+		t.Errorf("期望错误信息为 'skill name is required', 实际为 '%s'", errResp.Message)
 	}
 }
 
@@ -269,20 +254,23 @@ func TestGetSkill_NotFound(t *testing.T) {
 	}
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/detail?name=non-existent-skill", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
 	}
 
-	body := w.Body.String()
-	if body != "skill not found\n" {
-		t.Errorf("期望错误信息为 'skill not found', 实际为 '%s'", body)
+	var errResp HTTPError
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("解析错误响应失败: %v", err)
+	}
+	if errResp.Message != "skill not found" {
+		t.Errorf("期望错误信息为 'skill not found', 实际为 '%s'", errResp.Message)
 	}
 }
 
@@ -295,12 +283,12 @@ func TestGetSkill_NoMetadata(t *testing.T) {
 	tempDir := createTestSkillDir(t, "no-meta-skill", skillContent)
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/detail?name=no-meta-skill", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -356,19 +344,19 @@ description: 技能2描述
 	os.MkdirAll(skillDir2, 0755)
 	os.WriteFile(filepath.Join(skillDir2, "SKILL.md"), []byte(skillContent2), 0644)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/simple", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType != "application/json; charset=utf-8" {
 		t.Errorf("期望 Content-Type 为 'application/json', 实际为 '%s'", contentType)
 	}
 
@@ -421,12 +409,12 @@ func TestListSkillsSimple_Empty(t *testing.T) {
 	}
 	defer cleanupTestDir(t, tempDir)
 
-	_, mux := setupTestSkillHandler(tempDir)
+	_, engine := setupTestSkillHandler(tempDir)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills/simple", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)

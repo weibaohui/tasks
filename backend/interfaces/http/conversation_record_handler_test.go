@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -145,32 +146,21 @@ func setupTestConvRecordHandler() (*ConversationRecordHandler, *mockConvRecordRe
 	return handler, repo
 }
 
-func setupConvRecordMux(handler *ConversationRecordHandler) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/conversation-records", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			handler.CreateRecord(w, r)
-		case http.MethodGet:
-			handler.ListRecords(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/v1/conversation-records/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handler.GetRecord(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	return mux
+func setupConvRecordEngine(handler *ConversationRecordHandler) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	records := engine.Group("/api/v1/conversation-records")
+	records.POST("", handler.CreateRecord)
+	records.GET("", handler.handleGetRecords)
+	records.GET("/session/:sessionKey", handler.GetRecordsBySession)
+	records.GET("/trace/:traceId", handler.GetRecordsByTrace)
+	records.GET("/stats", handler.GetStats)
+	return engine
 }
 
 func TestCreateConversationRecord(t *testing.T) {
 	handler, _ := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 
 	body := `{
 		"trace_id": "trace-123",
@@ -194,7 +184,7 @@ func TestCreateConversationRecord(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusCreated, w.Code)
@@ -226,13 +216,13 @@ func TestCreateConversationRecord(t *testing.T) {
 
 func TestCreateConversationRecord_InvalidJSON(t *testing.T) {
 	handler, _ := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversation-records", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
@@ -241,7 +231,7 @@ func TestCreateConversationRecord_InvalidJSON(t *testing.T) {
 
 func TestListConversationRecords(t *testing.T) {
 	handler, repo := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 	ctx := context.Background()
 
 	// 先创建一些记录
@@ -256,7 +246,7 @@ func TestListConversationRecords(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records?trace_id=trace-123", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -275,7 +265,7 @@ func TestListConversationRecords(t *testing.T) {
 
 func TestListConversationRecords_WithFilters(t *testing.T) {
 	handler, repo := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 	ctx := context.Background()
 
 	record1, _ := domain.NewConversationRecord(
@@ -297,7 +287,7 @@ func TestListConversationRecords_WithFilters(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records?user_code=usr_001&event_type=llm_call", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -320,7 +310,7 @@ func TestListConversationRecords_WithFilters(t *testing.T) {
 
 func TestGetConversationRecord(t *testing.T) {
 	handler, repo := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 	ctx := context.Background()
 
 	record, _ := domain.NewConversationRecord(
@@ -331,10 +321,10 @@ func TestGetConversationRecord(t *testing.T) {
 	record.SetScope("session-abc", "usr_001", "agt_001", "", "")
 	repo.Save(ctx, record)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records/?id=conv-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records?id=conv-1", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
@@ -350,12 +340,12 @@ func TestGetConversationRecord(t *testing.T) {
 
 func TestGetConversationRecord_NotFound(t *testing.T) {
 	handler, _ := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records/?id=non-existent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records?id=non-existent", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusNotFound, w.Code)
@@ -364,15 +354,16 @@ func TestGetConversationRecord_NotFound(t *testing.T) {
 
 func TestGetConversationRecord_MissingID(t *testing.T) {
 	handler, _ := setupTestConvRecordHandler()
-	mux := setupConvRecordMux(handler)
+	engine := setupConvRecordEngine(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversation-records", nil)
 	w := httptest.NewRecorder()
 
-	mux.ServeHTTP(w, req)
+	engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusBadRequest, w.Code)
+	// Gin 路由: GET /api/v1/conversation-records 无 id 参数时回退到 ListRecords
+	if w.Code != http.StatusOK {
+		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, w.Code)
 	}
 }
 

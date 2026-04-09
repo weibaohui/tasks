@@ -1,22 +1,21 @@
 /**
  * HTTP Router
- * 配置 HTTP 路由
+ * 配置 HTTP 路由 (Gin 框架)
  */
 package http
 
 import (
-	"encoding/json"
 	"net/http"
-	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes 设置路由
-// 注意：Go 标准库 http.ServeMux 不支持路径参数，路由按最长前缀匹配
-func SetupRoutes() *http.ServeMux {
+func SetupRoutes() *gin.Engine {
 	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
-func SetupRoutesWithUsers(userHandler *UserHandler) *http.ServeMux {
+func SetupRoutesWithUsers(userHandler *UserHandler) *gin.Engine {
 	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
@@ -35,593 +34,185 @@ func SetupRoutesWithManagement(
 	stateMachineHandler *StateMachineHandler,
 	projectStateMachineHandler *ProjectStateMachineHandler,
 	requirementTypeHandler *RequirementTypeHandler,
-) *http.ServeMux {
-	mux := http.NewServeMux()
-	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if authHandler == nil {
-				next(w, r)
-				return
-			}
-			if _, err := authHandler.Authorize(r); err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
-				return
-			}
-			next(w, r)
+) *gin.Engine {
+	engine := gin.Default()
+
+	// 认证中间件
+	requireAuth := func(c *gin.Context) {
+		if authHandler == nil {
+			c.Next()
+			return
 		}
+		if _, err := authHandler.Authorize(c.Request); err != nil {
+			c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 
+	v1 := engine.Group("/api/v1")
+
 	if authHandler != nil {
-		mux.HandleFunc("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			authHandler.Login(w, r)
-		})
-		mux.HandleFunc("/api/v1/auth/me", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			authHandler.Me(w, r)
-		}))
+		auth := v1.Group("/auth")
+		auth.POST("/login", authHandler.Login)
+		auth.GET("/me", requireAuth, authHandler.Me)
 
 		// Token管理路由
-		mux.HandleFunc("/api/v1/users/tokens", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				authHandler.CreateToken(w, r)
-			case http.MethodGet:
-				authHandler.ListTokens(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-		mux.HandleFunc("/api/v1/users/tokens/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodDelete {
-				authHandler.DeleteToken(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		usersTokens := v1.Group("/users/tokens", requireAuth)
+		usersTokens.POST("", authHandler.CreateToken)
+		usersTokens.GET("", authHandler.ListTokens)
+		usersTokens.DELETE("/:id", authHandler.DeleteToken)
 	}
 
 	// MCP 路由
 	if mcpHandler != nil {
-		mux.HandleFunc("/api/v1/mcp/servers", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				mcpHandler.CreateServer(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					mcpHandler.GetServer(w, r)
-					return
-				}
-				mcpHandler.ListServers(w, r)
-			case http.MethodPut:
-				mcpHandler.UpdateServer(w, r)
-			case http.MethodDelete:
-				mcpHandler.DeleteServer(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-		mux.HandleFunc("/api/v1/mcp/servers/test", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			mcpHandler.TestServer(w, r)
-		}))
-		mux.HandleFunc("/api/v1/mcp/servers/refresh", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			mcpHandler.RefreshCapabilities(w, r)
-		}))
-		mux.HandleFunc("/api/v1/mcp/servers/tools", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			mcpHandler.ListTools(w, r)
-		}))
-		mux.HandleFunc("/api/v1/mcp/bindings", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				mcpHandler.ListBindings(w, r)
-			case http.MethodPost:
-				mcpHandler.CreateBinding(w, r)
-			case http.MethodPut:
-				mcpHandler.UpdateBinding(w, r)
-			case http.MethodDelete:
-				mcpHandler.DeleteBinding(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		mcpServers := v1.Group("/mcp/servers", requireAuth)
+		mcpServers.POST("", mcpHandler.CreateServer)
+		mcpServers.GET("", mcpHandler.handleGetServers)
+		mcpServers.PUT("", mcpHandler.UpdateServer)
+		mcpServers.DELETE("", mcpHandler.DeleteServer)
+		mcpServers.POST("/test", mcpHandler.TestServer)
+		mcpServers.POST("/refresh", mcpHandler.RefreshCapabilities)
+		mcpServers.GET("/tools", mcpHandler.ListTools)
+
+		mcpBindings := v1.Group("/mcp/bindings", requireAuth)
+		mcpBindings.GET("", mcpHandler.ListBindings)
+		mcpBindings.POST("", mcpHandler.CreateBinding)
+		mcpBindings.PUT("", mcpHandler.UpdateBinding)
+		mcpBindings.DELETE("", mcpHandler.DeleteBinding)
 	}
 
 	if userHandler != nil {
-		mux.HandleFunc("/api/v1/users", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost && authHandler != nil {
-				if _, err := authHandler.Authorize(r); err != nil {
-					w.WriteHeader(http.StatusUnauthorized)
-					_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
-					return
-				}
-			}
-			switch r.Method {
-			case http.MethodPost:
-				userHandler.CreateUser(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					userHandler.GetUser(w, r)
-					return
-				}
-				userHandler.ListUsers(w, r)
-			case http.MethodPut:
-				userHandler.UpdateUser(w, r)
-			case http.MethodDelete:
-				userHandler.DeleteUser(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		})
+		users := v1.Group("/users")
+		users.POST("", userHandler.CreateUser)
+		users.GET("", requireAuth, userHandler.handleGetUsers)
+		users.PUT("", requireAuth, userHandler.UpdateUser)
+		users.DELETE("", requireAuth, userHandler.DeleteUser)
 	}
 
 	if agentHandler != nil {
-		mux.HandleFunc("/api/v1/agents", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				agentHandler.CreateAgent(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" || r.URL.Query().Get("code") != "" {
-					agentHandler.GetAgent(w, r)
-					return
-				}
-				agentHandler.ListAgents(w, r)
-			case http.MethodPut:
-				agentHandler.UpdateAgent(w, r)
-			case http.MethodPatch:
-				agentHandler.PatchAgent(w, r)
-			case http.MethodDelete:
-				agentHandler.DeleteAgent(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		agents := v1.Group("/agents", requireAuth)
+		agents.POST("", agentHandler.CreateAgent)
+		agents.GET("", agentHandler.handleGetAgents)
+		agents.PUT("", agentHandler.UpdateAgent)
+		agents.PATCH("", agentHandler.PatchAgent)
+		agents.DELETE("", agentHandler.DeleteAgent)
 	}
 
 	if providerHandler != nil {
-		mux.HandleFunc("/api/v1/providers", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				providerHandler.CreateProvider(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					providerHandler.GetProvider(w, r)
-					return
-				}
-				providerHandler.ListProviders(w, r)
-			case http.MethodPut:
-				providerHandler.UpdateProvider(w, r)
-			case http.MethodDelete:
-				providerHandler.DeleteProvider(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		mux.HandleFunc("/api/v1/providers/test", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			providerHandler.TestConnection(w, r)
-		}))
+		providers := v1.Group("/providers", requireAuth)
+		providers.POST("", providerHandler.CreateProvider)
+		providers.GET("", providerHandler.handleGetProviders)
+		providers.PUT("", providerHandler.UpdateProvider)
+		providers.DELETE("", providerHandler.DeleteProvider)
+		providers.POST("/test", providerHandler.TestConnection)
 	}
 
 	if channelHandler != nil {
-		mux.HandleFunc("/api/v1/channels", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				channelHandler.CreateChannel(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" || r.URL.Query().Get("code") != "" {
-					channelHandler.GetChannel(w, r)
-					return
-				}
-				channelHandler.ListChannels(w, r)
-			case http.MethodPut:
-				channelHandler.UpdateChannel(w, r)
-			case http.MethodDelete:
-				channelHandler.DeleteChannel(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		mux.HandleFunc("/api/v1/channels/types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			channelHandler.ListChannelTypes(w, r)
-		}))
+		channels := v1.Group("/channels", requireAuth)
+		channels.POST("", channelHandler.CreateChannel)
+		channels.GET("", channelHandler.handleGetChannels)
+		channels.PUT("", channelHandler.UpdateChannel)
+		channels.DELETE("", channelHandler.DeleteChannel)
+		channels.GET("/types", channelHandler.ListChannelTypes)
 	}
 
 	if sessionHandler != nil {
-		mux.HandleFunc("/api/v1/sessions", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				sessionHandler.CreateSession(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("session_key") != "" {
-					sessionHandler.GetSession(w, r)
-					return
-				}
-				sessionHandler.ListSessions(w, r)
-			case http.MethodDelete:
-				sessionHandler.DeleteSession(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		sessions := v1.Group("/sessions", requireAuth)
+		sessions.POST("", sessionHandler.CreateSession)
+		sessions.GET("", sessionHandler.handleGetSessions)
+		sessions.DELETE("", sessionHandler.DeleteSession)
 
-		mux.HandleFunc("/api/v1/sessions/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			path := r.URL.Path
-			switch {
-			case strings.HasSuffix(path, "/touch"):
-				if r.Method != http.MethodPost {
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-					return
-				}
-				sessionHandler.TouchSession(w, r)
-			case strings.HasSuffix(path, "/metadata"):
-				switch r.Method {
-				case http.MethodGet:
-					sessionHandler.GetSessionMetadata(w, r)
-				case http.MethodPut:
-					sessionHandler.UpdateSessionMetadata(w, r)
-				default:
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				}
-			default:
-				switch r.Method {
-				case http.MethodGet:
-					sessionHandler.GetSession(w, r)
-				case http.MethodDelete:
-					sessionHandler.DeleteSession(w, r)
-				default:
-					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				}
-			}
-		}))
+		// 子路由：带路径参数
+		sessions.GET("/:sessionKey", sessionHandler.GetSession)
+		sessions.DELETE("/:sessionKey", sessionHandler.DeleteSessionByPath)
+		sessions.POST("/:sessionKey/touch", sessionHandler.TouchSession)
+		sessions.GET("/:sessionKey/metadata", sessionHandler.GetSessionMetadata)
+		sessions.PUT("/:sessionKey/metadata", sessionHandler.UpdateSessionMetadata)
 	}
 
 	if conversationRecordHandler != nil {
-		mux.HandleFunc("/api/v1/conversation-records", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				conversationRecordHandler.CreateRecord(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					conversationRecordHandler.GetRecord(w, r)
-					return
-				}
-				conversationRecordHandler.ListRecords(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// GET /api/v1/conversation-records/session/{sessionKey}
-		mux.HandleFunc("/api/v1/conversation-records/session/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			sessionKey := strings.TrimPrefix(r.URL.Path, "/api/v1/conversation-records/session/")
-			conversationRecordHandler.GetRecordsBySession(w, r, sessionKey)
-		}))
-
-		// GET /api/v1/conversation-records/trace/{traceId}
-		mux.HandleFunc("/api/v1/conversation-records/trace/", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			traceId := strings.TrimPrefix(r.URL.Path, "/api/v1/conversation-records/trace/")
-			conversationRecordHandler.GetRecordsByTrace(w, r, traceId)
-		}))
-
-		// GET /api/v1/conversation-records/stats
-		mux.HandleFunc("/api/v1/conversation-records/stats", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			conversationRecordHandler.GetStats(w, r)
-		}))
+		records := v1.Group("/conversation-records", requireAuth)
+		records.POST("", conversationRecordHandler.CreateRecord)
+		records.GET("", conversationRecordHandler.handleGetRecords)
+		records.GET("/session/:sessionKey", conversationRecordHandler.GetRecordsBySession)
+		records.GET("/trace/:traceId", conversationRecordHandler.GetRecordsByTrace)
+		records.GET("/stats", conversationRecordHandler.GetStats)
 	}
 
 	if projectHandler != nil {
-		mux.HandleFunc("/api/v1/projects", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				projectHandler.CreateProject(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					projectHandler.GetProject(w, r)
-					return
-				}
-				projectHandler.ListProjects(w, r)
-			case http.MethodPut:
-				projectHandler.UpdateProject(w, r)
-			case http.MethodDelete:
-				projectHandler.DeleteProject(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		projects := v1.Group("/projects", requireAuth)
+		projects.POST("", projectHandler.CreateProject)
+		projects.GET("", projectHandler.handleGetProjects)
+		projects.PUT("", projectHandler.UpdateProject)
+		projects.DELETE("", projectHandler.DeleteProject)
 	}
 
 	if requirementHandler != nil {
-		mux.HandleFunc("/api/v1/requirements/dispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.DispatchRequirement(w, r)
-		}))
-		mux.HandleFunc("/api/v1/requirements/pr", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.ReportRequirementPROpened(w, r)
-		}))
-		mux.HandleFunc("/api/v1/requirements/redispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.RedispatchRequirement(w, r)
-		}))
-		// 复制需求并派发新副本
-		mux.HandleFunc("/api/v1/requirements/copy-and-dispatch", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.CopyAndDispatchRequirement(w, r)
-		}))
-		// 重置需求 - 复用 RedispatchRequirement handler（语义相同）
-		mux.HandleFunc("/api/v1/requirements/reset", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.RedispatchRequirement(w, r)
-		}))
-		// 批量删除需求
-		mux.HandleFunc("/api/v1/requirements/batch-delete", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			requirementHandler.BatchDeleteRequirements(w, r)
-		}))
-		mux.HandleFunc("/api/v1/requirements", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodPost:
-				requirementHandler.CreateRequirement(w, r)
-			case http.MethodGet:
-				if r.URL.Query().Get("id") != "" {
-					requirementHandler.GetRequirement(w, r)
-					return
-				}
-				requirementHandler.ListRequirements(w, r)
-			case http.MethodPut:
-				requirementHandler.UpdateRequirement(w, r)
-			case http.MethodDelete:
-				requirementHandler.DeleteRequirement(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-		// 需求状态更新（用于修复异常状态）
-		mux.HandleFunc("/api/v1/requirements/status", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPut {
-				requirementHandler.UpdateRequirementStatus(w, r)
-				return
-			}
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}))
-		// 需求状态转换历史
-		mux.HandleFunc("/api/v1/requirements/transition-history", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				requirementHandler.GetRequirementTransitionHistory(w, r)
-				return
-			}
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}))
-
-		// 需求状态统计（动态从数据库提取）
-		mux.HandleFunc("/api/v1/requirements/status-stats", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				requirementHandler.GetStatusStats(w, r)
-				return
-			}
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}))
+		requirements := v1.Group("/requirements", requireAuth)
+		requirements.POST("", requirementHandler.CreateRequirement)
+		requirements.GET("", requirementHandler.handleGetRequirements)
+		requirements.PUT("", requirementHandler.UpdateRequirement)
+		requirements.DELETE("", requirementHandler.DeleteRequirement)
+		requirements.POST("/dispatch", requirementHandler.DispatchRequirement)
+		requirements.POST("/pr", requirementHandler.ReportRequirementPROpened)
+		requirements.POST("/redispatch", requirementHandler.RedispatchRequirement)
+		requirements.POST("/copy-and-dispatch", requirementHandler.CopyAndDispatchRequirement)
+		requirements.POST("/reset", requirementHandler.RedispatchRequirement)
+		requirements.POST("/batch-delete", requirementHandler.BatchDeleteRequirements)
+		requirements.PUT("/status", requirementHandler.UpdateRequirementStatus)
+		requirements.GET("/transition-history", requirementHandler.GetRequirementTransitionHistory)
+		requirements.GET("/status-stats", requirementHandler.GetStatusStats)
 	}
 
 	// 需求类型路由
 	if requirementTypeHandler != nil {
-		mux.HandleFunc("/api/v1/requirement-types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				requirementTypeHandler.ListRequirementTypes(w, r)
-			case http.MethodPost:
-				requirementTypeHandler.CreateRequirementType(w, r)
-			case http.MethodDelete:
-				requirementTypeHandler.DeleteRequirementType(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		reqTypes := v1.Group("/requirement-types", requireAuth)
+		reqTypes.GET("", requirementTypeHandler.ListRequirementTypes)
+		reqTypes.POST("", requirementTypeHandler.CreateRequirementType)
+		reqTypes.DELETE("", requirementTypeHandler.DeleteRequirementType)
 	}
 
 	// 工具路由
 	toolsHandler := NewToolsHandler()
-	mux.HandleFunc("/api/v1/tools/builtin", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		toolsHandler.ListBuiltInTools(w, r)
-	})
+	v1.GET("/tools/builtin", toolsHandler.ListBuiltInTools)
 
 	// Skill 路由
 	if skillHandler != nil {
-		mux.HandleFunc("/api/v1/skills", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				skillHandler.ListSkills(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-		mux.HandleFunc("/api/v1/skills/detail", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			skillHandler.GetSkill(w, r)
-		}))
-		mux.HandleFunc("/api/v1/skills/simple", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			skillHandler.ListSkillsSimple(w, r)
-		}))
+		skills := v1.Group("/skills", requireAuth)
+		skills.GET("", skillHandler.ListSkills)
+		skills.GET("/detail", skillHandler.GetSkill)
+		skills.GET("/simple", skillHandler.ListSkillsSimple)
 	}
 
 	// 状态机路由
 	if stateMachineHandler != nil {
-		// 状态机列表和创建
-		mux.HandleFunc("/api/v1/state-machines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				stateMachineHandler.ListStateMachines(w, r)
-			case http.MethodPost:
-				stateMachineHandler.CreateStateMachine(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		stateMachines := v1.Group("/state-machines", requireAuth)
+		stateMachines.GET("", stateMachineHandler.ListStateMachines)
+		stateMachines.POST("", stateMachineHandler.CreateStateMachine)
+		stateMachines.GET("/:id", stateMachineHandler.GetStateMachine)
+		stateMachines.PUT("/:id", stateMachineHandler.UpdateStateMachine)
+		stateMachines.DELETE("/:id", stateMachineHandler.DeleteStateMachine)
 
 		// 状态统计
-		mux.HandleFunc("/api/v1/requirements/states/summary", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				stateMachineHandler.GetStateSummary(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 单个状态机操作
-		mux.HandleFunc("/api/v1/state-machines/{id}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				stateMachineHandler.GetStateMachine(w, r)
-			case http.MethodPut:
-				stateMachineHandler.UpdateStateMachine(w, r)
-			case http.MethodDelete:
-				stateMachineHandler.DeleteStateMachine(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		v1.GET("/requirements/states/summary", requireAuth, stateMachineHandler.GetStateSummary)
 
 		// 需求状态转换
-		mux.HandleFunc("/api/v1/requirements/{requirement_id}/transitions", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost {
-				stateMachineHandler.TriggerTransition(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 需求当前状态（获取和初始化）
-		mux.HandleFunc("/api/v1/requirements/{requirement_id}/state", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				stateMachineHandler.GetRequirementState(w, r)
-			case http.MethodPost:
-				stateMachineHandler.InitializeRequirementState(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 需求转换历史
-		mux.HandleFunc("/api/v1/requirements/{requirement_id}/transitions/history", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				stateMachineHandler.GetTransitionHistory(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		v1.POST("/requirements/:requirement_id/transitions", requireAuth, stateMachineHandler.TriggerTransition)
+		v1.GET("/requirements/:requirement_id/state", requireAuth, stateMachineHandler.GetRequirementState)
+		v1.POST("/requirements/:requirement_id/state", requireAuth, stateMachineHandler.InitializeRequirementState)
+		v1.GET("/requirements/:requirement_id/transitions/history", requireAuth, stateMachineHandler.GetTransitionHistory)
 	}
 
 	// 项目状态机关联路由
 	if projectStateMachineHandler != nil {
-		// 获取可用的需求类型列表
-		mux.HandleFunc("/api/v1/project-state-machines/requirement-types", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				projectStateMachineHandler.GetAvailableRequirementTypes(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 列出项目的所有状态机映射
-		mux.HandleFunc("/api/v1/projects/{project_id}/state-machines", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				projectStateMachineHandler.ListProjectStateMachines(w, r)
-			case http.MethodPost:
-				projectStateMachineHandler.SetProjectStateMachine(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 获取指定类型的状态机映射
-		mux.HandleFunc("/api/v1/projects/{project_id}/state-machines/{requirement_type}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet {
-				projectStateMachineHandler.GetProjectStateMachineByType(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
-
-		// 删除项目状态机映射
-		mux.HandleFunc("/api/v1/project-state-machines/{id}", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodDelete {
-				projectStateMachineHandler.DeleteProjectStateMachine(w, r)
-			} else {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-		}))
+		v1.GET("/project-state-machines/requirement-types", requireAuth, projectStateMachineHandler.GetAvailableRequirementTypes)
+		v1.GET("/projects/:project_id/state-machines", requireAuth, projectStateMachineHandler.ListProjectStateMachines)
+		v1.POST("/projects/:project_id/state-machines", requireAuth, projectStateMachineHandler.SetProjectStateMachine)
+		v1.GET("/projects/:project_id/state-machines/:requirement_type", requireAuth, projectStateMachineHandler.GetProjectStateMachineByType)
+		v1.DELETE("/project-state-machines/:id", requireAuth, projectStateMachineHandler.DeleteProjectStateMachine)
 	}
 
-	return mux
+	return engine
 }

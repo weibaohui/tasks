@@ -1,10 +1,10 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -41,14 +41,13 @@ type UpdateServerRequest struct {
 }
 
 // CreateServer 创建 MCP 服务器
-func (h *MCPHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
+func (h *MCPHandler) CreateServer(c *gin.Context) {
 	var req CreateServerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
 		return
 	}
-	server, err := h.service.CreateServer(r.Context(), application.CreateMCPServerCommand{
+	server, err := h.service.CreateServer(c.Request.Context(), application.CreateMCPServerCommand{
 		Code:          req.Code,
 		Name:          req.Name,
 		Description:   req.Description,
@@ -59,60 +58,54 @@ func (h *MCPHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 		EnvVars:       req.EnvVars,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(serverToMap(server))
+	c.JSON(http.StatusOK, serverToMap(server))
 }
 
 // ListServers 列出 MCP 服务器
-func (h *MCPHandler) ListServers(w http.ResponseWriter, r *http.Request) {
-	servers, err := h.service.ListServers(r.Context())
+func (h *MCPHandler) ListServers(c *gin.Context) {
+	servers, err := h.service.ListServers(c.Request.Context())
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(servers))
 	for _, s := range servers {
 		resp = append(resp, serverToMap(s))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetServer 获取 MCP 服务器
-func (h *MCPHandler) GetServer(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) GetServer(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	server, err := h.service.GetServer(r.Context(), domain.NewMCPServerID(id))
+	server, err := h.service.GetServer(c.Request.Context(), domain.NewMCPServerID(id))
 	if err != nil || server == nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: "未找到服务器"})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "未找到服务器"})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(serverToMap(server))
+	c.JSON(http.StatusOK, serverToMap(server))
 }
 
 // UpdateServer 更新 MCP 服务器
-func (h *MCPHandler) UpdateServer(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) UpdateServer(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
 	var req UpdateServerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
 		return
 	}
-	server, err := h.service.UpdateServer(r.Context(), application.UpdateMCPServerCommand{
+	server, err := h.service.UpdateServer(c.Request.Context(), application.UpdateMCPServerCommand{
 		ID:            domain.NewMCPServerID(id),
 		Name:          req.Name,
 		Description:   req.Description,
@@ -123,76 +116,76 @@ func (h *MCPHandler) UpdateServer(w http.ResponseWriter, r *http.Request) {
 		EnvVars:       req.EnvVars,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(serverToMap(server))
+	c.JSON(http.StatusOK, serverToMap(server))
 }
 
 // DeleteServer 删除 MCP 服务器
-func (h *MCPHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) DeleteServer(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	if err := h.service.DeleteServer(r.Context(), domain.NewMCPServerID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.service.DeleteServer(c.Request.Context(), domain.NewMCPServerID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 // TestServer 测试 MCP 服务器连接
-func (h *MCPHandler) TestServer(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) TestServer(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	if err := h.service.TestServer(r.Context(), domain.NewMCPServerID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.service.TestServer(c.Request.Context(), domain.NewMCPServerID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 // RefreshCapabilities 刷新 MCP 工具能力
-func (h *MCPHandler) RefreshCapabilities(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) RefreshCapabilities(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	if err := h.service.RefreshCapabilities(r.Context(), domain.NewMCPServerID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.service.RefreshCapabilities(c.Request.Context(), domain.NewMCPServerID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 // ListTools 列出 MCP 工具
-func (h *MCPHandler) ListTools(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) ListTools(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	tools, err := h.service.ListTools(r.Context(), domain.NewMCPServerID(id))
+	tools, err := h.service.ListTools(c.Request.Context(), domain.NewMCPServerID(id))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(tools)
+	c.JSON(http.StatusOK, tools)
+}
+
+// handleGetServers 根据 query 参数分发到 GetServer 或 ListServers
+func (h *MCPHandler) handleGetServers(c *gin.Context) {
+	if c.Query("id") != "" {
+		h.GetServer(c)
+		return
+	}
+	h.ListServers(c)
 }
 
 // 绑定
@@ -211,35 +204,32 @@ type UpdateBindingRequest struct {
 }
 
 // ListBindings 列出 Agent-MCP 绑定
-func (h *MCPHandler) ListBindings(w http.ResponseWriter, r *http.Request) {
-	agentID := r.URL.Query().Get("agent_id")
+func (h *MCPHandler) ListBindings(c *gin.Context) {
+	agentID := c.Query("agent_id")
 	if agentID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "agent_id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "agent_id 必填"})
 		return
 	}
-	list, err := h.service.ListAgentBindings(r.Context(), domain.NewAgentID(agentID))
+	list, err := h.service.ListAgentBindings(c.Request.Context(), domain.NewAgentID(agentID))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(list))
 	for _, b := range list {
 		resp = append(resp, bindingToMap(b))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 // CreateBinding 创建 Agent-MCP 绑定
-func (h *MCPHandler) CreateBinding(w http.ResponseWriter, r *http.Request) {
+func (h *MCPHandler) CreateBinding(c *gin.Context) {
 	var req CreateBindingRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
 		return
 	}
-	binding, err := h.service.CreateAgentBinding(r.Context(), application.CreateAgentMCPBindingCommand{
+	binding, err := h.service.CreateAgentBinding(c.Request.Context(), application.CreateAgentMCPBindingCommand{
 		AgentID:      domain.NewAgentID(req.AgentID),
 		MCPServerID:  domain.NewMCPServerID(req.MCPServerID),
 		EnabledTools: req.EnabledTools,
@@ -247,55 +237,49 @@ func (h *MCPHandler) CreateBinding(w http.ResponseWriter, r *http.Request) {
 		AutoLoad:     req.AutoLoad,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(bindingToMap(binding))
+	c.JSON(http.StatusOK, bindingToMap(binding))
 }
 
 // UpdateBinding 更新 Agent-MCP 绑定
-func (h *MCPHandler) UpdateBinding(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) UpdateBinding(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
 	var req UpdateBindingRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "请求格式错误"})
 		return
 	}
-	binding, err := h.service.UpdateAgentBinding(r.Context(), application.UpdateAgentMCPBindingCommand{
+	binding, err := h.service.UpdateAgentBinding(c.Request.Context(), application.UpdateAgentMCPBindingCommand{
 		ID:           domain.NewAgentMCPBindingID(id),
 		EnabledTools: req.EnabledTools,
 		IsActive:     req.IsActive,
 		AutoLoad:     req.AutoLoad,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(bindingToMap(binding))
+	c.JSON(http.StatusOK, bindingToMap(binding))
 }
 
 // DeleteBinding 删除 Agent-MCP 绑定
-func (h *MCPHandler) DeleteBinding(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *MCPHandler) DeleteBinding(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id 必填"})
 		return
 	}
-	if err := h.service.DeleteAgentBinding(r.Context(), domain.NewAgentMCPBindingID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.service.DeleteAgentBinding(c.Request.Context(), domain.NewAgentMCPBindingID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 func serverToMap(s *domain.MCPServer) map[string]interface{} {

@@ -1,9 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -52,15 +52,14 @@ type UpdateProviderRequest struct {
 	IsActive        *bool                       `json:"is_active"`
 }
 
-func (h *LLMProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Request) {
+func (h *LLMProviderHandler) CreateProvider(c *gin.Context) {
 	var req CreateProviderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	provider, err := h.providerService.Create(r.Context(), application.CreateProviderCommand{
+	provider, err := h.providerService.Create(c.Request.Context(), application.CreateProviderCommand{
 		UserCode:        req.UserCode,
 		ProviderKey:     req.ProviderKey,
 		ProviderName:    req.ProviderName,
@@ -75,27 +74,23 @@ func (h *LLMProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Reque
 		AutoMerge:       req.AutoMerge,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(providerToMap(provider))
+	c.JSON(http.StatusCreated, providerToMap(provider))
 }
 
-func (h *LLMProviderHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
-	userCode := r.URL.Query().Get("user_code")
+func (h *LLMProviderHandler) ListProviders(c *gin.Context) {
+	userCode := c.Query("user_code")
 	if userCode == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "user_code is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "user_code is required"})
 		return
 	}
 
-	providers, err := h.providerService.List(r.Context(), userCode)
+	providers, err := h.providerService.List(c.Request.Context(), userCode)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
@@ -103,41 +98,37 @@ func (h *LLMProviderHandler) ListProviders(w http.ResponseWriter, r *http.Reques
 	for _, provider := range providers {
 		resp = append(resp, providerToMap(provider))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *LLMProviderHandler) GetProvider(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *LLMProviderHandler) GetProvider(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	provider, err := h.providerService.Get(r.Context(), domain.NewLLMProviderID(id))
+	provider, err := h.providerService.Get(c.Request.Context(), domain.NewLLMProviderID(id))
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(providerToMap(provider))
+	c.JSON(http.StatusOK, providerToMap(provider))
 }
 
-func (h *LLMProviderHandler) UpdateProvider(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *LLMProviderHandler) UpdateProvider(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
 
 	var req UpdateProviderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	provider, err := h.providerService.Update(r.Context(), application.UpdateProviderCommand{
+	provider, err := h.providerService.Update(c.Request.Context(), application.UpdateProviderCommand{
 		ID:              domain.NewLLMProviderID(id),
 		ProviderKey:     req.ProviderKey,
 		ProviderName:    req.ProviderName,
@@ -153,42 +144,46 @@ func (h *LLMProviderHandler) UpdateProvider(w http.ResponseWriter, r *http.Reque
 		IsActive:        req.IsActive,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(providerToMap(provider))
+	c.JSON(http.StatusOK, providerToMap(provider))
 }
 
-func (h *LLMProviderHandler) DeleteProvider(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *LLMProviderHandler) DeleteProvider(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	if err := h.providerService.Delete(r.Context(), domain.NewLLMProviderID(id)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+	if err := h.providerService.Delete(c.Request.Context(), domain.NewLLMProviderID(id)); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
-func (h *LLMProviderHandler) TestConnection(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *LLMProviderHandler) TestConnection(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	result, err := h.providerService.TestConnection(r.Context(), domain.NewLLMProviderID(id))
+	result, err := h.providerService.TestConnection(c.Request.Context(), domain.NewLLMProviderID(id))
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(result)
+	c.JSON(http.StatusOK, result)
+}
+
+// handleGetProviders 根据 query 参数分发到 GetProvider 或 ListProviders
+func (h *LLMProviderHandler) handleGetProviders(c *gin.Context) {
+	if c.Query("id") != "" {
+		h.GetProvider(c)
+		return
+	}
+	h.ListProviders(c)
 }
 
 func providerToMap(provider *domain.LLMProvider) map[string]interface{} {

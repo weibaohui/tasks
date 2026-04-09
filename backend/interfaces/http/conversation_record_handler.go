@@ -1,11 +1,11 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 )
@@ -38,11 +38,10 @@ type CreateConversationRecordRequest struct {
 	ChannelType      string `json:"channel_type"`
 }
 
-func (h *ConversationRecordHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
+func (h *ConversationRecordHandler) CreateRecord(c *gin.Context) {
 	var req CreateConversationRecordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 	var timestamp *time.Time
@@ -50,7 +49,7 @@ func (h *ConversationRecordHandler) CreateRecord(w http.ResponseWriter, r *http.
 		t := time.UnixMilli(*req.Timestamp)
 		timestamp = &t
 	}
-	record, err := h.recordService.CreateRecord(r.Context(), application.CreateConversationRecordCommand{
+	record, err := h.recordService.CreateRecord(c.Request.Context(), application.CreateConversationRecordCommand{
 		TraceID:          req.TraceID,
 		SpanID:           req.SpanID,
 		ParentSpanID:     req.ParentSpanID,
@@ -70,98 +69,92 @@ func (h *ConversationRecordHandler) CreateRecord(w http.ResponseWriter, r *http.
 		ChannelType:      req.ChannelType,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(conversationRecordToMap(record))
+	c.JSON(http.StatusCreated, conversationRecordToMap(record))
 }
 
-func (h *ConversationRecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+func (h *ConversationRecordHandler) ListRecords(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
 	query := application.ListConversationRecordsQuery{
-		TraceID:     r.URL.Query().Get("trace_id"),
-		SessionKey:  r.URL.Query().Get("session_key"),
-		UserCode:    r.URL.Query().Get("user_code"),
-		AgentCode:   r.URL.Query().Get("agent_code"),
-		ChannelCode: r.URL.Query().Get("channel_code"),
-		EventType:   r.URL.Query().Get("event_type"),
-		Role:        r.URL.Query().Get("role"),
+		TraceID:     c.Query("trace_id"),
+		SessionKey:  c.Query("session_key"),
+		UserCode:    c.Query("user_code"),
+		AgentCode:   c.Query("agent_code"),
+		ChannelCode: c.Query("channel_code"),
+		EventType:   c.Query("event_type"),
+		Role:        c.Query("role"),
 		Limit:       limit,
 		Offset:      offset,
 	}
-	records, err := h.recordService.ListRecords(r.Context(), query)
+	records, err := h.recordService.ListRecords(c.Request.Context(), query)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
-	total, err := h.recordService.CountRecords(r.Context(), query)
+	total, err := h.recordService.CountRecords(c.Request.Context(), query)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(records))
 	for _, record := range records {
 		resp = append(resp, conversationRecordToMap(record))
 	}
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"items": resp,
 		"total": total,
 	})
 }
 
-func (h *ConversationRecordHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+func (h *ConversationRecordHandler) GetRecord(c *gin.Context) {
+	id := c.Query("id")
 	if id == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
 		return
 	}
-	record, err := h.recordService.GetRecord(r.Context(), id)
+	record, err := h.recordService.GetRecord(c.Request.Context(), id)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: err.Error()})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(conversationRecordToMap(record))
+	c.JSON(http.StatusOK, conversationRecordToMap(record))
 }
 
-func (h *ConversationRecordHandler) GetRecordsBySession(w http.ResponseWriter, r *http.Request, sessionKey string) {
-	records, err := h.recordService.ListRecords(r.Context(), application.ListConversationRecordsQuery{
+func (h *ConversationRecordHandler) GetRecordsBySession(c *gin.Context) {
+	sessionKey := c.Param("sessionKey")
+	records, err := h.recordService.ListRecords(c.Request.Context(), application.ListConversationRecordsQuery{
 		SessionKey: sessionKey,
 		Limit:      500,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(records))
 	for _, record := range records {
 		resp = append(resp, conversationRecordToMap(record))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func (h *ConversationRecordHandler) GetRecordsByTrace(w http.ResponseWriter, r *http.Request, traceId string) {
-	records, err := h.recordService.ListRecords(r.Context(), application.ListConversationRecordsQuery{
+func (h *ConversationRecordHandler) GetRecordsByTrace(c *gin.Context) {
+	traceId := c.Param("traceId")
+	records, err := h.recordService.ListRecords(c.Request.Context(), application.ListConversationRecordsQuery{
 		TraceID: traceId,
 		Limit:   500,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(records))
 	for _, record := range records {
 		resp = append(resp, conversationRecordToMap(record))
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 func conversationRecordToMap(record *domain.ConversationRecord) map[string]interface{} {
@@ -188,12 +181,12 @@ func conversationRecordToMap(record *domain.ConversationRecord) map[string]inter
 	}
 }
 
-func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Request) {
-	startTimeStr := r.URL.Query().Get("start_time")
-	endTimeStr := r.URL.Query().Get("end_time")
-	agentCodes := r.URL.Query()["agent_codes"]
-	channelCodes := r.URL.Query()["channel_codes"]
-	roles := r.URL.Query()["roles"]
+func (h *ConversationRecordHandler) GetStats(c *gin.Context) {
+	startTimeStr := c.Query("start_time")
+	endTimeStr := c.Query("end_time")
+	agentCodes := c.QueryArray("agent_codes")
+	channelCodes := c.QueryArray("channel_codes")
+	roles := c.QueryArray("roles")
 
 	var startTime, endTime *time.Time
 	if startTimeStr != "" {
@@ -209,7 +202,7 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	stats, err := h.recordService.GetStats(r.Context(), application.GetConversationStatsQuery{
+	stats, err := h.recordService.GetStats(c.Request.Context(), application.GetConversationStatsQuery{
 		StartTime:    startTime,
 		EndTime:      endTime,
 		AgentCodes:   agentCodes,
@@ -217,8 +210,7 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		Roles:        roles,
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 
@@ -251,10 +243,10 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 	}
 
 	channelDist := make([]map[string]interface{}, 0, len(stats.ChannelDistribution))
-	for _, c := range stats.ChannelDistribution {
+	for _, c2 := range stats.ChannelDistribution {
 		channelDist = append(channelDist, map[string]interface{}{
-			"type":  c.Type,
-			"count": c.Count,
+			"type":  c2.Type,
+			"count": c2.Count,
 		})
 	}
 
@@ -279,7 +271,7 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"token_stats":          tokenStats,
 		"agent_distribution":   agentDist,
 		"channel_distribution": channelDist,
@@ -287,4 +279,13 @@ func (h *ConversationRecordHandler) GetStats(w http.ResponseWriter, r *http.Requ
 		"project_distribution": projectDist,
 		"session_stats":        sessionStats,
 	})
+}
+
+// handleGetRecords 根据 query 参数分发到 GetRecord 或 ListRecords
+func (h *ConversationRecordHandler) handleGetRecords(c *gin.Context) {
+	if c.Query("id") != "" {
+		h.GetRecord(c)
+		return
+	}
+	h.ListRecords(c)
 }

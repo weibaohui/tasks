@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/persistence"
@@ -20,18 +21,18 @@ import (
 )
 
 type AuthHandler struct {
-	userService    *application.UserApplicationService
-	userTokenRepo  *persistence.SQLiteUserTokenRepository
-	idGenerator    *utils.NanoIDGenerator
-	secretKey      []byte
+	userService   *application.UserApplicationService
+	userTokenRepo *persistence.SQLiteUserTokenRepository
+	idGenerator   *utils.NanoIDGenerator
+	secretKey     []byte
 }
 
 func NewAuthHandler(userService *application.UserApplicationService, userTokenRepo *persistence.SQLiteUserTokenRepository, idGenerator *utils.NanoIDGenerator, secret string) *AuthHandler {
 	return &AuthHandler{
 		userService:   userService,
 		userTokenRepo: userTokenRepo,
-		idGenerator:  idGenerator,
-		secretKey:    []byte(secret),
+		idGenerator:   idGenerator,
+		secretKey:     []byte(secret),
 	}
 }
 
@@ -48,26 +49,23 @@ type tokenClaims struct {
 }
 
 // Login 登录获取长期Token
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
-	user, err := h.userService.Authenticate(r.Context(), req.Username, req.Password)
+	user, err := h.userService.Authenticate(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: err.Error()})
+		c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: err.Error()})
 		return
 	}
 
 	// 生成长期Token（默认30天过期，nil表示永久）
 	tokenValue, err := generateSecureToken(32)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to generate token"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to generate token"})
 		return
 	}
 
@@ -83,21 +81,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		&expiresAt,
 	)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to create token"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to create token"})
 		return
 	}
 
 	// 只有在 userTokenRepo 可用时才保存 token
 	if h.userTokenRepo != nil {
-		if err := h.userTokenRepo.Save(r.Context(), token); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
+		if err := h.userTokenRepo.Save(c.Request.Context(), token); err != nil {
+			c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
 			return
 		}
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"token":      tokenValue, // 只返回一次，之后不再显示
 		"token_id":   token.ID().String(),
 		"expires_at": expiresAt.UnixMilli(),
@@ -106,14 +102,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Me 获取当前用户信息
-func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
-	user, err := h.Authorize(r)
+func (h *AuthHandler) Me(c *gin.Context) {
+	user, err := h.Authorize(c.Request)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+		c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(userToMap(user))
+	c.JSON(http.StatusOK, userToMap(user))
 }
 
 // Authorize 验证请求权限，支持长期Token
@@ -220,55 +215,50 @@ func hashToken(token string) string {
 // ============ Token管理API ============
 
 type CreateTokenRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ExpiresInDays int   `json:"expires_in_days"` // 0或负数表示永久
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ExpiresInDays int    `json:"expires_in_days"` // 0或负数表示永久
 }
 
 type TokenResponse struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	ExpiresAt   *int64  `json:"expires_at,omitempty"`
-	CreatedAt   int64   `json:"created_at"`
-	LastUsedAt  *int64  `json:"last_used_at,omitempty"`
-	IsActive    bool    `json:"is_active"`
-	IsExpired   bool    `json:"is_expired"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ExpiresAt   *int64 `json:"expires_at,omitempty"`
+	CreatedAt   int64  `json:"created_at"`
+	LastUsedAt  *int64 `json:"last_used_at,omitempty"`
+	IsActive    bool   `json:"is_active"`
+	IsExpired   bool   `json:"is_expired"`
 }
 
 // CreateToken 创建新的长期Token
-func (h *AuthHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) CreateToken(c *gin.Context) {
 	if h.userTokenRepo == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
 		return
 	}
 
-	user, err := h.Authorize(r)
+	user, err := h.Authorize(c.Request)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+		c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
 		return
 	}
 
 	var req CreateTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
 
 	if req.Name == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "name is required"})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "name is required"})
 		return
 	}
 
 	// 生成Token
 	tokenValue, err := generateSecureToken(32)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to generate token"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to generate token"})
 		return
 	}
 
@@ -288,20 +278,18 @@ func (h *AuthHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt,
 	)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("failed to create token: %v", err)})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("failed to create token: %v", err)})
 		return
 	}
 
-	if err := h.userTokenRepo.Save(r.Context(), token); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
+	if err := h.userTokenRepo.Save(c.Request.Context(), token); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
 		return
 	}
 
 	// 返回Token（只显示一次）
 	snap := token.ToSnapshot()
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"token":       tokenValue, // 只在此刻返回一次
 		"id":          snap.ID.String(),
 		"name":        snap.Name,
@@ -314,24 +302,21 @@ func (h *AuthHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListTokens 列出用户的所有Token
-func (h *AuthHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) ListTokens(c *gin.Context) {
 	if h.userTokenRepo == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
 		return
 	}
 
-	user, err := h.Authorize(r)
+	user, err := h.Authorize(c.Request)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+		c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
 		return
 	}
 
-	tokens, err := h.userTokenRepo.FindByUserID(r.Context(), user.ID())
+	tokens, err := h.userTokenRepo.FindByUserID(c.Request.Context(), user.ID())
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to list tokens"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to list tokens"})
 		return
 	}
 
@@ -350,56 +335,48 @@ func (h *AuthHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"tokens": result,
 	})
 }
 
 // DeleteToken 删除Token
-func (h *AuthHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) DeleteToken(c *gin.Context) {
 	if h.userTokenRepo == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "token management not configured"})
 		return
 	}
 
-	user, err := h.Authorize(r)
+	user, err := h.Authorize(c.Request)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+		c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
 		return
 	}
 
 	// 从路径提取token ID
-	path := r.URL.Path
-	parts := strings.Split(path, "/")
-	if len(parts) < 1 {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusBadRequest, Message: "invalid token id"})
+	tokenID := c.Param("id")
+	if tokenID == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid token id"})
 		return
 	}
-	tokenID := parts[len(parts)-1]
 
 	// 验证token属于当前用户
-	token, err := h.userTokenRepo.FindByID(r.Context(), domain.NewUserTokenID(tokenID))
+	token, err := h.userTokenRepo.FindByID(c.Request.Context(), domain.NewUserTokenID(tokenID))
 	if err != nil || token == nil {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusNotFound, Message: "token not found"})
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "token not found"})
 		return
 	}
 	if token.UserID().String() != user.ID().String() {
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusForbidden, Message: "forbidden"})
+		c.JSON(http.StatusForbidden, HTTPError{Code: http.StatusForbidden, Message: "forbidden"})
 		return
 	}
 
-	if err := h.userTokenRepo.Delete(r.Context(), domain.NewUserTokenID(tokenID)); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(HTTPError{Code: http.StatusInternalServerError, Message: "failed to delete token"})
+	if err := h.userTokenRepo.Delete(c.Request.Context(), domain.NewUserTokenID(tokenID)); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to delete token"})
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "token deleted",
 	})
 }

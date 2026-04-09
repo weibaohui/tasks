@@ -5,9 +5,9 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 )
 
@@ -24,27 +24,26 @@ func NewSkillHandler(loader *skill.SkillsLoader) *SkillHandler {
 }
 
 // ListSkills 列出所有技能
-func (h *SkillHandler) ListSkills(w http.ResponseWriter, r *http.Request) {
+func (h *SkillHandler) ListSkills(c *gin.Context) {
 	skills := h.loader.ListSkills()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"items": skills,
 		"total": len(skills),
 	})
 }
 
 // GetSkill 获取单个技能详情
-func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Query().Get("name")
+func (h *SkillHandler) GetSkill(c *gin.Context) {
+	name := c.Query("name")
 	if name == "" {
-		http.Error(w, "skill name is required", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "skill name is required"})
 		return
 	}
 
 	content := h.loader.LoadSkillContent(name)
 	if content == "" {
-		http.Error(w, "skill not found", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "skill not found"})
 		return
 	}
 
@@ -55,8 +54,7 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 		missing = h.loader.GetMissingRequirements(name)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"name":      name,
 		"content":   content,
 		"metadata":  metadata,
@@ -66,7 +64,7 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListSkillsSimple 获取所有技能名称列表（简单版，用于下拉选择）
-func (h *SkillHandler) ListSkillsSimple(w http.ResponseWriter, r *http.Request) {
+func (h *SkillHandler) ListSkillsSimple(c *gin.Context) {
 	skills := h.loader.ListSkills()
 
 	result := make([]map[string]string, 0, len(skills))
@@ -77,8 +75,7 @@ func (h *SkillHandler) ListSkillsSimple(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"items": result,
 		"total": len(result),
 	})
