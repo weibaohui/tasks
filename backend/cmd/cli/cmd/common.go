@@ -27,6 +27,12 @@ func AddCommands() {
 	rootCmd.AddCommand(stateMachineCmd)
 	rootCmd.AddCommand(stateCmd)
 	rootCmd.AddCommand(hookCmd)
+	rootCmd.AddCommand(channelCmd)
+	rootCmd.AddCommand(providerCmd)
+	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(sessionCmd)
+	rootCmd.AddCommand(userCmd)
+	rootCmd.AddCommand(skillCmd)
 }
 
 // RegisterFlagErrorFunc 自定义错误处理
