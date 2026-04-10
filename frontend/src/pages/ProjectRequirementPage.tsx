@@ -609,7 +609,27 @@ export const ProjectRequirementPage: React.FC = () => {
         width: 100,
         fixed: 'left' as const
     },
-    { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
+    {
+      title: '标题',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (title: string, item: Requirement) => {
+        if (!item.trace_id) return title;
+        return (
+          <Button
+            type="link"
+            style={{ padding: 0, height: 'auto', textAlign: 'left', whiteSpace: 'normal' }}
+            onClick={() => {
+              setCurrentTraceId(item.trace_id!);
+              setTraceViewerVisible(true);
+            }}
+          >
+            {title}
+          </Button>
+        );
+      }
+    },
     {
       title: '类型',
       key: 'requirement_type',
