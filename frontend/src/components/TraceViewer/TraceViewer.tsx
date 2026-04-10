@@ -25,6 +25,7 @@ import type { DataNode } from 'antd/es/tree';
 import dayjs from 'dayjs';
 import { getConversationRecordsByTrace } from '../../api/conversationRecordApi';
 import type { ConversationRecord } from '../../types/conversationRecord';
+import { ConversationTimeline } from './ConversationTimeline';
 
 const { Text } = Typography;
 
@@ -250,6 +251,11 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
         ) : (
           <div>
             <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 8 }}>对话时间线</Text>
+                <ConversationTimeline records={records} height={30} />
+              </div>
+              <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic title="总消息数" value={traceStats.count} />
