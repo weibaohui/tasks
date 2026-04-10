@@ -152,7 +152,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	stateMachineName := s.getProjectStateMachineName(ctx, project.ID().String(), requirement.RequirementType())
 
 	// 获取当前状态机状态和 AI Guide
-	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.RequirementType())
+	currentState, aiGuide := s.getStateMachineGuide(ctx, project.ID().String(), requirement.ID().String(), requirement.RequirementType())
 
 	// 获取完整的状态机配置（用于注入触发器表）
 	smConfig := s.getStateMachineConfig(ctx, project.ID().String(), requirement.RequirementType())
@@ -172,6 +172,51 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 
 		// 保存/更新 RequirementState
 		s.saveRequirementState(ctx, requirement, currentState)
+
+		// 自动执行 todo → 第一个处理中状态转换（系统自动完成，不需要 AI 介入）
+		if currentState == "todo" {
+			psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx,
+				requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+			if err == nil {
+				sm, err := s.stateMachineRepo.GetStateMachine(ctx, psm.ToSnapshot().StateMachineID)
+				if err == nil {
+					// 找到 todo 状态转换到的下一个状态（第一个非 todo 的后续状态）
+					var (
+						autoTransition *state_machine.Transition
+						nextState       *state_machine.State
+					)
+					for i := range sm.Config.Transitions {
+						t := &sm.Config.Transitions[i]
+						if t.FromState == "todo" {
+							autoTransition = t
+							nextState = sm.Config.GetState(t.ToState)
+							break
+						}
+					}
+					if autoTransition != nil && nextState != nil {
+						// 更新 RequirementState
+						reqState, _ := s.stateMachineRepo.GetRequirementState(ctx, requirement.ID().String())
+						if reqState != nil {
+							reqState.Transition(nextState.ID, nextState.Name)
+							_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
+
+							// 记录转换日志，使用实际的 trigger
+							autoLog := state_machine.NewTransitionLog(
+								requirement.ID().String(), "todo", nextState.ID,
+								autoTransition.Trigger, "system", "派发时自动状态转换")
+							_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)
+
+							// 同步到 Requirement
+							requirement.SyncStatusFromStateMachine(nextState.ID)
+							_ = s.requirementRepo.Save(ctx, requirement)
+							currentState = nextState.ID
+							// 刷新 aiGuide 以匹配新状态
+							aiGuide = sm.Config.GetStateAIGuide(nextState.ID)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
@@ -310,7 +355,7 @@ func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Cont
 
 // getStateMachineGuide 获取当前状态机状态和 AI Guide
 // 返回当前状态 ID 和 AI Guide 信息
-func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, projectID string, reqType domain.RequirementType) (string, map[string]interface{}) {
+func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, projectID, requirementID string, reqType domain.RequirementType) (string, map[string]interface{}) {
 	if s.stateMachineRepo == nil {
 		return "", nil
 	}
@@ -330,7 +375,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 	}
 
 	// 获取需求当前状态（从 RequirementState）
-	reqState, err := s.stateMachineRepo.GetRequirementState(ctx, projectID+"_"+string(reqType))
+	reqState, err := s.stateMachineRepo.GetRequirementState(ctx, requirementID)
 	if err != nil {
 		// 如果没有 RequirementState，返回初始状态
 		return sm.Config.InitialState, sm.Config.GetStateAIGuide(sm.Config.InitialState)
