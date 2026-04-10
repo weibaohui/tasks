@@ -1,13 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Form, Input, Modal, Popconfirm, Space, Switch, Table, message } from 'antd';
-import { useNavigate } from 'react-router-dom';
 import { createUser, deleteUser, listUsers, updateUser } from '../api/userApi';
-import { useAuthStore } from '../stores/authStore';
 import type { User } from '../types/user';
 
 export const UserManagementPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { logout } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -131,15 +127,6 @@ export const UserManagementPage: React.FC = () => {
             <Button onClick={() => fetchUsers()}>刷新</Button>
             <Button type="primary" onClick={() => setCreateOpen(true)}>
               新建用户
-            </Button>
-            <Button
-              danger
-              onClick={() => {
-                logout();
-                navigate('/login', { replace: true });
-              }}
-            >
-              退出登录
             </Button>
           </Space>
         }

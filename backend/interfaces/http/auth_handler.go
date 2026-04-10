@@ -62,40 +62,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 生成长期Token（默认30天过期，nil表示永久）
-	tokenValue, err := generateSecureToken(32)
+	// 生成JWT会话Token（不持久化到 user_tokens 表）
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	claims := tokenClaims{
+		UserID:    user.ID().String(),
+		Username:  user.Username(),
+		UserCode:  user.UserCode().String(),
+		ExpiresAt: expiresAt.Unix(),
+	}
+	tokenValue, err := h.generateJWT(claims)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to generate token"})
 		return
 	}
 
-	tokenHash := hashToken(tokenValue)
-	expiresAt := time.Now().Add(30 * 24 * time.Hour) // 默认30天
-
-	token, err := domain.NewUserToken(
-		domain.NewUserTokenID(h.idGenerator.Generate()),
-		user.ID(),
-		"默认Token",
-		"登录自动创建",
-		tokenHash,
-		&expiresAt,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to create token"})
-		return
-	}
-
-	// 只有在 userTokenRepo 可用时才保存 token
-	if h.userTokenRepo != nil {
-		if err := h.userTokenRepo.Save(c.Request.Context(), token); err != nil {
-			c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
-			return
-		}
-	}
-
 	c.JSON(http.StatusOK, map[string]interface{}{
-		"token":      tokenValue, // 只返回一次，之后不再显示
-		"token_id":   token.ID().String(),
+		"token":      tokenValue,
 		"expires_at": expiresAt.UnixMilli(),
 		"user":       userToMap(user),
 	})
@@ -177,6 +159,16 @@ func (h *AuthHandler) verifyJWT(token string) (*tokenClaims, error) {
 	return &claims, nil
 }
 
+func (h *AuthHandler) generateJWT(claims tokenClaims) (string, error) {
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	payloadEncoded := base64.RawURLEncoding.EncodeToString(payload)
+	signature := signPayload(h.secretKey, payloadEncoded)
+	return payloadEncoded + "." + signature, nil
+}
+
 func signPayload(secretKey []byte, payloadEncoded string) string {
 	mac := hmac.New(sha256.New, secretKey)
 	_, _ = mac.Write([]byte(payloadEncoded))
@@ -224,6 +216,7 @@ type TokenResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	TokenValue  string `json:"token_value"`
 	ExpiresAt   *int64 `json:"expires_at,omitempty"`
 	CreatedAt   int64  `json:"created_at"`
 	LastUsedAt  *int64 `json:"last_used_at,omitempty"`
@@ -282,6 +275,8 @@ func (h *AuthHandler) CreateToken(c *gin.Context) {
 		return
 	}
 
+	token.SetTokenValue(tokenValue)
+
 	if err := h.userTokenRepo.Save(c.Request.Context(), token); err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to save token"})
 		return
@@ -327,6 +322,7 @@ func (h *AuthHandler) ListTokens(c *gin.Context) {
 			ID:          snap.ID.String(),
 			Name:        snap.Name,
 			Description: snap.Description,
+			TokenValue:  token.TokenValue(),
 			ExpiresAt:   snap.ExpiresAt,
 			CreatedAt:   snap.CreatedAt,
 			LastUsedAt:  snap.LastUsedAt,

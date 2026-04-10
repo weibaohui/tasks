@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Button,
-  Card,
   Form,
   Input,
   Modal,
@@ -11,35 +10,40 @@ import {
   Space,
   Table,
   Tag,
-  message,
   Typography,
-  Alert,
+  message,
   Tooltip,
+  Empty,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+  CheckOutlined,
+  QuestionCircleOutlined,
+} from '@ant-design/icons';
 import { createToken, deleteToken, listTokens } from '../../api/authApi';
 import type { UserToken, CreateTokenRequest } from '../../types/user';
 
-const { Text, Paragraph } = Typography;
+const { Text, Paragraph, Title } = Typography;
 
 export const TokenManagement: React.FC = () => {
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm();
-  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [tokenResult, setTokenResult] = useState<{ token: string; name: string } | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
-  // 获取当前页面 URL 用于生成命令
-  const getCurrentServerUrl = () => {
-    return window.location.origin;
-  };
+  const serverUrl = `${window.location.origin}/api/v1`;
 
   const fetchTokens = async () => {
     setLoading(true);
     try {
       const data = await listTokens();
       setTokens(data);
-    } catch (_error) {
+    } catch {
       message.error('获取Token列表失败');
     } finally {
       setLoading(false);
@@ -57,12 +61,13 @@ export const TokenManagement: React.FC = () => {
         description: values.description || '',
         expires_in_days: values.expires_type === 'permanent' ? 0 : (values.expires_days || 30),
       };
-      await createToken(request);
+      const result = await createToken(request);
       message.success('Token创建成功');
       setCreateOpen(false);
       createForm.resetFields();
       fetchTokens();
-    } catch (_error) {
+      setTokenResult({ token: result.token, name: result.name });
+    } catch {
       message.error('创建Token失败');
     }
   };
@@ -72,8 +77,19 @@ export const TokenManagement: React.FC = () => {
       await deleteToken(id);
       message.success('删除Token成功');
       fetchTokens();
-    } catch (_error) {
+    } catch {
       message.error('删除Token失败');
+    }
+  };
+
+  const copyToClipboard = async (text: string, key: string, successMsg: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      message.success(successMsg);
+      window.setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      message.error('复制失败，请手动复制');
     }
   };
 
@@ -145,88 +161,134 @@ export const TokenManagement: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: unknown, record: UserToken) => {
-        const fullCommand = `tm auth ${getCurrentServerUrl()}/api/v1 YOUR_TOKEN`;
-        const isCopied = copiedTokenId === record.id;
-
-        return (
-          <Space>
-            <Tooltip title="复制 tm auth 命令">
-              <Button
-                size="small"
-                icon={isCopied ? <CheckOutlined /> : <CopyOutlined />}
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(fullCommand);
-                    setCopiedTokenId(record.id);
-                    message.success('已复制 tm auth 命令到剪贴板');
-                    window.setTimeout(() => setCopiedTokenId(null), 2000);
-                  } catch {
-                    message.error('复制失败，请手动复制');
-                  }
-                }}
-              >
-                {isCopied ? '已复制' : '复制命令'}
-              </Button>
-            </Tooltip>
-            <Popconfirm
-              title="确认删除此Token？"
-              description="删除后，使用此Token的API调用将立即失效"
-              onConfirm={() => handleDelete(record.id)}
-              okText="确认删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
+      render: (_: unknown, record: UserToken) => (
+        <Space>
+          <Tooltip title="复制 Token">
+            <Button
+              size="small"
+              icon={copiedKey === `token-${record.id}` ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={() => copyToClipboard(
+                record.token_value || '',
+                `token-${record.id}`,
+                '已复制 Token 到剪贴板',
+              )}
             >
-              <Button danger size="small" icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>
-          </Space>
-        );
-      },
+              {copiedKey === `token-${record.id}` ? '已复制' : '复制Token'}
+            </Button>
+          </Tooltip>
+          <Tooltip title="复制 taskmanager auth 命令">
+            <Button
+              size="small"
+              icon={copiedKey === `cmd-${record.id}` ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={() => copyToClipboard(
+                `taskmanager auth ${serverUrl} ${record.token_value || ''}`,
+                `cmd-${record.id}`,
+                '已复制命令到剪贴板',
+              )}
+            >
+              {copiedKey === `cmd-${record.id}` ? '已复制' : '复制命令'}
+            </Button>
+          </Tooltip>
+          <Popconfirm
+            title="确认删除此Token？"
+            description="删除后，使用此Token的API调用将立即失效"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确认删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 
   return (
-    <Card title="API Token 管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-      创建Token
-    </Button>}>
+    <div style={{ background: '#fff', borderRadius: 8, padding: 24 }}>
+      {/* 标题区 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div>
+          <Title level={4} style={{ margin: 0 }}>API Token</Title>
+          <Text type="secondary">管理 API Token，用于 CLI 认证和 API 调用</Text>
+        </div>
+        <Space>
+          <Button icon={<QuestionCircleOutlined />} onClick={() => setGuideOpen(true)}>
+            使用说明
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            创建 Token
+          </Button>
+        </Space>
+      </div>
+
+      {/* 表格区 */}
       {tokens.length === 0 && !loading ? (
-        <Alert
-          message="暂无API Token"
-          description="创建Token后，可以用于API调用，无需每次登录"
-          type="info"
-          showIcon
-        />
+        <Empty
+          description="暂无 API Token"
+          style={{ padding: '60px 0' }}
+        >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            创建第一个 Token
+          </Button>
+        </Empty>
       ) : (
-        <>
-          <Alert
-            message="CLI 使用方法"
-            description={
-              <Paragraph style={{ marginBottom: 0 }}>
-                使用以下命令配置 CLI 认证：<br />
-                <Text code copyable={{ text: `tm auth ${getCurrentServerUrl()}/api/v1 YOUR_TOKEN` }}>
-                  tm auth {getCurrentServerUrl()}/api/v1 YOUR_TOKEN
-                </Text>
-              </Paragraph>
-            }
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-          <Table
-            dataSource={tokens}
-            columns={columns}
-            rowKey="id"
-            loading={loading}
-            pagination={false}
-          />
-        </>
+        <Table
+          dataSource={tokens}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          pagination={false}
+        />
       )}
+
+      {/* CLI 使用说明弹窗 */}
+      <Modal
+        title="CLI 使用说明"
+        open={guideOpen}
+        onCancel={() => setGuideOpen(false)}
+        footer={<Button onClick={() => setGuideOpen(false)}>关闭</Button>}
+        width={560}
+      >
+        <Paragraph>
+          创建 Token 后，使用以下命令配置 CLI 认证：
+        </Paragraph>
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: 6,
+          fontFamily: 'monospace',
+          fontSize: 13,
+          marginBottom: 16,
+          border: '1px solid #d9d9d9',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>taskmanager auth {serverUrl} {'<TOKEN>'}</span>
+            <Button
+              size="small"
+              type="link"
+              icon={copiedKey === 'guide-cmd' ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={() => copyToClipboard(
+                `taskmanager auth ${serverUrl} YOUR_TOKEN`,
+                'guide-cmd',
+                '已复制命令模板到剪贴板',
+              )}
+            />
+          </div>
+        </div>
+        <Paragraph type="secondary" style={{ fontSize: 13 }}>
+          将 {'<TOKEN>'} 替换为你创建的 Token 值。Token 在创建时仅显示一次，请妥善保管。
+        </Paragraph>
+        <Paragraph type="secondary" style={{ fontSize: 13 }}>
+          也可以在 Token 列表中直接点击"复制命令"按钮获取完整命令。
+        </Paragraph>
+      </Modal>
 
       {/* 创建Token弹窗 */}
       <Modal
-        title="创建API Token"
+        title="创建 API Token"
         open={createOpen}
         onCancel={() => {
           setCreateOpen(false);
@@ -237,7 +299,7 @@ export const TokenManagement: React.FC = () => {
         <Form form={createForm} layout="vertical" onFinish={handleCreate}>
           <Form.Item
             name="name"
-            label="Token名称"
+            label="Token 名称"
             rules={[{ required: true, message: '请输入Token名称' }]}
           >
             <Input placeholder="例如：生产环境API" />
@@ -292,7 +354,54 @@ export const TokenManagement: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+
+      {/* Token 创建成功弹窗 */}
+      <Modal
+        title="Token 创建成功"
+        open={!!tokenResult}
+        onCancel={() => setTokenResult(null)}
+        footer={<Button onClick={() => setTokenResult(null)}>关闭</Button>}
+        width={560}
+      >
+        <div style={{ padding: '12px 16px', backgroundColor: '#fffbe6', borderRadius: 6, border: '1px solid #ffe58f', marginBottom: 16 }}>
+          <Text style={{ color: '#ad6800' }}>请立即复制并妥善保管 Token，关闭后无法再次查看！</Text>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary">Token 名称：{tokenResult?.name}</Text>
+        </div>
+        <div style={{
+          padding: '8px 12px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: 6,
+          fontFamily: 'monospace',
+          fontSize: 13,
+          wordBreak: 'break-all',
+          marginBottom: 16,
+          border: '1px solid #d9d9d9',
+        }}>
+          {tokenResult?.token}
+        </div>
+        <Space>
+          <Button
+            type="primary"
+            icon={copiedKey === 'token' ? <CheckOutlined /> : <CopyOutlined />}
+            onClick={() => copyToClipboard(tokenResult?.token || '', 'token', '已复制 Token 到剪贴板')}
+          >
+            {copiedKey === 'token' ? '已复制 Token' : '复制 Token'}
+          </Button>
+          <Button
+            icon={copiedKey === 'full-cmd' ? <CheckOutlined /> : <CopyOutlined />}
+            onClick={() => copyToClipboard(
+              `taskmanager auth ${serverUrl} ${tokenResult?.token || ''}`,
+              'full-cmd',
+              '已复制完整命令到剪贴板',
+            )}
+          >
+            {copiedKey === 'full-cmd' ? '已复制命令' : '复制命令'}
+          </Button>
+        </Space>
+      </Modal>
+    </div>
   );
 };
 
