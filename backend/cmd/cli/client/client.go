@@ -590,7 +590,7 @@ func (c *Client) DeleteProject(ctx context.Context, projectID string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		return c.handleError(resp)
 	}
 

@@ -224,7 +224,7 @@ export const TokenManagement: React.FC = () => {
                   name="expires_days"
                   label="天数"
                   initialValue={30}
-                  rules={[{ required: true, message: '请输入天数' }]}
+                  rules={[{ required: true, message: '请选择天数' }]}
                 >
                   <Select
                     placeholder="选择过期天数"
