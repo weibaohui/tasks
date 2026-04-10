@@ -207,7 +207,7 @@ func (r *SQLiteRequirementRepository) GetStatusStats(ctx context.Context, projec
 	}
 	defer rows.Close()
 
-	var stats []domain.StatusStat
+	stats := make([]domain.StatusStat, 0)
 	for rows.Next() {
 		var stat domain.StatusStat
 		if err := rows.Scan(&stat.Status, &stat.Count); err != nil {
