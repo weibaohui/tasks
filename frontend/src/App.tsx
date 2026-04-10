@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ConfigProvider, Layout, Menu, Space, Typography } from 'antd';
+import { ConfigProvider, Dropdown, Layout, Menu, Space, Typography } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
   ApiOutlined,
@@ -12,12 +12,14 @@ import {
   BranchesOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  DownOutlined,
+  LogoutOutlined,
   MessageOutlined,
   RobotOutlined,
   ToolOutlined,
   UserOutlined,
   ClusterOutlined,
-  SettingOutlined,
+  QuestionCircleOutlined,
   NodeIndexOutlined,
 } from '@ant-design/icons';
 import { Dashboard } from './pages/Dashboard';
@@ -46,7 +48,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const selectedKey = location.pathname.startsWith('/users')
     ? '/users'
     : location.pathname.startsWith('/providers')
@@ -79,12 +81,27 @@ const MainLayout: React.FC = () => {
         <Typography.Title level={5} style={{ margin: 0 }}>
           任务管理后台
         </Typography.Title>
-        <Space size="middle">
-          <span style={{ color: '#666' }}>
-            <UserOutlined style={{ marginRight: 8 }} />
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'username', label: user?.display_name || user?.username, disabled: true },
+              { type: 'divider' },
+              { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'logout') {
+                logout();
+                navigate('/login', { replace: true });
+              }
+            },
+          }}
+        >
+          <Space style={{ cursor: 'pointer', color: '#666' }}>
+            <UserOutlined />
             {user?.username || user?.user_code || '用户'}
-          </span>
-        </Space>
+            <DownOutlined style={{ fontSize: 10 }} />
+          </Space>
+        </Dropdown>
       </Layout.Header>
       <Layout>
         <Layout.Sider width={220} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
@@ -103,7 +120,7 @@ const MainLayout: React.FC = () => {
               { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
               { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
               { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-              { key: '/settings', icon: <SettingOutlined />, label: '设置' },
+              { key: '/settings', icon: <QuestionCircleOutlined />, label: '开放API' },
             ]}
             onClick={(item) => navigate(item.key)}
           />

@@ -33,6 +33,7 @@ type UserToken struct {
 	name        string
 	description string
 	tokenHash   string // 存储哈希值，不存储原始token
+	tokenValue  string // 存储原始token，用于展示
 	expiresAt   *time.Time // nil表示永久不过期
 	createdAt   time.Time
 	lastUsedAt  *time.Time
@@ -89,6 +90,14 @@ func (t *UserToken) Description() string {
 
 func (t *UserToken) TokenHash() string {
 	return t.tokenHash
+}
+
+func (t *UserToken) TokenValue() string {
+	return t.tokenValue
+}
+
+func (t *UserToken) SetTokenValue(value string) {
+	t.tokenValue = value
 }
 
 func (t *UserToken) ExpiresAt() *time.Time {

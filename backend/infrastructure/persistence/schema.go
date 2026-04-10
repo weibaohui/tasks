@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS user_tokens (
     name TEXT NOT NULL,
     description TEXT,
     token_hash TEXT NOT NULL,
+    token_value TEXT,
     expires_at INTEGER,
     last_used_at INTEGER,
     is_active INTEGER NOT NULL,
@@ -475,7 +476,10 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateAgentLLMProviderID(db); err != nil {
 		return err
 	}
-	return migrateRequirementsTraceIDIndex(db)
+	if err := migrateRequirementsTraceIDIndex(db); err != nil {
+		return err
+	}
+	return migrateUserTokenValue(db)
 }
 
 // migrateStateMachineTables 迁移状态机相关表（预留，未来可通过 migrations 调用）
@@ -834,6 +838,20 @@ func migrateAgentLLMProviderID(db *sql.DB) error {
 func migrateRequirementsTraceIDIndex(db *sql.DB) error {
 	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_requirements_trace_id ON requirements(trace_id)")
 	return err
+}
+
+// migrateUserTokenValue 迁移 user_tokens 表新增 token_value 列
+func migrateUserTokenValue(db *sql.DB) error {
+	exists, err := tableHasColumn(db, "user_tokens", "token_value")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if _, err := db.Exec("ALTER TABLE user_tokens ADD COLUMN token_value TEXT"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {

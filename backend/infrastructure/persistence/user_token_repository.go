@@ -19,11 +19,12 @@ func NewSQLiteUserTokenRepository(db *sql.DB) *SQLiteUserTokenRepository {
 func (r *SQLiteUserTokenRepository) Save(ctx context.Context, token *domain.UserToken) error {
 	snap := token.ToSnapshot()
 	query := `
-		INSERT INTO user_tokens (id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO user_tokens (id, user_id, name, description, token_hash, token_value, expires_at, last_used_at, is_active, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
+			token_value=excluded.token_value,
 			expires_at=excluded.expires_at,
 			last_used_at=excluded.last_used_at,
 			is_active=excluded.is_active
@@ -44,7 +45,8 @@ func (r *SQLiteUserTokenRepository) Save(ctx context.Context, token *domain.User
 		snap.UserID.String(),
 		snap.Name,
 		snap.Description,
-		token.TokenHash(), // 使用原始hash，不是snapshot中的
+		token.TokenHash(),
+		token.TokenValue(),
 		expiresAt,
 		lastUsedAt,
 		boolToInt(snap.IsActive),
@@ -54,19 +56,19 @@ func (r *SQLiteUserTokenRepository) Save(ctx context.Context, token *domain.User
 }
 
 func (r *SQLiteUserTokenRepository) FindByID(ctx context.Context, id domain.UserTokenID) (*domain.UserToken, error) {
-	query := `SELECT id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE id = ?`
+	query := `SELECT id, user_id, name, description, token_hash, token_value, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, query, id.String())
 	return scanUserToken(row)
 }
 
 func (r *SQLiteUserTokenRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*domain.UserToken, error) {
-	query := `SELECT id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE token_hash = ?`
+	query := `SELECT id, user_id, name, description, token_hash, token_value, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE token_hash = ?`
 	row := r.db.QueryRowContext(ctx, query, tokenHash)
 	return scanUserToken(row)
 }
 
 func (r *SQLiteUserTokenRepository) FindByUserID(ctx context.Context, userID domain.UserID) ([]*domain.UserToken, error) {
-	query := `SELECT id, user_id, name, description, token_hash, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE user_id = ? ORDER BY created_at DESC`
+	query := `SELECT id, user_id, name, description, token_hash, token_value, expires_at, last_used_at, is_active, created_at FROM user_tokens WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID.String())
 	if err != nil {
 		return nil, err
@@ -103,6 +105,7 @@ func scanUserToken(scanner rowScanner) (*domain.UserToken, error) {
 		name         string
 		description  string
 		tokenHash    string
+		tokenValue   sql.NullString
 		expiresAt    *int64
 		lastUsedAt   *int64
 		isActiveInt  int
@@ -115,6 +118,7 @@ func scanUserToken(scanner rowScanner) (*domain.UserToken, error) {
 		&name,
 		&description,
 		&tokenHash,
+		&tokenValue,
 		&expiresAt,
 		&lastUsedAt,
 		&isActiveInt,
@@ -148,6 +152,9 @@ func scanUserToken(scanner rowScanner) (*domain.UserToken, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+	if tokenValue.Valid {
+		token.SetTokenValue(tokenValue.String)
 	}
 	if lastUsedAtTime != nil {
 		token.UpdateLastUsed()

@@ -39,6 +39,7 @@ export interface UserToken {
   id: string;
   name: string;
   description: string;
+  token_value: string;
   expires_at?: number; // Unix milliseconds, undefined means permanent
   created_at: number;
   last_used_at?: number;
