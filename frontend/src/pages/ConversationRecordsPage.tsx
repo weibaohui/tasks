@@ -158,7 +158,7 @@ export const ConversationRecordsPage: React.FC = () => {
                               message.warning('该记录没有 trace_id');
                             }
                           }} type="link" size="small" style={{ padding: 0 }}
-                        />
+                        >查看</Button>
                       </Tooltip>
                     </ActionGroup>
                   ),
