@@ -8,17 +8,17 @@ export interface ConversationTimelineProps {
   height?: number | string;
 }
 
-// 颜色映射：根据不同的 role 或 event_type 区分
+// 颜色映射：使用更柔和的色系，带有科技感和区分度
 function getBlockColor(record: ConversationRecord): string {
   const role = (record.role || '').toLowerCase();
   
-  if (role === 'user') return '#1890ff'; // 蓝色 - 用户
-  if (role === 'assistant') return '#52c41a'; // 绿色 - 助手
-  if (role === 'system') return '#fa8c16'; // 橙色 - 系统
-  if (role === 'tool') return '#eb2f96'; // 粉色 - 工具调用 (tool_call)
-  if (role === 'tool_result') return '#722ed1'; // 紫色 - 工具结果
+  if (role === 'user') return '#4A90E2'; // 柔和的科技蓝 - 用户输入
+  if (role === 'assistant') return '#52C41A'; // 清新的薄荷绿 - 助手回答
+  if (role === 'system') return '#8C8C8C'; // 中性灰 - 系统/底层设定
+  if (role === 'tool') return '#FADB14'; // 温暖的明黄/橘黄 - 工具调用，代表处理中/中间态
+  if (role === 'tool_result') return '#13C2C2'; // 亮青色 - 工具返回结果，代表产出
   
-  return '#d9d9d9'; // 默认灰色
+  return '#D9D9D9'; // 默认底灰
 }
 
 function getBlockLabel(record: ConversationRecord): string {
@@ -118,7 +118,7 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
                 style={{
                   height: '100%',
                   background: color,
-                  borderRight: index < sortedRecords.length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                  borderRight: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
                   cursor: 'pointer',
                   minWidth: 4
                 }}
