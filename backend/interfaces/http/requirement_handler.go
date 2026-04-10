@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -93,11 +95,52 @@ func (h *RequirementHandler) GetRequirement(c *gin.Context) {
 
 func (h *RequirementHandler) ListRequirements(c *gin.Context) {
 	projectIDStr := c.Query("project_id")
+	status := c.Query("status")
+	limitStr := c.Query("limit")
+	offsetStr := c.Query("offset")
+
 	var projectID *domain.ProjectID
 	if projectIDStr != "" {
 		id := domain.NewProjectID(projectIDStr)
 		projectID = &id
 	}
+
+	// 分页模式（看板视图使用）
+	if limitStr != "" || offsetStr != "" {
+		limit, _ := strconv.Atoi(limitStr)
+		offset, _ := strconv.Atoi(offsetStr)
+		if limit <= 0 {
+			limit = 10
+		}
+		var statuses []string
+		if status != "" {
+			statuses = strings.Split(status, ",")
+		}
+		requirements, total, err := h.requirementService.ListRequirementsPaginated(
+			c.Request.Context(),
+			application.ListRequirementsQuery{
+				ProjectID: projectID,
+				Statuses:  statuses,
+				Limit:     limit,
+				Offset:    offset,
+			},
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+			return
+		}
+		items := make([]map[string]interface{}, 0, len(requirements))
+		for _, req := range requirements {
+			items = append(items, h.requirementToMap(req))
+		}
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"items": items,
+			"total": total,
+		})
+		return
+	}
+
+	// 兼容模式：返回全部数据（表格视图使用）
 	requirements, err := h.requirementService.ListRequirements(c.Request.Context(), projectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})

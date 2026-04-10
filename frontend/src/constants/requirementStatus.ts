@@ -45,3 +45,43 @@ export function getStatusColor(status: string) {
 export function getStatusLabel(status: string): string {
   return statusLabels[status] || status;
 }
+
+/**
+ * 看板三态分组定义
+ * 所有需求按 todo / processing / complete 三态分组显示
+ */
+export interface StatusGroup {
+  key: string;
+  label: string;
+  statuses: string[];
+  color: { color: string; bgColor: string; borderColor: string };
+}
+
+export const statusGroups: StatusGroup[] = [
+  {
+    key: 'todo',
+    label: '待办',
+    statuses: ['todo'],
+    color: { color: '#666666', bgColor: '#f5f5f5', borderColor: '#d9d9d9' },
+  },
+  {
+    key: 'processing',
+    label: '处理中',
+    statuses: [
+      'preparing', 'understanding', 'analyzing', 'implementing',
+      'submitting', 'coding', 'pr_opened', 'failed',
+    ],
+    color: { color: '#0958d9', bgColor: '#e6f4ff', borderColor: '#91caff' },
+  },
+  {
+    key: 'complete',
+    label: '已完成',
+    statuses: ['completed', 'done'],
+    color: { color: '#389e0d', bgColor: '#f6ffed', borderColor: '#b7eb8f' },
+  },
+];
+
+/** 根据实际状态找到所属分组 */
+export function getStatusGroup(status: string): StatusGroup {
+  return statusGroups.find((g) => g.statuses.includes(status)) ?? statusGroups[0];
+}

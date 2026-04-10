@@ -820,7 +820,7 @@ func TestProjectCLI_HeartbeatEnableDisable(t *testing.T) {
 	lines := strings.Split(output, "\n")
 	var projectID string
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "ID:") {
 			projectID = strings.TrimSpace(strings.TrimPrefix(line, "ID:"))
 			break

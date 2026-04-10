@@ -135,6 +135,33 @@ func (s *RequirementApplicationService) ListRequirements(ctx context.Context, pr
 	return s.requirementRepo.FindAll(ctx)
 }
 
+// ListRequirementsQuery 分页查询需求参数
+type ListRequirementsQuery struct {
+	ProjectID *domain.ProjectID
+	Statuses  []string
+	Limit     int
+	Offset    int
+}
+
+// ListRequirementsPaginated 分页查询需求列表
+func (s *RequirementApplicationService) ListRequirementsPaginated(ctx context.Context, query ListRequirementsQuery) ([]*domain.Requirement, int, error) {
+	filter := domain.RequirementListFilter{
+		ProjectID: query.ProjectID,
+		Statuses:  query.Statuses,
+		Limit:     query.Limit,
+		Offset:    query.Offset,
+	}
+	items, err := s.requirementRepo.List(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.requirementRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
 func (s *RequirementApplicationService) UpdateRequirement(ctx context.Context, cmd UpdateRequirementCommand) (*domain.Requirement, error) {
 	requirement, err := s.requirementRepo.FindByID(ctx, cmd.ID)
 	if err != nil {

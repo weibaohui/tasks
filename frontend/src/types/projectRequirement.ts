@@ -21,7 +21,7 @@ export interface Requirement {
   description: string;
   acceptance_criteria: string;
   temp_workspace_root: string;
-  status: 'todo' | 'preparing' | 'coding' | 'pr_opened' | 'failed' | 'completed' | 'done';
+  status: string;
   assignee_agent_code: string;
   replica_agent_code: string;
   workspace_path: string;

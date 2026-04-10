@@ -144,8 +144,18 @@ type RequirementRepository interface {
 	FindByID(ctx context.Context, id RequirementID) (*Requirement, error)
 	FindByProjectID(ctx context.Context, projectID ProjectID) ([]*Requirement, error)
 	FindAll(ctx context.Context) ([]*Requirement, error)
+	List(ctx context.Context, filter RequirementListFilter) ([]*Requirement, error)
+	Count(ctx context.Context, filter RequirementListFilter) (int, error)
 	Delete(ctx context.Context, id RequirementID) error
 	GetStatusStats(ctx context.Context, projectID *ProjectID) ([]StatusStat, error)
+}
+
+// RequirementListFilter 需求列表过滤条件（支持分页+状态过滤）
+type RequirementListFilter struct {
+	ProjectID *ProjectID
+	Statuses  []string
+	Limit     int
+	Offset    int
 }
 
 // StatusStat 状态统计数据

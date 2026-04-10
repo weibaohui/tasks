@@ -34,6 +34,28 @@ export async function listRequirements(projectId?: string): Promise<Requirement[
   return response.data;
 }
 
+export interface PaginatedRequirements {
+  items: Requirement[];
+  total: number;
+}
+
+export async function listRequirementsPaginated(params: {
+  projectId?: string;
+  statuses?: string[];
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedRequirements> {
+  const response = await apiClient.get<PaginatedRequirements>('/requirements', {
+    params: {
+      ...(params.projectId ? { project_id: params.projectId } : {}),
+      ...(params.statuses && params.statuses.length > 0 ? { status: params.statuses.join(',') } : {}),
+      limit: params.limit ?? 10,
+      offset: params.offset ?? 0,
+    },
+  });
+  return response.data;
+}
+
 export async function createRequirement(payload: CreateRequirementRequest): Promise<Requirement> {
   const response = await apiClient.post<Requirement>('/requirements', payload);
   return response.data;
