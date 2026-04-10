@@ -59,14 +59,22 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
       }
     >
       {!isEditing ? (
-        <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
-          <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || '-'}</div>
-          <div><span style={{ color: '#999' }}>最大思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
-          <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
-          <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
-          <div><span style={{ color: '#999' }}>最大对话轮次：</span>{form.getFieldValue('claude_code_config')?.max_turns ?? '-'}</div>
-          <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd ?? '-'}</div>
-        </div>
+        <>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ color: '#999' }}>系统提示词：</span>
+            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 2, padding: '4px 8px', backgroundColor: '#fafafa', borderRadius: 4, fontSize: 13 }}>
+              {form.getFieldValue('claude_code_config')?.system_prompt || '-'}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
+            <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || '-'}</div>
+            <div><span style={{ color: '#999' }}>最大思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
+            <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
+            <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
+            <div><span style={{ color: '#999' }}>最大对话轮次：</span>{form.getFieldValue('claude_code_config')?.max_turns ?? '-'}</div>
+            <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd ?? '-'}</div>
+          </div>
+        </>
       ) : (
         <div>
           <Form.Item label="模型" name={['claude_code_config', 'model']} style={{ marginBottom: 8 }}>
