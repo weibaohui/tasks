@@ -71,8 +71,8 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
         width: '100%', 
         height, 
         display: 'flex', 
-        // 关键改动：恢复从左到右的正向排列（flexDirection: 'row'），符合时间从左往右流动的自然直觉
         flexDirection: 'row',
+        justifyContent: 'flex-start',
         borderRadius: 4, 
         overflow: 'hidden',
         background: '#f0f0f0',
@@ -80,7 +80,6 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
       }}
     >
       <AnimatePresence mode="popLayout">
-        {/* 正序渲染：1，2，3... 没有新消息时，右边是灰色的空区域 */}
         {sortedRecords.map((record, index) => {
           const color = getBlockColor(record);
           const label = getBlockLabel(record);
@@ -108,24 +107,25 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
               }
             >
               <motion.div
-                // 改动：初始宽度为0，透明度0
-                initial={{ width: 0, opacity: 0 }}
-                // 动画目标为平分后的宽度
+                // 关键改动：不再使用 width 展开动画（"不是展开"）
+                // 而是将元素初始位置放到屏幕最右侧（x: 1000），然后逐个飞入
+                initial={{ x: 1000, opacity: 0 }}
                 animate={{ 
-                  width: `${itemWidthPercent}%`, 
+                  x: 0, 
                   opacity: 1
                 }}
-                // 当节点消失（比如过滤或重置）时的动画
-                exit={{ width: 0, opacity: 0 }}
+                exit={{ opacity: 0, scale: 0 }}
                 transition={{ 
                   type: 'spring', 
-                  stiffness: 300, 
-                  damping: 30
+                  stiffness: 250, 
+                  damping: 25,
+                  delay: index * 0.1 // 逐个延迟：第1个、第2个...依次进入
                 }}
                 style={{
                   height: '100%',
+                  // 宽度固定平分，不参与动画，保持色块形态完整
+                  width: `${itemWidthPercent}%`,
                   background: color,
-                  // 边框恢复在右侧，因为我们是从左往右堆叠
                   borderRight: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
                   cursor: 'pointer',
                   minWidth: 4
