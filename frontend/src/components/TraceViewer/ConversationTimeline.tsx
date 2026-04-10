@@ -71,22 +71,19 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
         width: '100%', 
         height, 
         display: 'flex', 
-        // 关键改动：使用 row-reverse 改变主轴方向，让子元素从右向左排列
-        flexDirection: 'row-reverse',
+        // 关键改动：恢复从左到右的正向排列（flexDirection: 'row'），符合时间从左往右流动的自然直觉
+        flexDirection: 'row',
         borderRadius: 4, 
         overflow: 'hidden',
         background: '#f0f0f0',
         position: 'relative'
       }}
     >
-      <AnimatePresence>
-        {/* 为了配合 row-reverse，我们需要把原本按时间正序的数组反转一下，
-            这样时间最新的节点会在 DOM 里先渲染，flex-direction: row-reverse 会把它放在最右边。*/}
-        {sortedRecords.slice().reverse().map((record, index) => {
+      <AnimatePresence mode="popLayout">
+        {/* 正序渲染：1，2，3... 没有新消息时，右边是灰色的空区域 */}
+        {sortedRecords.map((record, index) => {
           const color = getBlockColor(record);
           const label = getBlockLabel(record);
-          // 在翻转后的数组中，index 0 实际上是原本最新的节点
-          const isLatest = index === 0;
           
           return (
             <Tooltip 
@@ -111,24 +108,25 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
               }
             >
               <motion.div
-                // 改动：将初始 x 的偏移量改为负值（从右侧外进入）或者直接控制 width
-                // 因为我们在 row-reverse 中，增加宽度就意味着向左侧挤压
+                // 改动：初始宽度为0，透明度0
                 initial={{ width: 0, opacity: 0 }}
+                // 动画目标为平分后的宽度
                 animate={{ 
                   width: `${itemWidthPercent}%`, 
                   opacity: 1
                 }}
+                // 当节点消失（比如过滤或重置）时的动画
+                exit={{ width: 0, opacity: 0 }}
                 transition={{ 
                   type: 'spring', 
                   stiffness: 300, 
-                  damping: 30,
-                  delay: isLatest ? 0.1 : 0 
+                  damping: 30
                 }}
                 style={{
                   height: '100%',
                   background: color,
-                  // 边框也相应改变方向
-                  borderLeft: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
+                  // 边框恢复在右侧，因为我们是从左往右堆叠
+                  borderRight: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
                   cursor: 'pointer',
                   minWidth: 4
                 }}
