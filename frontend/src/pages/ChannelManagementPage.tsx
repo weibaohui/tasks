@@ -265,11 +265,9 @@ export const ChannelManagementPage: React.FC = () => {
       {
         title: '操作',
         key: 'action',
-        width: 180,
         render: (_: unknown, record: Channel) => (
           <Space>
             <Button
-              type="text"
               icon={<EditOutlined />}
               onClick={() => {
                 setEditing(record);
@@ -296,7 +294,7 @@ export const ChannelManagementPage: React.FC = () => {
                   },
                 });
                 setOpen(true);
-              }}
+              }} type="link" size="small" style={{ padding: 0 }}
             >
               编辑
             </Button>
@@ -305,7 +303,7 @@ export const ChannelManagementPage: React.FC = () => {
               description="删除后将无法恢复，是否继续？"
               onConfirm={() => handleDelete(record.id)}
             >
-              <Button type="text" danger icon={<DeleteOutlined />}>
+              <Button danger icon={<DeleteOutlined />} type="link" size="small" style={{ padding: 0 }}>
                 删除
               </Button>
             </Popconfirm>

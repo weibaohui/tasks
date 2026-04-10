@@ -55,15 +55,15 @@ export const MCPServerBindingCard: React.FC<MCPServerBindingCardProps> = ({
       ),
     },
     {
-      title: '操作', width: 200,
+      title: '操作',
       render: (_: unknown, record: AgentMCPBinding) => (
         <Space size="small">
           <Switch size="small" checked={record.is_active}
             onChange={async () => { await onUpdateBinding(record.id, { is_active: !record.is_active }); }} />
-          <Button type="text" size="small" onClick={() => onOpenToolsDrawer(record)}>配置工具</Button>
+          <Button onClick={() => onOpenToolsDrawer(record)} type="link" size="small" style={{ padding: 0 }}>配置工具</Button>
           <Popconfirm title="确认解绑该 MCP Server？"
             onConfirm={() => onDeleteBinding(record.id)}>
-            <Button type="text" danger size="small">解绑</Button>
+            <Button danger type="link" size="small" style={{ padding: 0 }}>解绑</Button>
           </Popconfirm>
         </Space>
       ),

@@ -165,13 +165,11 @@ export const MCPManagementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 360,
       render: (_: unknown, record: MCPServer) => (
         <Space>
-          <Button onClick={() => handleTest(record.id)}>测试连接</Button>
-          <Button onClick={() => handleRefresh(record.id)}>刷新工具</Button>
+          <Button onClick={() => handleTest(record.id)} type="link" size="small" style={{ padding: 0 }}>测试连接</Button>
+          <Button onClick={() => handleRefresh(record.id)} type="link" size="small" style={{ padding: 0 }}>刷新工具</Button>
           <Button
-            type="primary"
             onClick={() => {
               setEditing(record);
               setOpen(true);
@@ -185,12 +183,12 @@ export const MCPManagementPage: React.FC = () => {
                 url: record.url,
                 env_vars_kv: Object.entries(record.env_vars || {}).map(([k, v]) => ({ key: k, value: v })),
               });
-            }}
+            }} type="link" size="small" style={{ padding: 0 }}
           >
             编辑
           </Button>
           <Popconfirm title="确认删除该服务器？" onConfirm={() => handleDelete(record.id)}>
-            <Button danger>删除</Button>
+            <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
           </Popconfirm>
         </Space>
       ),

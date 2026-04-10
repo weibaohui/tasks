@@ -243,21 +243,19 @@ export const SessionManagementPage: React.FC = () => {
       {
         title: '操作',
         key: 'action',
-        width: 260,
         render: (_: unknown, record: Session) => (
           <Space>
-            <Button onClick={() => openMetadataDrawer(record)}>查看元数据</Button>
+            <Button onClick={() => openMetadataDrawer(record)} type="link" size="small" style={{ padding: 0 }}>查看元数据</Button>
             <Button
-              type="primary"
               onClick={() => {
                 setEditingMetadata(record);
                 metadataForm.setFieldsValue({ metadata_json: toJsonText(record.metadata) });
-              }}
+              }} type="link" size="small" style={{ padding: 0 }}
             >
               编辑元数据
             </Button>
             <Popconfirm title="确认删除该会话？" onConfirm={() => handleDelete(record.session_key)}>
-              <Button danger>删除</Button>
+              <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
             </Popconfirm>
           </Space>
         ),

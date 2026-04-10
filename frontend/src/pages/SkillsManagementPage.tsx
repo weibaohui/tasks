@@ -104,12 +104,10 @@ export const SkillsManagementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
       render: (_: unknown, record: Skill) => (
         <Button
-          type="text"
           icon={<EyeOutlined />}
-          onClick={() => openDetail(record)}
+          onClick={() => openDetail(record)} type="link" size="small" style={{ padding: 0 }}
         >
           查看
         </Button>

@@ -230,7 +230,6 @@ export const ProviderManagementPage: React.FC = () => {
       {
         title: '操作',
         key: 'action',
-        width: 260,
         render: (_: unknown, record: LLMProvider) => (
           <Space>
             <Button
@@ -245,12 +244,11 @@ export const ProviderManagementPage: React.FC = () => {
                 } catch (_error) {
                   message.error('连接测试失败');
                 }
-              }}
+              }} type="link" size="small" style={{ padding: 0 }}
             >
               测试
             </Button>
             <Button
-              type="primary"
               onClick={() => {
                 setEditing(record);
                 setCreateOpen(true);
@@ -268,12 +266,12 @@ export const ProviderManagementPage: React.FC = () => {
                   supported_models: record.supported_models || [],
                   extra_headers_json: toExtraHeadersJson(record.extra_headers),
                 });
-              }}
+              }} type="link" size="small" style={{ padding: 0 }}
             >
               编辑
             </Button>
             <Popconfirm title="确认删除该 Provider？" onConfirm={() => handleDelete(record.id)}>
-              <Button danger>删除</Button>
+              <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
             </Popconfirm>
           </Space>
         ),

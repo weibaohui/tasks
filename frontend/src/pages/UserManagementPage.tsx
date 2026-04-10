@@ -105,11 +105,11 @@ export const UserManagementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, record: User) => (
         <Space>
-          <Button type="link" onClick={() => handleEdit(record)}>
+          <Button onClick={() => handleEdit(record)} type="link" size="small" style={{ padding: 0 }}>
             编辑
           </Button>
           <Popconfirm title="确认删除该用户？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" danger>
+            <Button danger type="link" size="small" style={{ padding: 0 }}>
               删除
             </Button>
           </Popconfirm>

@@ -85,17 +85,14 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
     {
       title: '操作',
       key: 'action',
-      width: 180,
       render: (_: unknown, record: StateMachine) => (
         <Space size="small">
-          <Button type="link" size="small" onClick={() => onEdit(record)}>
+          <Button onClick={() => onEdit(record)} type="link" size="small" style={{ padding: 0 }}>
             编辑
           </Button>
           <Button
-            type="link"
-            size="small"
             icon={<PlayCircleOutlined />}
-            onClick={() => onInvoke?.(record)}
+            onClick={() => onInvoke?.(record)} type="link" size="small" style={{ padding: 0 }}
           >
             调用
           </Button>
@@ -105,7 +102,7 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
             okText="确认"
             cancelText="取消"
           >
-            <Button type="link" size="small" danger>
+            <Button danger type="link" size="small" style={{ padding: 0 }}>
               删除
             </Button>
           </Popconfirm>

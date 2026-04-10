@@ -220,13 +220,11 @@ export const ConversationRecordsPage: React.FC = () => {
       {
         title: '操作',
         key: 'action',
-        width: 150,
         fixed: 'right' as const,
         render: (_: unknown, record: ConversationRecord) => (
           <Space size="small">
             <Tooltip title="查看链路">
               <Button
-                type="text"
                 icon={<EyeOutlined />}
                 onClick={() => {
                   if (record.trace_id) {
@@ -235,7 +233,7 @@ export const ConversationRecordsPage: React.FC = () => {
                   } else {
                     message.warning('该记录没有 trace_id');
                   }
-                }}
+                }} type="link" size="small" style={{ padding: 0 }}
               />
             </Tooltip>
           </Space>

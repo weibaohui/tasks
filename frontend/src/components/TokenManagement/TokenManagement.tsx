@@ -165,26 +165,24 @@ export const TokenManagement: React.FC = () => {
         <Space>
           <Tooltip title="复制 Token">
             <Button
-              size="small"
               icon={copiedKey === `token-${record.id}` ? <CheckOutlined /> : <CopyOutlined />}
               onClick={() => copyToClipboard(
                 record.token_value || '',
                 `token-${record.id}`,
                 '已复制 Token 到剪贴板',
-              )}
+              )} type="link" size="small" style={{ padding: 0 }}
             >
               {copiedKey === `token-${record.id}` ? '已复制' : '复制Token'}
             </Button>
           </Tooltip>
           <Tooltip title="复制 taskmanager auth 命令">
             <Button
-              size="small"
               icon={copiedKey === `cmd-${record.id}` ? <CheckOutlined /> : <CopyOutlined />}
               onClick={() => copyToClipboard(
                 `taskmanager auth ${serverUrl} ${record.token_value || ''}`,
                 `cmd-${record.id}`,
                 '已复制命令到剪贴板',
-              )}
+              )} type="link" size="small" style={{ padding: 0 }}
             >
               {copiedKey === `cmd-${record.id}` ? '已复制' : '复制命令'}
             </Button>
@@ -197,7 +195,7 @@ export const TokenManagement: React.FC = () => {
             cancelText="取消"
             okButtonProps={{ danger: true }}
           >
-            <Button danger size="small" icon={<DeleteOutlined />}>
+            <Button danger icon={<DeleteOutlined />} type="link" size="small" style={{ padding: 0 }}>
               删除
             </Button>
           </Popconfirm>

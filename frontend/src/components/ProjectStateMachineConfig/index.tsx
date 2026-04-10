@@ -164,9 +164,8 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
     {
       title: '操作',
       key: 'action',
-      width: 100,
       render: (_: unknown, record: ProjectStateMachineMapping) => (
-        <Button type="link" danger onClick={() => handleDelete(record.id)}>
+        <Button danger onClick={() => handleDelete(record.id)} type="link" size="small" style={{ padding: 0 }}>
           删除
         </Button>
       ),

@@ -538,7 +538,6 @@ export const ProjectRequirementPage: React.FC = () => {
       title: '操作',
       key: 'action',
       fixed: 'left' as const,
-      width: 120,
       render: (_: unknown, item: Requirement) => {
         // 根据需求类型获取对应的状态
         const reqType = item.requirement_type || 'normal';
@@ -604,7 +603,7 @@ export const ProjectRequirementPage: React.FC = () => {
         );
         return (
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-            <Button type="link">操作</Button>
+            <Button type="link" size="small" style={{ padding: 0 }}>操作</Button>
           </Dropdown>
         );
       },

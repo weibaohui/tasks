@@ -730,9 +730,8 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                         {
                           title: '操作',
                           key: 'action',
-                          width: 80,
                           render: (_, __, index: number) => (
-                            <Button size="small" danger onClick={() => removeState(index)}>
+                            <Button danger onClick={() => removeState(index)} type="link" size="small" style={{ padding: 0 }}>
                               删除
                             </Button>
                           ),
@@ -811,9 +810,8 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                         {
                           title: '操作',
                           key: 'action',
-                          width: 80,
                           render: (_, __, index: number) => (
-                            <Button size="small" danger onClick={() => removeTransition(index)}>
+                            <Button danger onClick={() => removeTransition(index)} type="link" size="small" style={{ padding: 0 }}>
                               删除
                             </Button>
                           ),
