@@ -14,19 +14,25 @@ import {
   message,
   Typography,
   Alert,
+  Tooltip,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import { createToken, deleteToken, listTokens } from '../../api/authApi';
-import type { UserToken, CreateTokenRequest, CreateTokenResponse } from '../../types/user';
+import type { UserToken, CreateTokenRequest } from '../../types/user';
 
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 export const TokenManagement: React.FC = () => {
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [newToken, setNewToken] = useState<CreateTokenResponse | null>(null);
   const [createForm] = Form.useForm();
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+
+  // 获取当前页面 URL 用于生成命令
+  const getCurrentServerUrl = () => {
+    return window.location.origin;
+  };
 
   const fetchTokens = async () => {
     setLoading(true);
@@ -51,9 +57,8 @@ export const TokenManagement: React.FC = () => {
         description: values.description || '',
         expires_in_days: values.expires_type === 'permanent' ? 0 : (values.expires_days || 30),
       };
-      const response = await createToken(request);
-      setNewToken(response);
-      message.success('Token创建成功，请立即复制保存！');
+      await createToken(request);
+      message.success('Token创建成功');
       setCreateOpen(false);
       createForm.resetFields();
       fetchTokens();
@@ -70,10 +75,6 @@ export const TokenManagement: React.FC = () => {
     } catch (_error) {
       message.error('删除Token失败');
     }
-  };
-
-  const handleCloseNewTokenModal = () => {
-    setNewToken(null);
   };
 
   const formatExpiration = (expiresAt?: number): React.ReactNode => {
@@ -144,20 +145,41 @@ export const TokenManagement: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: unknown, record: UserToken) => (
-        <Popconfirm
-          title="确认删除此Token？"
-          description="删除后，使用此Token的API调用将立即失效"
-          onConfirm={() => handleDelete(record.id)}
-          okText="确认删除"
-          cancelText="取消"
-          okButtonProps={{ danger: true }}
-        >
-          <Button danger size="small" icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>
-      ),
+      render: (_: unknown, record: UserToken) => {
+        const fullCommand = `tm auth ${getCurrentServerUrl()}/api/v1 YOUR_TOKEN`;
+        const isCopied = copiedTokenId === record.id;
+
+        return (
+          <Space>
+            <Tooltip title="复制 tm auth 命令">
+              <Button
+                size="small"
+                icon={isCopied ? <CheckOutlined /> : <CopyOutlined />}
+                onClick={() => {
+                  navigator.clipboard.writeText(fullCommand);
+                  setCopiedTokenId(record.id);
+                  message.success('已复制 tm auth 命令到剪贴板');
+                  setTimeout(() => setCopiedTokenId(null), 2000);
+                }}
+              >
+                {isCopied ? '已复制' : '复制命令'}
+              </Button>
+            </Tooltip>
+            <Popconfirm
+              title="确认删除此Token？"
+              description="删除后，使用此Token的API调用将立即失效"
+              onConfirm={() => handleDelete(record.id)}
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger size="small" icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -173,13 +195,29 @@ export const TokenManagement: React.FC = () => {
           showIcon
         />
       ) : (
-        <Table
-          dataSource={tokens}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          pagination={false}
-        />
+        <>
+          <Alert
+            message="CLI 使用方法"
+            description={
+              <Paragraph style={{ marginBottom: 0 }}>
+                使用以下命令配置 CLI 认证：<br />
+                <Text code copyable={{ text: `tm auth ${getCurrentServerUrl()}/api/v1 YOUR_TOKEN` }}>
+                  tm auth {getCurrentServerUrl()}/api/v1 YOUR_TOKEN
+                </Text>
+              </Paragraph>
+            }
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          <Table
+            dataSource={tokens}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            pagination={false}
+          />
+        </>
       )}
 
       {/* 创建Token弹窗 */}
@@ -249,52 +287,6 @@ export const TokenManagement: React.FC = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Modal>
-
-      {/* 显示新创建的Token */}
-      <Modal
-        title={
-          <Space>
-            <WarningOutlined style={{ color: '#faad14' }} />
-            Token创建成功
-          </Space>
-        }
-        open={!!newToken}
-        onCancel={handleCloseNewTokenModal}
-        footer={
-          <Button type="primary" onClick={handleCloseNewTokenModal}>
-            我已保存
-          </Button>
-        }
-      >
-        <Alert
-          message="请立即复制并保存此Token"
-          description="Token只会显示一次，之后无法再次查看。如果丢失，请删除后重新创建。"
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-        <Input.Group compact>
-          <Input value={newToken?.token || ''} readOnly style={{ width: 'calc(100% - 100px)' }} />
-          <Button
-            onClick={() => {
-              navigator.clipboard.writeText(newToken?.token || '');
-              message.success('已复制到剪贴板');
-            }}
-          >
-            复制
-          </Button>
-        </Input.Group>
-        <div style={{ marginTop: 16 }}>
-          <Text type="secondary">Token名称: {newToken?.name}</Text>
-          <br />
-          <Text type="secondary">
-            过期时间:{' '}
-            {newToken?.expires_at
-              ? new Date(newToken.expires_at).toLocaleString('zh-CN')
-              : '永久'}
-          </Text>
-        </div>
       </Modal>
     </Card>
   );
