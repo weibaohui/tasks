@@ -6,6 +6,8 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Radio,
+  Select,
   Space,
   Table,
   Tag,
@@ -42,12 +44,12 @@ export const TokenManagement: React.FC = () => {
     fetchTokens();
   }, []);
 
-  const handleCreate = async (values: { name: string; description: string; expires_in_days: number }) => {
+  const handleCreate = async (values: { name: string; description: string; expires_type: 'permanent' | 'days'; expires_days?: number }) => {
     try {
       const request: CreateTokenRequest = {
         name: values.name,
-        description: values.description,
-        expires_in_days: values.expires_in_days,
+        description: values.description || '',
+        expires_in_days: values.expires_type === 'permanent' ? 0 : (values.expires_days || 30),
       };
       const response = await createToken(request);
       setNewToken(response);
@@ -202,12 +204,41 @@ export const TokenManagement: React.FC = () => {
             <Input.TextArea placeholder="描述此Token的用途" rows={2} />
           </Form.Item>
           <Form.Item
-            name="expires_in_days"
+            name="expires_type"
             label="过期时间"
-            initialValue={30}
+            initialValue="days"
             rules={[{ required: true }]}
           >
-            <Input type="number" min={0} placeholder="0表示永久不过期" />
+            <Radio.Group>
+              <Radio value="days">自定义天数</Radio>
+              <Radio value="permanent">永不过期</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) => prev.expires_type !== curr.expires_type}
+          >
+            {({ getFieldValue }) =>
+              getFieldValue('expires_type') === 'days' && (
+                <Form.Item
+                  name="expires_days"
+                  label="天数"
+                  initialValue={30}
+                  rules={[{ required: true, message: '请输入天数' }]}
+                >
+                  <Select
+                    placeholder="选择过期天数"
+                    options={[
+                      { label: '7天', value: 7 },
+                      { label: '30天', value: 30 },
+                      { label: '90天', value: 90 },
+                      { label: '180天', value: 180 },
+                      { label: '365天', value: 365 },
+                    ]}
+                  />
+                </Form.Item>
+              )
+            }
           </Form.Item>
           <Form.Item>
             <Space>
