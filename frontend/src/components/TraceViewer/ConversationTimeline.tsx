@@ -8,16 +8,19 @@ export interface ConversationTimelineProps {
   height?: number | string;
 }
 
-// 颜色映射：根据不同的 role 或 event_type 区分
+// 颜色映射：根据给定的蓝色系调色板进行映射，并让起点与终点有明显的跳脱和区别
+// 用户输入（起点）使用较深的品牌蓝
+// 助手回复（终点/产出）使用绿色，代表成功、闭环
 function getBlockColor(record: ConversationRecord): string {
   const role = (record.role || '').toLowerCase();
   
-  if (role === 'user') return '#1890ff'; // 蓝色 - 用户
-  if (role === 'assistant') return '#52c41a'; // 绿色 - 助手
-  if (role === 'system') return '#fa8c16'; // 橙色 - 系统
-  if (role === 'tool' || role === 'tool_result') return '#722ed1'; // 紫色 - 工具相关
+  if (role === 'user') return '#1890ff'; // blue-6 (Brand Color) - 用户的输入，整个链路的主体起点，足够醒目
+  if (role === 'assistant') return '#52c41a'; // green-6 (Success) - 助手回复，使用绿色，代表最终的回答成功闭环
+  if (role === 'system') return '#e6f7ff'; // blue-1 (Selected background) - 系统设定，背景感最弱
+  if (role === 'tool') return '#096dd9'; // blue-7 (Click) - 工具调用，正在执行/最重最深的逻辑层
+  if (role === 'tool_result') return '#69c0ff'; // blue-4 - 工具返回，处于工具调用和主色之间
   
-  return '#d9d9d9'; // 默认灰色
+  return '#f0f0f0'; // 默认灰
 }
 
 function getBlockLabel(record: ConversationRecord): string {
@@ -68,13 +71,15 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
         width: '100%', 
         height, 
         display: 'flex', 
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
         borderRadius: 4, 
         overflow: 'hidden',
         background: '#f0f0f0',
         position: 'relative'
       }}
     >
-      <AnimatePresence>
+      <AnimatePresence mode="popLayout">
         {sortedRecords.map((record, index) => {
           const color = getBlockColor(record);
           const label = getBlockLabel(record);
@@ -102,22 +107,26 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
               }
             >
               <motion.div
-                initial={{ width: 0, opacity: 0, x: 20 }}
+                // 关键改动：不再使用 width 展开动画（"不是展开"）
+                // 而是将元素初始位置放到屏幕最右侧（x: 1000），然后逐个飞入
+                initial={{ x: 1000, opacity: 0 }}
                 animate={{ 
-                  width: `${itemWidthPercent}%`, 
-                  opacity: 1, 
-                  x: 0 
+                  x: 0, 
+                  opacity: 1
                 }}
+                exit={{ opacity: 0, scale: 0 }}
                 transition={{ 
                   type: 'spring', 
-                  stiffness: 300, 
-                  damping: 30,
-                  delay: index === sortedRecords.length - 1 ? 0.1 : 0 
+                  stiffness: 250, 
+                  damping: 25,
+                  delay: index * 0.1 // 逐个延迟：第1个、第2个...依次进入
                 }}
                 style={{
                   height: '100%',
+                  // 宽度固定平分，不参与动画，保持色块形态完整
+                  width: `${itemWidthPercent}%`,
                   background: color,
-                  borderRight: index < sortedRecords.length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                  borderRight: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
                   cursor: 'pointer',
                   minWidth: 4
                 }}

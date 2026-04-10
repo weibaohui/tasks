@@ -8,7 +8,7 @@ import {
   Card,
   Col,
   Divider,
-  Modal,
+  Drawer,
   Row,
   Space,
   Statistic,
@@ -221,7 +221,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
 
   return (
     <>
-      <Modal
+      <Drawer
         title={
           <Space>
             <BranchesOutlined />
@@ -229,22 +229,34 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
           </Space>
         }
         open={visible}
-        onCancel={onClose}
-        footer={
+        onClose={onClose}
+        extra={
           <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
+              type="primary"
               icon={<MessageOutlined />}
               onClick={() => setChatVisible(true)}
               disabled={records.length === 0}
             >
-              查看对话
+              一键查看对话
             </Button>
-            <Button onClick={onClose}>关闭</Button>
           </Space>
         }
-        width={900}
+        width="90%"
+        styles={{
+          body: {
+            padding: '16px 24px',
+            background: '#f5f5f5',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden'
+          }
+        }}
+        destroyOnClose
       >
-        {loading ? (
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {loading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
         ) : records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
@@ -253,20 +265,30 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             <Card size="small" style={{ marginBottom: 16 }}>
               <div style={{ marginBottom: 16 }}>
                 <Text strong style={{ display: 'block', marginBottom: 8 }}>对话时间线</Text>
-                <ConversationTimeline records={records} height={30} />
+                {/* 高度从 25 缩小到 16，约等于原先的 2/3 */}
+                <ConversationTimeline records={records} height={16} />
               </div>
               <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
                 <Col span={8}>
-                  <Statistic title="总消息数" value={traceStats.count} />
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总消息数</span>} 
+                    value={traceStats.count} 
+                    valueStyle={{ fontSize: 14 }} 
+                  />
                 </Col>
                 <Col span={8}>
-                  <Statistic title="总Token" value={traceStats.totalTokens} />
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总Token</span>} 
+                    value={traceStats.totalTokens.toLocaleString()} 
+                    valueStyle={{ fontSize: 14 }} 
+                  />
                 </Col>
                 <Col span={8}>
-                  <Statistic
-                    title="总耗时"
-                    value={`${traceStats.duration}s`}
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总耗时</span>} 
+                    value={`${traceStats.duration}s`} 
+                    valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
               </Row>
@@ -286,52 +308,33 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             />
           </div>
         )}
-      </Modal>
+        </div>
+      </Drawer>
 
-      {/* 对话详情弹窗 */}
-      <Modal
+      {/* 对话详情抽屉 */}
+      <Drawer
         title={`对话详情 - ${traceId?.slice(0, 12) || ''}...`}
         open={chatVisible}
-        onCancel={() => setChatVisible(false)}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setChatVisible(false)}>关闭</Button>
-          </div>
-        }
-        width={800}
+        onClose={() => setChatVisible(false)}
+        width="60%"
+        styles={{
+          body: {
+            padding: '16px 24px',
+            background: '#f5f5f5',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }
+        }}
+        destroyOnClose
       >
         {records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
         ) : (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Statistic title="消息数" value={records.length} />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="总Token"
-                  value={records.reduce(
-                    (sum, r) => sum + (r.total_tokens || 0),
-                    0
-                  )}
-                />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="时长"
-                  value={`${Math.round(
-                    ((records[records.length - 1]?.timestamp || 0) -
-                      (records[0]?.timestamp || 0)) /
-                      1000
-                  )}s`}
-                />
-              </Col>
-            </Row>
-            <Divider />
+          <div style={{ flex: 1, overflow: 'auto' }}>
             <div
               style={{
-                maxHeight: 500,
+                maxHeight: '100%',
                 overflowY: 'auto',
                 padding: 16,
                 background: '#f5f5f5',
@@ -396,7 +399,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             </div>
           </div>
         )}
-      </Modal>
+      </Drawer>
     </>
   );
 };
