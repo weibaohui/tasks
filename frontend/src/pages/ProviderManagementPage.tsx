@@ -23,6 +23,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { createProvider, deleteProvider, listProviders, testProviderConnection, updateProvider } from '../api/providerApi';
 import { useAuthStore } from '../stores/authStore';
 import type { CreateProviderRequest, LLMProvider, ProviderModelInfo, UpdateProviderRequest } from '../types/provider';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type ProviderFormValues = {
   provider_key: string;
@@ -171,7 +172,58 @@ export const ProviderManagementPage: React.FC = () => {
 
   const columns: ColumnsType<LLMProvider> = useMemo(
     () => [
-      {
+          {
+                  title: '操作',
+                  key: 'action',
+                  render: (_: unknown, record: LLMProvider) => (
+                    <ActionGroup>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const res = await testProviderConnection(record.id);
+                            if (res.success) {
+                              message.success(`连接测试成功：${res.message || 'ok'}`);
+                            } else {
+                              message.error(`连接测试失败：${res.message || '失败'}`);
+                            }
+                          } catch (_error) {
+                            message.error('连接测试失败');
+                          }
+                        }} type="link" size="small" style={{ padding: 0 }}
+                      >
+                        测试
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setEditing(record);
+                          setCreateOpen(true);
+                          form.setFieldsValue({
+                            provider_key: record.provider_key,
+                            provider_name: record.provider_name,
+                            api_base: record.api_base,
+                            api_key: '',
+                            provider_type: record.provider_type || 'openai',
+                            is_default: record.is_default,
+                            is_active: record.is_active,
+                            priority: record.priority,
+                            auto_merge: record.auto_merge,
+                            default_model: record.default_model,
+                            supported_models: record.supported_models || [],
+                            extra_headers_json: toExtraHeadersJson(record.extra_headers),
+                          });
+                        }} type="link" size="small" style={{ padding: 0 }}
+                      >
+                        编辑
+                      </Button>
+                      <Popconfirm title="确认删除该 Provider？" onConfirm={() => handleDelete(record.id)}>
+                        <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
+                      </Popconfirm>
+                    </ActionGroup>
+                  ),
+                    width: 100,
+                    fixed: 'left' as const
+              },
+        {
         title: 'Key',
         dataIndex: 'provider_key',
         key: 'provider_key',
@@ -226,58 +278,7 @@ export const ProviderManagementPage: React.FC = () => {
         dataIndex: 'priority',
         key: 'priority',
         width: 90,
-      },
-      {
-        title: '操作',
-        key: 'action',
-        width: 260,
-        render: (_: unknown, record: LLMProvider) => (
-          <Space>
-            <Button
-              onClick={async () => {
-                try {
-                  const res = await testProviderConnection(record.id);
-                  if (res.success) {
-                    message.success(`连接测试成功：${res.message || 'ok'}`);
-                  } else {
-                    message.error(`连接测试失败：${res.message || '失败'}`);
-                  }
-                } catch (_error) {
-                  message.error('连接测试失败');
-                }
-              }}
-            >
-              测试
-            </Button>
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditing(record);
-                setCreateOpen(true);
-                form.setFieldsValue({
-                  provider_key: record.provider_key,
-                  provider_name: record.provider_name,
-                  api_base: record.api_base,
-                  api_key: '',
-                  provider_type: record.provider_type || 'openai',
-                  is_default: record.is_default,
-                  is_active: record.is_active,
-                  priority: record.priority,
-                  auto_merge: record.auto_merge,
-                  default_model: record.default_model,
-                  supported_models: record.supported_models || [],
-                  extra_headers_json: toExtraHeadersJson(record.extra_headers),
-                });
-              }}
-            >
-              编辑
-            </Button>
-            <Popconfirm title="确认删除该 Provider？" onConfirm={() => handleDelete(record.id)}>
-              <Button danger>删除</Button>
-            </Popconfirm>
-          </Space>
-        ),
-      },
+      }
     ],
     [form, handleDelete],
   );

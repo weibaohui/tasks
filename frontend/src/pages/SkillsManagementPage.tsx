@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Drawer, Grid, Space, Spin, Table, Tag, Typography, Button, Descriptions, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { RobotOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import { listSkills, getSkill, type Skill } from '../api/skillApi';
 
 const { useBreakpoint } = Grid;
@@ -57,6 +57,19 @@ export const SkillsManagementPage: React.FC = () => {
   }, [fetchList]);
 
   const columns: ColumnsType<Skill> = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: Skill) => (
+              <Button
+                onClick={() => openDetail(record)} type="link" size="small" style={{ padding: 0 }}
+              >
+                查看
+              </Button>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '名称',
       dataIndex: 'name',
@@ -100,21 +113,7 @@ export const SkillsManagementPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       render: (requires: string) => requires ? <Tag color="orange">{requires}</Tag> : '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      render: (_: unknown, record: Skill) => (
-        <Button
-          type="text"
-          icon={<EyeOutlined />}
-          onClick={() => openDetail(record)}
-        >
-          查看
-        </Button>
-      ),
-    },
+    }
   ];
 
   return (
