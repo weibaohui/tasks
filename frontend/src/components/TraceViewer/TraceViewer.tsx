@@ -265,7 +265,8 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             <Card size="small" style={{ marginBottom: 16 }}>
               <div style={{ marginBottom: 16 }}>
                 <Text strong style={{ display: 'block', marginBottom: 8 }}>对话时间线</Text>
-                <ConversationTimeline records={records} height={25} />
+                {/* 高度从 25 缩小到 16，约等于原先的 2/3 */}
+                <ConversationTimeline records={records} height={16} />
               </div>
               <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
@@ -273,21 +274,21 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
                   <Statistic 
                     title={<span style={{ fontSize: 12 }}>总消息数</span>} 
                     value={traceStats.count} 
-                    valueStyle={{ fontSize: 18 }} 
+                    valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic 
                     title={<span style={{ fontSize: 12 }}>总Token</span>} 
                     value={traceStats.totalTokens.toLocaleString()} 
-                    valueStyle={{ fontSize: 18 }} 
+                    valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic 
                     title={<span style={{ fontSize: 12 }}>总耗时</span>} 
                     value={`${traceStats.duration}s`} 
-                    valueStyle={{ fontSize: 18 }} 
+                    valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
               </Row>
