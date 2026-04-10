@@ -71,6 +71,8 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
         width: '100%', 
         height, 
         display: 'flex', 
+        // 关键改动：使用 row-reverse 改变主轴方向，让子元素从右向左排列
+        flexDirection: 'row-reverse',
         borderRadius: 4, 
         overflow: 'hidden',
         background: '#f0f0f0',
@@ -78,9 +80,13 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
       }}
     >
       <AnimatePresence>
-        {sortedRecords.map((record, index) => {
+        {/* 为了配合 row-reverse，我们需要把原本按时间正序的数组反转一下，
+            这样时间最新的节点会在 DOM 里先渲染，flex-direction: row-reverse 会把它放在最右边。*/}
+        {sortedRecords.slice().reverse().map((record, index) => {
           const color = getBlockColor(record);
           const label = getBlockLabel(record);
+          // 在翻转后的数组中，index 0 实际上是原本最新的节点
+          const isLatest = index === 0;
           
           return (
             <Tooltip 
@@ -105,22 +111,24 @@ export const ConversationTimeline: React.FC<ConversationTimelineProps> = ({
               }
             >
               <motion.div
-                initial={{ width: 0, opacity: 0, x: 20 }}
+                // 改动：将初始 x 的偏移量改为负值（从右侧外进入）或者直接控制 width
+                // 因为我们在 row-reverse 中，增加宽度就意味着向左侧挤压
+                initial={{ width: 0, opacity: 0 }}
                 animate={{ 
                   width: `${itemWidthPercent}%`, 
-                  opacity: 1, 
-                  x: 0 
+                  opacity: 1
                 }}
                 transition={{ 
                   type: 'spring', 
                   stiffness: 300, 
                   damping: 30,
-                  delay: index === sortedRecords.length - 1 ? 0.1 : 0 
+                  delay: isLatest ? 0.1 : 0 
                 }}
                 style={{
                   height: '100%',
                   background: color,
-                  borderRight: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
+                  // 边框也相应改变方向
+                  borderLeft: index < sortedRecords.length - 1 ? '1px solid #ffffff' : 'none',
                   cursor: 'pointer',
                   minWidth: 4
                 }}
