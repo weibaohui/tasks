@@ -92,7 +92,6 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
             编辑
           </Button>
           <Button
-            icon={<PlayCircleOutlined />}
             onClick={() => onInvoke?.(record)} type="link" size="small" style={{ padding: 0 }}
           >
             调用

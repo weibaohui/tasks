@@ -133,7 +133,7 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
             okText="确定"
             cancelText="取消"
           >
-            <Button danger icon={<DeleteOutlined />} type="link" size="small" style={{ padding: 0 }}>
+            <Button danger type="link" size="small" style={{ padding: 0 }}>
               删除
             </Button>
           </Popconfirm>

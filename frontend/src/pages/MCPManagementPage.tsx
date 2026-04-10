@@ -168,8 +168,8 @@ export const MCPManagementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, record: MCPServer) => (
         <ActionGroup>
-          <Button onClick={() => handleTest(record.id)} type="link" size="small" style={{ padding: 0 }}>测试连接</Button>
-          <Button onClick={() => handleRefresh(record.id)} type="link" size="small" style={{ padding: 0 }}>刷新工具</Button>
+          <Button onClick={() => handleTest(record.id)} type="link" size="small" style={{ padding: 0 }}>测试</Button>
+          <Button onClick={() => handleRefresh(record.id)} type="link" size="small" style={{ padding: 0 }}>刷新</Button>
           <Button
             onClick={() => {
               setEditing(record);

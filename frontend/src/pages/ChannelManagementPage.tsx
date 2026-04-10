@@ -269,7 +269,6 @@ export const ChannelManagementPage: React.FC = () => {
         render: (_: unknown, record: Channel) => (
           <ActionGroup>
             <Button
-              icon={<EditOutlined />}
               onClick={() => {
                 setEditing(record);
                 const config = record.config || {};
@@ -304,7 +303,7 @@ export const ChannelManagementPage: React.FC = () => {
               description="删除后将无法恢复，是否继续？"
               onConfirm={() => handleDelete(record.id)}
             >
-              <Button danger icon={<DeleteOutlined />} type="link" size="small" style={{ padding: 0 }}>
+              <Button danger type="link" size="small" style={{ padding: 0 }}>
                 删除
               </Button>
             </Popconfirm>

@@ -225,7 +225,6 @@ export const ConversationRecordsPage: React.FC = () => {
           <ActionGroup size="small">
             <Tooltip title="查看链路">
               <Button
-                icon={<EyeOutlined />}
                 onClick={() => {
                   if (record.trace_id) {
                     setCurrentTraceId(record.trace_id);
