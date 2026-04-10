@@ -15,7 +15,8 @@ function getBlockColor(record: ConversationRecord): string {
   if (role === 'user') return '#1890ff'; // 蓝色 - 用户
   if (role === 'assistant') return '#52c41a'; // 绿色 - 助手
   if (role === 'system') return '#fa8c16'; // 橙色 - 系统
-  if (role === 'tool' || role === 'tool_result') return '#722ed1'; // 紫色 - 工具相关
+  if (role === 'tool') return '#eb2f96'; // 粉色 - 工具调用 (tool_call)
+  if (role === 'tool_result') return '#722ed1'; // 紫色 - 工具结果
   
   return '#d9d9d9'; // 默认灰色
 }
