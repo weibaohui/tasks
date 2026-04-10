@@ -13,8 +13,8 @@ states:
   - id: todo
     name: 待办
     is_final: false
-  - id: processing
-    name: 处理中
+  - id: analyzing
+    name: 分析中
     is_final: false
   - id: completed
     name: 已完成
@@ -22,10 +22,10 @@ states:
 
 transitions:
   - from: todo
-    to: processing
+    to: analyzing
     trigger: start
     description: 开始处理
-  - from: processing
+  - from: analyzing
     to: completed
     trigger: complete
     description: 完成
@@ -162,14 +162,18 @@ func TestConfig_Validate_MandatoryStates(t *testing.T) {
 	// 缺少 todo 状态
 	yaml1 := `
 name: test
-initial_state: processing
+initial_state: analyzing
 states:
-  - id: processing
-    name: 处理中
+  - id: analyzing
+    name: 分析中
     is_final: false
   - id: completed
     name: 已完成
     is_final: true
+transitions:
+  - from: analyzing
+    to: completed
+    trigger: complete
 `
 	cfg1, err := ParseConfig(yaml1)
 	if err != nil {
@@ -180,8 +184,33 @@ states:
 		t.Error("期望校验失败：缺少 todo 状态")
 	}
 
-	// 缺少 processing 状态
+	// 缺少 completed 状态
 	yaml2 := `
+name: test
+initial_state: todo
+states:
+  - id: todo
+    name: 待办
+    is_final: false
+  - id: analyzing
+    name: 分析中
+    is_final: false
+transitions:
+  - from: todo
+    to: analyzing
+    trigger: start
+`
+	cfg2, err := ParseConfig(yaml2)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	err = cfg2.Validate()
+	if err == nil {
+		t.Error("期望校验失败：缺少 completed 状态")
+	}
+
+	// todo 没有出向转换
+	yaml3 := `
 name: test
 initial_state: todo
 states:
@@ -192,34 +221,13 @@ states:
     name: 已完成
     is_final: true
 `
-	cfg2, err := ParseConfig(yaml2)
-	if err != nil {
-		t.Fatalf("解析失败: %v", err)
-	}
-	err = cfg2.Validate()
-	if err == nil {
-		t.Error("期望校验失败：缺少 processing 状态")
-	}
-
-	// 缺少 completed 状态
-	yaml3 := `
-name: test
-initial_state: todo
-states:
-  - id: todo
-    name: 待办
-    is_final: false
-  - id: processing
-    name: 处理中
-    is_final: false
-`
 	cfg3, err := ParseConfig(yaml3)
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
 	err = cfg3.Validate()
 	if err == nil {
-		t.Error("期望校验失败：缺少 completed 状态")
+		t.Error("期望校验失败：todo 没有出向转换")
 	}
 
 	// completed 未标记为终态
@@ -230,15 +238,15 @@ states:
   - id: todo
     name: 待办
     is_final: false
-  - id: processing
-    name: 处理中
+  - id: analyzing
+    name: 分析中
     is_final: false
   - id: completed
     name: 已完成
     is_final: false
 transitions:
   - from: todo
-    to: processing
+    to: analyzing
     trigger: start
 `
 	cfg4, err := ParseConfig(yaml4)
@@ -262,8 +270,8 @@ func TestConfig_FindTransition_Success(t *testing.T) {
 		t.Fatal("期望找到转换")
 	}
 
-	if transition.ToState != "processing" {
-		t.Errorf("期望目标状态为 processing, 实际为 %s", transition.ToState)
+	if transition.ToState != "analyzing" {
+		t.Errorf("期望目标状态为 analyzing, 实际为 %s", transition.ToState)
 	}
 }
 
@@ -285,13 +293,13 @@ func TestConfig_GetState_Success(t *testing.T) {
 		t.Fatalf("解析失败: %v", err)
 	}
 
-	state := cfg.GetState("processing")
+	state := cfg.GetState("analyzing")
 	if state == nil {
 		t.Fatal("期望找到状态")
 	}
 
-	if state.Name != "处理中" {
-		t.Errorf("期望名称为 处理中, 实际为 %s", state.Name)
+	if state.Name != "分析中" {
+		t.Errorf("期望名称为 分析中, 实际为 %s", state.Name)
 	}
 
 	if state.IsFinal {

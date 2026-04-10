@@ -131,8 +131,8 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// 检查必须包含三态：todo, processing, completed
-	requiredStates := []string{"todo", "processing", "completed"}
+	// 检查必须包含两态：todo, completed
+	requiredStates := []string{"todo", "completed"}
 	for _, required := range requiredStates {
 		found := false
 		for _, s := range c.States {
@@ -144,6 +144,11 @@ func (c *Config) Validate() error {
 		if !found {
 			return ErrInvalidConfig("state machine must contain mandatory state '%s'", required)
 		}
+	}
+
+	// 检查 todo 至少有一条出向转换
+	if len(c.GetAvailableTriggers("todo")) == 0 {
+		return ErrInvalidConfig("mandatory state 'todo' must have at least one outgoing transition")
 	}
 
 	// 检查 completed 是否标记为终态
