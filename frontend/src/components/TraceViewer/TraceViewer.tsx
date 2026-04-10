@@ -8,7 +8,7 @@ import {
   Card,
   Col,
   Divider,
-  Modal,
+  Drawer,
   Row,
   Space,
   Statistic,
@@ -221,7 +221,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
 
   return (
     <>
-      <Modal
+      <Drawer
         title={
           <Space>
             <BranchesOutlined />
@@ -229,22 +229,34 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
           </Space>
         }
         open={visible}
-        onCancel={onClose}
-        footer={
+        onClose={onClose}
+        extra={
           <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
+              type="primary"
               icon={<MessageOutlined />}
               onClick={() => setChatVisible(true)}
               disabled={records.length === 0}
             >
-              查看对话
+              一键查看对话
             </Button>
-            <Button onClick={onClose}>关闭</Button>
           </Space>
         }
-        width={900}
+        width="90%"
+        styles={{
+          body: {
+            padding: '16px 24px',
+            background: '#f5f5f5',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden'
+          }
+        }}
+        destroyOnClose
       >
-        {loading ? (
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {loading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
         ) : records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
@@ -286,7 +298,8 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             />
           </div>
         )}
-      </Modal>
+        </div>
+      </Drawer>
 
       {/* 对话详情弹窗 */}
       <Modal
