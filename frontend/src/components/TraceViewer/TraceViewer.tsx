@@ -9,7 +9,6 @@ import {
   Col,
   Divider,
   Drawer,
-  Modal,
   Row,
   Space,
   Statistic,
@@ -302,50 +301,30 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
         </div>
       </Drawer>
 
-      {/* 对话详情弹窗 */}
-      <Modal
+      {/* 对话详情抽屉 */}
+      <Drawer
         title={`对话详情 - ${traceId?.slice(0, 12) || ''}...`}
         open={chatVisible}
-        onCancel={() => setChatVisible(false)}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setChatVisible(false)}>关闭</Button>
-          </div>
-        }
-        width={800}
+        onClose={() => setChatVisible(false)}
+        width="60%"
+        styles={{
+          body: {
+            padding: '16px 24px',
+            background: '#f5f5f5',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }
+        }}
+        destroyOnClose
       >
         {records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
         ) : (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Statistic title="消息数" value={records.length} />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="总Token"
-                  value={records.reduce(
-                    (sum, r) => sum + (r.total_tokens || 0),
-                    0
-                  )}
-                />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="时长"
-                  value={`${Math.round(
-                    ((records[records.length - 1]?.timestamp || 0) -
-                      (records[0]?.timestamp || 0)) /
-                      1000
-                  )}s`}
-                />
-              </Col>
-            </Row>
-            <Divider />
+          <div style={{ flex: 1, overflow: 'auto' }}>
             <div
               style={{
-                maxHeight: 500,
+                maxHeight: '100%',
                 overflowY: 'auto',
                 padding: 16,
                 background: '#f5f5f5',
@@ -410,7 +389,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             </div>
           </div>
         )}
-      </Modal>
+      </Drawer>
     </>
   );
 };
