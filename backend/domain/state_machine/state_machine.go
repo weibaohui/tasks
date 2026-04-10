@@ -131,6 +131,27 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// 检查必须包含三态：todo, processing, completed
+	requiredStates := []string{"todo", "processing", "completed"}
+	for _, required := range requiredStates {
+		found := false
+		for _, s := range c.States {
+			if s.ID == required {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrInvalidConfig("state machine must contain mandatory state '%s'", required)
+		}
+	}
+
+	// 检查 completed 是否标记为终态
+	completedState := c.GetState("completed")
+	if completedState != nil && !completedState.IsFinal {
+		return ErrInvalidConfig("mandatory state 'completed' should be marked as final (is_final: true)")
+	}
+
 	return nil
 }
 

@@ -7,25 +7,25 @@ import (
 const validYAML = `
 name: test_flow
 description: 测试流程
-initial_state: created
+initial_state: todo
 
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
-  - id: in_progress
-    name: 进行中
+  - id: processing
+    name: 处理中
     is_final: false
   - id: completed
     name: 已完成
     is_final: true
 
 transitions:
-  - from: created
-    to: in_progress
+  - from: todo
+    to: processing
     trigger: start
     description: 开始处理
-  - from: in_progress
+  - from: processing
     to: completed
     trigger: complete
     description: 完成
@@ -41,8 +41,8 @@ func TestParseConfig_Success(t *testing.T) {
 		t.Errorf("期望名称为 test_flow, 实际为 %s", cfg.Name)
 	}
 
-	if cfg.InitialState != "created" {
-		t.Errorf("期望初始状态为 created, 实际为 %s", cfg.InitialState)
+	if cfg.InitialState != "todo" {
+		t.Errorf("期望初始状态为 todo, 实际为 %s", cfg.InitialState)
 	}
 
 	if len(cfg.States) != 3 {
@@ -77,9 +77,15 @@ func TestConfig_Validate_InitialStateNotFound(t *testing.T) {
 name: test
 initial_state: not_exist
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
+  - id: processing
+    name: 处理中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
 `
 	cfg, err := ParseConfig(yaml)
 	if err != nil {
@@ -95,14 +101,20 @@ states:
 func TestConfig_Validate_TransitionFromStateNotFound(t *testing.T) {
 	yaml := `
 name: test
-initial_state: created
+initial_state: todo
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
+  - id: processing
+    name: 处理中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
 transitions:
   - from: not_exist
-    to: created
+    to: todo
     trigger: start
 `
 	cfg, err := ParseConfig(yaml)
@@ -119,17 +131,20 @@ transitions:
 func TestConfig_Validate_FinalStateCannotTransition(t *testing.T) {
 	yaml := `
 name: test
-initial_state: created
+initial_state: todo
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
+    is_final: false
+  - id: processing
+    name: 处理中
     is_final: false
   - id: completed
     name: 已完成
     is_final: true
 transitions:
   - from: completed
-    to: created
+    to: todo
     trigger: reopen
 `
 	cfg, err := ParseConfig(yaml)
@@ -143,19 +158,112 @@ transitions:
 	}
 }
 
+func TestConfig_Validate_MandatoryStates(t *testing.T) {
+	// 缺少 todo 状态
+	yaml1 := `
+name: test
+initial_state: processing
+states:
+  - id: processing
+    name: 处理中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
+`
+	cfg1, err := ParseConfig(yaml1)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	err = cfg1.Validate()
+	if err == nil {
+		t.Error("期望校验失败：缺少 todo 状态")
+	}
+
+	// 缺少 processing 状态
+	yaml2 := `
+name: test
+initial_state: todo
+states:
+  - id: todo
+    name: 待办
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
+`
+	cfg2, err := ParseConfig(yaml2)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	err = cfg2.Validate()
+	if err == nil {
+		t.Error("期望校验失败：缺少 processing 状态")
+	}
+
+	// 缺少 completed 状态
+	yaml3 := `
+name: test
+initial_state: todo
+states:
+  - id: todo
+    name: 待办
+    is_final: false
+  - id: processing
+    name: 处理中
+    is_final: false
+`
+	cfg3, err := ParseConfig(yaml3)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	err = cfg3.Validate()
+	if err == nil {
+		t.Error("期望校验失败：缺少 completed 状态")
+	}
+
+	// completed 未标记为终态
+	yaml4 := `
+name: test
+initial_state: todo
+states:
+  - id: todo
+    name: 待办
+    is_final: false
+  - id: processing
+    name: 处理中
+    is_final: false
+  - id: completed
+    name: 已完成
+    is_final: false
+transitions:
+  - from: todo
+    to: processing
+    trigger: start
+`
+	cfg4, err := ParseConfig(yaml4)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	err = cfg4.Validate()
+	if err == nil {
+		t.Error("期望校验失败：completed 未标记为终态")
+	}
+}
+
 func TestConfig_FindTransition_Success(t *testing.T) {
 	cfg, err := ParseConfig(validYAML)
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
 
-	transition := cfg.FindTransition("created", "start")
+	transition := cfg.FindTransition("todo", "start")
 	if transition == nil {
 		t.Fatal("期望找到转换")
 	}
 
-	if transition.ToState != "in_progress" {
-		t.Errorf("期望目标状态为 in_progress, 实际为 %s", transition.ToState)
+	if transition.ToState != "processing" {
+		t.Errorf("期望目标状态为 processing, 实际为 %s", transition.ToState)
 	}
 }
 
@@ -165,7 +273,7 @@ func TestConfig_FindTransition_NotFound(t *testing.T) {
 		t.Fatalf("解析失败: %v", err)
 	}
 
-	transition := cfg.FindTransition("created", "invalid_trigger")
+	transition := cfg.FindTransition("todo", "invalid_trigger")
 	if transition != nil {
 		t.Error("期望未找到转换")
 	}
@@ -177,13 +285,13 @@ func TestConfig_GetState_Success(t *testing.T) {
 		t.Fatalf("解析失败: %v", err)
 	}
 
-	state := cfg.GetState("in_progress")
+	state := cfg.GetState("processing")
 	if state == nil {
 		t.Fatal("期望找到状态")
 	}
 
-	if state.Name != "进行中" {
-		t.Errorf("期望名称为 进行中, 实际为 %s", state.Name)
+	if state.Name != "处理中" {
+		t.Errorf("期望名称为 处理中, 实际为 %s", state.Name)
 	}
 
 	if state.IsFinal {
@@ -220,7 +328,7 @@ func TestNewStateMachine(t *testing.T) {
 		t.Errorf("期望名称为 test, 实际为 %s", sm.Name)
 	}
 
-	if sm.Config.InitialState != "created" {
-		t.Errorf("期望初始状态为 created, 实际为 %s", sm.Config.InitialState)
+	if sm.Config.InitialState != "todo" {
+		t.Errorf("期望初始状态为 todo, 实际为 %s", sm.Config.InitialState)
 	}
 }
