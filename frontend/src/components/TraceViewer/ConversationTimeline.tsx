@@ -8,17 +8,17 @@ export interface ConversationTimelineProps {
   height?: number | string;
 }
 
-// 颜色映射：使用更柔和的色系，带有科技感和区分度
+// 颜色映射：与下方 Ant Design 的 Tag 边框色保持一致，实现视觉上的高度统一，同时保证柔和舒适
 function getBlockColor(record: ConversationRecord): string {
   const role = (record.role || '').toLowerCase();
   
-  if (role === 'user') return '#74B9FF'; // 柔和蓝 - 用户输入
-  if (role === 'assistant') return '#A8E6CF'; // 柔和绿 - 助手回答
-  if (role === 'system') return '#DFE6E9'; // 极浅灰 - 系统/底层设定
-  if (role === 'tool') return '#FFEAA7'; // 浅暖黄 - 工具调用，代表处理中/中间态
-  if (role === 'tool_result') return '#55EFC4'; // 浅青蓝 - 工具返回结果，代表产出
+  if (role === 'user') return '#91caff'; // Antd Blue 3 - 匹配【用户】Tag
+  if (role === 'assistant') return '#b7eb8f'; // Antd Green 3 - 匹配【助手】Tag
+  if (role === 'system') return '#d9d9d9'; // Antd Gray 3 - 匹配【系统】
+  if (role === 'tool') return '#d3adf7'; // Antd Purple 3 - 匹配【工具】Tag
+  if (role === 'tool_result') return '#87e8de'; // Antd Cyan 3 - 匹配【工具结果】Tag
   
-  return '#F1F2F6'; // 极浅底灰
+  return '#f0f0f0'; // 默认浅灰
 }
 
 function getBlockLabel(record: ConversationRecord): string {
