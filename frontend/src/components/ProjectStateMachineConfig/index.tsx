@@ -121,6 +121,17 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
   };
 
   const columns: ColumnsType<ProjectStateMachineMapping> = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: ProjectStateMachineMapping) => (
+              <Button danger onClick={() => handleDelete(record.id)} type="link" size="small" style={{ padding: 0 }}>
+                删除
+              </Button>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '需求类型',
       dataIndex: 'requirement_type',
@@ -160,17 +171,7 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
       key: 'updated_at',
       width: 180,
       render: (timestamp: number) => new Date(timestamp).toLocaleString(),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      render: (_: unknown, record: ProjectStateMachineMapping) => (
-        <Button type="link" danger onClick={() => handleDelete(record.id)}>
-          删除
-        </Button>
-      ),
-    },
+    }
   ];
 
   // 获取未配置的需求类型

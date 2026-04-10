@@ -16,6 +16,7 @@ import {
   updateMCPServer,
 } from '../api/mcpApi';
 import type { CreateMCPServerRequest, MCPServer, UpdateMCPServerRequest } from '../types/mcp';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type FormValues = {
   code: string;
@@ -151,6 +152,39 @@ export const MCPManagementPage: React.FC = () => {
   }, [fetchList]);
 
   const columns: ColumnsType<MCPServer> = useMemo(() => [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: MCPServer) => (
+              <ActionGroup>
+                <Button onClick={() => handleTest(record.id)} type="link" size="small" style={{ padding: 0 }}>测试</Button>
+                <Button onClick={() => handleRefresh(record.id)} type="link" size="small" style={{ padding: 0 }}>刷新</Button>
+                <Button
+                  onClick={() => {
+                    setEditing(record);
+                    setOpen(true);
+                    form.setFieldsValue({
+                      code: record.code,
+                      name: record.name,
+                      description: record.description,
+                      transport_type: record.transport_type,
+                      command: record.command,
+                      args: record.args || [],
+                      url: record.url,
+                      env_vars_kv: Object.entries(record.env_vars || {}).map(([k, v]) => ({ key: k, value: v })),
+                    });
+                  }} type="link" size="small" style={{ padding: 0 }}
+                >
+                  编辑
+                </Button>
+                <Popconfirm title="确认删除该服务器？" onConfirm={() => handleDelete(record.id)}>
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
+                </Popconfirm>
+              </ActionGroup>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
     { title: 'Code', dataIndex: 'code', key: 'code', width: 120, render: (v: string) => <Tag color="blue">{v}</Tag> },
     { title: '传输', dataIndex: 'transport_type', key: 'transport_type', width: 100 },
@@ -161,40 +195,7 @@ export const MCPManagementPage: React.FC = () => {
         ? <Tag color="cyan">{record.capabilities.length}</Tag>
         : <Tag color="default">0</Tag>
     },
-    { title: '最后连接', dataIndex: 'last_connected', key: 'last_connected', width: 160, render: (ts: number | null) => ts ? new Date(ts).toLocaleString() : '-' },
-    {
-      title: '操作',
-      key: 'action',
-      width: 360,
-      render: (_: unknown, record: MCPServer) => (
-        <Space>
-          <Button onClick={() => handleTest(record.id)}>测试连接</Button>
-          <Button onClick={() => handleRefresh(record.id)}>刷新工具</Button>
-          <Button
-            type="primary"
-            onClick={() => {
-              setEditing(record);
-              setOpen(true);
-              form.setFieldsValue({
-                code: record.code,
-                name: record.name,
-                description: record.description,
-                transport_type: record.transport_type,
-                command: record.command,
-                args: record.args || [],
-                url: record.url,
-                env_vars_kv: Object.entries(record.env_vars || {}).map(([k, v]) => ({ key: k, value: v })),
-              });
-            }}
-          >
-            编辑
-          </Button>
-          <Popconfirm title="确认删除该服务器？" onConfirm={() => handleDelete(record.id)}>
-            <Button danger>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+    { title: '最后连接', dataIndex: 'last_connected', key: 'last_connected', width: 160, render: (ts: number | null) => ts ? new Date(ts).toLocaleString() : '-' }
   ], [form, handleDelete, handleRefresh, handleTest]);
 
   useEffect(() => { fetchList(); }, [fetchList]);

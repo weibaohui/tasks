@@ -695,6 +695,17 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                       pagination={false}
                       size="small"
                       columns={[
+                          {
+                                                    title: '操作',
+                                                    key: 'action',
+                                                    render: (_, __, index: number) => (
+                                                      <Button danger onClick={() => removeState(index)} type="link" size="small" style={{ padding: 0 }}>
+                                                        删除
+                                                      </Button>
+                                                    ),
+                                                      width: 100,
+                                                      fixed: 'left' as const
+                                                  },
                         { title: 'ID', dataIndex: 'id', key: 'id', width: 120 },
                         { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
                         {
@@ -726,17 +737,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                               {record.aiGuide ? '已配置' : '配置'}
                             </Button>
                           ),
-                        },
-                        {
-                          title: '操作',
-                          key: 'action',
-                          width: 80,
-                          render: (_, __, index: number) => (
-                            <Button size="small" danger onClick={() => removeState(index)}>
-                              删除
-                            </Button>
-                          ),
-                        },
+                        }
                       ]}
                     />
                   </div>
@@ -754,6 +755,17 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                       pagination={false}
                       size="small"
                       columns={[
+                          {
+                                                    title: '操作',
+                                                    key: 'action',
+                                                    render: (_, __, index: number) => (
+                                                      <Button danger onClick={() => removeTransition(index)} type="link" size="small" style={{ padding: 0 }}>
+                                                        删除
+                                                      </Button>
+                                                    ),
+                                                      width: 100,
+                                                      fixed: 'left' as const
+                                                  },
                         {
                           title: '源状态',
                           dataIndex: 'from',
@@ -807,17 +819,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                               </Button>
                             </div>
                           ),
-                        },
-                        {
-                          title: '操作',
-                          key: 'action',
-                          width: 80,
-                          render: (_, __, index: number) => (
-                            <Button size="small" danger onClick={() => removeTransition(index)}>
-                              删除
-                            </Button>
-                          ),
-                        },
+                        }
                       ]}
                     />
                   </div>

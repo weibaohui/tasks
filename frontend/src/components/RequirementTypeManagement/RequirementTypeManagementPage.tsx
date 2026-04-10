@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Card, Typography, Space, Button, Table, Popconfirm, message, Tag } from 'antd';
-import { PlusOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { requirementTypeApi, type RequirementType, type CreateRequirementTypeRequest } from '../../api/requirementTypeApi';
 
 const { Title } = Typography;
@@ -92,6 +92,29 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
   };
 
   const columns = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: RequirementType) => {
+              if (isBuiltInType(record.code)) {
+                return <span style={{ color: '#999' }}>不可删除</span>;
+              }
+              return (
+                <Popconfirm
+                  title="确定删除此需求类型？"
+                  onConfirm={() => handleDelete(record)}
+                  okText="确定"
+                  cancelText="取消"
+                >
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              );
+            },
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '代码',
       dataIndex: 'code',
@@ -118,28 +141,7 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       dataIndex: 'color',
       key: 'color',
       render: (color: string) => color ? <Tag color={color}>{color}</Tag> : '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: RequirementType) => {
-        if (isBuiltInType(record.code)) {
-          return <span style={{ color: '#999' }}>不可删除</span>;
-        }
-        return (
-          <Popconfirm
-            title="确定删除此需求类型？"
-            onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        );
-      },
-    },
+    }
   ];
 
   return (
