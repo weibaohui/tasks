@@ -24,42 +24,44 @@ export const RequirementStatusStats: React.FC<RequirementStatusStatsProps> = ({
 
   return (
     <Card
-      title="状态统计"
+      title={<span style={{ fontSize: 14 }}>状态统计</span>}
+      size="small"
       style={{ marginBottom: 16 }}
-      bodyStyle={{ padding: '16px' }}
+      bodyStyle={{ padding: '12px' }}
     >
-      <Row gutter={[16, 16]}>
+      <Row gutter={[12, 12]}>
         {/* 全部状态卡片 */}
         <Col xs={12} sm={8} md={6} lg={4}>
           <div
             onClick={() => onStatusClick('')}
             style={{
               cursor: 'pointer',
-              padding: '16px',
-              borderRadius: '8px',
-              border: `2px solid ${!statusFilter ? '#1890ff' : '#e8e8e8'}`,
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: `1px solid ${!statusFilter ? '#1890ff' : '#e8e8e8'}`,
               backgroundColor: !statusFilter ? '#e6f7ff' : '#fafafa',
               transition: 'all 0.3s ease',
-              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}
           >
             <div
               style={{
-                fontSize: '24px',
-                fontWeight: 'bold',
-                color: !statusFilter ? '#1890ff' : '#262626',
-                marginBottom: '4px',
-              }}
-            >
-              {getTotalCount()}
-            </div>
-            <div
-              style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: !statusFilter ? '#1890ff' : '#595959',
               }}
             >
               <Badge color="#1890ff" text="全部" />
+            </div>
+            <div
+              style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: !statusFilter ? '#1890ff' : '#262626',
+              }}
+            >
+              {getTotalCount()}
             </div>
           </div>
         </Col>
@@ -76,32 +78,33 @@ export const RequirementStatusStats: React.FC<RequirementStatusStatsProps> = ({
                 onClick={() => onStatusClick(stat.status)}
                 style={{
                   cursor: 'pointer',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  border: `2px solid ${active ? colors.color : colors.borderColor}`,
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: `1px solid ${active ? colors.color : colors.borderColor}`,
                   backgroundColor: active ? colors.bgColor : '#ffffff',
                   transition: 'all 0.3s ease',
-                  textAlign: 'center',
                   opacity: stat.count === 0 ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}
               >
                 <div
                   style={{
-                    fontSize: '24px',
-                    fontWeight: 'bold',
-                    color: colors.color,
-                    marginBottom: '4px',
-                  }}
-                >
-                  {stat.count}
-                </div>
-                <div
-                  style={{
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: active ? colors.color : '#595959',
                   }}
                 >
                   <Badge color={colors.color} text={label} />
+                </div>
+                <div
+                  style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    color: colors.color,
+                  }}
+                >
+                  {stat.count}
                 </div>
               </div>
             </Col>
