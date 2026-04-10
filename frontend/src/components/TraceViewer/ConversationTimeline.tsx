@@ -8,17 +8,17 @@ export interface ConversationTimelineProps {
   height?: number | string;
 }
 
-// 颜色映射：采用极低饱和度的莫兰迪色系/淡雅水彩系，确保大面积铺开时视觉无压迫感
+// 颜色映射：使用明度较高但饱和度适中的颜色（类似 Ant Design Color 4/5），保证足够清晰度同时不刺眼
 function getBlockColor(record: ConversationRecord): string {
   const role = (record.role || '').toLowerCase();
   
-  if (role === 'user') return '#d6e4ff'; // Antd Blue 1 - 极淡水蓝
-  if (role === 'assistant') return '#f6ffed'; // Antd Green 1 - 极淡青绿
-  if (role === 'system') return '#f5f5f5'; // Antd Gray 1 - 极淡底灰
-  if (role === 'tool') return '#fff0f6'; // Antd Magenta 1 - 极淡藕粉
-  if (role === 'tool_result') return '#e6fffb'; // Antd Cyan 1 - 极淡青蓝
+  if (role === 'user') return '#69b1ff'; // Antd Blue 4 - 清晰天蓝
+  if (role === 'assistant') return '#95de64'; // Antd Green 4 - 柔和翠绿
+  if (role === 'system') return '#bfbfbf'; // Antd Gray 5 - 清晰中灰
+  if (role === 'tool') return '#b37feb'; // Antd Purple 4 - 明亮紫藤
+  if (role === 'tool_result') return '#5cdbd3'; // Antd Cyan 4 - 明亮青色
   
-  return '#fafafa'; // 默认底灰
+  return '#e8e8e8'; // 默认灰
 }
 
 function getBlockLabel(record: ConversationRecord): string {
