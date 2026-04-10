@@ -270,15 +270,24 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
               <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
                 <Col span={8}>
-                  <Statistic title="总消息数" value={traceStats.count} />
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总消息数</span>} 
+                    value={traceStats.count} 
+                    valueStyle={{ fontSize: 18 }} 
+                  />
                 </Col>
                 <Col span={8}>
-                  <Statistic title="总Token" value={traceStats.totalTokens} />
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总Token</span>} 
+                    value={traceStats.totalTokens.toLocaleString()} 
+                    valueStyle={{ fontSize: 18 }} 
+                  />
                 </Col>
                 <Col span={8}>
-                  <Statistic
-                    title="总耗时"
-                    value={`${traceStats.duration}s`}
+                  <Statistic 
+                    title={<span style={{ fontSize: 12 }}>总耗时</span>} 
+                    value={`${traceStats.duration}s`} 
+                    valueStyle={{ fontSize: 18 }} 
                   />
                 </Col>
               </Row>
