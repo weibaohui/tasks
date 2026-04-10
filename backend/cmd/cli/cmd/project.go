@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -228,7 +229,7 @@ var projectUpdateCmd = &cobra.Command{
 var projectDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "删除项目",
-	Example: `  taskmanager project delete <project_id>`,
+	Example: `  taskmanager project delete <project_id> [--force]`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 {
 			fmt.Println("错误: 缺少 project_id 参数")
@@ -237,12 +238,27 @@ var projectDeleteCmd = &cobra.Command{
 		}
 		projectID := args[0]
 
-		fmt.Printf("确认删除项目 %s? (y/N): ", projectID)
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Println("取消删除")
-			return
+		force, _ := cmd.Flags().GetBool("force")
+
+		// 检查环境变量
+		if !force {
+			confirmEnv := os.Getenv("CONFIRM_DELETE")
+			if confirmEnv == "y" || confirmEnv == "yes" || confirmEnv == "Y" || confirmEnv == "YES" {
+				force = true
+			} else if confirmEnv == "n" || confirmEnv == "no" || confirmEnv == "N" || confirmEnv == "NO" {
+				fmt.Println("取消删除")
+				return
+			}
+		}
+
+		if !force {
+			fmt.Printf("确认删除项目 %s? (y/N): ", projectID)
+			var confirm string
+			fmt.Scanln(&confirm)
+			if confirm != "y" && confirm != "Y" {
+				fmt.Println("取消删除")
+				return
+			}
 		}
 
 		ctx := context.Background()
@@ -705,4 +721,7 @@ func init() {
 	// dispatch set 命令的 flags
 	dispatchSetCmd.Flags().StringP("channel-code", "c", "", "渠道编码")
 	dispatchSetCmd.Flags().StringP("session-key", "k", "", "会话密钥")
+
+	// delete 命令的 flags
+	projectDeleteCmd.Flags().BoolP("force", "f", false, "跳过确认直接删除")
 }

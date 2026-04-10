@@ -929,32 +929,24 @@ func TestProjectCLI_Get(t *testing.T) {
 	requiresAPIToken(t)
 	buildCLI(t)
 
-	// 先列出项目获取一个ID
-	output, err := runCLI("project", "list")
-	if err != nil {
-		t.Fatalf("project list 失败: %v\n%s", err, output)
-	}
-
-	// 尝试获取第一个项目的详情
-	lines := strings.Split(output, "\n")
+	// 先创建一个项目以确保有可用的 ID
+	createOutput, _ := runCLI("project", "create", "--name", "Get测试项目-E2E")
+	lines := strings.Split(createOutput, "\n")
 	var projectID string
 	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) > 0 && strings.Contains(fields[0], "-") == false && strings.Count(line, " ") < 3 {
-			// 跳过表头和空行，尝试找ID
-			if len(fields) >= 1 && len(fields[0]) > 10 {
-				projectID = fields[0]
-				break
-			}
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ID:") {
+			projectID = strings.TrimSpace(strings.TrimPrefix(line, "ID:"))
+			break
 		}
 	}
 
 	if projectID == "" {
-		t.Skip("没有可用的项目ID，跳过 get 测试")
+		t.Skip("无法获取创建的项目ID，跳过 get 测试")
 	}
 
 	// 获取项目详情
-	output, err = runCLI("project", "get", projectID)
+	output, err := runCLI("project", "get", projectID)
 	if err != nil {
 		t.Fatalf("project get 失败: %v\n%s", err, output)
 	}
@@ -1029,12 +1021,13 @@ func TestProjectCLI_Delete(t *testing.T) {
 		t.Skip("无法获取创建的项目ID，跳过删除测试")
 	}
 
-	// 删除项目 (输入 n 取消确认)
-	output, err = runCLIWithEnv(map[string]string{"CONFIRM_DELETE": "n"}, "project", "delete", projectID)
-	t.Logf("project delete (取消): %s", output)
-
-	// 注意: 由于交互式输入问题，跳过实际删除测试
-	t.Logf("project delete 测试跳过 (需要交互式输入)")
+	// 使用 --force 标志删除项目 (跳过交互式确认)
+	output, err = runCLI("project", "delete", projectID, "--force")
+	if err != nil {
+		t.Logf("project delete 失败 (可能项目不存在): %v\n%s", err, output)
+	} else {
+		t.Logf("project delete: %s", output)
+	}
 }
 
 func TestProjectCLI_UnknownSubCommand(t *testing.T) {
