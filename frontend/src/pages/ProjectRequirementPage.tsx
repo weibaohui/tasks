@@ -615,25 +615,15 @@ export const ProjectRequirementPage: React.FC = () => {
       key: 'title',
       ellipsis: true,
       render: (title: string, item: Requirement) => {
-        // 如果当前有 trace_id（历史已完成）或本身处于 running 状态（正在进行）都可以点击查看
-        const runtimeStatus = item.claude_runtime?.status || '';
-        const isRunning = runtimeStatus === 'running';
-        
-        if (!item.trace_id && !isRunning) return title;
+        if (!item.trace_id) return title;
         
         return (
           <Button
             type="link"
             style={{ padding: 0, height: 'auto', textAlign: 'left', whiteSpace: 'normal' }}
             onClick={() => {
-              // 优先使用 trace_id，如果没有（通常是刚刚启动且还未写入 trace_id），则尝试传递可能包含 trace_id 逻辑
-              // 在这个应用中，通常 running 时其实也会生成 trace_id 或绑定任务。如果确定是通过 trace_id 关联，需要确保 item 里包含了 trace_id。
-              if (item.trace_id) {
-                setCurrentTraceId(item.trace_id);
-                setTraceViewerVisible(true);
-              } else {
-                message.warning('当前任务尚未生成对话链路标识 (trace_id)');
-              }
+              setCurrentTraceId(item.trace_id!);
+              setTraceViewerVisible(true);
             }}
           >
             {title}
