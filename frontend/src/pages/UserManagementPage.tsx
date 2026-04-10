@@ -74,6 +74,24 @@ export const UserManagementPage: React.FC = () => {
   };
 
   const columns = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: User) => (
+              <ActionGroup>
+                <Button onClick={() => handleEdit(record)} type="link" size="small" style={{ padding: 0 }}>
+                  编辑
+                </Button>
+                <Popconfirm title="确认删除该用户？" onConfirm={() => handleDelete(record.id)}>
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </ActionGroup>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '用户名',
       dataIndex: 'username',
@@ -100,25 +118,7 @@ export const UserManagementPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (time: number) => new Date(time).toLocaleString(),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: User) => (
-        <ActionGroup>
-          <Button onClick={() => handleEdit(record)} type="link" size="small" style={{ padding: 0 }}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除该用户？" onConfirm={() => handleDelete(record.id)}>
-            <Button danger type="link" size="small" style={{ padding: 0 }}>
-              删除
-            </Button>
-          </Popconfirm>
-        </ActionGroup>
-      ),
-        width: 100,
-        fixed: 'left' as const
-    },
+    }
   ];
 
   return (

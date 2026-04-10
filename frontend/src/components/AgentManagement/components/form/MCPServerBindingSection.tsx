@@ -28,6 +28,22 @@ export const MCPServerBindingCard: React.FC<MCPServerBindingCardProps> = ({
   onReloadMCP, onCreateBinding, onUpdateBinding, onDeleteBinding, onOpenToolsDrawer,
 }) => {
   const columns: ColumnsType<AgentMCPBinding> = [
+      {
+            title: '操作',
+            render: (_: unknown, record: AgentMCPBinding) => (
+              <ActionGroup size="small">
+                <Switch size="small" checked={record.is_active}
+                  onChange={async () => { await onUpdateBinding(record.id, { is_active: !record.is_active }); }} />
+                <Button onClick={() => onOpenToolsDrawer(record)} type="link" size="small" style={{ padding: 0 }}>配置</Button>
+                <Popconfirm title="确认解绑该 MCP Server？"
+                  onConfirm={() => onDeleteBinding(record.id)}>
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>解绑</Button>
+                </Popconfirm>
+              </ActionGroup>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: 'MCP Server',
       render: (_: unknown, record: AgentMCPBinding) => {
@@ -54,23 +70,7 @@ export const MCPServerBindingCard: React.FC<MCPServerBindingCardProps> = ({
         <Switch size="small" checked={record.auto_load} checkedChildren="自" unCheckedChildren="手"
           onChange={async () => { await onUpdateBinding(record.id, { auto_load: !record.auto_load }); }} />
       ),
-    },
-    {
-      title: '操作',
-      render: (_: unknown, record: AgentMCPBinding) => (
-        <ActionGroup size="small">
-          <Switch size="small" checked={record.is_active}
-            onChange={async () => { await onUpdateBinding(record.id, { is_active: !record.is_active }); }} />
-          <Button onClick={() => onOpenToolsDrawer(record)} type="link" size="small" style={{ padding: 0 }}>配置</Button>
-          <Popconfirm title="确认解绑该 MCP Server？"
-            onConfirm={() => onDeleteBinding(record.id)}>
-            <Button danger type="link" size="small" style={{ padding: 0 }}>解绑</Button>
-          </Popconfirm>
-        </ActionGroup>
-      ),
-        width: 100,
-        fixed: 'left' as const
-    },
+    }
   ];
 
   return (

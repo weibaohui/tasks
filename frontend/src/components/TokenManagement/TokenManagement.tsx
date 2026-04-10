@@ -17,7 +17,6 @@ import {
 } from 'antd';
 import {
   PlusOutlined,
-  DeleteOutlined,
   CopyOutlined,
   CheckOutlined,
   QuestionCircleOutlined,
@@ -110,6 +109,50 @@ export const TokenManagement: React.FC = () => {
   };
 
   const columns = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: UserToken) => (
+              <ActionGroup>
+                <Tooltip title="复制 Token">
+                  <Button
+                    onClick={() => copyToClipboard(
+                      record.token_value || '',
+                      `token-${record.id}`,
+                      '已复制 Token 到剪贴板',
+                    )} type="link" size="small" style={{ padding: 0 }}
+                  >
+                    {copiedKey === `token-${record.id}` ? '已复制' : '复制'}
+                  </Button>
+                </Tooltip>
+                <Tooltip title="复制 taskmanager auth 命令">
+                  <Button
+                    onClick={() => copyToClipboard(
+                      `taskmanager auth ${serverUrl} ${record.token_value || ''}`,
+                      `cmd-${record.id}`,
+                      '已复制命令到剪贴板',
+                    )} type="link" size="small" style={{ padding: 0 }}
+                  >
+                    {copiedKey === `cmd-${record.id}` ? '已复制' : '复制命令'}
+                  </Button>
+                </Tooltip>
+                <Popconfirm
+                  title="确认删除此Token？"
+                  description="删除后，使用此Token的API调用将立即失效"
+                  onConfirm={() => handleDelete(record.id)}
+                  okText="确认删除"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </ActionGroup>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '名称',
       dataIndex: 'name',
@@ -158,51 +201,7 @@ export const TokenManagement: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (createdAt: number) => new Date(createdAt).toLocaleString('zh-CN'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: UserToken) => (
-        <ActionGroup>
-          <Tooltip title="复制 Token">
-            <Button
-              onClick={() => copyToClipboard(
-                record.token_value || '',
-                `token-${record.id}`,
-                '已复制 Token 到剪贴板',
-              )} type="link" size="small" style={{ padding: 0 }}
-            >
-              {copiedKey === `token-${record.id}` ? '已复制' : '复制'}
-            </Button>
-          </Tooltip>
-          <Tooltip title="复制 taskmanager auth 命令">
-            <Button
-              onClick={() => copyToClipboard(
-                `taskmanager auth ${serverUrl} ${record.token_value || ''}`,
-                `cmd-${record.id}`,
-                '已复制命令到剪贴板',
-              )} type="link" size="small" style={{ padding: 0 }}
-            >
-              {copiedKey === `cmd-${record.id}` ? '已复制' : '复制命令'}
-            </Button>
-          </Tooltip>
-          <Popconfirm
-            title="确认删除此Token？"
-            description="删除后，使用此Token的API调用将立即失效"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确认删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-          >
-            <Button danger type="link" size="small" style={{ padding: 0 }}>
-              删除
-            </Button>
-          </Popconfirm>
-        </ActionGroup>
-      ),
-        width: 100,
-        fixed: 'left' as const
-    },
+    }
   ];
 
   return (

@@ -206,7 +206,28 @@ export const SessionManagementPage: React.FC = () => {
 
   const columns: ColumnsType<Session> = useMemo(
     () => [
-      {
+          {
+                  title: '操作',
+                  key: 'action',
+                  render: (_: unknown, record: Session) => (
+                    <ActionGroup>
+                      <Button onClick={() => openMetadataDrawer(record)} type="link" size="small" style={{ padding: 0 }}>元数据</Button>
+                      <Button
+                        onClick={() => {
+                          setEditingMetadata(record);
+                          metadataForm.setFieldsValue({ metadata_json: toJsonText(record.metadata) });
+                        }} type="link" size="small" style={{ padding: 0 }}
+                      >
+                        编辑数据</Button>
+                      <Popconfirm title="确认删除该会话？" onConfirm={() => handleDelete(record.session_key)}>
+                        <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
+                      </Popconfirm>
+                    </ActionGroup>
+                  ),
+                    width: 100,
+                    fixed: 'left' as const
+              },
+        {
         title: 'Session Key',
         dataIndex: 'session_key',
         key: 'session_key',
@@ -240,28 +261,7 @@ export const SessionManagementPage: React.FC = () => {
         key: 'last_active_at',
         width: 140,
         render: (v: number | null) => (v ? new Date(v).toLocaleString() : '-'),
-      },
-      {
-        title: '操作',
-        key: 'action',
-        render: (_: unknown, record: Session) => (
-          <ActionGroup>
-            <Button onClick={() => openMetadataDrawer(record)} type="link" size="small" style={{ padding: 0 }}>元数据</Button>
-            <Button
-              onClick={() => {
-                setEditingMetadata(record);
-                metadataForm.setFieldsValue({ metadata_json: toJsonText(record.metadata) });
-              }} type="link" size="small" style={{ padding: 0 }}
-            >
-              编辑数据</Button>
-            <Popconfirm title="确认删除该会话？" onConfirm={() => handleDelete(record.session_key)}>
-              <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
-            </Popconfirm>
-          </ActionGroup>
-        ),
-          width: 100,
-          fixed: 'left' as const
-    },
+      }
     ],
     [handleDelete, metadataForm, openMetadataDrawer],
   );

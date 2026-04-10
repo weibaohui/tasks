@@ -17,7 +17,7 @@ import {
   Tag,
   message,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { listAgents } from '../api/agentApi';
 import { createChannel, deleteChannel, listChannels, updateChannel } from '../api/channelApi';
@@ -220,7 +220,56 @@ export const ChannelManagementPage: React.FC = () => {
 
   const columns: ColumnsType<Channel> = useMemo(
     () => [
-      {
+          {
+                  title: '操作',
+                  key: 'action',
+                  render: (_: unknown, record: Channel) => (
+                    <ActionGroup>
+                      <Button
+                        onClick={() => {
+                          setEditing(record);
+                          const config = record.config || {};
+                          const allowFrom = record.allow_from?.join('\n') || '';
+                          form.setFieldsValue({
+                            name: record.name,
+                            type: record.type as ChannelType,
+                            agent_code: record.agent_code,
+                            is_active: record.is_active,
+                            allow_from: allowFrom,
+                            config: {
+                              app_id: String(config.app_id || ''),
+                              app_secret: String(config.app_secret || ''),
+                              encrypt_key: String(config.encrypt_key || ''),
+                              verification_token: String(config.verification_token || ''),
+                              client_id: String(config.client_id || ''),
+                              client_secret: String(config.client_secret || ''),
+                              homeserver: String(config.homeserver || ''),
+                              user_id: String(config.user_id || ''),
+                              token: String(config.token || ''),
+                              addr: String(config.addr || ''),
+                              path: String(config.path || ''),
+                            },
+                          });
+                          setOpen(true);
+                        }} type="link" size="small" style={{ padding: 0 }}
+                      >
+                        编辑
+                      </Button>
+                      <Popconfirm
+                        title="确认删除"
+                        description="删除后将无法恢复，是否继续？"
+                        onConfirm={() => handleDelete(record.id)}
+                      >
+                        <Button danger type="link" size="small" style={{ padding: 0 }}>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </ActionGroup>
+                  ),
+                    width: 100,
+                    fixed: 'left' as const
+              },
+        {
         title: '名称',
         dataIndex: 'name',
         key: 'name',
@@ -262,56 +311,7 @@ export const ChannelManagementPage: React.FC = () => {
             {record.is_active ? '启用' : '禁用'}
           </Tag>
         ),
-      },
-      {
-        title: '操作',
-        key: 'action',
-        render: (_: unknown, record: Channel) => (
-          <ActionGroup>
-            <Button
-              onClick={() => {
-                setEditing(record);
-                const config = record.config || {};
-                const allowFrom = record.allow_from?.join('\n') || '';
-                form.setFieldsValue({
-                  name: record.name,
-                  type: record.type as ChannelType,
-                  agent_code: record.agent_code,
-                  is_active: record.is_active,
-                  allow_from: allowFrom,
-                  config: {
-                    app_id: String(config.app_id || ''),
-                    app_secret: String(config.app_secret || ''),
-                    encrypt_key: String(config.encrypt_key || ''),
-                    verification_token: String(config.verification_token || ''),
-                    client_id: String(config.client_id || ''),
-                    client_secret: String(config.client_secret || ''),
-                    homeserver: String(config.homeserver || ''),
-                    user_id: String(config.user_id || ''),
-                    token: String(config.token || ''),
-                    addr: String(config.addr || ''),
-                    path: String(config.path || ''),
-                  },
-                });
-                setOpen(true);
-              }} type="link" size="small" style={{ padding: 0 }}
-            >
-              编辑
-            </Button>
-            <Popconfirm
-              title="确认删除"
-              description="删除后将无法恢复，是否继续？"
-              onConfirm={() => handleDelete(record.id)}
-            >
-              <Button danger type="link" size="small" style={{ padding: 0 }}>
-                删除
-              </Button>
-            </Popconfirm>
-          </ActionGroup>
-        ),
-          width: 100,
-          fixed: 'left' as const
-    },
+      }
     ],
     [agents, form, handleDelete],
   );

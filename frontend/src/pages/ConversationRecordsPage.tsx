@@ -18,7 +18,6 @@ import {
   Tooltip,
 } from 'antd';
 import {
-  EyeOutlined,
   FilterOutlined,
   ClearOutlined,
   SearchOutlined,
@@ -144,7 +143,29 @@ export const ConversationRecordsPage: React.FC = () => {
   // 构建会话聊天消息
   const columns: ColumnsType<ConversationRecord> = useMemo(
     () => [
-      {
+          {
+                  title: '操作',
+                  key: 'action',
+                  render: (_: unknown, record: ConversationRecord) => (
+                    <ActionGroup size="small">
+                      <Tooltip title="查看链路">
+                        <Button
+                          onClick={() => {
+                            if (record.trace_id) {
+                              setCurrentTraceId(record.trace_id);
+                              setTraceVisible(true);
+                            } else {
+                              message.warning('该记录没有 trace_id');
+                            }
+                          }} type="link" size="small" style={{ padding: 0 }}
+                        />
+                      </Tooltip>
+                    </ActionGroup>
+                  ),
+                    width: 100,
+                    fixed: 'left' as const
+              },
+        {
         title: 'ID',
         dataIndex: 'id',
         key: 'id',
@@ -217,29 +238,7 @@ export const ConversationRecordsPage: React.FC = () => {
         key: 'content',
         ellipsis: true,
         render: (v: string) => v?.substring(0, 50) + (v?.length > 50 ? '...' : ''),
-      },
-      {
-        title: '操作',
-        key: 'action',
-        render: (_: unknown, record: ConversationRecord) => (
-          <ActionGroup size="small">
-            <Tooltip title="查看链路">
-              <Button
-                onClick={() => {
-                  if (record.trace_id) {
-                    setCurrentTraceId(record.trace_id);
-                    setTraceVisible(true);
-                  } else {
-                    message.warning('该记录没有 trace_id');
-                  }
-                }} type="link" size="small" style={{ padding: 0 }}
-              />
-            </Tooltip>
-          </ActionGroup>
-        ),
-          width: 100,
-          fixed: 'left' as const
-    },
+      }
     ],
     [setCurrentTraceId],
   );

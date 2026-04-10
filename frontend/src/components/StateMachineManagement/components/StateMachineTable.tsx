@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Table, Button, Space, Tag, Popconfirm } from 'antd';
-import { PlayCircleOutlined } from '@ant-design/icons';
+
 import type { StateMachine } from '../../../types/stateMachine';
 import { ActionGroup } from "@/components/ActionGroup";
 
@@ -23,6 +23,34 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
   onInvoke,
 }) => {
   const columns = [
+      {
+            title: '操作',
+            key: 'action',
+            render: (_: unknown, record: StateMachine) => (
+              <ActionGroup size="small">
+                <Button onClick={() => onEdit(record)} type="link" size="small" style={{ padding: 0 }}>
+                  编辑
+                </Button>
+                <Button
+                  onClick={() => onInvoke?.(record)} type="link" size="small" style={{ padding: 0 }}
+                >
+                  调用
+                </Button>
+                <Popconfirm
+                  title="确定删除此状态机？"
+                  onConfirm={() => onDelete(record.id)}
+                  okText="确认"
+                  cancelText="取消"
+                >
+                  <Button danger type="link" size="small" style={{ padding: 0 }}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </ActionGroup>
+            ),
+              width: 100,
+              fixed: 'left' as const
+          },
     {
       title: '名称',
       dataIndex: 'name',
@@ -82,35 +110,7 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
       key: 'created_at',
       width: 160,
       render: (createdAt: string) => new Date(createdAt).toLocaleString(),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: StateMachine) => (
-        <ActionGroup size="small">
-          <Button onClick={() => onEdit(record)} type="link" size="small" style={{ padding: 0 }}>
-            编辑
-          </Button>
-          <Button
-            onClick={() => onInvoke?.(record)} type="link" size="small" style={{ padding: 0 }}
-          >
-            调用
-          </Button>
-          <Popconfirm
-            title="确定删除此状态机？"
-            onConfirm={() => onDelete(record.id)}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Button danger type="link" size="small" style={{ padding: 0 }}>
-              删除
-            </Button>
-          </Popconfirm>
-        </ActionGroup>
-      ),
-        width: 100,
-        fixed: 'left' as const
-    },
+    }
   ];
 
   return (
