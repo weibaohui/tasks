@@ -450,7 +450,7 @@ func (c *Client) ListAgents(ctx context.Context) ([]Agent, error) {
 	return result, nil
 }
 
-// Project Project 响应结构
+// Project 项目响应结构
 type Project struct {
 	ID                       string   `json:"id"`
 	Name                     string   `json:"name"`
@@ -465,6 +465,14 @@ type Project struct {
 	DispatchSessionKey       string   `json:"dispatch_session_key"`
 	CreatedAt                int64    `json:"created_at"`
 	UpdatedAt                int64    `json:"updated_at"`
+}
+
+// CreateProjectRequest 创建项目请求
+type CreateProjectRequest struct {
+	Name          string   `json:"name"`
+	GitRepoURL    string   `json:"git_repo_url"`
+	DefaultBranch string   `json:"default_branch"`
+	InitSteps     []string `json:"init_steps"`
 }
 
 // ListProjects 获取项目列表
@@ -485,6 +493,26 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	}
 
 	return result, nil
+}
+
+// CreateProject 创建项目
+func (c *Client) CreateProject(ctx context.Context, req CreateProjectRequest) (*Project, error) {
+	resp, err := c.doRequest(ctx, http.MethodPost, "/projects", req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, c.handleError(resp)
+	}
+
+	var result Project
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
 }
 
 // GetProject 获取项目详情
@@ -552,6 +580,21 @@ func (c *Client) UpdateProjectHeartbeat(ctx context.Context, projectID string, e
 		AgentCode:                &agentCode,
 	}
 	return c.UpdateProject(ctx, req)
+}
+
+// DeleteProject 删除项目
+func (c *Client) DeleteProject(ctx context.Context, projectID string) error {
+	resp, err := c.doRequest(ctx, http.MethodDelete, "/projects?id="+projectID, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.handleError(resp)
+	}
+
+	return nil
 }
 
 // ==================== State Machine APIs ====================
