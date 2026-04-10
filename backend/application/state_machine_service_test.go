@@ -142,6 +142,9 @@ description: 测试流程
 initial_state: created
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: created
     name: 已创建
     is_final: false
@@ -153,6 +156,10 @@ states:
     is_final: true
 
 transitions:
+  - from: todo
+    to: created
+    trigger: create
+    description: 创建
   - from: created
     to: in_progress
     trigger: start

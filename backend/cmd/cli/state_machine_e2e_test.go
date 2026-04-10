@@ -173,6 +173,9 @@ description: Hook 测试流程
 initial_state: created
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: created
     name: 已创建
     is_final: false
@@ -184,6 +187,10 @@ states:
     is_final: true
 
 transitions:
+  - from: todo
+    to: created
+    trigger: create
+    description: 创建
   - from: created
     to: in_progress
     trigger: start
@@ -304,14 +311,24 @@ description: 心跳任务流程
 initial_state: active
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: active
     name: 活跃
     is_final: false
   - id: stopped
     name: 已停止
     is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
 
 transitions:
+  - from: todo
+    to: active
+    trigger: activate
+    description: 激活
   - from: active
     to: stopped
     trigger: stop
@@ -368,6 +385,9 @@ description: 测试流程
 initial_state: created
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: created
     name: 已创建
     is_final: false
@@ -379,6 +399,10 @@ states:
     is_final: true
 
 transitions:
+  - from: todo
+    to: created
+    trigger: create
+    description: 创建
   - from: created
     to: in_progress
     trigger: start

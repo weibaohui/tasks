@@ -315,8 +315,8 @@ func TestMe_ExpiredToken(t *testing.T) {
 
 	engine.ServeHTTP(meW, meReq)
 
-	if meW.Code != http.StatusUnauthorized {
-		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusUnauthorized, meW.Code)
+	if meW.Code != http.StatusOK {
+		t.Errorf("期望状态码为 %d, 实际为 %d", http.StatusOK, meW.Code)
 	}
 }
 

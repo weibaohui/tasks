@@ -16,6 +16,9 @@ description: SDK 测试用流程
 initial_state: created
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: created
     name: 已创建
     is_final: false
@@ -24,9 +27,16 @@ states:
     is_final: false
   - id: done
     name: 已完成
+    is_final: false
+  - id: completed
+    name: 已完成
     is_final: true
 
 transitions:
+  - from: todo
+    to: created
+    trigger: create
+    description: 创建
   - from: created
     to: in_progress
     trigger: start
@@ -35,6 +45,10 @@ transitions:
     to: done
     trigger: complete
     description: 完成
+  - from: done
+    to: completed
+    trigger: finish
+    description: 结束
 `
 
 func TestSDK(t *testing.T) {
