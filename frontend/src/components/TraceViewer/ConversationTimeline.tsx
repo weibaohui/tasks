@@ -12,13 +12,13 @@ export interface ConversationTimelineProps {
 function getBlockColor(record: ConversationRecord): string {
   const role = (record.role || '').toLowerCase();
   
-  if (role === 'user') return '#4A90E2'; // 柔和的科技蓝 - 用户输入
-  if (role === 'assistant') return '#52C41A'; // 清新的薄荷绿 - 助手回答
-  if (role === 'system') return '#8C8C8C'; // 中性灰 - 系统/底层设定
-  if (role === 'tool') return '#FADB14'; // 温暖的明黄/橘黄 - 工具调用，代表处理中/中间态
-  if (role === 'tool_result') return '#13C2C2'; // 亮青色 - 工具返回结果，代表产出
+  if (role === 'user') return '#74B9FF'; // 柔和蓝 - 用户输入
+  if (role === 'assistant') return '#A8E6CF'; // 柔和绿 - 助手回答
+  if (role === 'system') return '#DFE6E9'; // 极浅灰 - 系统/底层设定
+  if (role === 'tool') return '#FFEAA7'; // 浅暖黄 - 工具调用，代表处理中/中间态
+  if (role === 'tool_result') return '#55EFC4'; // 浅青蓝 - 工具返回结果，代表产出
   
-  return '#D9D9D9'; // 默认底灰
+  return '#F1F2F6'; // 极浅底灰
 }
 
 function getBlockLabel(record: ConversationRecord): string {
