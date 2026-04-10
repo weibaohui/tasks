@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import { createToken, deleteToken, listTokens } from '../../api/authApi';
 import type { UserToken, CreateTokenRequest } from '../../types/user';
+import { ActionGroup } from "@/components/ActionGroup";
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -162,7 +163,7 @@ export const TokenManagement: React.FC = () => {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: UserToken) => (
-        <Space>
+        <ActionGroup>
           <Tooltip title="复制 Token">
             <Button
               icon={copiedKey === `token-${record.id}` ? <CheckOutlined /> : <CopyOutlined />}
@@ -199,8 +200,10 @@ export const TokenManagement: React.FC = () => {
               删除
             </Button>
           </Popconfirm>
-        </Space>
+        </ActionGroup>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

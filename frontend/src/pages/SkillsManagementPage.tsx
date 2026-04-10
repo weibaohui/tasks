@@ -112,6 +112,8 @@ export const SkillsManagementPage: React.FC = () => {
           查看
         </Button>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

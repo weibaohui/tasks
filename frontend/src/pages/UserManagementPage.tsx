@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button, Card, Form, Input, Modal, Popconfirm, Space, Switch, Table, message } from 'antd';
 import { createUser, deleteUser, listUsers, updateUser } from '../api/userApi';
 import type { User } from '../types/user';
+import { ActionGroup } from "@/components/ActionGroup";
 
 export const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -104,7 +105,7 @@ export const UserManagementPage: React.FC = () => {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: User) => (
-        <Space>
+        <ActionGroup>
           <Button onClick={() => handleEdit(record)} type="link" size="small" style={{ padding: 0 }}>
             编辑
           </Button>
@@ -113,8 +114,10 @@ export const UserManagementPage: React.FC = () => {
               删除
             </Button>
           </Popconfirm>
-        </Space>
+        </ActionGroup>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

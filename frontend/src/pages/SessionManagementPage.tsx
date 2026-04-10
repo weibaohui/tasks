@@ -26,6 +26,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateSessionRequest, Session } from '../types/session';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type CreateSessionFormValues = {
   agent_code: string;
@@ -244,7 +245,7 @@ export const SessionManagementPage: React.FC = () => {
         title: '操作',
         key: 'action',
         render: (_: unknown, record: Session) => (
-          <Space>
+          <ActionGroup>
             <Button onClick={() => openMetadataDrawer(record)} type="link" size="small" style={{ padding: 0 }}>查看元数据</Button>
             <Button
               onClick={() => {
@@ -257,9 +258,11 @@ export const SessionManagementPage: React.FC = () => {
             <Popconfirm title="确认删除该会话？" onConfirm={() => handleDelete(record.session_key)}>
               <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
             </Popconfirm>
-          </Space>
+          </ActionGroup>
         ),
-      },
+          width: 100,
+          fixed: 'left' as const
+    },
     ],
     [handleDelete, metadataForm, openMetadataDrawer],
   );

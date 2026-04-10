@@ -30,6 +30,7 @@ import {
 } from '../api/conversationRecordApi';
 import type { ConversationRecord, ListConversationRecordsQuery } from '../types/conversationRecord';
 import { TraceViewer } from '../components/TraceViewer';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type QueryFormValues = {
   trace_id?: string;
@@ -220,9 +221,8 @@ export const ConversationRecordsPage: React.FC = () => {
       {
         title: '操作',
         key: 'action',
-        fixed: 'right' as const,
         render: (_: unknown, record: ConversationRecord) => (
-          <Space size="small">
+          <ActionGroup size="small">
             <Tooltip title="查看链路">
               <Button
                 icon={<EyeOutlined />}
@@ -236,9 +236,11 @@ export const ConversationRecordsPage: React.FC = () => {
                 }} type="link" size="small" style={{ padding: 0 }}
               />
             </Tooltip>
-          </Space>
+          </ActionGroup>
         ),
-      },
+          width: 100,
+          fixed: 'left' as const
+    },
     ],
     [setCurrentTraceId],
   );

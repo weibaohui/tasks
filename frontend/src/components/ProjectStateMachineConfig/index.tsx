@@ -169,6 +169,8 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
           删除
         </Button>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

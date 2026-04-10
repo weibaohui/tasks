@@ -735,6 +735,8 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                               删除
                             </Button>
                           ),
+                            width: 100,
+                            fixed: 'left' as const
                         },
                       ]}
                     />
@@ -815,6 +817,8 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
                               删除
                             </Button>
                           ),
+                            width: 100,
+                            fixed: 'left' as const
                         },
                       ]}
                     />

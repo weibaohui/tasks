@@ -16,6 +16,7 @@ import {
   updateMCPServer,
 } from '../api/mcpApi';
 import type { CreateMCPServerRequest, MCPServer, UpdateMCPServerRequest } from '../types/mcp';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type FormValues = {
   code: string;
@@ -166,7 +167,7 @@ export const MCPManagementPage: React.FC = () => {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: MCPServer) => (
-        <Space>
+        <ActionGroup>
           <Button onClick={() => handleTest(record.id)} type="link" size="small" style={{ padding: 0 }}>测试连接</Button>
           <Button onClick={() => handleRefresh(record.id)} type="link" size="small" style={{ padding: 0 }}>刷新工具</Button>
           <Button
@@ -190,8 +191,10 @@ export const MCPManagementPage: React.FC = () => {
           <Popconfirm title="确认删除该服务器？" onConfirm={() => handleDelete(record.id)}>
             <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
           </Popconfirm>
-        </Space>
+        </ActionGroup>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ], [form, handleDelete, handleRefresh, handleTest]);
 

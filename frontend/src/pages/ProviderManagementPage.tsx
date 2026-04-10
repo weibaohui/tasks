@@ -23,6 +23,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { createProvider, deleteProvider, listProviders, testProviderConnection, updateProvider } from '../api/providerApi';
 import { useAuthStore } from '../stores/authStore';
 import type { CreateProviderRequest, LLMProvider, ProviderModelInfo, UpdateProviderRequest } from '../types/provider';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type ProviderFormValues = {
   provider_key: string;
@@ -231,7 +232,7 @@ export const ProviderManagementPage: React.FC = () => {
         title: '操作',
         key: 'action',
         render: (_: unknown, record: LLMProvider) => (
-          <Space>
+          <ActionGroup>
             <Button
               onClick={async () => {
                 try {
@@ -273,9 +274,11 @@ export const ProviderManagementPage: React.FC = () => {
             <Popconfirm title="确认删除该 Provider？" onConfirm={() => handleDelete(record.id)}>
               <Button danger type="link" size="small" style={{ padding: 0 }}>删除</Button>
             </Popconfirm>
-          </Space>
+          </ActionGroup>
         ),
-      },
+          width: 100,
+          fixed: 'left' as const
+    },
     ],
     [form, handleDelete],
   );

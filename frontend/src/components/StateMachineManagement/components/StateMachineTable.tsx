@@ -5,6 +5,7 @@ import React from 'react';
 import { Table, Button, Space, Tag, Popconfirm } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
 import type { StateMachine } from '../../../types/stateMachine';
+import { ActionGroup } from "@/components/ActionGroup";
 
 interface StateMachineTableProps {
   items: StateMachine[];
@@ -86,7 +87,7 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
       title: '操作',
       key: 'action',
       render: (_: unknown, record: StateMachine) => (
-        <Space size="small">
+        <ActionGroup size="small">
           <Button onClick={() => onEdit(record)} type="link" size="small" style={{ padding: 0 }}>
             编辑
           </Button>
@@ -106,8 +107,10 @@ export const StateMachineTable: React.FC<StateMachineTableProps> = ({
               删除
             </Button>
           </Popconfirm>
-        </Space>
+        </ActionGroup>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

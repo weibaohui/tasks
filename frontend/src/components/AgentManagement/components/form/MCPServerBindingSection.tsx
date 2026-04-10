@@ -3,11 +3,12 @@
  */
 import React from 'react';
 import { ApiOutlined } from '@ant-design/icons';
-import { Button, Card, Popconfirm, Select, Space, Switch, Table, Tag } from 'antd';
+import { Button, Card, Popconfirm, Select, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { FormInstance } from 'antd/es/form';
 import type { AgentMCPBinding, MCPServer } from '../../../../types/mcp';
 import type { Agent } from '../../../../types/agent';
+import { ActionGroup } from "@/components/ActionGroup";
 
 interface MCPServerBindingCardProps {
   editing: Agent | null;
@@ -57,7 +58,7 @@ export const MCPServerBindingCard: React.FC<MCPServerBindingCardProps> = ({
     {
       title: '操作',
       render: (_: unknown, record: AgentMCPBinding) => (
-        <Space size="small">
+        <ActionGroup size="small">
           <Switch size="small" checked={record.is_active}
             onChange={async () => { await onUpdateBinding(record.id, { is_active: !record.is_active }); }} />
           <Button onClick={() => onOpenToolsDrawer(record)} type="link" size="small" style={{ padding: 0 }}>配置工具</Button>
@@ -65,8 +66,10 @@ export const MCPServerBindingCard: React.FC<MCPServerBindingCardProps> = ({
             onConfirm={() => onDeleteBinding(record.id)}>
             <Button danger type="link" size="small" style={{ padding: 0 }}>解绑</Button>
           </Popconfirm>
-        </Space>
+        </ActionGroup>
       ),
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

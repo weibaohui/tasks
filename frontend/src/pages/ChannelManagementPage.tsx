@@ -25,6 +25,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import { ChannelTypeLabels } from '../types/channel';
+import { ActionGroup } from "@/components/ActionGroup";
 
 type ChannelType = 'feishu' | 'dingtalk' | 'matrix' | 'websocket';
 
@@ -266,7 +267,7 @@ export const ChannelManagementPage: React.FC = () => {
         title: '操作',
         key: 'action',
         render: (_: unknown, record: Channel) => (
-          <Space>
+          <ActionGroup>
             <Button
               icon={<EditOutlined />}
               onClick={() => {
@@ -307,9 +308,11 @@ export const ChannelManagementPage: React.FC = () => {
                 删除
               </Button>
             </Popconfirm>
-          </Space>
+          </ActionGroup>
         ),
-      },
+          width: 100,
+          fixed: 'left' as const
+    },
     ],
     [agents, form, handleDelete],
   );

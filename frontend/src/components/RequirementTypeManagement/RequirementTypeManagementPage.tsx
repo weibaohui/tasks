@@ -139,6 +139,8 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
           </Popconfirm>
         );
       },
+        width: 100,
+        fixed: 'left' as const
     },
   ];
 

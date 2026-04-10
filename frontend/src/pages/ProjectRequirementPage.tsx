@@ -537,7 +537,6 @@ export const ProjectRequirementPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      fixed: 'left' as const,
       render: (_: unknown, item: Requirement) => {
         // 根据需求类型获取对应的状态
         const reqType = item.requirement_type || 'normal';
@@ -607,6 +606,8 @@ export const ProjectRequirementPage: React.FC = () => {
           </Dropdown>
         );
       },
+        width: 100,
+        fixed: 'left' as const
     },
     { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
     {
