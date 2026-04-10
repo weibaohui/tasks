@@ -253,7 +253,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
             <Card size="small" style={{ marginBottom: 16 }}>
               <div style={{ marginBottom: 16 }}>
                 <Text strong style={{ display: 'block', marginBottom: 8 }}>对话时间线</Text>
-                <ConversationTimeline records={records} height={30} />
+                <ConversationTimeline records={records} height={25} />
               </div>
               <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
