@@ -155,11 +155,15 @@ export const TokenManagement: React.FC = () => {
               <Button
                 size="small"
                 icon={isCopied ? <CheckOutlined /> : <CopyOutlined />}
-                onClick={() => {
-                  navigator.clipboard.writeText(fullCommand);
-                  setCopiedTokenId(record.id);
-                  message.success('已复制 tm auth 命令到剪贴板');
-                  setTimeout(() => setCopiedTokenId(null), 2000);
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(fullCommand);
+                    setCopiedTokenId(record.id);
+                    message.success('已复制 tm auth 命令到剪贴板');
+                    window.setTimeout(() => setCopiedTokenId(null), 2000);
+                  } catch {
+                    message.error('复制失败，请手动复制');
+                  }
                 }}
               >
                 {isCopied ? '已复制' : '复制命令'}
