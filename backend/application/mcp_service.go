@@ -2,14 +2,11 @@ package application
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/weibh/taskmanager/domain"
 )
 
@@ -57,7 +54,7 @@ type MCPApplicationService struct {
 	mcpToolRepo    domain.MCPToolRepository
 	mcpToolLogRepo domain.MCPToolLogRepository
 	idGen          domain.IDGenerator
-	clientFactory  func(server *domain.MCPServer) (*client.Client, error)
+	clientFactory  domain.MCPClientFactory
 }
 
 func NewMCPApplicationService(
@@ -67,17 +64,17 @@ func NewMCPApplicationService(
 	mcpToolRepo domain.MCPToolRepository,
 	mcpToolLogRepo domain.MCPToolLogRepository,
 	idGen domain.IDGenerator,
+	clientFactory domain.MCPClientFactory,
 ) *MCPApplicationService {
-	svc := &MCPApplicationService{
+	return &MCPApplicationService{
 		mcpServerRepo:  mcpServerRepo,
 		agentRepo:      agentRepo,
 		bindingRepo:    bindingRepo,
 		mcpToolRepo:    mcpToolRepo,
 		mcpToolLogRepo: mcpToolLogRepo,
 		idGen:          idGen,
+		clientFactory:  clientFactory,
 	}
-	svc.clientFactory = svc.defaultCreateMCPClient
-	return svc
 }
 
 // MCP Server
@@ -168,7 +165,7 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	if server == nil {
 		return errors.New("MCP 服务器不存在")
 	}
-	cli, err := s.clientFactory(server)
+	cli, err := s.clientFactory.CreateClient(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -186,13 +183,7 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 		}
 		return err
 	}
-	_, err = cli.Initialize(ctx2, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			ClientInfo:      mcp.Implementation{Name: "taskmanager-mcp-client", Version: "1.0.0"},
-			Capabilities:    mcp.ClientCapabilities{},
-		},
-	})
+	err = cli.Initialize(ctx2)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -213,7 +204,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	if server == nil {
 		return errors.New("MCP 服务器不存在")
 	}
-	cli, err := s.clientFactory(server)
+	cli, err := s.clientFactory.CreateClient(server)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -231,13 +222,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 		}
 		return err
 	}
-	_, err = cli.Initialize(ctx2, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			ClientInfo:      mcp.Implementation{Name: "taskmanager-mcp-client", Version: "1.0.0"},
-			Capabilities:    mcp.ClientCapabilities{},
-		},
-	})
+	err = cli.Initialize(ctx2)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -245,7 +230,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 		}
 		return err
 	}
-	res, err := cli.ListTools(ctx2, mcp.ListToolsRequest{})
+	tools, err := cli.ListTools(ctx2)
 	if err != nil {
 		server.SetStatus("error", fmt.Sprintf("获取工具列表失败: %v", err))
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
@@ -257,14 +242,11 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	if err := s.mcpToolRepo.DeleteByServerID(ctx, server.ID()); err != nil {
 		return err
 	}
-	capabilities := make([]domain.MCPTool, 0, len(res.Tools))
-	for _, t := range res.Tools {
+	capabilities := make([]domain.MCPTool, 0, len(tools))
+	for _, t := range tools {
 		var schema map[string]interface{}
-		if t.InputSchema.Properties != nil {
-			b, err := json.Marshal(t.InputSchema)
-			if err == nil {
-				_ = json.Unmarshal(b, &schema)
-			}
+		if t.Schema != nil {
+			schema = t.Schema
 		}
 		capabilities = append(capabilities, domain.MCPTool{
 			Name:        t.Name,
@@ -398,7 +380,7 @@ func (s *MCPApplicationService) ExecuteTool(ctx context.Context, serverID domain
 	if server == nil || server.Status() != "active" {
 		return "", fmt.Errorf("MCP 服务器不可用")
 	}
-	cli, err := s.clientFactory(server)
+	cli, err := s.clientFactory.CreateClient(server)
 	if err != nil {
 		return "", err
 	}
@@ -408,43 +390,14 @@ func (s *MCPApplicationService) ExecuteTool(ctx context.Context, serverID domain
 	if err := cli.Start(ctx2); err != nil {
 		return "", err
 	}
-	_, err = cli.Initialize(ctx2, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			ClientInfo:      mcp.Implementation{Name: "taskmanager-mcp-client", Version: "1.0.0"},
-			Capabilities:    mcp.ClientCapabilities{},
-		},
-	})
+	err = cli.Initialize(ctx2)
 	if err != nil {
 		return "", err
 	}
-	res, err := cli.CallTool(ctx2, mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      toolName,
-			Arguments: params,
-		},
-	})
+	result, err := cli.CallTool(ctx2, toolName, params)
 	if err != nil {
 		return "", err
 	}
-	b, _ := json.Marshal(res)
-	return string(b), nil
+	return result.Content, nil
 }
 
-// create client according to transport
-func (s *MCPApplicationService) defaultCreateMCPClient(server *domain.MCPServer) (*client.Client, error) {
-	switch server.TransportType() {
-	case domain.MCPTransportSTDIO:
-		env := []string{}
-		for k, v := range server.EnvVars() {
-			env = append(env, fmt.Sprintf("%s=%s", k, v))
-		}
-		return client.NewStdioMCPClient(server.Command(), env, server.Args()...)
-	case domain.MCPTransportHTTP:
-		return client.NewStreamableHttpClient(server.URL())
-	case domain.MCPTransportSSE:
-		return client.NewSSEMCPClient(server.URL())
-	default:
-		return nil, fmt.Errorf("不支持的传输类型: %s", server.TransportType())
-	}
-}

@@ -2,15 +2,11 @@ package application
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/weibh/taskmanager/domain"
 )
 
@@ -274,6 +270,7 @@ func setupTestMCPService() *MCPApplicationService {
 		newMockMCPToolRepo(),
 		&mockMCPToolLogRepo{},
 		&mockAgentIDGen{},
+		&mockMCPClientFactory{},
 	)
 }
 
@@ -293,8 +290,48 @@ func setupTestMCPServiceWithAgent() (*MCPApplicationService, *domain.Agent) {
 		newMockMCPToolRepo(),
 		&mockMCPToolLogRepo{},
 		idGen,
+		&mockMCPClientFactory{},
 	)
 	return svc, agent
+}
+
+// mockMCPClientFactory mock 实现 domain.MCPClientFactory
+type mockMCPClientFactory struct{}
+
+func (f *mockMCPClientFactory) CreateClient(_ *domain.MCPServer) (domain.MCPClient, error) {
+	return nil, fmt.Errorf("mock: not implemented")
+}
+
+// mockDomainMCPClient 实现 domain.MCPClient 用于测试
+type mockDomainMCPClient struct {
+	tools      []domain.MCPToolInfo
+	toolsErr   error
+	callResult domain.MCPToolResult
+}
+
+func (m *mockDomainMCPClient) Start(_ context.Context) error { return nil }
+func (m *mockDomainMCPClient) Initialize(_ context.Context) error { return nil }
+func (m *mockDomainMCPClient) ListTools(_ context.Context) ([]domain.MCPToolInfo, error) {
+	return m.tools, m.toolsErr
+}
+func (m *mockDomainMCPClient) CallTool(_ context.Context, _ string, _ map[string]interface{}) (domain.MCPToolResult, error) {
+	return m.callResult, nil
+}
+func (m *mockDomainMCPClient) Close() error { return nil }
+
+// helper: 设置 service 的 clientFactory 为返回指定 mock client 的工厂
+func setMockClientFactory(svc *MCPApplicationService, cli domain.MCPClient) {
+	svc.clientFactory = &funcMCPClientFactory{fn: func(_ *domain.MCPServer) (domain.MCPClient, error) {
+		return cli, nil
+	}}
+}
+
+type funcMCPClientFactory struct {
+	fn func(*domain.MCPServer) (domain.MCPClient, error)
+}
+
+func (f *funcMCPClientFactory) CreateClient(s *domain.MCPServer) (domain.MCPClient, error) {
+	return f.fn(s)
 }
 
 // ---------- tests: CreateServer ----------
@@ -626,52 +663,6 @@ func TestMCPService_RefreshCapabilities_UnsupportedTransport(t *testing.T) {
 	}
 }
 
-// mock transport for success path tests
-type mockMCPTransport struct {
-	initializeResult *mcp.InitializeResult
-	listToolsResult  *mcp.ListToolsResult
-	listToolsErr     error
-	callToolResult   *mcp.CallToolResult
-}
-
-func (m *mockMCPTransport) Start(ctx context.Context) error { return nil }
-func (m *mockMCPTransport) SendRequest(ctx context.Context, request transport.JSONRPCRequest) (*transport.JSONRPCResponse, error) {
-	switch request.Method {
-	case "initialize":
-		res := m.initializeResult
-		if res == nil {
-			res = &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				ServerInfo:      mcp.Implementation{Name: "mock", Version: "1.0"},
-			}
-		}
-		b, _ := json.Marshal(res)
-		return transport.NewJSONRPCResultResponse(request.ID, b), nil
-	case "tools/list":
-		if m.listToolsErr != nil {
-			return nil, m.listToolsErr
-		}
-		res := m.listToolsResult
-		if res == nil {
-			res = &mcp.ListToolsResult{Tools: []mcp.Tool{}}
-		}
-		b, _ := json.Marshal(res)
-		return transport.NewJSONRPCResultResponse(request.ID, b), nil
-	case "tools/call":
-		res := m.callToolResult
-		if res == nil {
-			res = &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}
-		}
-		b, _ := json.Marshal(res)
-		return transport.NewJSONRPCResultResponse(request.ID, b), nil
-	}
-	return nil, fmt.Errorf("unknown method: %s", request.Method)
-}
-func (m *mockMCPTransport) SendNotification(ctx context.Context, notification mcp.JSONRPCNotification) error { return nil }
-func (m *mockMCPTransport) SetNotificationHandler(handler func(notification mcp.JSONRPCNotification)) {}
-func (m *mockMCPTransport) Close() error                                          { return nil }
-func (m *mockMCPTransport) GetSessionId() string                                  { return "" }
-
 func TestMCPService_TestServer_Success(t *testing.T) {
 	svc := setupTestMCPService()
 	ctx := context.Background()
@@ -683,9 +674,7 @@ func TestMCPService_TestServer_Success(t *testing.T) {
 		Command:       "echo",
 	})
 
-	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
-		return client.NewClient(&mockMCPTransport{}), nil
-	}
+	setMockClientFactory(svc, &mockDomainMCPClient{})
 
 	repo := svc.mcpServerRepo.(*mockMCPServerRepo)
 	before := repo.updateCounter
@@ -715,16 +704,12 @@ func TestMCPService_RefreshCapabilities_Success(t *testing.T) {
 		Command:       "echo",
 	})
 
-	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
-		return client.NewClient(&mockMCPTransport{
-			listToolsResult: &mcp.ListToolsResult{
-				Tools: []mcp.Tool{
-					{Name: "toolA", Description: "descA", InputSchema: mcp.ToolInputSchema{Properties: map[string]any{}}},
-					{Name: "toolB", Description: "descB", InputSchema: mcp.ToolInputSchema{Properties: map[string]any{}}},
-				},
-			},
-		}), nil
-	}
+	setMockClientFactory(svc, &mockDomainMCPClient{
+		tools: []domain.MCPToolInfo{
+			{Name: "toolA", Description: "descA", Schema: map[string]any{}},
+			{Name: "toolB", Description: "descB", Schema: map[string]any{}},
+		},
+	})
 
 	repo := svc.mcpServerRepo.(*mockMCPServerRepo)
 	before := repo.updateCounter
@@ -763,9 +748,9 @@ func TestMCPService_RefreshCapabilities_ListToolsError(t *testing.T) {
 		Command:       "echo",
 	})
 
-	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
-		return client.NewClient(&mockMCPTransport{listToolsErr: errors.New("list tools failed")}), nil
-	}
+	setMockClientFactory(svc, &mockDomainMCPClient{
+		toolsErr: errors.New("list tools failed"),
+	})
 
 	err := svc.RefreshCapabilities(ctx, server.ID())
 	if err == nil {
@@ -791,13 +776,9 @@ func TestMCPService_ExecuteTool_Success(t *testing.T) {
 	// since GetByID returns deep copy, update stored server
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers[server.ID().String()] = server
 
-	svc.clientFactory = func(s *domain.MCPServer) (*client.Client, error) {
-		return client.NewClient(&mockMCPTransport{
-			callToolResult: &mcp.CallToolResult{
-				Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "result-data"}},
-			},
-		}), nil
-	}
+	setMockClientFactory(svc, &mockDomainMCPClient{
+		callResult: domain.MCPToolResult{Content: "result-data"},
+	})
 
 	res, err := svc.ExecuteTool(ctx, server.ID(), "toolA", map[string]interface{}{"key": "val"})
 	if err != nil {

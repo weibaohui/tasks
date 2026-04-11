@@ -29,6 +29,7 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/workspace"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
+	infraMcp "github.com/weibh/taskmanager/infrastructure/mcp"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
@@ -142,6 +143,18 @@ func main() {
 	// 初始化状态机仓库（提前初始化，供 requirementDispatchService 使用）
 	stateMachineRepo := _persistence.NewSQLiteStateMachineRepository(db)
 
+	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator, &infraMcp.MCPClientFactoryImpl{})
+
+	// 初始化需求类型仓储
+	requirementTypeRepo := _persistence.NewSQLiteRequirementTypeEntityRepository(db)
+
+	// 6. 初始化技能加载器（gateway 需要）
+	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
+
+	// 7. 初始化渠道网关
+	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
+
+	// 初始化需求派发服务（需要 gateway.messageBus，所以放在 gateway 之后）
 	requirementDispatchService := application.NewRequirementDispatchService(
 		requirementRepo,
 		projectRepo,
@@ -152,18 +165,8 @@ func main() {
 		stateMachineRepo,
 		&config.ConfigWorkspaceProvider{},
 		&workspace.OSWorkspaceManager{},
+		gateway.messageBus,
 	)
-	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
-
-	// 初始化需求类型仓储
-	requirementTypeRepo := _persistence.NewSQLiteRequirementTypeEntityRepository(db)
-
-	// 6. 初始化技能加载器（gateway 需要）
-	skillsLoader := skill.NewSkillsLoader(resolveWorkspace())
-
-	// 7. 初始化渠道网关
-	gateway := initGateway(channelService, sessionService, agentRepo, providerRepo, idGenerator, hookManager, logger, mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
-	requirementDispatchService.SetInboundPublisher(gateway.messageBus)
 
 	// 初始化状态机执行器和服务（供心跳调度器使用）
 	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
@@ -195,8 +198,7 @@ func main() {
 	// 9. 初始化 HTTP API Handler
 	userService := application.NewUserApplicationService(userRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
-	application.TestLLMConnectionFunc = llm.TestLLMConnection
-	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
+	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator, llm.TestLLMConnection)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator)
 
