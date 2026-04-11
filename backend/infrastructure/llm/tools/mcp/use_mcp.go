@@ -9,18 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // UseMCPTool use_mcp 工具 - 用于按需加载 MCP Server
 type UseMCPTool struct {
-	mcpService *application.MCPApplicationService
+	mcpService domain.MCPToolService
 }
 
 // NewUseMCPTool 创建 use_mcp 工具
-func NewUseMCPTool(mcpService *application.MCPApplicationService) *UseMCPTool {
+func NewUseMCPTool(mcpService domain.MCPToolService) *UseMCPTool {
 	return &UseMCPTool{
 		mcpService: mcpService,
 	}

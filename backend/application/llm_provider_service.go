@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 const DefaultFallbackModel = "gpt-3.5-turbo"
@@ -18,23 +16,17 @@ var (
 
 // TestConnectionRunner 定义测试连接的接口，便于测试时注入 mock
 type TestConnectionRunner interface {
-	RunTest(ctx context.Context, config *llm.Config) error
+	RunTest(ctx context.Context, providerKey, model, apiKey, baseURL string) error
 }
 
 // defaultTestConnectionRunner 默认的测试连接实现
 type defaultTestConnectionRunner struct{}
 
-func (r *defaultTestConnectionRunner) RunTest(ctx context.Context, config *llm.Config) error {
-	client, err := llm.NewLLMProvider(config)
-	if err != nil {
-		return fmt.Errorf("创建 LLM 客户端失败: %w", err)
-	}
+// TestLLMConnectionFunc is set during initialization to wire the infrastructure implementation.
+var TestLLMConnectionFunc func(ctx context.Context, providerKey, model, apiKey, baseURL string) error
 
-	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	_, err = client.Generate(testCtx, "Hi, please respond with 'OK' if you receive this message.")
-	return err
+func (r *defaultTestConnectionRunner) RunTest(ctx context.Context, providerKey, model, apiKey, baseURL string) error {
+	return TestLLMConnectionFunc(ctx, providerKey, model, apiKey, baseURL)
 }
 
 // ChooseModelForProvider 根据 provider 信息选择用于测试连接的模型
@@ -257,17 +249,8 @@ func (s *LLMProviderApplicationService) TestConnection(ctx context.Context, id d
 	// 使用纯函数选择模型
 	model := ChooseModelForProvider(provider.DefaultModel(), provider.SupportedModels())
 
-	config := &llm.Config{
-		ProviderType: provider.ProviderKey(),
-		Model:        model,
-		APIKey:       provider.APIKey(),
-		BaseURL:      provider.APIBase(),
-		Temperature:  0.7,
-		MaxTokens:    1024,
-	}
-
 	// 使用注入的 testRunner 进行测试
-	err = s.testRunner.RunTest(ctx, config)
+	err = s.testRunner.RunTest(ctx, provider.ProviderKey(), model, provider.APIKey(), provider.APIBase())
 	if err != nil {
 		return map[string]interface{}{
 			"success": false,

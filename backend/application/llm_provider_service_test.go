@@ -7,19 +7,24 @@ import (
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // mockTestConnectionRunner 用于测试的 fake runner
 type mockTestConnectionRunner struct {
 	returnErr   error
 	called      bool
-	lastConfig  *llm.Config
+	lastProviderKey string
+	lastModel      string
+	lastAPIKey     string
+	lastBaseURL    string
 }
 
-func (m *mockTestConnectionRunner) RunTest(ctx context.Context, config *llm.Config) error {
+func (m *mockTestConnectionRunner) RunTest(ctx context.Context, providerKey, model, apiKey, baseURL string) error {
 	m.called = true
-	m.lastConfig = config
+	m.lastProviderKey = providerKey
+	m.lastModel = model
+	m.lastAPIKey = apiKey
+	m.lastBaseURL = baseURL
 	return m.returnErr
 }
 
@@ -1103,11 +1108,11 @@ func TestLLMProviderService_TestConnection_WithSupportedModels(t *testing.T) {
 	if !mockRunner.called {
 		t.Error("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig == nil {
-		t.Fatal("期望 lastConfig 不为 nil")
+	if mockRunner.called == false {
+		t.Fatal("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig.Model != "gpt-4" {
-		t.Errorf("期望模型为 'gpt-4', 实际为 '%s'", mockRunner.lastConfig.Model)
+	if mockRunner.lastModel != "gpt-4" {
+		t.Errorf("期望模型为 'gpt-4', 实际为 '%s'", mockRunner.lastModel)
 	}
 
 	// 验证返回结果
@@ -1147,11 +1152,11 @@ func TestLLMProviderService_TestConnection_WithDefaultModel(t *testing.T) {
 	if !mockRunner.called {
 		t.Error("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig == nil {
-		t.Fatal("期望 lastConfig 不为 nil")
+	if mockRunner.called == false {
+		t.Fatal("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig.Model != "gpt-4-turbo" {
-		t.Errorf("期望模型为 'gpt-4-turbo', 实际为 '%s'", mockRunner.lastConfig.Model)
+	if mockRunner.lastModel != "gpt-4-turbo" {
+		t.Errorf("期望模型为 'gpt-4-turbo', 实际为 '%s'", mockRunner.lastModel)
 	}
 
 	if result["success"] != false {
@@ -1186,11 +1191,11 @@ func TestLLMProviderService_TestConnection_FallbackModel(t *testing.T) {
 	if !mockRunner.called {
 		t.Error("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig == nil {
-		t.Fatal("期望 lastConfig 不为 nil")
+	if mockRunner.called == false {
+		t.Fatal("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig.Model != "gpt-3.5-turbo" {
-		t.Errorf("期望模型为 'gpt-3.5-turbo', 实际为 '%s'", mockRunner.lastConfig.Model)
+	if mockRunner.lastModel != "gpt-3.5-turbo" {
+		t.Errorf("期望模型为 'gpt-3.5-turbo', 实际为 '%s'", mockRunner.lastModel)
 	}
 
 	if result["success"] != false {
@@ -1227,11 +1232,11 @@ func TestLLMProviderService_TestConnection_Success(t *testing.T) {
 	if !mockRunner.called {
 		t.Error("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig == nil {
-		t.Fatal("期望 lastConfig 不为 nil")
+	if mockRunner.called == false {
+		t.Fatal("期望 testRunner.RunTest 被调用")
 	}
-	if mockRunner.lastConfig.Model != "gpt-4" {
-		t.Errorf("期望传入 runner 的模型为 'gpt-4', 实际为 '%s'", mockRunner.lastConfig.Model)
+	if mockRunner.lastModel != "gpt-4" {
+		t.Errorf("期望传入 runner 的模型为 'gpt-4', 实际为 '%s'", mockRunner.lastModel)
 	}
 
 	// 验证返回结果

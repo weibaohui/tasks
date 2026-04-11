@@ -19,12 +19,14 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
+	"github.com/weibh/taskmanager/infrastructure/cleanup"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/utils"
+	"github.com/weibh/taskmanager/infrastructure/workspace"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 	"github.com/weibh/taskmanager/pkg/channel"
@@ -88,7 +90,7 @@ func main() {
 	logger.Info("Session 服务初始化完成")
 
 	// 6.5 初始化 ReplicaCleanupService
-	replicaCleanupSvc := application.NewReplicaCleanupService(agentRepo)
+	replicaCleanupSvc := cleanup.NewReplicaCleanupService(agentRepo, &workspace.OSWorkspaceManager{})
 	logger.Info("ReplicaCleanupService 初始化完成")
 
 	// 7. 初始化 Hook Manager

@@ -9,18 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // CallMCPTool 通用 MCP 工具调用器
 type CallMCPTool struct {
-	mcpService *application.MCPApplicationService
+	mcpService domain.MCPToolService
 }
 
 // NewCallMCPTool 创建通用 MCP 工具调用器
-func NewCallMCPTool(mcpService *application.MCPApplicationService) *CallMCPTool {
+func NewCallMCPTool(mcpService domain.MCPToolService) *CallMCPTool {
 	return &CallMCPTool{
 		mcpService: mcpService,
 	}

@@ -24,7 +24,9 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
+	"github.com/weibh/taskmanager/infrastructure/cleanup"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
+	"github.com/weibh/taskmanager/infrastructure/workspace"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"github.com/weibh/taskmanager/infrastructure/utils"
@@ -134,7 +136,7 @@ func main() {
 	channelService := application.NewChannelApplicationService(channelRepo, idGenerator)
 	sessionService := application.NewSessionApplicationService(sessionRepo, idGenerator)
 
-	replicaCleanupSvc := application.NewReplicaCleanupService(agentRepo)
+	replicaCleanupSvc := cleanup.NewReplicaCleanupService(agentRepo, &workspace.OSWorkspaceManager{})
 	logger.Info("ReplicaCleanupService 初始化完成")
 
 	// 初始化状态机仓库（提前初始化，供 requirementDispatchService 使用）
@@ -149,6 +151,8 @@ func main() {
 		idGenerator,
 		replicaCleanupSvc,
 		stateMachineRepo,
+		&config.ConfigWorkspaceProvider{},
+		&workspace.OSWorkspaceManager{},
 	)
 	mcpService := application.NewMCPApplicationService(mcpServerRepo, agentRepo, bindingRepo, mcpToolRepo, mcpToolLogRepo, idGenerator)
 
@@ -192,6 +196,7 @@ func main() {
 	// 9. 初始化 HTTP API Handler
 	userService := application.NewUserApplicationService(userRepo, idGenerator)
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
+	application.TestLLMConnectionFunc = llm.TestLLMConnection
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator)
@@ -429,7 +434,7 @@ func initGateway(
 	skillsLoader *skill.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRecordRepo domain.ConversationRecordRepository,
-	replicaCleanupSvc *application.ReplicaCleanupService,
+	replicaCleanupSvc *cleanup.ReplicaCleanupService,
 ) *Gateway {
 	gw := &Gateway{
 		logger:         logger,

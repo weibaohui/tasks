@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 )
 
 // StateMachineHandler 状态机 HTTP 处理
@@ -162,7 +161,7 @@ func (h *StateMachineHandler) TriggerTransition(c *gin.Context) {
 	// 将 metadata 存入 context
 	ctx := c.Request.Context()
 	if req.Metadata != nil {
-		ctx = infra_sm.WithMetadata(ctx, req.Metadata)
+		ctx = state_machine.WithMetadata(ctx, req.Metadata)
 	}
 
 	rs, err := h.service.TriggerTransition(ctx, requirementID, req.Trigger, req.TriggeredBy, req.Remark)

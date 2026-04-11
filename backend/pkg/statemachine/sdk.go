@@ -157,5 +157,5 @@ func (s *SDK) Close() error {
 // WithMetadata 将 metadata 存入 context，用于 Hook 模板变量替换
 // 用法: sm.Transition(statemachine.WithMetadata(ctx, metadata), ...)
 func WithMetadata(ctx context.Context, metadata map[string]interface{}) context.Context {
-	return infra_sm.WithMetadata(ctx, metadata)
+	return state_machine.WithMetadata(ctx, metadata)
 }

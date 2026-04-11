@@ -13,26 +13,26 @@ const testYAML = `
 name: 测试流程
 description: SDK 测试用流程
 
-initial_state: created
+initial_state: todo
 
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
   - id: in_progress
     name: 进行中
     is_final: false
-  - id: done
+  - id: completed
     name: 已完成
     is_final: true
 
 transitions:
-  - from: created
+  - from: todo
     to: in_progress
     trigger: start
     description: 开始
   - from: in_progress
-    to: done
+    to: completed
     trigger: complete
     description: 完成
 `
@@ -128,8 +128,8 @@ func TestSDK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
-	if rs.CurrentState != "created" {
-		t.Errorf("Initial state: %s != created", rs.CurrentState)
+	if rs.CurrentState != "todo" {
+		t.Errorf("Initial state: %s != todo", rs.CurrentState)
 	}
 
 	// 触发转换 start
@@ -148,8 +148,8 @@ func TestSDK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Transition(complete) failed: %v", err)
 	}
-	if rs.CurrentState != "done" {
-		t.Errorf("State after complete: %s != done", rs.CurrentState)
+	if rs.CurrentState != "completed" {
+		t.Errorf("State after complete: %s != completed", rs.CurrentState)
 	}
 
 	// 获取状态
@@ -158,8 +158,8 @@ func TestSDK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if state.CurrentState != "done" {
-		t.Errorf("GetState state: %s != done", state.CurrentState)
+	if state.CurrentState != "completed" {
+		t.Errorf("GetState state: %s != completed", state.CurrentState)
 	}
 
 	// 获取历史

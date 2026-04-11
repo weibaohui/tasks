@@ -14,34 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// metadataContextKey 是 context 中存储 metadata 的 key
-type metadataContextKey struct{}
-
-// WithMetadata 将 metadata 存入 context
-func WithMetadata(ctx context.Context, metadata map[string]interface{}) context.Context {
-	return context.WithValue(ctx, metadataContextKey{}, metadata)
-}
-
-// MetadataFromContext 从 context 获取 metadata
-func MetadataFromContext(ctx context.Context) map[string]interface{} {
-	if metadata, ok := ctx.Value(metadataContextKey{}).(map[string]interface{}); ok {
-		return metadata
-	}
-	return nil
-}
-
-// HookContext Hook 执行时的上下文信息
-type HookContext struct {
-	RequirementID   string                 // 需求ID
-	StateMachineID string                 // 状态机ID
-	FromState      string                 // 源状态
-	ToState        string                 // 目标状态
-	Trigger        string                 // 触发器
-	HookName       string                 // Hook名称
-	HookType       string                 // Hook类型
-	Metadata       map[string]interface{} // 动态元数据，用于模板变量替换
-}
-
 // TransitionExecutor 转换钩子执行器
 type TransitionExecutor struct {
 	logger     *zap.Logger
@@ -59,7 +31,7 @@ func NewTransitionExecutor(logger *zap.Logger) *TransitionExecutor {
 }
 
 // ExecuteHooks 异步执行 hooks
-func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_machine.TransitionHook, hookCtx HookContext) {
+func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_machine.TransitionHook, hookCtx state_machine.HookContext) {
 	go func() {
 		for _, hook := range hooks {
 			e.executeHook(ctx, hook, hookCtx)
@@ -67,7 +39,7 @@ func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_mac
 	}()
 }
 
-func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine.TransitionHook, hookCtx HookContext) {
+func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine.TransitionHook, hookCtx state_machine.HookContext) {
 	logger := e.logger.With(
 		zap.String("hook", hook.Name),
 		zap.String("requirement_id", hookCtx.RequirementID),

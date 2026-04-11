@@ -5,7 +5,6 @@ import (
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"go.uber.org/zap"
 )
 
@@ -13,12 +12,12 @@ import (
 type StateMachineService struct {
 	repo            state_machine.Repository
 	requirementRepo domain.RequirementRepository
-	executor        *infra_sm.TransitionExecutor
+	executor        state_machine.HookExecutor
 	logger          *zap.Logger
 }
 
 // NewStateMachineService 创建服务
-func NewStateMachineService(repo state_machine.Repository, requirementRepo domain.RequirementRepository, executor *infra_sm.TransitionExecutor, logger *zap.Logger) *StateMachineService {
+func NewStateMachineService(repo state_machine.Repository, requirementRepo domain.RequirementRepository, executor state_machine.HookExecutor, logger *zap.Logger) *StateMachineService {
 	return &StateMachineService{
 		repo:            repo,
 		requirementRepo: requirementRepo,
@@ -170,11 +169,11 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 
 	// 异步执行 hooks
 	if len(transition.Hooks) > 0 {
-		metadata := infra_sm.MetadataFromContext(ctx)
+		metadata := state_machine.MetadataFromContext(ctx)
 		if metadata == nil {
 			metadata = make(map[string]interface{})
 		}
-		hookCtx := infra_sm.HookContext{
+		hookCtx := state_machine.HookContext{
 			RequirementID:   requirementID,
 			StateMachineID:  sm.ID,
 			FromState:       rs.CurrentState,

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/weibh/taskmanager/infrastructure/utils"
+	"github.com/weibh/taskmanager/domain"
 )
 
 type Span struct {
@@ -30,9 +30,10 @@ type TraceContext struct {
 	cancelFunc context.CancelFunc  `json:"-"`
 	rootCtx    context.Context     `json:"-"`
 	logger     interface{ Info(string, ...interface{}) }
+	idGen      domain.IDGenerator
 }
 
-func NewTraceContext(traceID, rootTaskID string, logger interface{ Info(string, ...interface{}) }) *TraceContext {
+func NewTraceContext(traceID, rootTaskID string, logger interface{ Info(string, ...interface{}) }, idGen domain.IDGenerator) *TraceContext {
 	rootCtx, cancel := context.WithCancel(context.Background())
 	return &TraceContext{
 		TraceID:    traceID,
@@ -42,6 +43,7 @@ func NewTraceContext(traceID, rootTaskID string, logger interface{ Info(string, 
 		rootCtx:    rootCtx,
 		cancelFunc: cancel,
 		logger:     logger,
+		idGen:      idGen,
 	}
 }
 
@@ -55,9 +57,9 @@ func (tc *TraceContext) GenerateSpanID(parentSpanID string) string {
 
 	var spanID string
 	if parentSpanID == "" {
-		spanID = fmt.Sprintf("span-%s", utils.NewNanoIDGenerator(8).Generate())
+		spanID = fmt.Sprintf("span-%s", tc.idGen.Generate())
 	} else {
-		spanID = fmt.Sprintf("%s-%s", parentSpanID, utils.NewNanoIDGenerator(4).Generate())
+		spanID = fmt.Sprintf("%s-%s", parentSpanID, tc.idGen.Generate())
 	}
 
 	tc.spans[spanID] = &Span{

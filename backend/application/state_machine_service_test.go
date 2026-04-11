@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
 	"go.uber.org/zap"
 )
 
@@ -139,11 +138,11 @@ func (r *MockStateMachineRepository) Clear() {
 const testYAML = `
 name: test_flow
 description: 测试流程
-initial_state: created
+initial_state: todo
 
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
   - id: in_progress
     name: 进行中
@@ -153,7 +152,7 @@ states:
     is_final: true
 
 transitions:
-  - from: created
+  - from: todo
     to: in_progress
     trigger: start
     description: 开始处理
@@ -253,8 +252,8 @@ func TestStateMachineService_InitializeRequirementState(t *testing.T) {
 		t.Fatalf("初始化失败: %v", err)
 	}
 
-	if rs.CurrentState != "created" {
-		t.Errorf("期望初始状态为 created, 实际为 %s", rs.CurrentState)
+	if rs.CurrentState != "todo" {
+		t.Errorf("期望初始状态为 todo, 实际为 %s", rs.CurrentState)
 	}
 
 	if len(repo.transitionLogs) != 1 {
@@ -272,7 +271,7 @@ func TestStateMachineService_TriggerTransition(t *testing.T) {
 	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
 	metadata := map[string]interface{}{"project_id": "project-1"}
-	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	ctxWithMeta := state_machine.WithMetadata(ctx, metadata)
 	rs, err := svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "开始处理")
 	if err != nil {
 		t.Fatalf("转换失败: %v", err)
@@ -293,7 +292,7 @@ func TestStateMachineService_TriggerTransition_InvalidTrigger(t *testing.T) {
 	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
 	metadata := map[string]interface{}{"project_id": "project-1"}
-	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	ctxWithMeta := state_machine.WithMetadata(ctx, metadata)
 	_, err := svc.TriggerTransition(ctxWithMeta, "req-1", "invalid", "user", "")
 	if err == nil {
 		t.Error("期望失败：无效的触发器")
@@ -312,7 +311,7 @@ func TestStateMachineService_TriggerTransition_StateNotFound(t *testing.T) {
 	repo.UpdateRequirementState(ctx, rs)
 
 	metadata := map[string]interface{}{"project_id": "project-1"}
-	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	ctxWithMeta := state_machine.WithMetadata(ctx, metadata)
 	_, err := svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "")
 	if err == nil {
 		t.Error("期望失败")
@@ -360,7 +359,7 @@ func TestStateMachineService_GetTransitionHistory(t *testing.T) {
 	svc.InitializeRequirementState(ctx, "req-1", sm.ID)
 
 	metadata := map[string]interface{}{"project_id": "project-1"}
-	ctxWithMeta := infra_sm.WithMetadata(ctx, metadata)
+	ctxWithMeta := state_machine.WithMetadata(ctx, metadata)
 	svc.TriggerTransition(ctxWithMeta, "req-1", "start", "user", "")
 
 	logs, err := svc.GetTransitionHistory(ctx, "req-1")

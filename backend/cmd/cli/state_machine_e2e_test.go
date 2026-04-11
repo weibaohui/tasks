@@ -62,12 +62,12 @@ func TestStateMachineE2E(t *testing.T) {
 		if err != nil {
 			t.Fatalf("初始化需求状态失败: %v", err)
 		}
-		if rs.CurrentState != "created" {
-			t.Errorf("期望初始状态为 created, 实际为 %s", rs.CurrentState)
+		if rs.CurrentState != "todo" {
+			t.Errorf("期望初始状态为 todo, 实际为 %s", rs.CurrentState)
 		}
 		t.Logf("需求状态初始化成功: %s", rs.CurrentState)
 
-		// 4. 触发转换: created -> in_progress
+		// 4. 触发转换: todo -> in_progress
 		rs, err = svc.TriggerTransition(ctx, "req-001", "start", "user", "开始处理")
 		if err != nil {
 			t.Fatalf("触发转换失败: %v", err)
@@ -170,11 +170,11 @@ func TestTransitionHookE2E(t *testing.T) {
 	yamlWithHook := `
 name: hook_test_flow
 description: Hook 测试流程
-initial_state: created
+initial_state: todo
 
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
   - id: in_progress
     name: 进行中
@@ -184,7 +184,7 @@ states:
     is_final: true
 
 transitions:
-  - from: created
+  - from: todo
     to: in_progress
     trigger: start
     description: 开始
@@ -301,22 +301,31 @@ func TestHeartbeatStateMachineE2E(t *testing.T) {
 	heartbeatYAML := `
 name: heartbeat_flow
 description: 心跳任务流程
-initial_state: active
+initial_state: todo
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: active
     name: 活跃
     is_final: false
   - id: stopped
     name: 已停止
     is_final: false
+  - id: completed
+    name: 已完成
+    is_final: true
 
 transitions:
+  - from: todo
+    to: active
+    trigger: start
+    description: 开始心跳
   - from: active
     to: stopped
     trigger: stop
     description: 停止心跳
-
   - from: stopped
     to: active
     trigger: restart
@@ -335,8 +344,17 @@ transitions:
 		t.Fatalf("初始化需求状态失败: %v", err)
 	}
 
+	if rs.CurrentState != "todo" {
+		t.Errorf("期望初始状态为 todo, 实际为 %s", rs.CurrentState)
+	}
+
+	// 开始心跳: todo -> active
+	rs, err = svc.TriggerTransition(ctx, "heartbeat-001", "start", "system", "开始")
+	if err != nil {
+		t.Fatalf("开始心跳失败: %v", err)
+	}
 	if rs.CurrentState != "active" {
-		t.Errorf("期望初始状态为 active, 实际为 %s", rs.CurrentState)
+		t.Errorf("期望状态为 active, 实际为 %s", rs.CurrentState)
 	}
 
 	// 停止心跳
@@ -365,11 +383,11 @@ transitions:
 const testFlowYAML = `
 name: test_flow
 description: 测试流程
-initial_state: created
+initial_state: todo
 
 states:
-  - id: created
-    name: 已创建
+  - id: todo
+    name: 待办
     is_final: false
   - id: in_progress
     name: 进行中
@@ -379,7 +397,7 @@ states:
     is_final: true
 
 transitions:
-  - from: created
+  - from: todo
     to: in_progress
     trigger: start
     description: 开始处理
