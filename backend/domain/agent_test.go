@@ -194,21 +194,21 @@ func TestAgent_UpdateConfig(t *testing.T) {
 		AgentTypeBareLLM,
 	)
 
-	agent.UpdateConfig(
-		"身份设定",
-		"灵魂设定",
-		"Agents设定",
-		"用户设定",
-		"工具设定",
-		"gpt-4",
-		8192,
-		0.9,
-		20,
-		20,
-		[]string{"skill1", "skill2"},
-		[]string{"tool1", "tool2"},
-		true,
-	)
+	agent.UpdateConfig(AgentConfigUpdate{
+		IdentityContent: "身份设定",
+		SoulContent: "灵魂设定",
+		AgentsContent: "Agents设定",
+		UserContent: "用户设定",
+		ToolsContent: "工具设定",
+		Model: "gpt-4",
+		MaxTokens: 8192,
+		Temperature: 0.9,
+		MaxIterations: 20,
+		HistoryMessages: 20,
+		SkillsList: []string{"skill1", "skill2"},
+		ToolsList: []string{"tool1", "tool2"},
+		EnableThinkingProcess: true,
+	})
 
 	if agent.IdentityContent() != "身份设定" {
 		t.Errorf("期望IdentityContent为 身份设定, 实际为 %s", agent.IdentityContent())
@@ -274,21 +274,21 @@ func TestAgent_UpdateConfig_PreservesDefaultValues(t *testing.T) {
 	)
 
 	// 只更新部分配置，其他保持不变
-	agent.UpdateConfig(
-		"新身份",
-		"", // 空，保持原值
-		"", // 空，保持原值
-		"", // 空，保持原值
-		"", // 空，保持原值
-		"claude-3",
-		0,  // 0 不应被设置
-		0,  // 0 不应被设置
-		0,  // 0 不应被设置
-		-1, // 负数不应被设置
-		nil,
-		nil,
-		false,
-	)
+	agent.UpdateConfig(AgentConfigUpdate{
+		IdentityContent: "新身份",
+		SoulContent: "", // 空，保持原值,
+		AgentsContent: "", // 空，保持原值,
+		UserContent: "", // 空，保持原值,
+		ToolsContent: "", // 空，保持原值,
+		Model: "claude-3",
+		MaxTokens: 0,  // 0 不应被设置,
+		Temperature: 0,  // 0 不应被设置,
+		MaxIterations: 0,  // 0 不应被设置,
+		HistoryMessages: -1, // 负数不应被设置,
+		SkillsList: nil,
+		ToolsList: nil,
+		EnableThinkingProcess: false,
+	})
 
 	// identityContent 被更新
 	if agent.IdentityContent() != "新身份" {
@@ -389,21 +389,21 @@ func TestAgent_ToSnapshot(t *testing.T) {
 	agent.SetActive(false)
 	agent.SetDefault(true)
 
-	agent.UpdateConfig(
-		"身份",
-		"灵魂",
-		"",
-		"",
-		"",
-		"gpt-4",
-		8192,
-		0.8,
-		25,
-		15,
-		[]string{"skill1"},
-		[]string{"tool1"},
-		true,
-	)
+	agent.UpdateConfig(AgentConfigUpdate{
+		IdentityContent: "身份",
+		SoulContent: "灵魂",
+		AgentsContent: "",
+		UserContent: "",
+		ToolsContent: "",
+		Model: "gpt-4",
+		MaxTokens: 8192,
+		Temperature: 0.8,
+		MaxIterations: 25,
+		HistoryMessages: 15,
+		SkillsList: []string{"skill1"},
+		ToolsList: []string{"tool1"},
+		EnableThinkingProcess: true,
+	})
 
 	snap := agent.ToSnapshot()
 
@@ -490,21 +490,21 @@ func TestAgent_FromSnapshot(t *testing.T) {
 	originalAgent.SetActive(false)
 	originalAgent.SetDefault(true)
 
-	originalAgent.UpdateConfig(
-		"身份",
-		"灵魂",
-		"agents",
-		"user",
-		"tools",
-		"gpt-4",
-		8192,
-		0.8,
-		25,
-		15,
-		[]string{"skill1", "skill2"},
-		[]string{"tool1", "tool2"},
-		true,
-	)
+	originalAgent.UpdateConfig(AgentConfigUpdate{
+		IdentityContent: "身份",
+		SoulContent: "灵魂",
+		AgentsContent: "agents",
+		UserContent: "user",
+		ToolsContent: "tools",
+		Model: "gpt-4",
+		MaxTokens: 8192,
+		Temperature: 0.8,
+		MaxIterations: 25,
+		HistoryMessages: 15,
+		SkillsList: []string{"skill1", "skill2"},
+		ToolsList: []string{"tool1", "tool2"},
+		EnableThinkingProcess: true,
+	})
 
 	snap := originalAgent.ToSnapshot()
 
@@ -598,7 +598,7 @@ func TestAgent_SkillsList_ReturnsCopy(t *testing.T) {
 		AgentTypeBareLLM,
 	)
 
-	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, []string{"skill1", "skill2"}, nil, false)
+	agent.UpdateConfig(AgentConfigUpdate{SkillsList: []string{"skill1", "skill2"}})
 
 	skills1 := agent.SkillsList()
 	skills1[0] = "modified"
@@ -619,7 +619,7 @@ func TestAgent_ToolsList_ReturnsCopy(t *testing.T) {
 		AgentTypeBareLLM,
 	)
 
-	agent.UpdateConfig("", "", "", "", "", "", 0, 0, 0, 0, nil, []string{"tool1", "tool2"}, false)
+	agent.UpdateConfig(AgentConfigUpdate{ToolsList: []string{"tool1", "tool2"}})
 
 	tools1 := agent.ToolsList()
 	tools1[0] = "modified"
@@ -833,5 +833,60 @@ func TestAgent_FromSnapshot_WithClaudeCodeConfig(t *testing.T) {
 	}
 	if retrievedConfig.Model != "claude-3-5-sonnet" {
 		t.Errorf("期望恢复的 Model 为 claude-3-5-sonnet, 实际为 %s", retrievedConfig.Model)
+	}
+}
+
+func TestAgent_UpdateConfig_StructPartial(t *testing.T) {
+	agent, _ := NewAgent(NewAgentID("agent-001"), NewAgentCode("agt_code"), "user-001", "TestAgent", "desc", AgentTypeBareLLM)
+
+	// First set full config
+	agent.UpdateConfig(AgentConfigUpdate{
+		IdentityContent: "identity",
+		SoulContent:     "soul",
+		Model:           "gpt-4",
+		MaxTokens:       2048,
+		Temperature:     0.5,
+		MaxIterations:   10,
+		HistoryMessages: 20,
+		SkillsList:      []string{"skill1"},
+		ToolsList:       []string{"tool1"},
+	})
+
+	// Update only Model — other fields should be cleared since struct uses zero values
+	agent.UpdateConfig(AgentConfigUpdate{
+		Model: "gpt-4o",
+	})
+
+	if agent.Model() != "gpt-4o" {
+		t.Errorf("Model should be gpt-4o, got %s", agent.Model())
+	}
+	// IdentityContent is empty string in struct, so it gets set to ""
+	if agent.IdentityContent() != "" {
+		t.Errorf("IdentityContent should be empty, got %s", agent.IdentityContent())
+	}
+	// MaxTokens is 0 in struct, so it should NOT override (UpdateConfig keeps >0 check)
+	if agent.MaxTokens() != 2048 {
+		t.Errorf("MaxTokens should be preserved as 2048 when 0 provided, got %d", agent.MaxTokens())
+	}
+	if agent.Temperature() != 0.5 {
+		t.Errorf("Temperature should be preserved as 0.5 when 0 provided, got %f", agent.Temperature())
+	}
+}
+
+func TestAgent_UpdateConfig_PreservesPositiveValues(t *testing.T) {
+	agent, _ := NewAgent(NewAgentID("agent-001"), NewAgentCode("agt_code"), "user-001", "TestAgent", "desc", AgentTypeBareLLM)
+
+	agent.UpdateConfig(AgentConfigUpdate{
+		MaxTokens:       4096,
+		Temperature:     0.7,
+		MaxIterations:   15,
+		HistoryMessages: 10,
+	})
+
+	if agent.MaxTokens() != 4096 {
+		t.Errorf("MaxTokens should be 4096, got %d", agent.MaxTokens())
+	}
+	if agent.Temperature() != 0.7 {
+		t.Errorf("Temperature should be 0.7, got %f", agent.Temperature())
 	}
 }

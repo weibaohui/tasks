@@ -62,7 +62,15 @@ func TestNewMCPServer_EmptyName(t *testing.T) {
 func TestMCPServer_UpdateProfile(t *testing.T) {
 	server, _ := NewMCPServer(NewMCPServerID("srv-001"), "github", "GitHub", MCPTransportSTDIO)
 
-	server.UpdateProfile("GitHub MCP", "A MCP server for GitHub", MCPTransportHTTP, "npx", "http://localhost:8080", []string{"arg1"}, map[string]string{"KEY": "value"})
+	server.UpdateProfile(MCPProfileUpdate{
+		Name:        "GitHub MCP",
+		Description: "A MCP server for GitHub",
+		Transport:   MCPTransportHTTP,
+		Command:     "npx",
+		URL:         "http://localhost:8080",
+		Args:        []string{"arg1"},
+		EnvVars:     map[string]string{"KEY": "value"},
+	})
 
 	if server.Name() != "GitHub MCP" {
 		t.Errorf("期望 Name 为 GitHub MCP, 实际为 %s", server.Name())
@@ -95,7 +103,7 @@ func TestMCPServer_UpdateProfile(t *testing.T) {
 
 func TestMCPServer_UpdateProfile_Partial(t *testing.T) {
 	server, _ := NewMCPServer(NewMCPServerID("srv-001"), "github", "GitHub", MCPTransportSTDIO)
-	server.UpdateProfile("NewName", "", "", "", "", nil, nil)
+	server.UpdateProfile(MCPProfileUpdate{Name: "NewName"})
 
 	if server.Name() != "NewName" {
 		t.Errorf("期望 Name 为 NewName, 实际为 %s", server.Name())
@@ -181,7 +189,10 @@ func TestMCPServer_Capabilities_ReturnsCopy(t *testing.T) {
 
 func TestMCPServer_ToSnapshot(t *testing.T) {
 	server, _ := NewMCPServer(NewMCPServerID("srv-001"), "github", "GitHub", MCPTransportSTDIO)
-	server.UpdateProfile("GitHub MCP", "desc", MCPTransportHTTP, "cmd", "url", []string{"a"}, map[string]string{"K": "v"})
+	server.UpdateProfile(MCPProfileUpdate{
+		Name: "GitHub MCP", Description: "desc", Transport: MCPTransportHTTP,
+		Command: "cmd", URL: "url", Args: []string{"a"}, EnvVars: map[string]string{"K": "v"},
+	})
 	server.SetStatus("active", "")
 
 	snap := server.ToSnapshot()
@@ -413,5 +424,47 @@ func TestAgentMCPBinding_FromSnapshot(t *testing.T) {
 	}
 	if !binding.AutoLoad() {
 		t.Error("AutoLoad 应为 true")
+	}
+}
+
+func TestMCPServer_UpdateProfile_EmptyFields(t *testing.T) {
+	server, _ := NewMCPServer(NewMCPServerID("srv-001"), "github", "GitHub", MCPTransportSTDIO)
+	server.UpdateProfile(MCPProfileUpdate{
+		Name:      "GitHub MCP",
+		Transport: MCPTransportHTTP,
+		Command:   "npx",
+		URL:       "http://localhost:8080",
+	})
+
+	// Now update with empty struct — only description should change
+	server.UpdateProfile(MCPProfileUpdate{Description: "updated desc"})
+
+	if server.Name() != "GitHub MCP" {
+		t.Errorf("Name should be preserved, got %s", server.Name())
+	}
+	if server.Description() != "updated desc" {
+		t.Errorf("Description should be updated, got %s", server.Description())
+	}
+	if server.TransportType() != MCPTransportHTTP {
+		t.Errorf("Transport should be preserved, got %s", server.TransportType())
+	}
+	if server.Command() != "npx" {
+		t.Errorf("Command should be preserved, got %s", server.Command())
+	}
+	if server.URL() != "http://localhost:8080" {
+		t.Errorf("URL should be preserved, got %s", server.URL())
+	}
+}
+
+func TestMCPServer_UpdateProfile_ArgsImmutability(t *testing.T) {
+	server, _ := NewMCPServer(NewMCPServerID("srv-001"), "github", "GitHub", MCPTransportSTDIO)
+	args := []string{"arg1", "arg2"}
+	server.UpdateProfile(MCPProfileUpdate{Args: args})
+
+	// Modify original slice
+	args[0] = "modified"
+
+	if server.Args()[0] == "modified" {
+		t.Error("Args should be a copy, not a reference to the original slice")
 	}
 }

@@ -1255,3 +1255,67 @@ func TestAgentService_UpdateAgent_EnableThinkingProcess(t *testing.T) {
 		t.Error("更新后 EnableThinkingProcess 应为 true")
 	}
 }
+
+func TestApplyProfileUpdate_NameAndDescription(t *testing.T) {
+	agent, _ := domain.NewAgent(domain.NewAgentID("a1"), domain.NewAgentCode("c1"), "u1", "Original", "original desc", domain.AgentTypeBareLLM)
+
+	name := "Updated"
+	desc := "new desc"
+	err := applyProfileUpdate(agent, &name, &desc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent.Name() != "Updated" {
+		t.Errorf("expected Updated, got %s", agent.Name())
+	}
+	if agent.Description() != "new desc" {
+		t.Errorf("expected new desc, got %s", agent.Description())
+	}
+}
+
+func TestApplyProfileUpdate_NameOnly(t *testing.T) {
+	agent, _ := domain.NewAgent(domain.NewAgentID("a1"), domain.NewAgentCode("c1"), "u1", "Original", "keep desc", domain.AgentTypeBareLLM)
+
+	name := "Updated"
+	err := applyProfileUpdate(agent, &name, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent.Name() != "Updated" {
+		t.Errorf("expected Updated, got %s", agent.Name())
+	}
+	if agent.Description() != "keep desc" {
+		t.Errorf("description should be preserved, got %s", agent.Description())
+	}
+}
+
+func TestApplyProfileUpdate_DescriptionOnly(t *testing.T) {
+	agent, _ := domain.NewAgent(domain.NewAgentID("a1"), domain.NewAgentCode("c1"), "u1", "Original", "old desc", domain.AgentTypeBareLLM)
+
+	desc := "new desc"
+	err := applyProfileUpdate(agent, nil, &desc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent.Name() != "Original" {
+		t.Errorf("name should be preserved, got %s", agent.Name())
+	}
+	if agent.Description() != "new desc" {
+		t.Errorf("expected new desc, got %s", agent.Description())
+	}
+}
+
+func TestApplyProfileUpdate_NilBoth(t *testing.T) {
+	agent, _ := domain.NewAgent(domain.NewAgentID("a1"), domain.NewAgentCode("c1"), "u1", "Original", "desc", domain.AgentTypeBareLLM)
+
+	err := applyProfileUpdate(agent, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent.Name() != "Original" {
+		t.Errorf("name should be preserved, got %s", agent.Name())
+	}
+	if agent.Description() != "desc" {
+		t.Errorf("description should be preserved, got %s", agent.Description())
+	}
+}

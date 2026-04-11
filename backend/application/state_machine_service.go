@@ -1,6 +1,7 @@
 package application
 
 import (
+	"log"
 	"context"
 
 	"github.com/weibh/taskmanager/domain"
@@ -114,8 +115,8 @@ func (s *StateMachineService) InitializeRequirementState(ctx context.Context, re
 	}
 
 	// 记录日志
-	log := statemachine.NewTransitionLog(requirementID, "", initialState.ID, "init", "system", "requirement created")
-	s.repo.SaveTransitionLog(ctx, log)
+	logEntry := statemachine.NewTransitionLog(requirementID, "", initialState.ID, "init", "system", "requirement created")
+	s.repo.SaveTransitionLog(ctx, logEntry)
 
 	return rs, nil
 }
@@ -148,18 +149,18 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 	}
 
 	// 记录日志
-	log := statemachine.NewTransitionLog(requirementID, rs.CurrentState, toState.ID, trigger, triggeredBy, remark)
+	logEntry := statemachine.NewTransitionLog(requirementID, rs.CurrentState, toState.ID, trigger, triggeredBy, remark)
 
 	// 更新状态
 	rs.Transition(toState.ID, toState.Name)
 	if err := s.repo.UpdateRequirementState(ctx, rs); err != nil {
-		log.MarkFailed(err.Error())
-		s.repo.SaveTransitionLog(ctx, log)
+		logEntry.MarkFailed(err.Error())
+		s.repo.SaveTransitionLog(ctx, logEntry)
 		return nil, err
 	}
 
 	// 保存日志
-	if err := s.repo.SaveTransitionLog(ctx, log); err != nil {
+	if err := s.repo.SaveTransitionLog(ctx, logEntry); err != nil {
 		s.logger.Warn("failed to save transition log", zap.Error(err))
 	}
 
@@ -168,7 +169,9 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 		requirement, err := s.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 		if err == nil && requirement != nil {
 			requirement.SyncStatusFromStateMachine(toState.ID)
-			_ = s.requirementRepo.Save(ctx, requirement)
+			if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+				log.Printf("requirementRepo.Save failed: %v", errSave)
+			}
 		}
 	}
 

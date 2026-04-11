@@ -1,6 +1,7 @@
 package application
 
 import (
+	"log"
 	"context"
 	"errors"
 	"path/filepath"
@@ -113,7 +114,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if err != nil {
 		requirement.SetWorkspacePath(workspacePath)
 		requirement.SetClaudeRuntimeError(err.Error())
-		_ = s.requirementRepo.Save(ctx, requirement)
+		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+			log.Printf("requirementRepo.Save failed: %v", errSave)
+		}
 		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
 		return nil, err
 	}
@@ -128,19 +131,25 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	channelType, chatID, err := parseSessionKey(cmd.SessionKey)
 	if err != nil {
 		requirement.SetClaudeRuntimeError(err.Error())
-		_ = s.requirementRepo.Save(ctx, requirement)
+		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+			log.Printf("requirementRepo.Save failed: %v", errSave)
+		}
 		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
 		return nil, err
 	}
 	if s.inboundPublisher == nil {
 		requirement.SetClaudeRuntimeError(ErrInboundPublisherNotConfigured.Error())
-		_ = s.requirementRepo.Save(ctx, requirement)
+		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+			log.Printf("requirementRepo.Save failed: %v", errSave)
+		}
 		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
 		return nil, ErrInboundPublisherNotConfigured
 	}
 	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
 		requirement.SetClaudeRuntimeError(err.Error())
-		_ = s.requirementRepo.Save(ctx, requirement)
+		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+			log.Printf("requirementRepo.Save failed: %v", errSave)
+		}
 		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
 		return nil, err
 	}
@@ -157,7 +166,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 记录状态转换日志
 	if s.stateMachineRepo != nil && currentState != "" {
 		fromStatus := string(requirement.Status())
-		log := statemachine.NewTransitionLog(
+		logEntry := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			fromStatus,
 			currentState,
@@ -165,7 +174,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 			"system",
 			"派发需求",
 		)
-		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		if errSave := s.stateMachineRepo.SaveTransitionLog(ctx, logEntry); errSave != nil {
+			log.Printf("stateMachineRepo.SaveTransitionLog failed: %v", errSave)
+		}
 
 		// 保存/更新 RequirementState
 		s.saveRequirementState(ctx, requirement, currentState)
@@ -179,15 +190,21 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 					reqState, _ := s.stateMachineRepo.GetRequirementState(ctx, requirement.ID().String())
 					if reqState != nil {
 						reqState.Transition(nextState.ID, nextState.Name)
-						_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
+						if errSave := s.stateMachineRepo.UpdateRequirementState(ctx, reqState); errSave != nil {
+							log.Printf("stateMachineRepo.UpdateRequirementState failed: %v", errSave)
+						}
 
 						autoLog := statemachine.NewTransitionLog(
 							requirement.ID().String(), "todo", nextState.ID,
 							autoTransition.Trigger, "system", "派发时自动状态转换")
-						_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)
+						if errSave := s.stateMachineRepo.SaveTransitionLog(ctx, autoLog); errSave != nil {
+							log.Printf("stateMachineRepo.SaveTransitionLog failed: %v", errSave)
+						}
 
 						requirement.SyncStatusFromStateMachine(nextState.ID)
-						_ = s.requirementRepo.Save(ctx, requirement)
+						if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
+							log.Printf("requirementRepo.Save failed: %v", errSave)
+						}
 						currentState = nextState.ID
 						aiGuide = smConfig.GetStateAIGuide(nextState.ID)
 					}

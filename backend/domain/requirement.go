@@ -30,14 +30,28 @@ type RequirementStatus string
 
 // 注意：状态值现在由状态机定义，不再硬编码。
 // 这里只保留 todo 作为默认值，其他状态从状态机获取。
-const RequirementStatusTodo RequirementStatus = "todo"
+const (
+	RequirementStatusTodo       RequirementStatus = "todo"
+	RequirementStatusPreparing  RequirementStatus = "preparing"
+	RequirementStatusCoding     RequirementStatus = "coding"
+	RequirementStatusPROpened   RequirementStatus = "pr_opened"
+	RequirementStatusFailed     RequirementStatus = "failed"
+	RequirementStatusCompleted  RequirementStatus = "completed"
+)
+
+// Claude Runtime 状态常量
+const (
+	RuntimeStatusRunning   = "running"
+	RuntimeStatusCompleted = "completed"
+	RuntimeStatusFailed    = "failed"
+)
 
 // Normalize 规范化状态值，将旧值转换为 todo
 // 注意：其他状态不再自动转换，改为由状态机定义
 func (s RequirementStatus) Normalize() RequirementStatus {
 	switch s {
 	case "in_progress", "doing":
-		return RequirementStatus("preparing")
+		return RequirementStatusPreparing
 	case "preparing", "coding", "pr_opened", "failed", "completed", "done":
 		// 这些旧状态保持不变（由状态机定义）
 		return s
@@ -224,7 +238,7 @@ func (r *Requirement) CanRedispatch() bool {
 // StartClaudeRuntime 开始 Claude Runtime
 func (r *Requirement) StartClaudeRuntime() {
 	now := time.Now()
-	r.claudeRuntimeStatus = "running"
+	r.claudeRuntimeStatus = RuntimeStatusRunning
 	r.claudeRuntimeStartedAt = &now
 	r.claudeRuntimeEndedAt = nil
 	r.claudeRuntimeError = ""
@@ -235,9 +249,9 @@ func (r *Requirement) StartClaudeRuntime() {
 func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
 	now := time.Now()
 	if success {
-		r.claudeRuntimeStatus = "completed"
+		r.claudeRuntimeStatus = RuntimeStatusCompleted
 	} else {
-		r.claudeRuntimeStatus = "failed"
+		r.claudeRuntimeStatus = RuntimeStatusFailed
 		r.claudeRuntimeError = errMsg
 	}
 	r.claudeRuntimeEndedAt = &now
@@ -291,7 +305,7 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 	}
 
 	now := time.Now()
-	newStatus := RequirementStatus("preparing")
+	newStatus := RequirementStatusPreparing
 	if r.status != newStatus {
 		r.previousStatus = r.status
 	}
@@ -308,11 +322,11 @@ func (r *Requirement) StartDispatch(assigneeAgentCode string) error {
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
-	if r.status != "preparing" {
+	if r.status != RequirementStatusPreparing {
 		return ErrRequirementCannotDispatch
 	}
 
-	newStatus := RequirementStatus("coding")
+	newStatus := RequirementStatusCoding
 	if r.status != newStatus {
 		r.previousStatus = r.status
 	}
@@ -331,7 +345,7 @@ func (r *Requirement) MarkCoding(workspacePath, replicaAgentCode string) error {
 // 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkPROpened() {
 	now := time.Now()
-	newStatus := RequirementStatus("pr_opened")
+	newStatus := RequirementStatusPROpened
 	if r.status != newStatus {
 		r.previousStatus = r.status
 	}
@@ -352,7 +366,7 @@ const StaleReplicaMissingThreshold = 5 * time.Minute
 // IsStale 判断处于 coding 状态的需求是否过期
 // 返回 (shouldCleanup, reason)
 func (r *Requirement) IsStale(now time.Time) (bool, string) {
-	if r.status != RequirementStatus("coding") {
+	if r.status != RequirementStatusCoding {
 		return false, ""
 	}
 
@@ -383,7 +397,7 @@ func (r *Requirement) IsStaleWithReplicaCheck(now time.Time, replicaExists bool)
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
 // 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkFailed(lastError string) {
-	newStatus := RequirementStatus("failed")
+	newStatus := RequirementStatusFailed
 	if r.status != newStatus {
 		r.previousStatus = r.status
 	}
@@ -400,7 +414,7 @@ func (r *Requirement) MarkFailed(lastError string) {
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
 // 如果状态发生变化，会保存前一个状态到 previousStatus
 func (r *Requirement) MarkCompleted() {
-	newStatus := RequirementStatus("completed")
+	newStatus := RequirementStatusCompleted
 	if r.status != newStatus {
 		r.previousStatus = r.status
 	}

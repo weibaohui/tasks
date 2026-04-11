@@ -620,7 +620,7 @@ func TestMCPService_TestServer_UnsupportedTransport(t *testing.T) {
 
 	// 手动创建 server 并注入不正确的 transport
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-test-1"), "mcp_tt", "TT", domain.MCPTransportSTDIO)
-	server.UpdateProfile("TT", "", "bad_transport", "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "TT", Transport: "bad_transport"})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-test-1"] = server
 
 	err := svc.TestServer(ctx, domain.NewMCPServerID("mcp-test-1"))
@@ -650,7 +650,7 @@ func TestMCPService_RefreshCapabilities_UnsupportedTransport(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-ref-1"), "mcp_ref", "Ref", domain.MCPTransportSTDIO)
-	server.UpdateProfile("Ref", "", "bad_transport", "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "Ref", Transport: "bad_transport"})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-ref-1"] = server
 
 	err := svc.RefreshCapabilities(ctx, domain.NewMCPServerID("mcp-ref-1"))
@@ -1151,7 +1151,7 @@ func TestMCPService_TestServer_SSEStartFail(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-sse-start"), "mcp_sse_start", "SSEStart", domain.MCPTransportSSE)
-	server.UpdateProfile("SSEStart", "", domain.MCPTransportSSE, "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "SSEStart", Transport: domain.MCPTransportSSE})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-sse-start"] = server
 
 	err := svc.TestServer(ctx, domain.NewMCPServerID("mcp-sse-start"))
@@ -1169,7 +1169,7 @@ func TestMCPService_TestServer_HTTPInitFail(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-http-init"), "mcp_http_init", "HTTPInit", domain.MCPTransportHTTP)
-	server.UpdateProfile("HTTPInit", "", domain.MCPTransportHTTP, "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "HTTPInit", Transport: domain.MCPTransportHTTP})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-http-init"] = server
 
 	err := svc.TestServer(ctx, domain.NewMCPServerID("mcp-http-init"))
@@ -1187,7 +1187,7 @@ func TestMCPService_RefreshCapabilities_SSEStartFail(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-ref-sse"), "mcp_ref_sse", "RefSSE", domain.MCPTransportSSE)
-	server.UpdateProfile("RefSSE", "", domain.MCPTransportSSE, "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "RefSSE", Transport: domain.MCPTransportSSE})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-ref-sse"] = server
 
 	err := svc.RefreshCapabilities(ctx, domain.NewMCPServerID("mcp-ref-sse"))
@@ -1205,7 +1205,7 @@ func TestMCPService_RefreshCapabilities_HTTPInitFail(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-ref-http"), "mcp_ref_http", "RefHTTP", domain.MCPTransportHTTP)
-	server.UpdateProfile("RefHTTP", "", domain.MCPTransportHTTP, "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "RefHTTP", Transport: domain.MCPTransportHTTP})
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-ref-http"] = server
 
 	err := svc.RefreshCapabilities(ctx, domain.NewMCPServerID("mcp-ref-http"))
@@ -1250,7 +1250,7 @@ func TestMCPService_ExecuteTool_UnsupportedTransport(t *testing.T) {
 	ctx := context.Background()
 
 	server, _ := domain.NewMCPServer(domain.NewMCPServerID("mcp-exec"), "mcp_exec", "Exec", domain.MCPTransportSTDIO)
-	server.UpdateProfile("Exec", "", "bad_transport", "", "", nil, nil)
+	server.UpdateProfile(domain.MCPProfileUpdate{Name: "Exec", Transport: "bad_transport"})
 	server.SetStatus("active", "")
 	svc.mcpServerRepo.(*mockMCPServerRepo).servers["mcp-exec"] = server
 
