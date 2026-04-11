@@ -24,7 +24,7 @@ type HeartbeatScheduler struct {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	requirementDispatchService *RequirementDispatchService
-	stateMachineRepo           statemachine.Repository
+	stateMachineService         *StateMachineService
 }
 
 // NewHeartbeatScheduler 创建心跳调度器
@@ -37,7 +37,7 @@ func NewHeartbeatScheduler(
 		PublishInbound(msg *channelBus.InboundMessage)
 	},
 	requirementDispatchService *RequirementDispatchService,
-	stateMachineRepo statemachine.Repository,
+	stateMachineService *StateMachineService,
 ) *HeartbeatScheduler {
 	return &HeartbeatScheduler{
 		cron:                      cron.New(cron.WithSeconds()),
@@ -47,7 +47,7 @@ func NewHeartbeatScheduler(
 		idGenerator:               idGenerator,
 		inboundPublisher:          inboundPublisher,
 		requirementDispatchService: requirementDispatchService,
-		stateMachineRepo:          stateMachineRepo,
+		stateMachineService:       stateMachineService,
 	}
 }
 
@@ -97,60 +97,45 @@ func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
 	now := time.Now()
 	staleCount := 0
 	for _, req := range requirements {
-		// 检查是否处于 coding 状态
-		if string(req.Status()) == "coding" {
-			updatedAt := req.UpdatedAt()
-			shouldCleanup := false
-			reason := ""
-
-			// 如果超过 30 分钟未更新，标记为需要清理
-			if now.Sub(updatedAt) > 30*time.Minute {
-				shouldCleanup = true
-				reason = "timeout - no update for 30+ minutes"
+		// 检查分身是否存在（用于 IsStaleWithReplicaCheck）
+		replicaExists := true
+		if req.ReplicaAgentCode() != "" && s.agentRepo != nil {
+			agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(req.ReplicaAgentCode()))
+			if err == nil && agent == nil {
+				replicaExists = false
 			}
+		}
 
-			// 检查分身是否缺失（可能被之前的服务器异常关闭删除）
-			// 如果分身不存在，且需求处于 coding 状态超过 5 分钟，说明可能出问题了
-			if !shouldCleanup && req.ReplicaAgentCode() != "" {
-				if s.agentRepo != nil {
-					agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(req.ReplicaAgentCode()))
-					if err == nil && agent == nil {
-						// 分身不存在，可能是服务器异常关闭后被清理了
-						if now.Sub(updatedAt) > 5*time.Minute {
-							shouldCleanup = true
-							reason = "replica agent missing - possible server crash during execution"
-						}
+		// 使用领域方法判断是否过期
+		shouldCleanup, reason := req.IsStaleWithReplicaCheck(now, replicaExists)
+		if !shouldCleanup {
+			continue
+		}
+
+		staleCount++
+		log.Printf("[HEARTBEAT] cleanup: found stale requirement %s (title: %s, reason: %s, updated: %s ago)",
+			req.ID(), req.Title(), reason, now.Sub(req.UpdatedAt()).Round(time.Minute))
+
+		// 清理分身（如果还存在）
+		if replicaAgentCode := req.ReplicaAgentCode(); replicaAgentCode != "" {
+			if s.agentRepo != nil {
+				agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
+				if err == nil && agent != nil {
+					if err := s.agentRepo.Delete(ctx, agent.ID()); err != nil {
+						log.Printf("[HEARTBEAT] cleanup: failed to delete replica agent %s: %v", replicaAgentCode, err)
+					} else {
+						log.Printf("[HEARTBEAT] cleanup: deleted replica agent %s", replicaAgentCode)
 					}
 				}
 			}
+		}
 
-			if shouldCleanup {
-				staleCount++
-				log.Printf("[HEARTBEAT] cleanup: found stale requirement %s (title: %s, reason: %s, updated: %s ago)",
-					req.ID(), req.Title(), reason, now.Sub(updatedAt).Round(time.Minute))
-
-				// 清理分身（如果还存在）
-				if replicaAgentCode := req.ReplicaAgentCode(); replicaAgentCode != "" {
-					if s.agentRepo != nil {
-						agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
-						if err == nil && agent != nil {
-							if err := s.agentRepo.Delete(ctx, agent.ID()); err != nil {
-								log.Printf("[HEARTBEAT] cleanup: failed to delete replica agent %s: %v", replicaAgentCode, err)
-							} else {
-								log.Printf("[HEARTBEAT] cleanup: deleted replica agent %s", replicaAgentCode)
-							}
-						}
-					}
-				}
-
-				// 标记为失败
-				req.MarkFailed("cleanup: " + reason)
-				if err := s.requirementRepo.Save(ctx, req); err != nil {
-					log.Printf("[HEARTBEAT] cleanup: failed to save requirement %s: %v", req.ID(), err)
-				} else {
-					log.Printf("[HEARTBEAT] cleanup: marked requirement %s as failed", req.ID())
-				}
-			}
+		// 标记为失败
+		req.MarkFailed("cleanup: " + reason)
+		if err := s.requirementRepo.Save(ctx, req); err != nil {
+			log.Printf("[HEARTBEAT] cleanup: failed to save requirement %s: %v", req.ID(), err)
+		} else {
+			log.Printf("[HEARTBEAT] cleanup: marked requirement %s as failed", req.ID())
 		}
 	}
 
@@ -225,29 +210,14 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 	}
 
 	// 初始化状态机状态（如果项目绑定了状态机）
-	log.Printf("[HEARTBEAT] stateMachineRepo is nil: %v", s.stateMachineRepo == nil)
-	if s.stateMachineRepo != nil {
-		psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementTypeHeartbeat)
-		log.Printf("[HEARTBEAT] GetProjectStateMachine err=%v, psm=%v", err, psm)
+	if s.stateMachineService != nil {
+		psm, err := s.stateMachineService.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementTypeHeartbeat)
 		if err == nil && psm != nil {
-			// 获取状态机配置
-			sm, err := s.stateMachineRepo.GetStateMachine(ctx, psm.StateMachineID())
-			log.Printf("[HEARTBEAT] GetStateMachine err=%v, sm=%v, sm.Config=%v", err, sm, sm != nil && sm.Config != nil)
-			if err == nil && sm != nil && sm.Config != nil {
-				// 创建初始状态
-				initialState := sm.Config.GetState(sm.Config.InitialState)
-				log.Printf("[HEARTBEAT] InitialState=%s, initialState=%v", sm.Config.InitialState, initialState)
-				if initialState != nil {
-					rs := statemachine.NewRequirementState(requirement.ID().String(), sm.ID, initialState.ID, initialState.Name)
-					if err := s.stateMachineRepo.SaveRequirementState(ctx, rs); err != nil {
-						log.Printf("[HEARTBEAT] failed to initialize requirement state: %v", err)
-					} else {
-						log.Printf("[HEARTBEAT] initialized requirement state for %s (state: %s)", requirement.ID(), initialState.ID)
-						// 记录初始化日志
-						logEntry := statemachine.NewTransitionLog(requirement.ID().String(), "", initialState.ID, "init", "heartbeat-scheduler", "requirement created by heartbeat")
-						s.stateMachineRepo.SaveTransitionLog(ctx, logEntry)
-					}
-				}
+			rs, err := s.stateMachineService.InitializeRequirementState(ctx, requirement.ID().String(), psm.StateMachineID())
+			if err != nil {
+				log.Printf("[HEARTBEAT] failed to initialize requirement state: %v", err)
+			} else {
+				log.Printf("[HEARTBEAT] initialized requirement state for %s (state: %s)", requirement.ID(), rs.CurrentState)
 			}
 		}
 	}

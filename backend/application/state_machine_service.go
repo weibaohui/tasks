@@ -88,6 +88,11 @@ func (s *StateMachineService) DeleteStateMachine(ctx context.Context, id string)
 	return s.repo.DeleteStateMachine(ctx, id)
 }
 
+// GetProjectStateMachine 获取项目关联的状态机
+func (s *StateMachineService) GetProjectStateMachine(ctx context.Context, projectID string, requirementType statemachine.RequirementType) (*statemachine.ProjectStateMachine, error) {
+	return s.repo.GetProjectStateMachine(ctx, projectID, requirementType)
+}
+
 // InitializeRequirementState 初始化需求状态（创建需求时调用）
 // 注意：此方法需要调用方传入 stateMachineID，因为状态机不再绑定到特定项目
 func (s *StateMachineService) InitializeRequirementState(ctx context.Context, requirementID, stateMachineID string) (*statemachine.RequirementState, error) {

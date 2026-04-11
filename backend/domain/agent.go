@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -427,4 +428,38 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.claudeCodeConfig = snap.ClaudeCodeConfig
 	a.createdAt = snap.CreatedAt
 	a.updatedAt = snap.UpdatedAt
+}
+
+// NewReplicaAgent 从基础 Agent 创建分身 Agent
+// base: 基础 Agent（复制其配置）
+// id/agentCode: 新生成的 ID 和 Code
+// requirementID: 关联的需求 ID（用于命名）
+// workspacePath: 分身工作目录
+func NewReplicaAgent(base *Agent, id AgentID, agentCode AgentCode, requirementID, workspacePath string) *Agent {
+	snap := base.ToSnapshot()
+	now := time.Now()
+	snap.ID = id
+	snap.AgentCode = agentCode
+	snap.Name = fmt.Sprintf("%s-replica-%s", base.Name(), requirementID)
+	snap.IsDefault = false
+	snap.IsActive = true
+	snap.AgentType = AgentTypeCoding
+	snap.CreatedAt = now
+	snap.UpdatedAt = now
+
+	if snap.ClaudeCodeConfig == nil {
+		snap.ClaudeCodeConfig = DefaultClaudeCodeConfig()
+	} else {
+		cfg := *snap.ClaudeCodeConfig
+		snap.ClaudeCodeConfig = &cfg
+	}
+	snap.ClaudeCodeConfig.Cwd = workspacePath
+	continueConversation := false
+	forkSession := true
+	snap.ClaudeCodeConfig.ContinueConversation = &continueConversation
+	snap.ClaudeCodeConfig.ForkSession = &forkSession
+
+	replica := &Agent{}
+	replica.FromSnapshot(snap)
+	return replica
 }
