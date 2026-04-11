@@ -33,9 +33,9 @@ import (
 	"path/filepath"
 
 	"github.com/weibh/taskmanager/application"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/config"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/persistence"
 	"go.uber.org/zap"
 )
@@ -100,17 +100,17 @@ func New(ctx context.Context, opts ...Option) *SDK {
 // name: 状态机名称
 // description: 描述
 // yamlConfig: YAML 格式的配置
-func (s *SDK) Create(ctx context.Context, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
+func (s *SDK) Create(ctx context.Context, name, description, yamlConfig string) (*statemachine.StateMachine, error) {
 	return s.svc.CreateStateMachine(ctx, name, description, yamlConfig)
 }
 
 // Get 获取状态机
-func (s *SDK) Get(ctx context.Context, id string) (*state_machine.StateMachine, error) {
+func (s *SDK) Get(ctx context.Context, id string) (*statemachine.StateMachine, error) {
 	return s.svc.GetStateMachine(ctx, id)
 }
 
 // List 列出所有状态机
-func (s *SDK) List(ctx context.Context) ([]*state_machine.StateMachine, error) {
+func (s *SDK) List(ctx context.Context) ([]*statemachine.StateMachine, error) {
 	return s.svc.ListStateMachines(ctx)
 }
 
@@ -122,7 +122,7 @@ func (s *SDK) Delete(ctx context.Context, id string) error {
 // Initialize 初始化需求状态
 // requirementID: 需求 ID（可以是任意字符串）
 // stateMachineID: 状态机 ID
-func (s *SDK) Initialize(ctx context.Context, requirementID, stateMachineID string) (*state_machine.RequirementState, error) {
+func (s *SDK) Initialize(ctx context.Context, requirementID, stateMachineID string) (*statemachine.RequirementState, error) {
 	return s.svc.InitializeRequirementState(ctx, requirementID, stateMachineID)
 }
 
@@ -132,17 +132,17 @@ func (s *SDK) Initialize(ctx context.Context, requirementID, stateMachineID stri
 // triggeredBy: 触发者
 // remark: 备注
 // 可以通过 context 传递 metadata：statemachine.WithMetadata(ctx, metadata)
-func (s *SDK) Transition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*state_machine.RequirementState, error) {
+func (s *SDK) Transition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*statemachine.RequirementState, error) {
 	return s.svc.TriggerTransition(ctx, requirementID, trigger, triggeredBy, remark)
 }
 
 // GetState 获取需求当前状态
-func (s *SDK) GetState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
+func (s *SDK) GetState(ctx context.Context, requirementID string) (*statemachine.RequirementState, error) {
 	return s.svc.GetRequirementState(ctx, requirementID)
 }
 
 // GetHistory 获取需求转换历史
-func (s *SDK) GetHistory(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
+func (s *SDK) GetHistory(ctx context.Context, requirementID string) ([]*statemachine.TransitionLog, error) {
 	return s.svc.GetTransitionHistory(ctx, requirementID)
 }
 

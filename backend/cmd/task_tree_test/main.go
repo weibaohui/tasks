@@ -33,7 +33,7 @@ const (
 
 var (
 	httpClient = &http.Client{Timeout: 10 * time.Second}
-	idGen      = utils.NewNanoIDGenerator(21)
+	idGen      = utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	taskCount  int
 	totalDepth int
 )

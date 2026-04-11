@@ -4,21 +4,21 @@ import (
 	"context"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"go.uber.org/zap"
 )
 
 // StateMachineService 应用服务
 type StateMachineService struct {
-	repo            state_machine.Repository
+	repo            statemachine.Repository
 	requirementRepo domain.RequirementRepository
 	executor        *infra_sm.TransitionExecutor
 	logger          *zap.Logger
 }
 
 // NewStateMachineService 创建服务
-func NewStateMachineService(repo state_machine.Repository, requirementRepo domain.RequirementRepository, executor *infra_sm.TransitionExecutor, logger *zap.Logger) *StateMachineService {
+func NewStateMachineService(repo statemachine.Repository, requirementRepo domain.RequirementRepository, executor *infra_sm.TransitionExecutor, logger *zap.Logger) *StateMachineService {
 	return &StateMachineService{
 		repo:            repo,
 		requirementRepo: requirementRepo,
@@ -28,8 +28,8 @@ func NewStateMachineService(repo state_machine.Repository, requirementRepo domai
 }
 
 // CreateStateMachine 创建状态机
-func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
-	cfg, err := state_machine.ParseConfig(yamlConfig)
+func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, description, yamlConfig string) (*statemachine.StateMachine, error) {
+	cfg, err := statemachine.ParseConfig(yamlConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, desc
 		return nil, err
 	}
 
-	sm := state_machine.NewStateMachine(name, description, cfg)
+	sm := statemachine.NewStateMachine(name, description, cfg)
 	if err := s.repo.SaveStateMachine(ctx, sm); err != nil {
 		return nil, err
 	}
@@ -47,8 +47,8 @@ func (s *StateMachineService) CreateStateMachine(ctx context.Context, name, desc
 }
 
 // UpdateStateMachine 更新状态机
-func (s *StateMachineService) UpdateStateMachine(ctx context.Context, id, name, description, yamlConfig string) (*state_machine.StateMachine, error) {
-	cfg, err := state_machine.ParseConfig(yamlConfig)
+func (s *StateMachineService) UpdateStateMachine(ctx context.Context, id, name, description, yamlConfig string) (*statemachine.StateMachine, error) {
+	cfg, err := statemachine.ParseConfig(yamlConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (s *StateMachineService) UpdateStateMachine(ctx context.Context, id, name, 
 	}
 
 	// 使用相同 ID 创建新对象（SaveStateMachine 使用 UPSERT）
-	sm := state_machine.NewStateMachine(name, description, cfg)
+	sm := statemachine.NewStateMachine(name, description, cfg)
 	sm.ID = id
 
 	if err := s.repo.SaveStateMachine(ctx, sm); err != nil {
@@ -75,12 +75,12 @@ func (s *StateMachineService) UpdateStateMachine(ctx context.Context, id, name, 
 }
 
 // GetStateMachine 获取状态机
-func (s *StateMachineService) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
+func (s *StateMachineService) GetStateMachine(ctx context.Context, id string) (*statemachine.StateMachine, error) {
 	return s.repo.GetStateMachine(ctx, id)
 }
 
 // ListStateMachines 列出状态机
-func (s *StateMachineService) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
+func (s *StateMachineService) ListStateMachines(ctx context.Context) ([]*statemachine.StateMachine, error) {
 	return s.repo.ListStateMachines(ctx)
 }
 
@@ -91,7 +91,7 @@ func (s *StateMachineService) DeleteStateMachine(ctx context.Context, id string)
 
 // InitializeRequirementState 初始化需求状态（创建需求时调用）
 // 注意：此方法需要调用方传入 stateMachineID，因为状态机不再绑定到特定项目
-func (s *StateMachineService) InitializeRequirementState(ctx context.Context, requirementID, stateMachineID string) (*state_machine.RequirementState, error) {
+func (s *StateMachineService) InitializeRequirementState(ctx context.Context, requirementID, stateMachineID string) (*statemachine.RequirementState, error) {
 	// 获取状态机
 	sm, err := s.repo.GetStateMachine(ctx, stateMachineID)
 	if err != nil {
@@ -101,16 +101,16 @@ func (s *StateMachineService) InitializeRequirementState(ctx context.Context, re
 	// 创建初始状态
 	initialState := sm.Config.GetState(sm.Config.InitialState)
 	if initialState == nil {
-		return nil, state_machine.ErrStateNotFound(sm.Config.InitialState)
+		return nil, statemachine.ErrStateNotFound(sm.Config.InitialState)
 	}
 
-	rs := state_machine.NewRequirementState(requirementID, sm.ID, initialState.ID, initialState.Name)
+	rs := statemachine.NewRequirementState(requirementID, sm.ID, initialState.ID, initialState.Name)
 	if err := s.repo.SaveRequirementState(ctx, rs); err != nil {
 		return nil, err
 	}
 
 	// 记录日志
-	log := state_machine.NewTransitionLog(requirementID, "", initialState.ID, "init", "system", "requirement created")
+	log := statemachine.NewTransitionLog(requirementID, "", initialState.ID, "init", "system", "requirement created")
 	s.repo.SaveTransitionLog(ctx, log)
 
 	return rs, nil
@@ -118,7 +118,7 @@ func (s *StateMachineService) InitializeRequirementState(ctx context.Context, re
 
 // TriggerTransition 触发转换
 // metadata 通过 context 传递，用于 hook 上下文的模板变量替换
-func (s *StateMachineService) TriggerTransition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*state_machine.RequirementState, error) {
+func (s *StateMachineService) TriggerTransition(ctx context.Context, requirementID, trigger, triggeredBy, remark string) (*statemachine.RequirementState, error) {
 	// 获取当前状态
 	rs, err := s.repo.GetRequirementState(ctx, requirementID)
 	if err != nil {
@@ -134,17 +134,17 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 	// 查找转换规则
 	transition := sm.Config.FindTransition(rs.CurrentState, trigger)
 	if transition == nil {
-		return nil, state_machine.ErrTransitionNotFound(rs.CurrentState, trigger)
+		return nil, statemachine.ErrTransitionNotFound(rs.CurrentState, trigger)
 	}
 
 	// 获取目标状态
 	toState := sm.Config.GetState(transition.ToState)
 	if toState == nil {
-		return nil, state_machine.ErrStateNotFound(transition.ToState)
+		return nil, statemachine.ErrStateNotFound(transition.ToState)
 	}
 
 	// 记录日志
-	log := state_machine.NewTransitionLog(requirementID, rs.CurrentState, toState.ID, trigger, triggeredBy, remark)
+	log := statemachine.NewTransitionLog(requirementID, rs.CurrentState, toState.ID, trigger, triggeredBy, remark)
 
 	// 更新状态
 	rs.Transition(toState.ID, toState.Name)
@@ -191,12 +191,12 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 }
 
 // GetRequirementState 获取需求状态
-func (s *StateMachineService) GetRequirementState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
+func (s *StateMachineService) GetRequirementState(ctx context.Context, requirementID string) (*statemachine.RequirementState, error) {
 	return s.repo.GetRequirementState(ctx, requirementID)
 }
 
 // GetTransitionHistory 获取转换历史
-func (s *StateMachineService) GetTransitionHistory(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
+func (s *StateMachineService) GetTransitionHistory(ctx context.Context, requirementID string) ([]*statemachine.TransitionLog, error) {
 	return s.repo.ListTransitionLogs(ctx, requirementID)
 }
 

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
-	"github.com/weibh/taskmanager/domain/state_machine"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 )
 
 // StateMachineHandler 状态机 HTTP 处理
@@ -61,7 +61,7 @@ func (h *StateMachineHandler) CreateStateMachine(c *gin.Context) {
 
 	sm, err := h.service.CreateStateMachine(c.Request.Context(), req.Name, req.Description, req.Config)
 	if err != nil {
-		if smErr, ok := err.(*state_machine.StateMachineError); ok {
+		if smErr, ok := err.(*statemachine.StateMachineError); ok {
 			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}
@@ -82,7 +82,7 @@ func (h *StateMachineHandler) GetStateMachine(c *gin.Context) {
 
 	sm, err := h.service.GetStateMachine(c.Request.Context(), id)
 	if err != nil {
-		if _, ok := err.(*state_machine.StateMachineError); ok {
+		if _, ok := err.(*statemachine.StateMachineError); ok {
 			c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 			return
 		}
@@ -125,7 +125,7 @@ func (h *StateMachineHandler) UpdateStateMachine(c *gin.Context) {
 
 	sm, err := h.service.UpdateStateMachine(c.Request.Context(), id, req.Name, req.Description, req.Config)
 	if err != nil {
-		if smErr, ok := err.(*state_machine.StateMachineError); ok {
+		if smErr, ok := err.(*statemachine.StateMachineError); ok {
 			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}
@@ -167,7 +167,7 @@ func (h *StateMachineHandler) TriggerTransition(c *gin.Context) {
 
 	rs, err := h.service.TriggerTransition(ctx, requirementID, req.Trigger, req.TriggeredBy, req.Remark)
 	if err != nil {
-		if smErr, ok := err.(*state_machine.StateMachineError); ok {
+		if smErr, ok := err.(*statemachine.StateMachineError); ok {
 			switch smErr.Code {
 			case "TRANSITION_NOT_FOUND", "STATE_NOT_FOUND":
 				c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
@@ -193,7 +193,7 @@ func (h *StateMachineHandler) GetRequirementState(c *gin.Context) {
 
 	rs, err := h.service.GetRequirementState(c.Request.Context(), requirementID)
 	if err != nil {
-		if _, ok := err.(*state_machine.StateMachineError); ok {
+		if _, ok := err.(*statemachine.StateMachineError); ok {
 			c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: err.Error()})
 			return
 		}
@@ -230,7 +230,7 @@ func (h *StateMachineHandler) InitializeRequirementState(c *gin.Context) {
 
 	rs, err := h.service.InitializeRequirementState(c.Request.Context(), requirementID, req.StateMachineID)
 	if err != nil {
-		if smErr, ok := err.(*state_machine.StateMachineError); ok {
+		if smErr, ok := err.(*statemachine.StateMachineError); ok {
 			c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: smErr.Message})
 			return
 		}

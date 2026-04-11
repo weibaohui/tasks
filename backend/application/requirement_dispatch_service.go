@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/config"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
@@ -40,8 +40,7 @@ type RequirementDispatchService struct {
 	requirementRepo  domain.RequirementRepository
 	projectRepo      domain.ProjectRepository
 	agentRepo        domain.AgentRepository
-	stateMachineRepo state_machine.Repository
-	taskService      interface{} // TaskApplicationService - no longer used
+	stateMachineRepo statemachine.Repository
 	sessionService   *SessionApplicationService
 	idGenerator      domain.IDGenerator
 	inboundPublisher interface {
@@ -54,17 +53,15 @@ func NewRequirementDispatchService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
-	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 	replicaCleanupSvc domain.ReplicaCleanupService,
-	stateMachineRepo state_machine.Repository,
+	stateMachineRepo statemachine.Repository,
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
 		requirementRepo:   requirementRepo,
 		projectRepo:       projectRepo,
 		agentRepo:         agentRepo,
-		taskService:       taskService,
 		sessionService:    sessionService,
 		idGenerator:       idGenerator,
 		replicaCleanupSvc: replicaCleanupSvc,
@@ -160,7 +157,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 记录状态转换日志
 	if s.stateMachineRepo != nil && currentState != "" {
 		fromStatus := string(requirement.Status())
-		log := state_machine.NewTransitionLog(
+		log := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			fromStatus,
 			currentState,
@@ -176,14 +173,14 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		// 自动执行 todo → 第一个处理中状态转换（系统自动完成，不需要 AI 介入）
 		if currentState == "todo" {
 			psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx,
-				requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+				requirement.ProjectID().String(), statemachine.RequirementType(requirement.RequirementType()))
 			if err == nil {
 				sm, err := s.stateMachineRepo.GetStateMachine(ctx, psm.ToSnapshot().StateMachineID)
 				if err == nil {
 					// 找到 todo 状态转换到的下一个状态（第一个非 todo 的后续状态）
 					var (
-						autoTransition *state_machine.Transition
-						nextState       *state_machine.State
+						autoTransition *statemachine.Transition
+						nextState       *statemachine.State
 					)
 					for i := range sm.Config.Transitions {
 						t := &sm.Config.Transitions[i]
@@ -201,7 +198,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 							_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
 
 							// 记录转换日志，使用实际的 trigger
-							autoLog := state_machine.NewTransitionLog(
+							autoLog := statemachine.NewTransitionLog(
 								requirement.ID().String(), "todo", nextState.ID,
 								autoTransition.Trigger, "system", "派发时自动状态转换")
 							_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)
@@ -339,7 +336,7 @@ func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Cont
 		return ""
 	}
 
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return ""
 	}
@@ -361,7 +358,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 	}
 
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return "", nil
 	}
@@ -388,7 +385,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 // saveRequirementState 保存需求状态到状态机
 func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, requirement *domain.Requirement, currentState string) {
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, requirement.ProjectID().String(), statemachine.RequirementType(requirement.RequirementType()))
 	if err != nil {
 		return
 	}
@@ -408,18 +405,18 @@ func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, r
 	}
 
 	// 创建或更新 RequirementState
-	rs := state_machine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
+	rs := statemachine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
 	_ = s.stateMachineRepo.SaveRequirementState(ctx, rs)
 }
 
 // getStateMachineConfig 获取完整的状态机配置
-func (s *RequirementDispatchService) getStateMachineConfig(ctx context.Context, projectID string, reqType domain.RequirementType) *state_machine.Config {
+func (s *RequirementDispatchService) getStateMachineConfig(ctx context.Context, projectID string, reqType domain.RequirementType) *statemachine.Config {
 	if s.stateMachineRepo == nil {
 		return nil
 	}
 
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return nil
 	}
@@ -478,7 +475,7 @@ func parseSessionKey(sessionKey string) (string, string, error) {
 	return channelType, chatID, nil
 }
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *state_machine.Config) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *statemachine.Config) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 	requirementType := "普通需求"
 	if isHeartbeat {
@@ -617,7 +614,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 }
 
 // buildStateMachineGuide 构建状态机使用指南
-func buildStateMachineGuide(stateMachineName string, smConfig *state_machine.Config) string {
+func buildStateMachineGuide(stateMachineName string, smConfig *statemachine.Config) string {
 	if stateMachineName == "" {
 		return `【状态机使用指南】
 当前需求未配置状态机。如需使用状态机管理工作流，请联系管理员配置。`
@@ -663,7 +660,7 @@ func buildStateMachineGuide(stateMachineName string, smConfig *state_machine.Con
 
 // buildTriggerTable 构建状态机的完整触发器表（Markdown格式）
 // 包含所有状态和从该状态出发可用的所有触发器
-func buildTriggerTable(smConfig *state_machine.Config) string {
+func buildTriggerTable(smConfig *statemachine.Config) string {
 	if smConfig == nil || len(smConfig.States) == 0 {
 		return ""
 	}
@@ -711,7 +708,7 @@ func buildTriggerTable(smConfig *state_machine.Config) string {
 }
 
 // findTransitionByTrigger 根据触发器查找转换
-func findTransitionByTrigger(smConfig *state_machine.Config, fromState, trigger string) *state_machine.Transition {
+func findTransitionByTrigger(smConfig *statemachine.Config, fromState, trigger string) *statemachine.Transition {
 	for i := range smConfig.Transitions {
 		t := &smConfig.Transitions[i]
 		if t.FromState == fromState && t.Trigger == trigger {
@@ -722,7 +719,7 @@ func findTransitionByTrigger(smConfig *state_machine.Config, fromState, trigger 
 }
 
 // getStateName 根据状态ID获取状态名称
-func getStateName(smConfig *state_machine.Config, stateID string) string {
+func getStateName(smConfig *statemachine.Config, stateID string) string {
 	for _, s := range smConfig.States {
 		if s.ID == stateID {
 			return s.Name
@@ -733,7 +730,7 @@ func getStateName(smConfig *state_machine.Config, stateID string) string {
 
 // buildExecutionPipeline 根据状态机配置动态生成执行流水线
 // 使用 PHASE 结构和 ON_PHASE_COMPLETE Hook
-func buildExecutionPipeline(smConfig *state_machine.Config, requirementID, gitRepo, branch string) string {
+func buildExecutionPipeline(smConfig *statemachine.Config, requirementID, gitRepo, branch string) string {
 	if smConfig == nil || len(smConfig.Transitions) == 0 {
 		return `PHASE 1 — EXECUTE
 执行需求开发工作
@@ -841,7 +838,7 @@ taskmanager requirement transition --id ` + requirementID + ` --trigger=complete
 }
 
 // getFirstTrigger 获取状态机的第一个触发器（从 initial_state 出发）
-func getFirstTrigger(smConfig *state_machine.Config) string {
+func getFirstTrigger(smConfig *statemachine.Config) string {
 	if smConfig == nil {
 		return "start"
 	}
@@ -855,7 +852,7 @@ func getFirstTrigger(smConfig *state_machine.Config) string {
 
 // buildStateChain 从状态机构建状态链
 // 根据 transitions 构建从 initial_state 开始的完整状态路径
-func buildStateChain(smConfig *state_machine.Config) []string {
+func buildStateChain(smConfig *statemachine.Config) []string {
 	if smConfig == nil {
 		return nil
 	}

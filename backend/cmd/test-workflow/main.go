@@ -6,41 +6,41 @@ import (
 	"os"
 
 	"github.com/weibh/taskmanager/application"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	"go.uber.org/zap"
 )
 
 // MockStateMachineRepository 测试用 Mock
 type MockStateMachineRepository struct {
-	stateMachines      map[string]*state_machine.StateMachine
-	requirementStates map[string]*state_machine.RequirementState
-	transitionLogs    []*state_machine.TransitionLog
+	stateMachines      map[string]*statemachine.StateMachine
+	requirementStates map[string]*statemachine.RequirementState
+	transitionLogs    []*statemachine.TransitionLog
 }
 
 func NewMockStateMachineRepository() *MockStateMachineRepository {
 	return &MockStateMachineRepository{
-		stateMachines:      make(map[string]*state_machine.StateMachine),
-		requirementStates: make(map[string]*state_machine.RequirementState),
-		transitionLogs:    []*state_machine.TransitionLog{},
+		stateMachines:      make(map[string]*statemachine.StateMachine),
+		requirementStates: make(map[string]*statemachine.RequirementState),
+		transitionLogs:    []*statemachine.TransitionLog{},
 	}
 }
 
-func (r *MockStateMachineRepository) SaveStateMachine(ctx context.Context, sm *state_machine.StateMachine) error {
+func (r *MockStateMachineRepository) SaveStateMachine(ctx context.Context, sm *statemachine.StateMachine) error {
 	r.stateMachines[sm.ID] = sm
 	return nil
 }
 
-func (r *MockStateMachineRepository) GetStateMachine(ctx context.Context, id string) (*state_machine.StateMachine, error) {
+func (r *MockStateMachineRepository) GetStateMachine(ctx context.Context, id string) (*statemachine.StateMachine, error) {
 	sm, ok := r.stateMachines[id]
 	if !ok {
-		return nil, state_machine.ErrStateMachineNotFound(id)
+		return nil, statemachine.ErrStateMachineNotFound(id)
 	}
 	return sm, nil
 }
 
-func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context) ([]*state_machine.StateMachine, error) {
-	var result []*state_machine.StateMachine
+func (r *MockStateMachineRepository) ListStateMachines(ctx context.Context) ([]*statemachine.StateMachine, error) {
+	var result []*statemachine.StateMachine
 	for _, sm := range r.stateMachines {
 		result = append(result, sm)
 	}
@@ -52,31 +52,31 @@ func (r *MockStateMachineRepository) DeleteStateMachine(ctx context.Context, id 
 	return nil
 }
 
-func (r *MockStateMachineRepository) SaveRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+func (r *MockStateMachineRepository) SaveRequirementState(ctx context.Context, rs *statemachine.RequirementState) error {
 	r.requirementStates[rs.RequirementID] = rs
 	return nil
 }
 
-func (r *MockStateMachineRepository) GetRequirementState(ctx context.Context, requirementID string) (*state_machine.RequirementState, error) {
+func (r *MockStateMachineRepository) GetRequirementState(ctx context.Context, requirementID string) (*statemachine.RequirementState, error) {
 	rs, ok := r.requirementStates[requirementID]
 	if !ok {
-		return nil, state_machine.ErrRequirementStateNotFound(requirementID)
+		return nil, statemachine.ErrRequirementStateNotFound(requirementID)
 	}
 	return rs, nil
 }
 
-func (r *MockStateMachineRepository) UpdateRequirementState(ctx context.Context, rs *state_machine.RequirementState) error {
+func (r *MockStateMachineRepository) UpdateRequirementState(ctx context.Context, rs *statemachine.RequirementState) error {
 	r.requirementStates[rs.RequirementID] = rs
 	return nil
 }
 
-func (r *MockStateMachineRepository) SaveTransitionLog(ctx context.Context, log *state_machine.TransitionLog) error {
+func (r *MockStateMachineRepository) SaveTransitionLog(ctx context.Context, log *statemachine.TransitionLog) error {
 	r.transitionLogs = append(r.transitionLogs, log)
 	return nil
 }
 
-func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, requirementID string) ([]*state_machine.TransitionLog, error) {
-	var result []*state_machine.TransitionLog
+func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, requirementID string) ([]*statemachine.TransitionLog, error) {
+	var result []*statemachine.TransitionLog
 	for _, log := range r.transitionLogs {
 		if log.RequirementID == requirementID {
 			result = append(result, log)
@@ -85,15 +85,15 @@ func (r *MockStateMachineRepository) ListTransitionLogs(ctx context.Context, req
 	return result, nil
 }
 
-func (r *MockStateMachineRepository) SaveProjectStateMachine(ctx context.Context, psm *state_machine.ProjectStateMachine) error {
+func (r *MockStateMachineRepository) SaveProjectStateMachine(ctx context.Context, psm *statemachine.ProjectStateMachine) error {
 	return nil
 }
 
-func (r *MockStateMachineRepository) GetProjectStateMachine(ctx context.Context, projectID string, requirementType state_machine.RequirementType) (*state_machine.ProjectStateMachine, error) {
-	return nil, state_machine.ErrProjectStateMachineNotFound
+func (r *MockStateMachineRepository) GetProjectStateMachine(ctx context.Context, projectID string, requirementType statemachine.RequirementType) (*statemachine.ProjectStateMachine, error) {
+	return nil, statemachine.ErrProjectStateMachineNotFound
 }
 
-func (r *MockStateMachineRepository) ListProjectStateMachines(ctx context.Context, projectID string) ([]*state_machine.ProjectStateMachine, error) {
+func (r *MockStateMachineRepository) ListProjectStateMachines(ctx context.Context, projectID string) ([]*statemachine.ProjectStateMachine, error) {
 	return nil, nil
 }
 

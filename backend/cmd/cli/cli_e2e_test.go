@@ -390,7 +390,7 @@ func TestCLI_RequirementCreate(t *testing.T) {
 	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	idGen := utils.NewNanoIDGenerator(21)
+	idGen := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 
 	project, err := domain.NewProject(domain.NewProjectID(idGen.Generate()), "测试项目", "test-project", "main", nil)
@@ -437,7 +437,7 @@ func TestCLI_RequirementGet(t *testing.T) {
 	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	idGen := utils.NewNanoIDGenerator(21)
+	idGen := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil, nil)
@@ -659,7 +659,7 @@ func TestCLI_Workflow_ProjectAndRequirement_Manual(t *testing.T) {
 	db, dbPath, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	idGen := utils.NewNanoIDGenerator(21)
+	idGen := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	appService := application.NewRequirementApplicationService(requirementRepo, projectRepo, idGen, nil, nil)

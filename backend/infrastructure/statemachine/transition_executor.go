@@ -1,4 +1,4 @@
-package state_machine
+package statemachine
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +59,7 @@ func NewTransitionExecutor(logger *zap.Logger) *TransitionExecutor {
 }
 
 // ExecuteHooks 异步执行 hooks
-func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_machine.TransitionHook, hookCtx HookContext) {
+func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []statemachine.TransitionHook, hookCtx HookContext) {
 	go func() {
 		for _, hook := range hooks {
 			e.executeHook(ctx, hook, hookCtx)
@@ -67,7 +67,7 @@ func (e *TransitionExecutor) ExecuteHooks(ctx context.Context, hooks []state_mac
 	}()
 }
 
-func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine.TransitionHook, hookCtx HookContext) {
+func (e *TransitionExecutor) executeHook(ctx context.Context, hook statemachine.TransitionHook, hookCtx HookContext) {
 	logger := e.logger.With(
 		zap.String("hook", hook.Name),
 		zap.String("requirement_id", hookCtx.RequirementID),
@@ -128,7 +128,7 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook state_machine
 	e.executeCompensation(ctx, hook, hookCtx.RequirementID, lastErr)
 }
 
-func (e *TransitionExecutor) executeWebhook(ctx context.Context, hook state_machine.TransitionHook, hookCtx map[string]interface{}) error {
+func (e *TransitionExecutor) executeWebhook(ctx context.Context, hook statemachine.TransitionHook, hookCtx map[string]interface{}) error {
 	// 获取 URL
 	url, ok := hook.Config["url"].(string)
 	if !ok {
@@ -175,7 +175,7 @@ func (e *TransitionExecutor) executeWebhook(ctx context.Context, hook state_mach
 }
 
 // executeCommand 执行二进制命令
-func (e *TransitionExecutor) executeCommand(ctx context.Context, hook state_machine.TransitionHook, hookCtx map[string]interface{}) error {
+func (e *TransitionExecutor) executeCommand(ctx context.Context, hook statemachine.TransitionHook, hookCtx map[string]interface{}) error {
 	// 获取命令
 	cmdStr, ok := hook.Config["command"].(string)
 	if !ok {
@@ -229,7 +229,7 @@ func (e *TransitionExecutor) interpolate(s string, ctx map[string]interface{}) s
 	return result
 }
 
-func (e *TransitionExecutor) executeCompensation(ctx context.Context, hook state_machine.TransitionHook, requirementID string, err error) {
+func (e *TransitionExecutor) executeCompensation(ctx context.Context, hook statemachine.TransitionHook, requirementID string, err error) {
 	// 预留接口，当前只记录日志
 	e.logger.Warn("compensation triggered (not implemented)",
 		zap.String("hook", hook.Name),

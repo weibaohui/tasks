@@ -83,7 +83,7 @@ func (m *mockAuthIDGenerator) Generate() string {
 
 func setupTestAuthHandler() (*AuthHandler, *mockAuthUserRepository) {
 	repo := newMockAuthUserRepository()
-	idGen := utils.NewNanoIDGenerator(21)
+	idGen := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	userService := application.NewUserApplicationService(repo, idGen)
 	// 注意：userTokenRepo 为 nil，因此 Login 不会保存 token
 	// 这意味着依赖 token 存储的测试将无法正常工作
@@ -291,7 +291,7 @@ func TestMe_ExpiredToken(t *testing.T) {
 	expiredHandler := NewAuthHandler(
 		application.NewUserApplicationService(repo, &mockAuthIDGenerator{}),
 		nil, // userTokenRepo
-		utils.NewNanoIDGenerator(21),
+		utils.NewNanoIDGenerator(utils.DefaultIDSize),
 		"test-secret-key",
 	)
 
