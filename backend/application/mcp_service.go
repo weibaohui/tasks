@@ -90,7 +90,15 @@ func (s *MCPApplicationService) CreateServer(ctx context.Context, cmd CreateMCPS
 	if err != nil {
 		return nil, err
 	}
-	server.UpdateProfile(cmd.Name, cmd.Description, cmd.TransportType, cmd.Command, cmd.URL, cmd.Args, cmd.EnvVars)
+	server.UpdateProfile(domain.MCPProfileUpdate{
+		Name:        cmd.Name,
+		Description: cmd.Description,
+		Transport:   cmd.TransportType,
+		Command:     cmd.Command,
+		URL:         cmd.URL,
+		Args:        cmd.Args,
+		EnvVars:     cmd.EnvVars,
+	})
 	if err := s.mcpServerRepo.Create(ctx, server); err != nil {
 		return nil, err
 	}
@@ -141,7 +149,15 @@ func (s *MCPApplicationService) UpdateServer(ctx context.Context, cmd UpdateMCPS
 	if cmd.EnvVars != nil {
 		env = *cmd.EnvVars
 	}
-	server.UpdateProfile(name, desc, trans, command, url, args, env)
+	server.UpdateProfile(domain.MCPProfileUpdate{
+		Name:        name,
+		Description: desc,
+		Transport:   trans,
+		Command:     command,
+		URL:         url,
+		Args:        args,
+		EnvVars:     env,
+	})
 	if err := s.mcpServerRepo.Update(ctx, server); err != nil {
 		return nil, err
 	}

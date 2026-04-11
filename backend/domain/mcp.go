@@ -90,25 +90,36 @@ func (m *MCPServer) ErrorMessage() string            { return m.errorMessage }
 func (m *MCPServer) CreatedAt() time.Time            { return m.createdAt }
 func (m *MCPServer) UpdatedAt() time.Time            { return m.updatedAt }
 
-func (m *MCPServer) UpdateProfile(name, description string, transport MCPTransportType, command, url string, args []string, envVars map[string]string) {
-	if name != "" {
-		m.name = name
+// MCPProfileUpdate MCP 配置更新参数
+type MCPProfileUpdate struct {
+	Name        string
+	Description string
+	Transport   MCPTransportType
+	Command     string
+	URL         string
+	Args        []string
+	EnvVars     map[string]string
+}
+
+func (m *MCPServer) UpdateProfile(cfg MCPProfileUpdate) {
+	if cfg.Name != "" {
+		m.name = cfg.Name
 	}
-	m.description = description
-	if transport != "" {
-		m.transportType = transport
+	m.description = cfg.Description
+	if cfg.Transport != "" {
+		m.transportType = cfg.Transport
 	}
-	if command != "" {
-		m.command = command
+	if cfg.Command != "" {
+		m.command = cfg.Command
 	}
-	if url != "" {
-		m.url = url
+	if cfg.URL != "" {
+		m.url = cfg.URL
 	}
-	if args != nil {
-		m.args = append([]string(nil), args...)
+	if cfg.Args != nil {
+		m.args = append([]string(nil), cfg.Args...)
 	}
-	if envVars != nil {
-		m.envVars = envVars
+	if cfg.EnvVars != nil {
+		m.envVars = cfg.EnvVars
 	}
 	m.updatedAt = time.Now()
 }

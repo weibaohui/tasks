@@ -159,7 +159,10 @@ func scanMCPServer(scanner mcpRowScanner) (*domain.MCPServer, error) {
 		last = &v
 	}
 	entity, _ := domain.NewMCPServer(domain.NewMCPServerID(id), code, name, domain.MCPTransportType(transportType))
-	entity.UpdateProfile(name, description.String, domain.MCPTransportType(transportType), command.String, url.String, args, envVars)
+	entity.UpdateProfile(domain.MCPProfileUpdate{
+		Name: name, Description: description.String, Transport: domain.MCPTransportType(transportType),
+		Command: command.String, URL: url.String, Args: args, EnvVars: envVars,
+	})
 	entity.SetStatus(status, errorMessage.String)
 	entity.SetCapabilities(caps)
 	// patch timestamps

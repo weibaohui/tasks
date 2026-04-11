@@ -77,7 +77,7 @@ func (s *RequirementApplicationService) recordTransitionIfNeeded(ctx context.Con
 	previousStatus := requirement.PreviousStatus()
 	currentStatus := requirement.Status()
 	if previousStatus != "" && previousStatus != currentStatus {
-		log := statemachine.NewTransitionLog(
+		logEntry := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			string(previousStatus),
 			string(currentStatus),
@@ -85,7 +85,9 @@ func (s *RequirementApplicationService) recordTransitionIfNeeded(ctx context.Con
 			triggeredBy,
 			remark,
 		)
-		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		if errSave := s.stateMachineRepo.SaveTransitionLog(ctx, logEntry); errSave != nil {
+			log.Printf("stateMachineRepo.SaveTransitionLog failed: %v", errSave)
+		}
 	}
 }
 
@@ -220,7 +222,7 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 	fromStatus := requirement.Status()
 	toStatus := cmd.NewStatus
 	if string(fromStatus) != toStatus && s.stateMachineRepo != nil {
-		log := statemachine.NewTransitionLog(
+		logEntry := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			string(fromStatus),
 			toStatus,
@@ -228,7 +230,9 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 			"system",
 			"手动修改状态",
 		)
-		_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+		if errSave := s.stateMachineRepo.SaveTransitionLog(ctx, logEntry); errSave != nil {
+			log.Printf("stateMachineRepo.SaveTransitionLog failed: %v", errSave)
+		}
 	}
 
 	// 使用 SyncStatusFromStateMachine 直接设置状态
@@ -292,7 +296,7 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 		fromStatus := string(requirement.Status())
 		toStatus := "todo"
 		if fromStatus != toStatus {
-			log := statemachine.NewTransitionLog(
+			logEntry := statemachine.NewTransitionLog(
 				requirement.ID().String(),
 				fromStatus,
 				toStatus,
@@ -300,7 +304,9 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 				"system",
 				"重新派发",
 			)
-			_ = s.stateMachineRepo.SaveTransitionLog(ctx, log)
+			if errSave := s.stateMachineRepo.SaveTransitionLog(ctx, logEntry); errSave != nil {
+				log.Printf("stateMachineRepo.SaveTransitionLog failed: %v", errSave)
+			}
 		}
 	}
 
@@ -378,7 +384,9 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 	})
 	if err != nil {
 		// 派发失败，删除已保存的需求以保持一致性
-		_ = s.requirementRepo.Delete(ctx, newReq.ID())
+		if errSave := s.requirementRepo.Delete(ctx, newReq.ID()); errSave != nil {
+			log.Printf("requirementRepo.Delete failed: %v", errSave)
+		}
 		log.Printf("requirement creation failed, cleaned up %s: %v", newReq.ID().String(), err)
 		return nil, err
 	}

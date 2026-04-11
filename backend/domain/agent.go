@@ -248,42 +248,45 @@ func (a *Agent) UpdateProfile(name, description string) error {
 	return nil
 }
 
-func (a *Agent) UpdateConfig(
-	identityContent string,
-	soulContent string,
-	agentsContent string,
-	userContent string,
-	toolsContent string,
-	model string,
-	maxTokens int,
-	temperature float64,
-	maxIterations int,
-	historyMessages int,
-	skillsList []string,
-	toolsList []string,
-	enableThinkingProcess bool,
-) {
-	a.identityContent = identityContent
-	a.soulContent = soulContent
-	a.agentsContent = agentsContent
-	a.userContent = userContent
-	a.toolsContent = toolsContent
-	a.model = model
-	if maxTokens > 0 {
-		a.maxTokens = maxTokens
+// AgentConfigUpdate Agent 配置更新参数
+type AgentConfigUpdate struct {
+	IdentityContent      string
+	SoulContent          string
+	AgentsContent        string
+	UserContent          string
+	ToolsContent         string
+	Model                string
+	MaxTokens            int
+	Temperature          float64
+	MaxIterations        int
+	HistoryMessages      int
+	SkillsList           []string
+	ToolsList            []string
+	EnableThinkingProcess bool
+}
+
+func (a *Agent) UpdateConfig(cfg AgentConfigUpdate) {
+	a.identityContent = cfg.IdentityContent
+	a.soulContent = cfg.SoulContent
+	a.agentsContent = cfg.AgentsContent
+	a.userContent = cfg.UserContent
+	a.toolsContent = cfg.ToolsContent
+	a.model = cfg.Model
+	if cfg.MaxTokens > 0 {
+		a.maxTokens = cfg.MaxTokens
 	}
-	if temperature > 0 {
-		a.temperature = temperature
+	if cfg.Temperature > 0 {
+		a.temperature = cfg.Temperature
 	}
-	if maxIterations > 0 {
-		a.maxIterations = maxIterations
+	if cfg.MaxIterations > 0 {
+		a.maxIterations = cfg.MaxIterations
 	}
-	if historyMessages >= 0 {
-		a.historyMessages = historyMessages
+	if cfg.HistoryMessages >= 0 {
+		a.historyMessages = cfg.HistoryMessages
 	}
-	a.skillsList = append([]string(nil), skillsList...)
-	a.toolsList = append([]string(nil), toolsList...)
-	a.enableThinkingProcess = enableThinkingProcess
+	a.skillsList = append([]string(nil), cfg.SkillsList...)
+	a.toolsList = append([]string(nil), cfg.ToolsList...)
+	a.enableThinkingProcess = cfg.EnableThinkingProcess
 	a.updatedAt = time.Now()
 }
 

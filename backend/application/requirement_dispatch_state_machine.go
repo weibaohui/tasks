@@ -1,6 +1,7 @@
 package application
 
 import (
+	"log"
 	"context"
 
 	"github.com/weibh/taskmanager/domain"
@@ -82,7 +83,9 @@ func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, r
 
 	// 创建或更新 RequirementState
 	rs := statemachine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
-	_ = s.stateMachineRepo.SaveRequirementState(ctx, rs)
+	if errSave := s.stateMachineRepo.SaveRequirementState(ctx, rs); errSave != nil {
+		log.Printf("stateMachineRepo.SaveRequirementState failed: %v", errSave)
+	}
 }
 
 // getStateMachineConfig 获取完整的状态机配置
