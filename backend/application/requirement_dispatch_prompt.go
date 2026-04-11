@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 )
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *state_machine.Config) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *statemachine.Config) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 	requirementType := "普通需求"
 	if isHeartbeat {
@@ -147,7 +147,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 }
 
 // buildStateMachineGuide 构建状态机使用指南
-func buildStateMachineGuide(stateMachineName string, smConfig *state_machine.Config) string {
+func buildStateMachineGuide(stateMachineName string, smConfig *statemachine.Config) string {
 	if stateMachineName == "" {
 		return `【状态机使用指南】
 当前需求未配置状态机。如需使用状态机管理工作流，请联系管理员配置。`
@@ -193,7 +193,7 @@ func buildStateMachineGuide(stateMachineName string, smConfig *state_machine.Con
 
 // buildTriggerTable 构建状态机的完整触发器表（Markdown格式）
 // 包含所有状态和从该状态出发可用的所有触发器
-func buildTriggerTable(smConfig *state_machine.Config) string {
+func buildTriggerTable(smConfig *statemachine.Config) string {
 	if smConfig == nil || len(smConfig.States) == 0 {
 		return ""
 	}
@@ -241,7 +241,7 @@ func buildTriggerTable(smConfig *state_machine.Config) string {
 }
 
 // findTransitionByTrigger 根据触发器查找转换
-func findTransitionByTrigger(smConfig *state_machine.Config, fromState, trigger string) *state_machine.Transition {
+func findTransitionByTrigger(smConfig *statemachine.Config, fromState, trigger string) *statemachine.Transition {
 	for i := range smConfig.Transitions {
 		t := &smConfig.Transitions[i]
 		if t.FromState == fromState && t.Trigger == trigger {
@@ -252,7 +252,7 @@ func findTransitionByTrigger(smConfig *state_machine.Config, fromState, trigger 
 }
 
 // getStateName 根据状态ID获取状态名称
-func getStateName(smConfig *state_machine.Config, stateID string) string {
+func getStateName(smConfig *statemachine.Config, stateID string) string {
 	for _, s := range smConfig.States {
 		if s.ID == stateID {
 			return s.Name
@@ -263,7 +263,7 @@ func getStateName(smConfig *state_machine.Config, stateID string) string {
 
 // buildExecutionPipeline 根据状态机配置动态生成执行流水线
 // 使用 PHASE 结构和 ON_PHASE_COMPLETE Hook
-func buildExecutionPipeline(smConfig *state_machine.Config, requirementID, gitRepo, branch string) string {
+func buildExecutionPipeline(smConfig *statemachine.Config, requirementID, gitRepo, branch string) string {
 	if smConfig == nil || len(smConfig.Transitions) == 0 {
 		return `PHASE 1 — EXECUTE
 执行需求开发工作
@@ -371,7 +371,7 @@ taskmanager requirement transition --id ` + requirementID + ` --trigger=complete
 }
 
 // getFirstTrigger 获取状态机的第一个触发器（从 initial_state 出发）
-func getFirstTrigger(smConfig *state_machine.Config) string {
+func getFirstTrigger(smConfig *statemachine.Config) string {
 	if smConfig == nil {
 		return "start"
 	}
@@ -385,7 +385,7 @@ func getFirstTrigger(smConfig *state_machine.Config) string {
 
 // buildStateChain 从状态机构建状态链
 // 根据 transitions 构建从 initial_state 开始的完整状态路径
-func buildStateChain(smConfig *state_machine.Config) []string {
+func buildStateChain(smConfig *statemachine.Config) []string {
 	if smConfig == nil {
 		return nil
 	}

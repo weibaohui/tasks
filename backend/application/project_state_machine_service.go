@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 )
 
 // ProjectStateMachineMapping 项目状态机映射DTO
@@ -30,11 +30,11 @@ type GetProjectStateMachinesQuery struct {
 
 // ProjectStateMachineApplicationService 项目状态机应用服务
 type ProjectStateMachineApplicationService struct {
-	repo state_machine.Repository
+	repo statemachine.Repository
 }
 
 // NewProjectStateMachineApplicationService 创建应用服务
-func NewProjectStateMachineApplicationService(repo state_machine.Repository) *ProjectStateMachineApplicationService {
+func NewProjectStateMachineApplicationService(repo statemachine.Repository) *ProjectStateMachineApplicationService {
 	return &ProjectStateMachineApplicationService{repo: repo}
 }
 
@@ -46,18 +46,18 @@ func (s *ProjectStateMachineApplicationService) SetProjectStateMachine(ctx conte
 		return nil, err
 	}
 
-	reqType := state_machine.RequirementType(cmd.RequirementType)
+	reqType := statemachine.RequirementType(cmd.RequirementType)
 
 	// 尝试获取现有映射
 	existing, err := s.repo.GetProjectStateMachine(ctx, cmd.ProjectID, reqType)
-	if err != nil && err != state_machine.ErrProjectStateMachineNotFound {
+	if err != nil && err != statemachine.ErrProjectStateMachineNotFound {
 		return nil, err
 	}
 
-	var psm *state_machine.ProjectStateMachine
-	if err == state_machine.ErrProjectStateMachineNotFound {
+	var psm *statemachine.ProjectStateMachine
+	if err == statemachine.ErrProjectStateMachineNotFound {
 		// 创建新映射
-		psm, err = state_machine.NewProjectStateMachine(cmd.ProjectID, reqType, cmd.StateMachineID)
+		psm, err = statemachine.NewProjectStateMachine(cmd.ProjectID, reqType, cmd.StateMachineID)
 		if err != nil {
 			return nil, err
 		}
@@ -122,14 +122,14 @@ func (s *ProjectStateMachineApplicationService) DeleteProjectStateMachine(ctx co
 // GetAvailableRequirementTypes 获取可用的需求类型列表
 func (s *ProjectStateMachineApplicationService) GetAvailableRequirementTypes() []string {
 	return []string{
-		string(state_machine.RequirementTypeNormal),
-		string(state_machine.RequirementTypeHeartbeat),
+		string(statemachine.RequirementTypeNormal),
+		string(statemachine.RequirementTypeHeartbeat),
 	}
 }
 
 // GetProjectStateMachineByType 获取指定类型的项目状态机映射
 func (s *ProjectStateMachineApplicationService) GetProjectStateMachineByType(ctx context.Context, projectID string, requirementType string) (*ProjectStateMachineMapping, error) {
-	reqType := state_machine.RequirementType(requirementType)
+	reqType := statemachine.RequirementType(requirementType)
 	psm, err := s.repo.GetProjectStateMachine(ctx, projectID, reqType)
 	if err != nil {
 		return nil, err

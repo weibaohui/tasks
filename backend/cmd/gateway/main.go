@@ -68,7 +68,7 @@ func main() {
 	logger.Info("数据库初始化完成")
 
 	// 3. 初始化依赖
-	idGenerator := utils.NewNanoIDGenerator(21)
+	idGenerator := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 	channelRepo := _persistence.NewSQLiteChannelRepository(db)
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	agentRepo := _persistence.NewSQLiteAgentRepository(db)
@@ -107,7 +107,7 @@ func main() {
 	logger.Info("技能加载器初始化完成", zap.String("workspace", gatewayWorkspace))
 
 	// 9. 初始化消息处理器 (gateway 不创建 workerPool，任务由 server 执行)
-	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
+	processor := channel.NewMessageProcessor(messageBus, sessionManager, logger, agentRepo, providerRepo, sessionService, idGenerator, hookManager, llm.NewLLMProviderFactory(), nil, gatewaySkillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	logger.Info("消息处理器初始化完成")
 
 	// 10. 初始化应用服务

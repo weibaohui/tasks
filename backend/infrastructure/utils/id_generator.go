@@ -8,6 +8,9 @@ import (
 	"github.com/aidarkhanov/nanoid/v2"
 )
 
+// DefaultIDSize 默认 ID 长度
+const DefaultIDSize = 21
+
 // NanoIDGenerator NanoID 生成器
 type NanoIDGenerator struct {
 	size int
@@ -16,7 +19,7 @@ type NanoIDGenerator struct {
 // NewNanoIDGenerator 创建 NanoID 生成器
 func NewNanoIDGenerator(size int) *NanoIDGenerator {
 	if size <= 0 {
-		size = 21
+		size = DefaultIDSize
 	}
 	return &NanoIDGenerator{size: size}
 }

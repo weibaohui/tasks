@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -36,12 +36,11 @@ type RequirementDispatchService struct {
 	requirementRepo   domain.RequirementRepository
 	projectRepo       domain.ProjectRepository
 	agentRepo         domain.AgentRepository
-	stateMachineRepo  state_machine.Repository
-	taskService       interface{} // TaskApplicationService - no longer used
-	sessionService    *SessionApplicationService
-	idGenerator       domain.IDGenerator
+	stateMachineRepo  statemachine.Repository
 	workspaceConfig   domain.WorkspaceConfigProvider
 	workspaceManager  domain.WorkspaceManager
+	sessionService    *SessionApplicationService
+	idGenerator       domain.IDGenerator
 	inboundPublisher  interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
@@ -52,11 +51,10 @@ func NewRequirementDispatchService(
 	requirementRepo domain.RequirementRepository,
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
-	taskService interface{}, // TaskApplicationService - no longer used
 	sessionService *SessionApplicationService,
 	idGenerator domain.IDGenerator,
 	replicaCleanupSvc domain.ReplicaCleanupService,
-	stateMachineRepo state_machine.Repository,
+	stateMachineRepo statemachine.Repository,
 	workspaceConfig domain.WorkspaceConfigProvider,
 	workspaceManager domain.WorkspaceManager,
 ) *RequirementDispatchService {
@@ -64,7 +62,6 @@ func NewRequirementDispatchService(
 		requirementRepo:   requirementRepo,
 		projectRepo:       projectRepo,
 		agentRepo:         agentRepo,
-		taskService:       taskService,
 		sessionService:    sessionService,
 		idGenerator:       idGenerator,
 		replicaCleanupSvc: replicaCleanupSvc,
@@ -162,7 +159,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 记录状态转换日志
 	if s.stateMachineRepo != nil && currentState != "" {
 		fromStatus := string(requirement.Status())
-		log := state_machine.NewTransitionLog(
+		log := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			fromStatus,
 			currentState,
@@ -178,14 +175,14 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		// 自动执行 todo → 第一个处理中状态转换（系统自动完成，不需要 AI 介入）
 		if currentState == "todo" {
 			psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx,
-				requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+				requirement.ProjectID().String(), statemachine.RequirementType(requirement.RequirementType()))
 			if err == nil {
 				sm, err := s.stateMachineRepo.GetStateMachine(ctx, psm.ToSnapshot().StateMachineID)
 				if err == nil {
 					// 找到 todo 状态转换到的下一个状态（第一个非 todo 的后续状态）
 					var (
-						autoTransition *state_machine.Transition
-						nextState       *state_machine.State
+						autoTransition *statemachine.Transition
+						nextState       *statemachine.State
 					)
 					for i := range sm.Config.Transitions {
 						t := &sm.Config.Transitions[i]
@@ -203,7 +200,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 							_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
 
 							// 记录转换日志，使用实际的 trigger
-							autoLog := state_machine.NewTransitionLog(
+							autoLog := statemachine.NewTransitionLog(
 								requirement.ID().String(), "todo", nextState.ID,
 								autoTransition.Trigger, "system", "派发时自动状态转换")
 							_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 )
 
 var (
@@ -49,7 +50,7 @@ type RequirementApplicationService struct {
 	projectRepo       domain.ProjectRepository
 	idGenerator       domain.IDGenerator
 	replicaCleanupSvc domain.ReplicaCleanupService
-	stateMachineRepo  state_machine.Repository
+	stateMachineRepo  statemachine.Repository
 }
 
 func NewRequirementApplicationService(
@@ -57,7 +58,7 @@ func NewRequirementApplicationService(
 	projectRepo domain.ProjectRepository,
 	idGenerator domain.IDGenerator,
 	replicaCleanupSvc domain.ReplicaCleanupService,
-	stateMachineRepo state_machine.Repository,
+	stateMachineRepo statemachine.Repository,
 ) *RequirementApplicationService {
 	return &RequirementApplicationService{
 		requirementRepo:   requirementRepo,
@@ -76,7 +77,7 @@ func (s *RequirementApplicationService) recordTransitionIfNeeded(ctx context.Con
 	previousStatus := requirement.PreviousStatus()
 	currentStatus := requirement.Status()
 	if previousStatus != "" && previousStatus != currentStatus {
-		log := state_machine.NewTransitionLog(
+		log := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			string(previousStatus),
 			string(currentStatus),
@@ -219,7 +220,7 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 	fromStatus := requirement.Status()
 	toStatus := cmd.NewStatus
 	if string(fromStatus) != toStatus && s.stateMachineRepo != nil {
-		log := state_machine.NewTransitionLog(
+		log := statemachine.NewTransitionLog(
 			requirement.ID().String(),
 			string(fromStatus),
 			toStatus,
@@ -240,7 +241,7 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 }
 
 // GetRequirementTransitionHistory 获取需求的状态转换历史
-func (s *RequirementApplicationService) GetRequirementTransitionHistory(ctx context.Context, requirementID domain.RequirementID) ([]*state_machine.TransitionLog, error) {
+func (s *RequirementApplicationService) GetRequirementTransitionHistory(ctx context.Context, requirementID domain.RequirementID) ([]*statemachine.TransitionLog, error) {
 	if s.stateMachineRepo == nil {
 		return nil, nil
 	}
@@ -264,7 +265,9 @@ func (s *RequirementApplicationService) ReportRequirementPROpened(ctx context.Co
 
 	// 先清理分身和工作区（应用层职责）
 	if s.replicaCleanupSvc != nil {
-		_ = s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath())
+		if err := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); err != nil {
+			log.Printf("failed to cleanup replica for requirement %s: %v", requirement.ID().String(), err)
+		}
 	}
 
 	requirement.MarkPROpened()
@@ -289,7 +292,7 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 		fromStatus := string(requirement.Status())
 		toStatus := "todo"
 		if fromStatus != toStatus {
-			log := state_machine.NewTransitionLog(
+			log := statemachine.NewTransitionLog(
 				requirement.ID().String(),
 				fromStatus,
 				toStatus,
@@ -376,6 +379,7 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 	if err != nil {
 		// 派发失败，删除已保存的需求以保持一致性
 		_ = s.requirementRepo.Delete(ctx, newReq.ID())
+		log.Printf("requirement creation failed, cleaned up %s: %v", newReq.ID().String(), err)
 		return nil, err
 	}
 

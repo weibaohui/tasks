@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 )
 
 func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Context, projectID string, reqType domain.RequirementType) string {
@@ -12,7 +12,7 @@ func (s *RequirementDispatchService) getProjectStateMachineName(ctx context.Cont
 		return ""
 	}
 
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return ""
 	}
@@ -34,7 +34,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 	}
 
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return "", nil
 	}
@@ -61,7 +61,7 @@ func (s *RequirementDispatchService) getStateMachineGuide(ctx context.Context, p
 // saveRequirementState 保存需求状态到状态机
 func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, requirement *domain.Requirement, currentState string) {
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, requirement.ProjectID().String(), state_machine.RequirementType(requirement.RequirementType()))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, requirement.ProjectID().String(), statemachine.RequirementType(requirement.RequirementType()))
 	if err != nil {
 		return
 	}
@@ -81,18 +81,18 @@ func (s *RequirementDispatchService) saveRequirementState(ctx context.Context, r
 	}
 
 	// 创建或更新 RequirementState
-	rs := state_machine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
+	rs := statemachine.NewRequirementState(requirement.ID().String(), sm.ID, currentState, stateInfo.Name)
 	_ = s.stateMachineRepo.SaveRequirementState(ctx, rs)
 }
 
 // getStateMachineConfig 获取完整的状态机配置
-func (s *RequirementDispatchService) getStateMachineConfig(ctx context.Context, projectID string, reqType domain.RequirementType) *state_machine.Config {
+func (s *RequirementDispatchService) getStateMachineConfig(ctx context.Context, projectID string, reqType domain.RequirementType) *statemachine.Config {
 	if s.stateMachineRepo == nil {
 		return nil
 	}
 
 	// 获取项目状态机映射
-	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, state_machine.RequirementType(reqType))
+	psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, projectID, statemachine.RequirementType(reqType))
 	if err != nil {
 		return nil
 	}

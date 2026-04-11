@@ -220,9 +220,7 @@ type MessageProcessor struct {
 	agentConfigCache     *AgentConfigCache
 	agentRepo            domain.AgentRepository
 	providerRepo         domain.LLMProviderRepository
-	taskService          interface{} // *application.TaskApplicationService - removed
 	sessionService       *application.SessionApplicationService
-	workerPool           interface{} // *application.WorkerPool - removed
 	idGenerator          domain.IDGenerator
 	toolRegistry         *llm.ToolRegistry
 	hookManager          *hook.Manager
@@ -243,9 +241,7 @@ func NewMessageProcessor(
 	logger *zap.Logger,
 	agentRepo domain.AgentRepository,
 	providerRepo domain.LLMProviderRepository,
-	taskService interface{}, // *application.TaskApplicationService - removed
 	sessionService *application.SessionApplicationService,
-	workerPool interface{}, // *application.WorkerPool - removed
 	idGenerator domain.IDGenerator,
 	hookManager *hook.Manager,
 	factory domain.LLMProviderFactory,
@@ -269,9 +265,7 @@ func NewMessageProcessor(
 		agentConfigCache:     NewAgentConfigCache(),
 		agentRepo:            agentRepo,
 		providerRepo:         providerRepo,
-		taskService:          taskService,
 		sessionService:       sessionService,
-		workerPool:           workerPool,
 		idGenerator:          idGenerator,
 		toolRegistry:         registry,
 		hookManager:          hookManager,

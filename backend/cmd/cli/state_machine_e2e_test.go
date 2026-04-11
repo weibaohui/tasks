@@ -12,7 +12,7 @@ import (
 
 	"github.com/weibh/taskmanager/application"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"go.uber.org/zap"
 )
 

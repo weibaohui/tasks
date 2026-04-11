@@ -19,6 +19,9 @@ description: 从代码提交到上线的完整DevOps流程
 initial_state: code_submitted
 
 states:
+  - id: todo
+    name: 待办
+    is_final: false
   - id: code_submitted
     name: 代码已提交
     is_final: false
@@ -36,9 +39,16 @@ states:
     is_final: false
   - id: deploy_production
     name: 部署生产
+    is_final: false
+  - id: completed
+    name: 已完成
     is_final: true
 
 transitions:
+  - from: todo
+    to: code_submitted
+    trigger: create
+    description: 创建
   - from: code_submitted
     to: code_review
     trigger: start_review
@@ -75,6 +85,10 @@ transitions:
     to: integration_test
     trigger: staging_failed
     description: 预发布验证失败，回滚重测
+  - from: deploy_production
+    to: completed
+    trigger: finish
+    description: 完成
 `
 
 func TestStateMachineDevOpsCLI(t *testing.T) {
@@ -130,8 +144,8 @@ func TestStateMachineDevOpsCLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取触发器失败: %v", err)
 	}
-	if len(triggers) != 9 {
-		t.Errorf("预期 9 个触发器，实际 %d 个", len(triggers))
+	if len(triggers) != 11 {
+		t.Errorf("预期 11 个触发器，实际 %d 个", len(triggers))
 	}
 
 	// Step 4: 初始化需求

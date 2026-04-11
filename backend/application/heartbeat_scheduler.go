@@ -9,7 +9,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/state_machine"
+	"github.com/weibh/taskmanager/domain/statemachine"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -24,7 +24,7 @@ type HeartbeatScheduler struct {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	requirementDispatchService *RequirementDispatchService
-	stateMachineRepo           state_machine.Repository
+	stateMachineRepo           statemachine.Repository
 }
 
 // NewHeartbeatScheduler 创建心跳调度器
@@ -37,7 +37,7 @@ func NewHeartbeatScheduler(
 		PublishInbound(msg *channelBus.InboundMessage)
 	},
 	requirementDispatchService *RequirementDispatchService,
-	stateMachineRepo state_machine.Repository,
+	stateMachineRepo statemachine.Repository,
 ) *HeartbeatScheduler {
 	return &HeartbeatScheduler{
 		cron:                      cron.New(cron.WithSeconds()),
@@ -227,7 +227,7 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 	// 初始化状态机状态（如果项目绑定了状态机）
 	log.Printf("[HEARTBEAT] stateMachineRepo is nil: %v", s.stateMachineRepo == nil)
 	if s.stateMachineRepo != nil {
-		psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, project.ID().String(), state_machine.RequirementTypeHeartbeat)
+		psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementTypeHeartbeat)
 		log.Printf("[HEARTBEAT] GetProjectStateMachine err=%v, psm=%v", err, psm)
 		if err == nil && psm != nil {
 			// 获取状态机配置
@@ -238,13 +238,13 @@ func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
 				initialState := sm.Config.GetState(sm.Config.InitialState)
 				log.Printf("[HEARTBEAT] InitialState=%s, initialState=%v", sm.Config.InitialState, initialState)
 				if initialState != nil {
-					rs := state_machine.NewRequirementState(requirement.ID().String(), sm.ID, initialState.ID, initialState.Name)
+					rs := statemachine.NewRequirementState(requirement.ID().String(), sm.ID, initialState.ID, initialState.Name)
 					if err := s.stateMachineRepo.SaveRequirementState(ctx, rs); err != nil {
 						log.Printf("[HEARTBEAT] failed to initialize requirement state: %v", err)
 					} else {
 						log.Printf("[HEARTBEAT] initialized requirement state for %s (state: %s)", requirement.ID(), initialState.ID)
 						// 记录初始化日志
-						logEntry := state_machine.NewTransitionLog(requirement.ID().String(), "", initialState.ID, "init", "heartbeat-scheduler", "requirement created by heartbeat")
+						logEntry := statemachine.NewTransitionLog(requirement.ID().String(), "", initialState.ID, "init", "heartbeat-scheduler", "requirement created by heartbeat")
 						s.stateMachineRepo.SaveTransitionLog(ctx, logEntry)
 					}
 				}

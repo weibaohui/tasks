@@ -28,7 +28,7 @@ import (
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/workspace"
 	"github.com/weibh/taskmanager/infrastructure/skill"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/state_machine"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
@@ -90,7 +90,7 @@ func main() {
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
-	idGenerator := utils.NewNanoIDGenerator(21)
+	idGenerator := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 
 	eventBus := bus.NewEventBus()
 	userRepo := _persistence.NewSQLiteUserRepository(db)
@@ -146,7 +146,6 @@ func main() {
 		requirementRepo,
 		projectRepo,
 		agentRepo,
-		nil, // taskService - no longer used
 		sessionService,
 		idGenerator,
 		replicaCleanupSvc,
@@ -386,7 +385,7 @@ func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGener
 		return nil, nil, nil, fmt.Errorf("初始化数据库结构失败(%s): %w", dbPath, err)
 	}
 
-	idGenerator := utils.NewNanoIDGenerator(21)
+	idGenerator := utils.NewNanoIDGenerator(utils.DefaultIDSize)
 
 	userRepo := _persistence.NewSQLiteUserRepository(db)
 	cleanup := func() {
@@ -447,7 +446,7 @@ func initGateway(
 	hookManager.Register(feishuThinkingHook)
 	logger.Info("已注册 FeishuThinkingProcessHook")
 
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, nil, sessionService, nil, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
+	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, sessionService, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	gw.channelManager = channel.NewManager(gw.messageBus)
 	gw.loadChannels(channelService)
 
