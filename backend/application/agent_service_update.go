@@ -32,25 +32,46 @@ type PatchAgentCommand struct {
 	ClaudeCodeConfig      *domain.ClaudeCodeConfig
 }
 
-// agentConfigPatch 通用接口，用于提取 agent config 的 patch 字段
-type agentConfigPatch interface {
-	hasConfigField() bool
-	applyTo(agent *domain.Agent) domain.AgentConfigUpdate
+// agentConfigPatchFields 通用配置 patch 字段提取接口
+type agentConfigPatchFields interface {
+	configPointers() (identityContent, soulContent, agentsContent, userContent, toolsContent *string,
+		model *string, maxTokens *int, temperature *float64, maxIterations *int, historyMessages *int,
+		skillsList *[]string, toolsList *[]string, enableThinkingProcess *bool)
 }
 
-// updateAgentPatch adapts UpdateAgentCommand to agentConfigPatch
-type updateAgentPatch UpdateAgentCommand
+// updatePatch adapts UpdateAgentCommand to agentConfigPatchFields
+type updatePatch UpdateAgentCommand
 
-func (p updateAgentPatch) hasConfigField() bool {
-	return p.IdentityContent != nil || p.SoulContent != nil ||
-		p.AgentsContent != nil || p.UserContent != nil || p.ToolsContent != nil ||
-		p.Model != nil || p.MaxTokens != nil || p.Temperature != nil ||
-		p.MaxIterations != nil || p.HistoryMessages != nil ||
-		p.SkillsList != nil || p.ToolsList != nil ||
-		p.EnableThinkingProcess != nil
+func (p updatePatch) configPointers() (identityContent, soulContent, agentsContent, userContent, toolsContent *string,
+	model *string, maxTokens *int, temperature *float64, maxIterations *int, historyMessages *int,
+	skillsList *[]string, toolsList *[]string, enableThinkingProcess *bool) {
+	return p.IdentityContent, p.SoulContent, p.AgentsContent, p.UserContent, p.ToolsContent,
+		p.Model, p.MaxTokens, p.Temperature, p.MaxIterations, p.HistoryMessages,
+		p.SkillsList, p.ToolsList, p.EnableThinkingProcess
 }
 
-func (p updateAgentPatch) applyTo(agent *domain.Agent) domain.AgentConfigUpdate {
+// patchCmd adapts PatchAgentCommand to agentConfigPatchFields
+type patchCmd PatchAgentCommand
+
+func (p patchCmd) configPointers() (identityContent, soulContent, agentsContent, userContent, toolsContent *string,
+	model *string, maxTokens *int, temperature *float64, maxIterations *int, historyMessages *int,
+	skillsList *[]string, toolsList *[]string, enableThinkingProcess *bool) {
+	return p.IdentityContent, p.SoulContent, p.AgentsContent, p.UserContent, p.ToolsContent,
+		p.Model, p.MaxTokens, p.Temperature, p.MaxIterations, p.HistoryMessages,
+		p.SkillsList, p.ToolsList, p.EnableThinkingProcess
+}
+
+// hasConfigField 检查是否有任意一个配置字段被提供
+func hasConfigField(p agentConfigPatchFields) bool {
+	ic, sc, ac, uc, tc, m, mt, t, mi, hm, sl, tl, etp := p.configPointers()
+	return ic != nil || sc != nil || ac != nil || uc != nil || tc != nil ||
+		m != nil || mt != nil || t != nil || mi != nil || hm != nil ||
+		sl != nil || tl != nil || etp != nil
+}
+
+// buildAgentConfigUpdate 从 patch 字段构建完整的 AgentConfigUpdate
+func buildAgentConfigUpdate(agent *domain.Agent, p agentConfigPatchFields) domain.AgentConfigUpdate {
+	ic, sc, ac, uc, tc, m, mt, t, mi, hm, sl, tl, etp := p.configPointers()
 	cfg := domain.AgentConfigUpdate{
 		IdentityContent:      agent.IdentityContent(),
 		SoulContent:          agent.SoulContent(),
@@ -66,114 +87,44 @@ func (p updateAgentPatch) applyTo(agent *domain.Agent) domain.AgentConfigUpdate 
 		ToolsList:            agent.ToolsList(),
 		EnableThinkingProcess: agent.EnableThinkingProcess(),
 	}
-	if p.IdentityContent != nil {
-		cfg.IdentityContent = *p.IdentityContent
+	if ic != nil {
+		cfg.IdentityContent = *ic
 	}
-	if p.SoulContent != nil {
-		cfg.SoulContent = *p.SoulContent
+	if sc != nil {
+		cfg.SoulContent = *sc
 	}
-	if p.AgentsContent != nil {
-		cfg.AgentsContent = *p.AgentsContent
+	if ac != nil {
+		cfg.AgentsContent = *ac
 	}
-	if p.UserContent != nil {
-		cfg.UserContent = *p.UserContent
+	if uc != nil {
+		cfg.UserContent = *uc
 	}
-	if p.ToolsContent != nil {
-		cfg.ToolsContent = *p.ToolsContent
+	if tc != nil {
+		cfg.ToolsContent = *tc
 	}
-	if p.Model != nil {
-		cfg.Model = *p.Model
+	if m != nil {
+		cfg.Model = *m
 	}
-	if p.MaxTokens != nil {
-		cfg.MaxTokens = *p.MaxTokens
+	if mt != nil {
+		cfg.MaxTokens = *mt
 	}
-	if p.Temperature != nil {
-		cfg.Temperature = *p.Temperature
+	if t != nil {
+		cfg.Temperature = *t
 	}
-	if p.MaxIterations != nil {
-		cfg.MaxIterations = *p.MaxIterations
+	if mi != nil {
+		cfg.MaxIterations = *mi
 	}
-	if p.HistoryMessages != nil {
-		cfg.HistoryMessages = *p.HistoryMessages
+	if hm != nil {
+		cfg.HistoryMessages = *hm
 	}
-	if p.SkillsList != nil {
-		cfg.SkillsList = *p.SkillsList
+	if sl != nil {
+		cfg.SkillsList = *sl
 	}
-	if p.ToolsList != nil {
-		cfg.ToolsList = *p.ToolsList
+	if tl != nil {
+		cfg.ToolsList = *tl
 	}
-	if p.EnableThinkingProcess != nil {
-		cfg.EnableThinkingProcess = *p.EnableThinkingProcess
-	}
-	return cfg
-}
-
-// patchAgentPatch adapts PatchAgentCommand to agentConfigPatch
-type patchAgentPatch PatchAgentCommand
-
-func (p patchAgentPatch) hasConfigField() bool {
-	return p.IdentityContent != nil || p.SoulContent != nil ||
-		p.AgentsContent != nil || p.UserContent != nil || p.ToolsContent != nil ||
-		p.Model != nil || p.MaxTokens != nil || p.Temperature != nil ||
-		p.MaxIterations != nil || p.HistoryMessages != nil ||
-		p.SkillsList != nil || p.ToolsList != nil ||
-		p.EnableThinkingProcess != nil
-}
-
-func (p patchAgentPatch) applyTo(agent *domain.Agent) domain.AgentConfigUpdate {
-	cfg := domain.AgentConfigUpdate{
-		IdentityContent:      agent.IdentityContent(),
-		SoulContent:          agent.SoulContent(),
-		AgentsContent:        agent.AgentsContent(),
-		UserContent:          agent.UserContent(),
-		ToolsContent:         agent.ToolsContent(),
-		Model:                agent.Model(),
-		MaxTokens:            agent.MaxTokens(),
-		Temperature:          agent.Temperature(),
-		MaxIterations:        agent.MaxIterations(),
-		HistoryMessages:      agent.HistoryMessages(),
-		SkillsList:           agent.SkillsList(),
-		ToolsList:            agent.ToolsList(),
-		EnableThinkingProcess: agent.EnableThinkingProcess(),
-	}
-	if p.IdentityContent != nil {
-		cfg.IdentityContent = *p.IdentityContent
-	}
-	if p.SoulContent != nil {
-		cfg.SoulContent = *p.SoulContent
-	}
-	if p.AgentsContent != nil {
-		cfg.AgentsContent = *p.AgentsContent
-	}
-	if p.UserContent != nil {
-		cfg.UserContent = *p.UserContent
-	}
-	if p.ToolsContent != nil {
-		cfg.ToolsContent = *p.ToolsContent
-	}
-	if p.Model != nil {
-		cfg.Model = *p.Model
-	}
-	if p.MaxTokens != nil {
-		cfg.MaxTokens = *p.MaxTokens
-	}
-	if p.Temperature != nil {
-		cfg.Temperature = *p.Temperature
-	}
-	if p.MaxIterations != nil {
-		cfg.MaxIterations = *p.MaxIterations
-	}
-	if p.HistoryMessages != nil {
-		cfg.HistoryMessages = *p.HistoryMessages
-	}
-	if p.SkillsList != nil {
-		cfg.SkillsList = *p.SkillsList
-	}
-	if p.ToolsList != nil {
-		cfg.ToolsList = *p.ToolsList
-	}
-	if p.EnableThinkingProcess != nil {
-		cfg.EnableThinkingProcess = *p.EnableThinkingProcess
+	if etp != nil {
+		cfg.EnableThinkingProcess = *etp
 	}
 	return cfg
 }
@@ -191,9 +142,9 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 		return nil, err
 	}
 
-	patch := updateAgentPatch(cmd)
-	if patch.hasConfigField() {
-		agent.UpdateConfig(patch.applyTo(agent))
+	p := updatePatch(cmd)
+	if hasConfigField(p) {
+		agent.UpdateConfig(buildAgentConfigUpdate(agent, p))
 	}
 
 	if cmd.IsActive != nil {
@@ -228,9 +179,9 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 		return nil, err
 	}
 
-	patch := patchAgentPatch(cmd)
-	if patch.hasConfigField() {
-		agent.UpdateConfig(patch.applyTo(agent))
+	p := patchCmd(cmd)
+	if hasConfigField(p) {
+		agent.UpdateConfig(buildAgentConfigUpdate(agent, p))
 	}
 
 	if cmd.IsActive != nil {

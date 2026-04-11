@@ -246,7 +246,7 @@ func TestRequirement_StartDispatch_InvalidState(t *testing.T) {
 		name   string
 		status RequirementStatus
 	}{
-		{"preparing 状态", "preparing"},
+		{"preparing 状态", RequirementStatusPreparing},
 		{"coding 状态", RequirementStatusCoding},
 		{"pr_opened 状态", RequirementStatusPROpened},
 		{"failed 状态", RequirementStatusFailed},
@@ -529,7 +529,7 @@ func TestRequirement_StartClaudeRuntime(t *testing.T) {
 	req.StartClaudeRuntime()
 
 	// 验证状态
-	if req.ClaudeRuntimeStatus() != "running" {
+	if req.ClaudeRuntimeStatus() != RuntimeStatusRunning {
 		t.Errorf("期望 ClaudeRuntimeStatus 为 'running', 实际为 %s", req.ClaudeRuntimeStatus())
 	}
 

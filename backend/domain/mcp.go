@@ -119,7 +119,11 @@ func (m *MCPServer) UpdateProfile(cfg MCPProfileUpdate) {
 		m.args = append([]string(nil), cfg.Args...)
 	}
 	if cfg.EnvVars != nil {
-		m.envVars = cfg.EnvVars
+		envVars := make(map[string]string, len(cfg.EnvVars))
+		for k, v := range cfg.EnvVars {
+			envVars[k] = v
+		}
+		m.envVars = envVars
 	}
 	m.updatedAt = time.Now()
 }
