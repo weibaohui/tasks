@@ -73,6 +73,15 @@ func requiresAPIToken(t *testing.T) {
 	}
 }
 
+// ensureServerReady 等待服务器就绪，处理并行测试时其他包重启服务器的情况
+func ensureServerReady(t *testing.T) {
+	requiresAPIToken(t)
+	cfg, _ := config.Load()
+	if err := waitForServerReady(cfg.API.BaseURL, cfg.API.Token, 20*time.Second); err != nil {
+		t.Fatalf("服务器未就绪: %v", err)
+	}
+}
+
 func setupTestDB(t *testing.T) (*sql.DB, string, func()) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -743,7 +752,7 @@ func TestCLI_ProjectDispatchHelp(t *testing.T) {
 }
 
 func TestProjectCLI_List(t *testing.T) {
-	requiresAPIToken(t)
+	ensureServerReady(t)
 	buildCLI(t)
 
 	output, err := runCLI("project", "list")
@@ -760,7 +769,7 @@ func TestProjectCLI_List(t *testing.T) {
 }
 
 func TestProjectCLI_Create(t *testing.T) {
-	requiresAPIToken(t)
+	ensureServerReady(t)
 	buildCLI(t)
 
 	// 测试缺少必需参数
@@ -788,7 +797,7 @@ func TestProjectCLI_Create(t *testing.T) {
 }
 
 func TestProjectCLI_HeartbeatStatus(t *testing.T) {
-	requiresAPIToken(t)
+	ensureServerReady(t)
 	buildCLI(t)
 
 	output, err := runCLI("project", "heartbeat", "status")
@@ -1158,6 +1167,12 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("编译 Server 失败: %v\n%s", err, string(output))
 		os.Exit(1)
+	}
+
+	// 等待服务器就绪（处理并行测试时其他包重启服务器的情况）
+	cfg, err := config.Load()
+	if err == nil && cfg.API.Token != "" {
+		_ = waitForServerReady(cfg.API.BaseURL, cfg.API.Token, 15*time.Second)
 	}
 
 	os.Exit(m.Run())

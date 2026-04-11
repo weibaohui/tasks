@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -236,7 +237,7 @@ var serverRestartCmd = &cobra.Command{
 	Short:   "重启服务器",
 	Example: `  taskmanager server restart`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// 先停止
+		// 1. 先尝试按 PID 文件停止
 		pid := getPID()
 		if pid != 0 {
 			fmt.Println("正在停止服务器...")
@@ -252,6 +253,24 @@ var serverRestartCmd = &cobra.Command{
 			}
 			cleanupPIDFile()
 			fmt.Println("服务器已停止")
+		}
+
+		// 2. 检查端口是否仍被占用（处理 PID 文件过期的情况）
+		serverPort := getServerPort()
+		if pid, ok := findProcessOnPort(serverPort); ok {
+			fmt.Printf("端口 %d 仍被进程 %d 占用，正在终止...\n", serverPort, pid)
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+			for i := 0; i < 30; i++ {
+				if !isProcessRunning(pid) {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			if isProcessRunning(pid) {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+				time.Sleep(200 * time.Millisecond)
+			}
+			fmt.Printf("进程 %d 已终止\n", pid)
 		}
 
 		// 再启动
@@ -312,6 +331,42 @@ func isRunning() bool {
 func cleanupPIDFile() {
 	pidFile := getPIDFilePath()
 	_ = os.Remove(pidFile)
+}
+
+// getServerPort 获取服务器端口
+func getServerPort() int {
+	if port := os.Getenv("SERVER_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			return p
+		}
+	}
+	return 13618
+}
+
+// findProcessOnPort 查找占用指定端口的进程 PID
+func findProcessOnPort(port int) (int, bool) {
+	// 尝试监听端口，如果成功说明端口空闲
+	addr := fmt.Sprintf(":%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		ln.Close()
+		return 0, false
+	}
+
+	// 端口被占用，使用 lsof 查找占用进程
+	cmd := exec.Command("lsof", "-ti", fmt.Sprintf(":%d", port), "-sTCP:LISTEN")
+	output, err := cmd.Output()
+	if err != nil || len(output) == 0 {
+		return 0, false
+	}
+	pidStr := strings.TrimSpace(string(output))
+	// lsof 可能返回多行（多个 PID），取第一行
+	lines := strings.Split(pidStr, "\n")
+	pid, err := strconv.Atoi(strings.TrimSpace(lines[0]))
+	if err != nil {
+		return 0, false
+	}
+	return pid, true
 }
 
 // printStatus 打印服务器状态
