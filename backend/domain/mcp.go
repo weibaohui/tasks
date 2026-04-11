@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -274,4 +275,31 @@ func (b *AgentMCPBinding) FromSnapshot(s AgentMCPBindingSnapshot) {
 func EncodeAny(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
+}
+
+// MCPToolInfo MCP 工具信息（从 MCP 协议响应映射）
+type MCPToolInfo struct {
+	Name        string
+	Description string
+	Schema      map[string]interface{}
+}
+
+// MCPToolResult MCP 工具调用结果
+type MCPToolResult struct {
+	Content string
+	IsError bool
+}
+
+// MCPClient MCP 客户端接口（屏蔽底层 mcp-go 实现）
+type MCPClient interface {
+	Start(ctx context.Context) error
+	Initialize(ctx context.Context) error
+	ListTools(ctx context.Context) ([]MCPToolInfo, error)
+	CallTool(ctx context.Context, toolName string, params map[string]interface{}) (MCPToolResult, error)
+	Close() error
+}
+
+// MCPClientFactory MCP 客户端工厂接口
+type MCPClientFactory interface {
+	CreateClient(server *MCPServer) (MCPClient, error)
 }

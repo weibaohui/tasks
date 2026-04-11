@@ -57,6 +57,9 @@ func NewRequirementDispatchService(
 	stateMachineRepo statemachine.Repository,
 	workspaceConfig domain.WorkspaceConfigProvider,
 	workspaceManager domain.WorkspaceManager,
+	inboundPublisher interface {
+		PublishInbound(msg *channelBus.InboundMessage)
+	},
 ) *RequirementDispatchService {
 	return &RequirementDispatchService{
 		requirementRepo:   requirementRepo,
@@ -68,13 +71,8 @@ func NewRequirementDispatchService(
 		stateMachineRepo:  stateMachineRepo,
 		workspaceConfig:   workspaceConfig,
 		workspaceManager:  workspaceManager,
+		inboundPublisher:  inboundPublisher,
 	}
-}
-
-func (s *RequirementDispatchService) SetInboundPublisher(publisher interface {
-	PublishInbound(msg *channelBus.InboundMessage)
-}) {
-	s.inboundPublisher = publisher
 }
 
 func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cmd DispatchRequirementCommand) (*DispatchRequirementResult, error) {

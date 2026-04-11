@@ -141,7 +141,7 @@ func setupTestLLMProviderSvcWithRunner(runner TestConnectionRunner) (*LLMProvide
 	if runner != nil {
 		svc = NewLLMProviderApplicationServiceWithRunner(repo, idGen, runner)
 	} else {
-		svc = NewLLMProviderApplicationService(repo, idGen)
+		svc = NewLLMProviderApplicationService(repo, idGen, func(_ context.Context, _, _, _, _ string) error { return nil })
 	}
 	return svc, repo, idGen
 }
@@ -931,7 +931,7 @@ func TestLLMProviderService_NewService(t *testing.T) {
 	repo := newMockLLMProviderRepoForService()
 	idGen := &mockLLMProviderIDGen{}
 
-	svc := NewLLMProviderApplicationService(repo, idGen)
+	svc := NewLLMProviderApplicationService(repo, idGen, func(_ context.Context, _, _, _, _ string) error { return nil })
 
 	if svc == nil {
 		t.Fatal("期望 svc 不为 nil")

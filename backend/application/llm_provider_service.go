@@ -19,14 +19,13 @@ type TestConnectionRunner interface {
 	RunTest(ctx context.Context, providerKey, model, apiKey, baseURL string) error
 }
 
-// defaultTestConnectionRunner 默认的测试连接实现
-type defaultTestConnectionRunner struct{}
-
-// TestLLMConnectionFunc is set during initialization to wire the infrastructure implementation.
-var TestLLMConnectionFunc func(ctx context.Context, providerKey, model, apiKey, baseURL string) error
+// defaultTestConnectionRunner 默认的测试连接实现，委托给注入的函数
+type defaultTestConnectionRunner struct {
+	fn func(ctx context.Context, providerKey, model, apiKey, baseURL string) error
+}
 
 func (r *defaultTestConnectionRunner) RunTest(ctx context.Context, providerKey, model, apiKey, baseURL string) error {
-	return TestLLMConnectionFunc(ctx, providerKey, model, apiKey, baseURL)
+	return r.fn(ctx, providerKey, model, apiKey, baseURL)
 }
 
 // ChooseModelForProvider 根据 provider 信息选择用于测试连接的模型
@@ -82,11 +81,12 @@ type LLMProviderApplicationService struct {
 func NewLLMProviderApplicationService(
 	repo domain.LLMProviderRepository,
 	idGenerator domain.IDGenerator,
+	testConnectionFn func(ctx context.Context, providerKey, model, apiKey, baseURL string) error,
 ) *LLMProviderApplicationService {
 	return &LLMProviderApplicationService{
 		repo:        repo,
 		idGenerator: idGenerator,
-		testRunner:  &defaultTestConnectionRunner{},
+		testRunner:  &defaultTestConnectionRunner{fn: testConnectionFn},
 	}
 }
 
