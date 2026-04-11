@@ -177,7 +177,7 @@ func main() {
 		idGenerator,
 		gateway.messageBus,
 		requirementDispatchService,
-		stateMachineRepo,
+		stateMachineService,
 	)
 
 	// 启动心跳调度器

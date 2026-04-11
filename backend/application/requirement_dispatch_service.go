@@ -173,45 +173,25 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		s.saveRequirementState(ctx, requirement, currentState)
 
 		// 自动执行 todo → 第一个处理中状态转换（系统自动完成，不需要 AI 介入）
-		if currentState == "todo" {
-			psm, err := s.stateMachineRepo.GetProjectStateMachine(ctx,
-				requirement.ProjectID().String(), statemachine.RequirementType(requirement.RequirementType()))
-			if err == nil {
-				sm, err := s.stateMachineRepo.GetStateMachine(ctx, psm.ToSnapshot().StateMachineID)
-				if err == nil {
-					// 找到 todo 状态转换到的下一个状态（第一个非 todo 的后续状态）
-					var (
-						autoTransition *statemachine.Transition
-						nextState       *statemachine.State
-					)
-					for i := range sm.Config.Transitions {
-						t := &sm.Config.Transitions[i]
-						if t.FromState == "todo" {
-							autoTransition = t
-							nextState = sm.Config.GetState(t.ToState)
-							break
-						}
-					}
-					if autoTransition != nil && nextState != nil {
-						// 更新 RequirementState
-						reqState, _ := s.stateMachineRepo.GetRequirementState(ctx, requirement.ID().String())
-						if reqState != nil {
-							reqState.Transition(nextState.ID, nextState.Name)
-							_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
+		if currentState == "todo" && smConfig != nil {
+			autoTransition := smConfig.FindFirstTransitionFrom("todo")
+			if autoTransition != nil {
+				nextState := smConfig.GetState(autoTransition.ToState)
+				if nextState != nil {
+					reqState, _ := s.stateMachineRepo.GetRequirementState(ctx, requirement.ID().String())
+					if reqState != nil {
+						reqState.Transition(nextState.ID, nextState.Name)
+						_ = s.stateMachineRepo.UpdateRequirementState(ctx, reqState)
 
-							// 记录转换日志，使用实际的 trigger
-							autoLog := statemachine.NewTransitionLog(
-								requirement.ID().String(), "todo", nextState.ID,
-								autoTransition.Trigger, "system", "派发时自动状态转换")
-							_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)
+						autoLog := statemachine.NewTransitionLog(
+							requirement.ID().String(), "todo", nextState.ID,
+							autoTransition.Trigger, "system", "派发时自动状态转换")
+						_ = s.stateMachineRepo.SaveTransitionLog(ctx, autoLog)
 
-							// 同步到 Requirement
-							requirement.SyncStatusFromStateMachine(nextState.ID)
-							_ = s.requirementRepo.Save(ctx, requirement)
-							currentState = nextState.ID
-							// 刷新 aiGuide 以匹配新状态
-							aiGuide = sm.Config.GetStateAIGuide(nextState.ID)
-						}
+						requirement.SyncStatusFromStateMachine(nextState.ID)
+						_ = s.requirementRepo.Save(ctx, requirement)
+						currentState = nextState.ID
+						aiGuide = smConfig.GetStateAIGuide(nextState.ID)
 					}
 				}
 			}

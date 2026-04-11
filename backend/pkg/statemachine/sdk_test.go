@@ -24,9 +24,6 @@ states:
     is_final: false
   - id: completed
     name: 已完成
-    is_final: false
-  - id: completed
-    name: 已完成
     is_final: true
 
 transitions:
@@ -38,10 +35,6 @@ transitions:
     to: completed
     trigger: complete
     description: 完成
-  - from: done
-    to: completed
-    trigger: finish
-    description: 结束
 `
 
 func TestSDK(t *testing.T) {

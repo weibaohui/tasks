@@ -171,6 +171,18 @@ func (c *Config) FindTransition(currentStateID, trigger string) *Transition {
 	return nil
 }
 
+// FindFirstTransitionFrom 查找从指定状态出发的第一个转换
+// 用于自动转换场景（如 dispatch 时从 todo 自动跳转到第一个处理状态）
+func (c *Config) FindFirstTransitionFrom(fromState string) *Transition {
+	for i := range c.Transitions {
+		t := &c.Transitions[i]
+		if t.FromState == fromState {
+			return t
+		}
+	}
+	return nil
+}
+
 // GetState 获取状态
 func (c *Config) GetState(stateID string) *State {
 	for i := range c.States {

@@ -343,6 +343,41 @@ func (r *Requirement) MarkPROpened() {
 	r.workspacePath = ""
 }
 
+// StaleThreshold 需求超时判定阈值
+const StaleThreshold = 30 * time.Minute
+
+// StaleReplicaMissingThreshold 分身缺失时的较短超时阈值
+const StaleReplicaMissingThreshold = 5 * time.Minute
+
+// IsStale 判断处于 coding 状态的需求是否过期
+// 返回 (shouldCleanup, reason)
+func (r *Requirement) IsStale(now time.Time) (bool, string) {
+	if r.status != RequirementStatus("coding") {
+		return false, ""
+	}
+
+	updatedAt := r.updatedAt
+	if now.Sub(updatedAt) > StaleThreshold {
+		return true, "timeout - no update for 30+ minutes"
+	}
+	return false, ""
+}
+
+// IsStaleWithReplicaCheck 在分身缺失时使用较短的阈值判定过期
+// 需要调用方提供 replicaExists 信息
+func (r *Requirement) IsStaleWithReplicaCheck(now time.Time, replicaExists bool) (bool, string) {
+	if stale, reason := r.IsStale(now); stale {
+		return true, reason
+	}
+
+	if r.replicaAgentCode != "" && !replicaExists {
+		if now.Sub(r.updatedAt) > StaleReplicaMissingThreshold {
+			return true, "replica agent missing - possible server crash during execution"
+		}
+	}
+	return false, ""
+}
+
 // MarkFailed 标记失败
 // 注意：此方法直接设置状态，应使用状态机 TriggerTransition 替代
 // 注意：清理分身和workspace应由调用方负责，此方法只负责状态变更
