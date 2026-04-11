@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -287,7 +288,7 @@ func TestMe_ExpiredToken(t *testing.T) {
 	)
 	repo.Save(ctx, user)
 
-	// 手动创建一个 handler 用于测试（新的 login 使用数据库存储 token，不使用 TTL）
+	// 手动创建一个 handler 用于测试
 	expiredHandler := NewAuthHandler(
 		application.NewUserApplicationService(repo, &mockAuthIDGenerator{}),
 		nil, // userTokenRepo
@@ -295,22 +296,18 @@ func TestMe_ExpiredToken(t *testing.T) {
 		"test-secret-key",
 	)
 
-	body := `{"username": "testuser", "password": "password"}`
-	gin.SetMode(gin.TestMode)
-	loginW := httptest.NewRecorder()
-	loginCtx, _ := gin.CreateTestContext(loginW)
-	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(body))
-	loginReq.Header.Set("Content-Type", "application/json")
-	loginCtx.Request = loginReq
-	expiredHandler.Login(loginCtx)
-
-	var loginResp map[string]interface{}
-	json.Unmarshal(loginW.Body.Bytes(), &loginResp)
-	token := loginResp["token"].(string)
+	// 直接生成一个已过期的 JWT（ExpiresAt 设为过去时间）
+	expiredClaims := tokenClaims{
+		UserID:    "user-1",
+		Username:  "testuser",
+		UserCode:  "usr_001",
+		ExpiresAt: time.Now().Add(-1 * time.Hour).Unix(),
+	}
+	expiredToken, _ := expiredHandler.generateJWT(expiredClaims)
 
 	// 使用过期的 token 访问 /me
 	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	meReq.Header.Set("Authorization", "Bearer "+token)
+	meReq.Header.Set("Authorization", "Bearer "+expiredToken)
 	meW := httptest.NewRecorder()
 
 	engine.ServeHTTP(meW, meReq)

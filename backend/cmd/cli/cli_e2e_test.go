@@ -269,9 +269,9 @@ func TestCLI_CreateAdmin(t *testing.T) {
 		t.Fatalf("create-admin 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含弃用提示
-	if !strings.Contains(output, "请在 server 端执行") {
-		t.Errorf("输出不包含弃用提示 '请在 server 端执行':\n%s", output)
+	// 验证输出包含成功提示
+	if !strings.Contains(output, "管理员用户创建成功") && !strings.Contains(output, "管理员用户已存在") {
+		t.Errorf("输出不包含成功提示:\n%s", output)
 	}
 }
 
@@ -283,9 +283,9 @@ func TestCLI_DeleteAdmin(t *testing.T) {
 		t.Fatalf("delete-admin 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含弃用提示
-	if !strings.Contains(output, "请在 server 端执行") {
-		t.Errorf("输出不包含弃用提示 '请在 server 端执行':\n%s", output)
+	// 验证输出包含成功提示
+	if !strings.Contains(output, "管理员用户已删除") && !strings.Contains(output, "管理员用户不存在") {
+		t.Errorf("输出不包含成功提示:\n%s", output)
 	}
 }
 
@@ -300,14 +300,14 @@ func TestCLI_AgentList(t *testing.T) {
 		t.Fatalf("agent list 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含表头
-	if !strings.Contains(output, "Agent 列表") {
-		t.Errorf("输出不包含 'Agent 列表':\n%s", output)
+	// 验证输出包含 JSON 数组（CLI 输出纯 JSON）
+	if !strings.HasPrefix(strings.TrimSpace(output), "[") {
+		t.Errorf("输出不是 JSON 数组:\n%s", output)
 	}
 
-	// 验证输出包含 ID 和状态 列
-	if !strings.Contains(output, "ID") {
-		t.Errorf("输出不包含 'ID' 列:\n%s", output)
+	// 验证输出包含基本字段
+	if !strings.Contains(output, `"name"`) {
+		t.Errorf("输出不包含 'name' 字段:\n%s", output)
 	}
 
 	t.Logf("agent list 输出:\n%s", output)
