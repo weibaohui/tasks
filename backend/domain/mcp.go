@@ -143,6 +143,26 @@ func (m *MCPServer) SetCapabilities(cap []MCPTool) {
 	m.updatedAt = time.Now()
 }
 
+func (m *MCPServer) MarkClientCreationFailed(err error) {
+	m.SetStatus("error", "创建客户端失败: "+err.Error())
+}
+
+func (m *MCPServer) MarkStartFailed(err error) {
+	m.SetStatus("error", "启动失败: "+err.Error())
+}
+
+func (m *MCPServer) MarkInitializationFailed(err error) {
+	m.SetStatus("error", "初始化失败: "+err.Error())
+}
+
+func (m *MCPServer) MarkListToolsFailed(err error) {
+	m.SetStatus("error", "获取工具列表失败: "+err.Error())
+}
+
+func (m *MCPServer) MarkActive() {
+	m.SetStatus("active", "")
+}
+
 type AgentMCPBindingID struct {
 	value string
 }
@@ -242,7 +262,15 @@ func (m *MCPServer) FromSnapshot(s MCPServerSnapshot) {
 	m.command = s.Command
 	m.args = append([]string(nil), s.Args...)
 	m.url = s.URL
-	m.envVars = s.EnvVars
+	if s.EnvVars != nil {
+		envVars := make(map[string]string, len(s.EnvVars))
+		for k, v := range s.EnvVars {
+			envVars[k] = v
+		}
+		m.envVars = envVars
+	} else {
+		m.envVars = nil
+	}
 	m.status = s.Status
 	m.capabilities = append([]MCPTool(nil), s.Capabilities...)
 	m.lastConnected = s.LastConnected
