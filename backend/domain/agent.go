@@ -428,7 +428,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.isDefault = snap.IsDefault
 	a.enableThinkingProcess = snap.EnableThinkingProcess
 	a.shadowFrom = snap.ShadowFrom
-	a.claudeCodeConfig = snap.ClaudeCodeConfig
+	a.claudeCodeConfig = snap.ClaudeCodeConfig.Clone()
 	a.createdAt = snap.CreatedAt
 	a.updatedAt = snap.UpdatedAt
 }

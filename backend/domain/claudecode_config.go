@@ -266,6 +266,17 @@ func (c *ClaudeCodeConfig) MergeWith(other *ClaudeCodeConfig) {
 	}
 }
 
+// Clone 返回配置的深拷贝
+func (c *ClaudeCodeConfig) Clone() *ClaudeCodeConfig {
+	if c == nil {
+		return nil
+	}
+	data, _ := json.Marshal(c)
+	clone := &ClaudeCodeConfig{}
+	_ = json.Unmarshal(data, clone)
+	return clone
+}
+
 // ClaudeCodeConfigUpdatedAt 返回配置的更新时间（用于比较）
 func (c *ClaudeCodeConfig) UpdatedAt() time.Time {
 	// 简化实现，实际可以使用配置内容的 hash

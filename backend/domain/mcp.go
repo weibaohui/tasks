@@ -272,7 +272,19 @@ func (m *MCPServer) FromSnapshot(s MCPServerSnapshot) {
 		m.envVars = nil
 	}
 	m.status = s.Status
-	m.capabilities = append([]MCPTool(nil), s.Capabilities...)
+	if s.Capabilities != nil {
+		caps := make([]MCPTool, len(s.Capabilities))
+		for i, t := range s.Capabilities {
+			caps[i] = MCPTool{
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: cloneMap(t.InputSchema),
+			}
+		}
+		m.capabilities = caps
+	} else {
+		m.capabilities = nil
+	}
 	m.lastConnected = s.LastConnected
 	m.errorMessage = s.ErrorMessage
 	m.createdAt = s.CreatedAt
