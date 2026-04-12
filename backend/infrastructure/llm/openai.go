@@ -13,16 +13,18 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/weibh/taskmanager/domain"
 )
 
 // OpenAIProvider OpenAI GPT 系列 provider
 type OpenAIProvider struct {
 	config    *Config
 	client    *http.Client
-	lastUsage Usage // 上次调用的 token 使用量
+	lastUsage domain.Usage // 上次调用的 token 使用量
 }
 
-var _ LLMProvider = (*OpenAIProvider)(nil)
+var _ domain.LLMClient = (*OpenAIProvider)(nil)
 
 // OpenAIMessage OpenAI 消息格式
 type OpenAIMessage struct {
@@ -51,21 +53,14 @@ type OpenAIRequest struct {
 	Messages    []OpenAIMessage `json:"messages"`
 	Temperature float64         `json:"temperature,omitempty"`
 	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Tools       []ToolInfo      `json:"tools,omitempty"`
+	Tools       []domain.ToolInfo      `json:"tools,omitempty"`
 }
 
 // OpenAIResponse OpenAI 响应格式
 type OpenAIResponse struct {
 	ID      string   `json:"id"`
 	Choices []Choice `json:"choices"`
-	Usage   Usage    `json:"usage"`
-}
-
-// Usage OpenAI token 使用量
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	Usage   domain.Usage    `json:"usage"`
 }
 
 // Choice 选择
@@ -156,12 +151,12 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 }
 
 // GetLastUsage 返回上次调用的 token 使用量
-func (p *OpenAIProvider) GetLastUsage() Usage {
+func (p *OpenAIProvider) GetLastUsage() domain.Usage {
 	return p.lastUsage
 }
 
 // GenerateWithTools 生成文本，支持工具调用
-func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, toolRegistries []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, toolRegistries []*domain.ToolRegistry, maxIterations int) (string, []domain.ToolCall, error) {
 	if maxIterations <= 0 {
 		maxIterations = 5
 	}
@@ -172,7 +167,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	}
 
 	// 收集所有工具到 map
-	toolMap := make(map[string]Tool)
+	toolMap := make(map[string]domain.Tool)
 	for _, registry := range toolRegistries {
 		if registry != nil {
 			for _, tool := range registry.List() {
@@ -182,11 +177,11 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	}
 
 	// 收集所有工具信息
-	var allTools []ToolInfo
+	var allTools []domain.ToolInfo
 	for _, tool := range toolMap {
-		allTools = append(allTools, ToolInfo{
+		allTools = append(allTools, domain.ToolInfo{
 			Type: "function",
-			Function: FunctionDef{
+			Function: domain.FunctionDef{
 				Name:        tool.Name(),
 				Description: tool.Description(),
 				Parameters:  tool.Parameters(),
@@ -194,7 +189,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		})
 	}
 
-	var allToolCalls []ToolCall
+	var allToolCalls []domain.ToolCall
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// 构建请求
@@ -263,7 +258,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 
 		// 处理工具调用
 		for _, tc := range choice.Message.ToolCalls {
-			toolCall := ToolCall{
+			toolCall := domain.ToolCall{
 				ID:    tc.ID,
 				Name:  tc.Function.Name,
 				Input: json.RawMessage(tc.Function.Arguments),
@@ -312,7 +307,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // GenerateSubTasks 生成子任务计划
-func (p *OpenAIProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
+func (p *OpenAIProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*domain.SubTaskPlan, error) {
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
 	resp, err := p.Generate(ctx, prompt)

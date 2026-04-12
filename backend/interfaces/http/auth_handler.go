@@ -16,18 +16,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/persistence"
-	"github.com/weibh/taskmanager/infrastructure/utils"
 )
 
 type AuthHandler struct {
 	userService   *application.UserApplicationService
-	userTokenRepo *persistence.SQLiteUserTokenRepository
-	idGenerator   *utils.NanoIDGenerator
+	userTokenRepo domain.UserTokenRepository
+	idGenerator   domain.IDGenerator
 	secretKey     []byte
 }
 
-func NewAuthHandler(userService *application.UserApplicationService, userTokenRepo *persistence.SQLiteUserTokenRepository, idGenerator *utils.NanoIDGenerator, secret string) *AuthHandler {
+func NewAuthHandler(userService *application.UserApplicationService, userTokenRepo domain.UserTokenRepository, idGenerator domain.IDGenerator, secret string) *AuthHandler {
 	return &AuthHandler{
 		userService:   userService,
 		userTokenRepo: userTokenRepo,

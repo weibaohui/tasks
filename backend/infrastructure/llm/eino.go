@@ -13,6 +13,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
+	"github.com/weibh/taskmanager/domain"
 	"go.uber.org/zap"
 )
 
@@ -21,7 +22,7 @@ type EinoProvider struct {
 	config       *Config
 	chatModel    model.ToolCallingChatModel
 	logger       *zap.Logger
-	lastUsage    Usage
+	lastUsage    domain.Usage
 	toolHooks    []ToolHook            // 工具执行钩子
 	toolObserver ToolExecutionObserver // 工具执行观察者
 	llmCallIndex int                   // 当前 LLM 调用索引
@@ -54,7 +55,7 @@ type ToolCallContext struct {
 // LLMCallContext LLM 调用上下文（传递给 observer）
 type LLMCallContext struct {
 	Content   string
-	Usage     Usage
+	Usage     domain.Usage
 	ToolCalls []string // tool names if any
 	TraceID   string
 	SpanID    string
@@ -81,7 +82,7 @@ func (p *EinoProvider) SetToolExecutionObserver(observer ToolExecutionObserver) 
 	p.toolObserver = observer
 }
 
-var _ LLMProvider = (*EinoProvider)(nil)
+var _ domain.LLMClient = (*EinoProvider)(nil)
 
 // NewEinoProvider 创建 Eino Provider
 func NewEinoProvider(config *Config, logger *zap.Logger) (*EinoProvider, error) {
@@ -122,7 +123,7 @@ func (p *EinoProvider) Generate(ctx context.Context, prompt string) (string, err
 	}
 
 	if resp.ResponseMeta != nil && resp.ResponseMeta.Usage != nil {
-		p.lastUsage = Usage{
+		p.lastUsage = domain.Usage{
 			PromptTokens:     resp.ResponseMeta.Usage.PromptTokens,
 			CompletionTokens: resp.ResponseMeta.Usage.CompletionTokens,
 			TotalTokens:      resp.ResponseMeta.Usage.TotalTokens,
@@ -137,13 +138,13 @@ func (p *EinoProvider) Generate(ctx context.Context, prompt string) (string, err
 // 注意：当模型返回 ToolCalls 时，必须先把包含 ToolCalls 的 assistant 消息写入 messages，
 // 再追加 tool 消息（携带 tool_call_id）。否则部分 OpenAI 兼容网关（例如 Minimax）会报
 // “tool result's tool id not found / tool_call_id 找不到”等错误。
-func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, toolRegistries []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, toolRegistries []*domain.ToolRegistry, maxIterations int) (string, []domain.ToolCall, error) {
 	if maxIterations <= 0 {
 		maxIterations = 5
 	}
 
 	// 收集所有工具
-	toolMap := make(map[string]Tool)
+	toolMap := make(map[string]domain.Tool)
 	for _, registry := range toolRegistries {
 		if registry != nil {
 			for _, t := range registry.List() {
@@ -183,7 +184,7 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 		schema.UserMessage(prompt),
 	}
 
-	var allToolCalls []ToolCall
+	var allToolCalls []domain.ToolCall
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		p.logger.Debug("EINO 迭代开始",
@@ -202,7 +203,7 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 
 		// 记录 token 使用量
 		if resp.ResponseMeta != nil && resp.ResponseMeta.Usage != nil {
-			p.lastUsage = Usage{
+			p.lastUsage = domain.Usage{
 				PromptTokens:     resp.ResponseMeta.Usage.PromptTokens,
 				CompletionTokens: resp.ResponseMeta.Usage.CompletionTokens,
 				TotalTokens:      resp.ResponseMeta.Usage.TotalTokens,
@@ -243,7 +244,7 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 				zap.String("参数", tc.Function.Arguments),
 			)
 
-			toolCall := ToolCall{
+			toolCall := domain.ToolCall{
 				ID:   tc.ID,
 				Name: tc.Function.Name,
 			}
@@ -345,7 +346,7 @@ func (p *EinoProvider) GenerateWithTools(ctx context.Context, prompt string, too
 }
 
 // GenerateSubTasks 生成子任务计划
-func (p *EinoProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
+func (p *EinoProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*domain.SubTaskPlan, error) {
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
 	resp, err := p.Generate(ctx, prompt)
@@ -365,7 +366,7 @@ func (p *EinoProvider) GenerateSubTasks(ctx context.Context, taskName string, ta
 }
 
 // GetLastUsage 返回上次调用的 token 使用量
-func (p *EinoProvider) GetLastUsage() Usage {
+func (p *EinoProvider) GetLastUsage() domain.Usage {
 	return p.lastUsage
 }
 
@@ -394,7 +395,7 @@ func NewEinoChatModel(ctx context.Context, config *Config) (model.ToolCallingCha
 }
 
 // BindTools 绑定工具到模型
-func BindTools(ctx context.Context, chatModel model.ToolCallingChatModel, regs []*ToolRegistry) (model.ToolCallingChatModel, error) {
+func BindTools(ctx context.Context, chatModel model.ToolCallingChatModel, regs []*domain.ToolRegistry) (model.ToolCallingChatModel, error) {
 	if len(regs) == 0 {
 		return chatModel, nil
 	}

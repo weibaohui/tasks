@@ -2,20 +2,20 @@ package channel
 
 import (
 	"context"
+	"strings"
+
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/infrastructure/llm/tools"
 	"github.com/weibh/taskmanager/infrastructure/llm/tools/mcp"
 	skilltools "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
-	"github.com/weibh/taskmanager/infrastructure/llm/tools"
-	"strings"
 )
 
-func (p *MessageProcessor) buildAgentToolsRegistry(ctx context.Context, agent *domain.Agent, contextParams map[string]string) *llm.ToolRegistry {
+func (p *MessageProcessor) buildAgentToolsRegistry(ctx context.Context, agent *domain.Agent, contextParams map[string]string) *domain.ToolRegistry {
 	if agent == nil {
 		return nil
 	}
 
-	registry := llm.NewToolRegistry()
+	registry := domain.NewToolRegistry()
 	registered := false
 
 	// 1. 注册 Bash 工具（如果 agent.ToolsList 包含 "bash"）

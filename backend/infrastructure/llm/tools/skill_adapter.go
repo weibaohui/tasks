@@ -9,9 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/domain"
 	skilltool "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
-	"github.com/weibh/taskmanager/infrastructure/skill"
 )
 
 // SkillToolAdapter 技能工具适配器，实现 llm.Tool 接口
@@ -26,8 +25,8 @@ func NewSkillToolAdapter(skillTool *skilltool.DynamicTool) *SkillToolAdapter {
 	}
 }
 
-// 确保实现 llm.Tool 接口
-var _ llm.Tool = (*SkillToolAdapter)(nil)
+// 确保实现 domain.Tool 接口
+var _ domain.Tool = (*SkillToolAdapter)(nil)
 
 // Name 返回工具名称
 func (a *SkillToolAdapter) Name() string {
@@ -61,34 +60,34 @@ func (a *SkillToolAdapter) Parameters() json.RawMessage {
 }
 
 // Execute 执行工具
-func (a *SkillToolAdapter) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
+func (a *SkillToolAdapter) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
 	// 执行技能
 	result, err := a.skillTool.InvokableRun(ctx, string(input))
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Error: err.Error(),
 		}, nil
 	}
 
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: result,
 	}, nil
 }
 
 // SkillToolsAdapterRegistry 技能工具注册器
 type SkillToolsAdapterRegistry struct {
-	loader *skill.SkillsLoader
+	loader domain.SkillsLoader
 }
 
 // NewSkillToolsAdapterRegistry 创建技能工具适配器注册器
-func NewSkillToolsAdapterRegistry(loader *skill.SkillsLoader) *SkillToolsAdapterRegistry {
+func NewSkillToolsAdapterRegistry(loader domain.SkillsLoader) *SkillToolsAdapterRegistry {
 	return &SkillToolsAdapterRegistry{
 		loader: loader,
 	}
 }
 
 // GetTools 返回所有适配后的技能工具
-func (r *SkillToolsAdapterRegistry) GetTools() []llm.Tool {
+func (r *SkillToolsAdapterRegistry) GetTools() []domain.Tool {
 	if r.loader == nil {
 		return nil
 	}
@@ -98,7 +97,7 @@ func (r *SkillToolsAdapterRegistry) GetTools() []llm.Tool {
 }
 
 // GetToolsForSkills 返回指定技能列表的适配后工具（避免重复发现）
-func (r *SkillToolsAdapterRegistry) GetToolsForSkills(skills []skill.SkillInfo) []llm.Tool {
+func (r *SkillToolsAdapterRegistry) GetToolsForSkills(skills []domain.SkillInfo) []domain.Tool {
 	if r.loader == nil {
 		return nil
 	}
@@ -106,8 +105,8 @@ func (r *SkillToolsAdapterRegistry) GetToolsForSkills(skills []skill.SkillInfo) 
 }
 
 // filterAndConvertTools 根据技能列表过滤并转换工具
-func (r *SkillToolsAdapterRegistry) filterAndConvertTools(skills []skill.SkillInfo) []llm.Tool {
-	tools := make([]llm.Tool, 0, len(skills))
+func (r *SkillToolsAdapterRegistry) filterAndConvertTools(skills []domain.SkillInfo) []domain.Tool {
+	tools := make([]domain.Tool, 0, len(skills))
 
 	for _, s := range skills {
 		// 检查技能是否可用
@@ -116,7 +115,7 @@ func (r *SkillToolsAdapterRegistry) filterAndConvertTools(skills []skill.SkillIn
 		}
 
 		// 创建动态工具
-		dynamicTool := skilltool.NewDynamicTool(s.Name, s.Description, r.loader.LoadSkill)
+		dynamicTool := skilltool.NewDynamicTool(s.Name, s.Description, r.loader.LoadSkillContent)
 		// 创建适配器
 		adapter := NewSkillToolAdapter(dynamicTool)
 		tools = append(tools, adapter)

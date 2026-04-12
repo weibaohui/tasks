@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // UseMCPTool use_mcp 工具 - 用于按需加载 MCP Server
@@ -25,7 +24,7 @@ func NewUseMCPTool(mcpService domain.MCPToolService) *UseMCPTool {
 	}
 }
 
-var _ llm.Tool = (*UseMCPTool)(nil)
+var _ domain.Tool = (*UseMCPTool)(nil)
 
 // Name 返回工具名称
 func (t *UseMCPTool) Name() string {
@@ -60,21 +59,21 @@ func (t *UseMCPTool) Parameters() json.RawMessage {
 }
 
 // Execute 执行工具
-func (t *UseMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
+func (t *UseMCPTool) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
 	var args struct {
 		ServerCode string `json:"server_code"`
 		Action     string `json:"action"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("解析参数失败: %v", err),
 		}, nil
 	}
 
 	if args.ServerCode == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "server_code 不能为空",
 		}, nil
@@ -91,7 +90,7 @@ func (t *UseMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.T
 	case "info":
 		return t.handleInfo(ctx, args.ServerCode)
 	default:
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("不支持的操作: %s", args.Action),
 		}, nil
@@ -99,11 +98,11 @@ func (t *UseMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.T
 }
 
 // handleLoad 加载 MCP Server
-func (t *UseMCPTool) handleLoad(ctx context.Context, serverCode string) (*llm.ToolResult, error) {
+func (t *UseMCPTool) handleLoad(ctx context.Context, serverCode string) (*domain.ToolResult, error) {
 	// 查找 server
 	servers, err := t.mcpService.ListServers(ctx)
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("获取 MCP Server 列表失败: %v", err),
 		}, nil
@@ -118,14 +117,14 @@ func (t *UseMCPTool) handleLoad(ctx context.Context, serverCode string) (*llm.To
 	}
 
 	if server == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("MCP Server '%s' 不存在", serverCode),
 		}, nil
 	}
 
 	if server.Status() != "active" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("MCP Server '%s' 未激活，当前状态: %s", serverCode, server.Status()),
 		}, nil
@@ -134,7 +133,7 @@ func (t *UseMCPTool) handleLoad(ctx context.Context, serverCode string) (*llm.To
 	// 获取工具列表
 	tools, err := t.mcpService.ListTools(ctx, server.ID())
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("获取工具列表失败: %v", err),
 		}, nil
@@ -163,17 +162,17 @@ func (t *UseMCPTool) handleLoad(ctx context.Context, serverCode string) (*llm.To
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: string(resultJSON),
 		Error:  "",
 	}, nil
 }
 
 // handleInfo 获取 Server 信息（不加载）
-func (t *UseMCPTool) handleInfo(ctx context.Context, serverCode string) (*llm.ToolResult, error) {
+func (t *UseMCPTool) handleInfo(ctx context.Context, serverCode string) (*domain.ToolResult, error) {
 	servers, err := t.mcpService.ListServers(ctx)
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("获取 MCP Server 列表失败: %v", err),
 		}, nil
@@ -188,7 +187,7 @@ func (t *UseMCPTool) handleInfo(ctx context.Context, serverCode string) (*llm.To
 	}
 
 	if server == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("MCP Server '%s' 不存在", serverCode),
 		}, nil
@@ -204,7 +203,7 @@ func (t *UseMCPTool) handleInfo(ctx context.Context, serverCode string) (*llm.To
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: string(resultJSON),
 		Error:  "",
 	}, nil

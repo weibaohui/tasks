@@ -19,7 +19,7 @@ type HookManagerInterface interface {
 
 // HookableProvider 包装普通 Provider，添加 Hook 支持
 type HookableProvider struct {
-	wrapped LLMProvider
+	wrapped domain.LLMClient
 	hookMgr HookManagerInterface
 	// 用于 GenerateSubTasks 的上下文信息
 	sessionID   string
@@ -33,7 +33,7 @@ type HookableProvider struct {
 }
 
 // NewHookableProvider 创建 Hookable Provider
-func NewHookableProvider(wrapped LLMProvider) *HookableProvider {
+func NewHookableProvider(wrapped domain.LLMClient) *HookableProvider {
 	return &HookableProvider{wrapped: wrapped}
 }
 
@@ -106,7 +106,7 @@ func (p *HookableProvider) getUsage() domain.Usage {
 }
 
 // GenerateSubTasks 生成子任务计划（带 Hook 支持）
-func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
+func (p *HookableProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*domain.SubTaskPlan, error) {
 	// 1. Pre Hook - 生成一个特殊的 prompt
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
@@ -187,12 +187,12 @@ func (p *HookableProvider) Name() string {
 }
 
 // GetLastUsage 返回上次调用的 token 使用量
-func (p *HookableProvider) GetLastUsage() Usage {
+func (p *HookableProvider) GetLastUsage() domain.Usage {
 	return p.wrapped.GetLastUsage()
 }
 
 // GenerateWithTools 生成文本，支持工具调用（直接委托给 wrapped provider，暂不添加 hook 支持）
-func (p *HookableProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+func (p *HookableProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*domain.ToolRegistry, maxIterations int) (string, []domain.ToolCall, error) {
 	return p.wrapped.GenerateWithTools(ctx, prompt, tools, maxIterations)
 }
 

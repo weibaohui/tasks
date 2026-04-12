@@ -432,7 +432,7 @@ func initGateway(
 	hookManager *hook.Manager,
 	logger *zap.Logger,
 	mcpService *application.MCPApplicationService,
-	skillsLoader *skill.SkillsLoader,
+	skillsLoader domain.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRecordRepo domain.ConversationRecordRepository,
 	replicaCleanupSvc *cleanup.ReplicaCleanupService,

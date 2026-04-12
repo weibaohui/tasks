@@ -1,8 +1,4 @@
-/**
- * LLM Tool 接口定义
- * 支持 LLM 调用外部工具
- */
-package llm
+package domain
 
 import (
 	"context"
@@ -40,6 +36,7 @@ type ToolRegistry struct {
 	tools map[string]Tool
 }
 
+// NewToolRegistry 创建工具注册表
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
 		tools: make(map[string]Tool),
@@ -66,7 +63,7 @@ func (r *ToolRegistry) List() []Tool {
 	return tools
 }
 
-// ToolInfos 返回工具信息列表（用于传递给 LLM）
+// ToolInfo 工具信息列表（用于传递给 LLM）
 type ToolInfo struct {
 	Type     string      `json:"type"`
 	Function FunctionDef `json:"function"`
@@ -94,4 +91,16 @@ func (r *ToolRegistry) GetToolInfos() []ToolInfo {
 		})
 	}
 	return infos
+}
+
+// SubTask 子任务
+type SubTask struct {
+	Goal     string `yaml:"goal"`
+	TaskType string `yaml:"type"`
+}
+
+// SubTaskPlan 子任务计划
+type SubTaskPlan struct {
+	SubTasks []SubTask `yaml:"sub_tasks"`
+	Reason   string    `yaml:"reason,omitempty"`
 }

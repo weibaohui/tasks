@@ -11,31 +11,28 @@ import (
 	"github.com/weibh/taskmanager/domain"
 )
 
-// EventHandler 事件处理函数
-type EventHandler func(event domain.DomainEvent)
-
 // EventBus 事件总线
 type EventBus struct {
 	mu       sync.RWMutex
-	handlers map[string][]EventHandler
+	handlers map[string][]domain.EventHandler
 }
 
 // NewEventBus 创建事件总线
 func NewEventBus() *EventBus {
 	return &EventBus{
-		handlers: make(map[string][]EventHandler),
+		handlers: make(map[string][]domain.EventHandler),
 	}
 }
 
 // Subscribe 订阅事件
-func (eb *EventBus) Subscribe(eventType string, handler EventHandler) {
+func (eb *EventBus) Subscribe(eventType string, handler domain.EventHandler) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 	eb.handlers[eventType] = append(eb.handlers[eventType], handler)
 }
 
 // Unsubscribe 取消订阅
-func (eb *EventBus) Unsubscribe(eventType string, handler EventHandler) {
+func (eb *EventBus) Unsubscribe(eventType string, handler domain.EventHandler) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 	handlers := eb.handlers[eventType]
@@ -60,7 +57,7 @@ func (eb *EventBus) Publish(event domain.DomainEvent) {
 }
 
 // SubscribeFunc 返回取消订阅函数
-func (eb *EventBus) SubscribeFunc(eventType string, handler EventHandler) func() {
+func (eb *EventBus) SubscribeFunc(eventType string, handler domain.EventHandler) func() {
 	eb.Subscribe(eventType, handler)
 	return func() {
 		eb.Unsubscribe(eventType, handler)

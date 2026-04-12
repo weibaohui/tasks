@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -143,15 +144,21 @@ func scanMCPServer(scanner mcpRowScanner) (*domain.MCPServer, error) {
 	}
 	args := []string{}
 	if argsJSON.Valid && argsJSON.String != "" && argsJSON.String != "null" {
-		_ = json.Unmarshal([]byte(argsJSON.String), &args)
+		if err := json.Unmarshal([]byte(argsJSON.String), &args); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal args: %w", err)
+		}
 	}
 	envVars := map[string]string{}
 	if envJSON.Valid && envJSON.String != "" && envJSON.String != "null" {
-		_ = json.Unmarshal([]byte(envJSON.String), &envVars)
+		if err := json.Unmarshal([]byte(envJSON.String), &envVars); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal env: %w", err)
+		}
 	}
 	caps := []domain.MCPTool{}
 	if capsJSON.Valid && capsJSON.String != "" && capsJSON.String != "null" {
-		_ = json.Unmarshal([]byte(capsJSON.String), &caps)
+		if err := json.Unmarshal([]byte(capsJSON.String), &caps); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal capabilities: %w", err)
+		}
 	}
 	var last *time.Time
 	if lastConnectedAt.Valid && lastConnectedAt.Int64 > 0 {

@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -146,7 +147,9 @@ func scanSession(scanner rowScanner) (*domain.Session, error) {
 	}
 
 	metadata := map[string]interface{}{}
-	_ = json.Unmarshal(metadataJSON, &metadata)
+	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
 	var lastActive *time.Time
 	if lastActiveUnix.Valid {
 		t := time.Unix(lastActiveUnix.Int64, 0)

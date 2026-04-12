@@ -117,7 +117,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
-		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
+		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
+			log.Printf("RemoveWorkspace failed: %v", errCleanup)
+		}
 		return nil, err
 	}
 
@@ -134,7 +136,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
-		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
+		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
+			log.Printf("RemoveWorkspace failed: %v", errCleanup)
+		}
 		return nil, err
 	}
 	if s.inboundPublisher == nil {
@@ -142,7 +146,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
-		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
+		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
+			log.Printf("RemoveWorkspace failed: %v", errCleanup)
+		}
 		return nil, ErrInboundPublisherNotConfigured
 	}
 	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
@@ -150,7 +156,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
-		_ = s.workspaceManager.RemoveWorkspace(workspacePath)
+		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
+			log.Printf("RemoveWorkspace failed: %v", errCleanup)
+		}
 		return nil, err
 	}
 

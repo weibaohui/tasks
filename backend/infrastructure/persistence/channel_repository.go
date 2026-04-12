@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -155,9 +156,13 @@ func scanChannel(scanner rowScanner) (*domain.Channel, error) {
 	}
 
 	var allowFrom []string
-	_ = json.Unmarshal(allowFromJSON, &allowFrom)
+	if err := json.Unmarshal(allowFromJSON, &allowFrom); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal allow_from: %w", err)
+	}
 	config := map[string]interface{}{}
-	_ = json.Unmarshal(configJSON, &config)
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
 
 	channel := &domain.Channel{}
 	channel.FromSnapshot(domain.ChannelSnapshot{

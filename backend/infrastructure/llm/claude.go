@@ -11,16 +11,18 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/weibh/taskmanager/domain"
 )
 
 // ClaudeProvider Anthropic Claude provider
 type ClaudeProvider struct {
 	config    *Config
 	client    *http.Client
-	lastUsage Usage // 上次调用的 token 使用量
+	lastUsage domain.Usage // 上次调用的 token 使用量
 }
 
-var _ LLMProvider = (*ClaudeProvider)(nil)
+var _ domain.LLMClient = (*ClaudeProvider)(nil)
 
 // ClaudeMessage Claude 消息格式
 type ClaudeMessage struct {
@@ -114,7 +116,7 @@ func (p *ClaudeProvider) Generate(ctx context.Context, prompt string) (string, e
 }
 
 // GenerateSubTasks 生成子任务计划
-func (p *ClaudeProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
+func (p *ClaudeProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*domain.SubTaskPlan, error) {
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
 	resp, err := p.Generate(ctx, prompt)
@@ -133,7 +135,7 @@ func (p *ClaudeProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 }
 
 // GenerateWithTools 生成文本，支持工具调用 (Claude 版本)
-func (p *ClaudeProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
+func (p *ClaudeProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*domain.ToolRegistry, maxIterations int) (string, []domain.ToolCall, error) {
 	// Claude 的工具调用实现较为复杂，这里暂时委托给普通 Generate
 	// TODO: 实现完整的 Claude 工具调用支持
 	resp, err := p.Generate(ctx, prompt)
@@ -146,6 +148,6 @@ func (p *ClaudeProvider) Name() string {
 }
 
 // GetLastUsage 返回上次调用的 token 使用量
-func (p *ClaudeProvider) GetLastUsage() Usage {
+func (p *ClaudeProvider) GetLastUsage() domain.Usage {
 	return p.lastUsage
 }

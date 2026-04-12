@@ -11,19 +11,15 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/weibh/taskmanager/domain"
 	"gopkg.in/yaml.v3"
 )
 
 // SkillLoaderFunc 技能加载函数类型
 type SkillLoaderFunc func(name string) string
 
-// SkillInfo 技能信息
-type SkillInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Available   bool   `json:"available"`
-	Requires    string `json:"requires,omitempty"`
-}
+// ensure *SkillsLoader implements domain.SkillsLoader
+var _ domain.SkillsLoader = (*SkillsLoader)(nil)
 
 // SkillsLoader 技能加载器
 type SkillsLoader struct {
@@ -109,9 +105,9 @@ func detectExecutableDir() string {
 }
 
 // ListSkills 列出所有可用技能（从所有搜索路径合并）
-func (s *SkillsLoader) ListSkills() []SkillInfo {
+func (s *SkillsLoader) ListSkills() []domain.SkillInfo {
 	// 使用 map 去重，后加载的同名技能覆盖前面的
-	skillsMap := make(map[string]SkillInfo)
+	skillsMap := make(map[string]domain.SkillInfo)
 
 	for _, searchPath := range s.searchPaths {
 		if !isDir(searchPath) {
@@ -153,7 +149,7 @@ func (s *SkillsLoader) ListSkills() []SkillInfo {
 			}
 
 			// 放入 map，后面的会覆盖前面的
-			skillsMap[skillName] = SkillInfo{
+			skillsMap[skillName] = domain.SkillInfo{
 				Name:        skillName,
 				Description: desc,
 				Available:   available,
@@ -163,7 +159,7 @@ func (s *SkillsLoader) ListSkills() []SkillInfo {
 	}
 
 	// 转换为切片
-	skills := make([]SkillInfo, 0, len(skillsMap))
+	skills := make([]domain.SkillInfo, 0, len(skillsMap))
 	for _, info := range skillsMap {
 		skills = append(skills, info)
 	}
