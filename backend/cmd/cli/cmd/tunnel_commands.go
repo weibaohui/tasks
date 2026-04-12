@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/weibh/taskmanager/infrastructure/config"
@@ -73,6 +74,10 @@ func isCloudflaredInstalled() bool {
 
 // runCloudflaredTunnel 启动 cloudflared tunnel 并返回 URL
 func runCloudflaredTunnel(port int) string {
+	// 清理残留的 cloudflared 进程
+	_ = exec.Command("pkill", "-f", "cloudflared").Run()
+	time.Sleep(500 * time.Millisecond) // 等待端口释放
+
 	cmd := exec.Command("cloudflared", "tunnel", "--url", fmt.Sprintf("http://localhost:%d", port))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
