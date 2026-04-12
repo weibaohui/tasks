@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
 var tunnelCmd = &cobra.Command{
@@ -22,7 +23,7 @@ var tunnelCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
 		if port == 0 {
-			port = getServerPort()
+			port = config.GetServerPort()
 		}
 
 		// 检查 cloudflared 是否安装

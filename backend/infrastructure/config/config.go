@@ -200,6 +200,15 @@ func GetAgentAIWorkSpaceRoot() string {
 	return cfg.Agent.AIWorkSpaceRoot
 }
 
+// GetServerPort 获取服务器端口
+func GetServerPort() int {
+	cfg, err := Load()
+	if err != nil {
+		return 13618
+	}
+	return cfg.Server.Port
+}
+
 // EnsureConfigDir 确保配置目录存在
 func EnsureConfigDir() error {
 	home, _ := os.UserHomeDir()
