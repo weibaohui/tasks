@@ -33,8 +33,8 @@ type TraceContext struct {
 	idGen      domain.IDGenerator
 }
 
-func NewTraceContext(traceID, rootTaskID string, logger interface{ Info(string, ...interface{}) }, idGen domain.IDGenerator) *TraceContext {
-	rootCtx, cancel := context.WithCancel(context.Background())
+func NewTraceContext(ctx context.Context, traceID, rootTaskID string, logger interface{ Info(string, ...interface{}) }, idGen domain.IDGenerator) *TraceContext {
+	rootCtx, cancel := context.WithCancel(ctx)
 	return &TraceContext{
 		TraceID:    traceID,
 		RootTaskID: rootTaskID,

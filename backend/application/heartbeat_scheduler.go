@@ -25,6 +25,7 @@ type HeartbeatScheduler struct {
 	}
 	requirementDispatchService *RequirementDispatchService
 	stateMachineService         *StateMachineService
+	rootCtx                     context.Context
 }
 
 // NewHeartbeatScheduler 创建心跳调度器
@@ -53,6 +54,8 @@ func NewHeartbeatScheduler(
 
 // Start 启动调度器
 func (s *HeartbeatScheduler) Start(ctx context.Context) error {
+	s.rootCtx = ctx
+
 	// 启动时清理过期的需求（服务器被kill时可能留下）
 	s.cleanupStaleRequirements(ctx)
 
@@ -162,14 +165,13 @@ func (s *HeartbeatScheduler) scheduleProject(project *domain.Project) error {
 
 	projectID := project.ID()
 	_, err := s.cron.AddFunc(cronExpr, func() {
-		s.executeHeartbeat(projectID.String())
+		s.executeHeartbeat(s.rootCtx, projectID.String())
 	})
 	return err
 }
 
 // executeHeartbeat 执行心跳
-func (s *HeartbeatScheduler) executeHeartbeat(projectID string) {
-	ctx := context.Background()
+func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID string) {
 
 	project, err := s.projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
 	if err != nil || project == nil {

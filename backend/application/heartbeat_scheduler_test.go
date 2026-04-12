@@ -161,7 +161,7 @@ func TestHeartbeatScheduler_ExecuteHeartbeat(t *testing.T) {
 	)
 
 	// 执行心跳
-	scheduler.executeHeartbeat("proj-001")
+	scheduler.executeHeartbeat(context.Background(), "proj-001")
 
 	// 验证需求是否被创建
 	requirements := reqRepo.requirements

@@ -63,14 +63,14 @@ func (rt *TaskRuntime) Unregister(taskID string) {
 }
 
 // CreateContext 为任务创建带超时的 context
-func (rt *TaskRuntime) CreateContext(taskID string, timeout time.Duration) (context.Context, context.CancelFunc) {
+func (rt *TaskRuntime) CreateContext(parentCtx context.Context, taskID string, timeout time.Duration) (context.Context, context.CancelFunc) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		ctx, cancel = context.WithTimeout(parentCtx, timeout)
 	} else {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(parentCtx)
 	}
 
 	rt.Register(taskID, ctx, cancel)
