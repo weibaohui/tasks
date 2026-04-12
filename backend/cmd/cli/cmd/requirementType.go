@@ -10,7 +10,7 @@ var requirementTypeCmd = &cobra.Command{
 	Long:  `查询和创建需求类型`,
 }
 
-func init() {
+func registerRequirementTypeCommands() {
 	requirementTypeCmd.AddCommand(requirementTypeListCmd)
 	requirementTypeCmd.AddCommand(requirementTypeCreateCmd)
 }

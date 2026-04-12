@@ -233,7 +233,7 @@ var mcpRefreshCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerMcpCommands() {
 	mcpCmd.AddCommand(mcpListCmd)
 	mcpCmd.AddCommand(mcpCreateCmd)
 	mcpCmd.AddCommand(mcpUpdateCmd)

@@ -68,8 +68,7 @@ var authCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(authCmd)
+func registerAuthCommands() {
 }
 
 // defaultConfigForAuth 返回认证专用的默认配置

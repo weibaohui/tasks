@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -285,13 +286,19 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 
 	var skills []string
 	var tools []string
-	_ = json.Unmarshal(skillsJSON, &skills)
-	_ = json.Unmarshal(toolsJSON, &tools)
+	if err := json.Unmarshal(skillsJSON, &skills); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal skills: %w", err)
+	}
+	if err := json.Unmarshal(toolsJSON, &tools); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal tools: %w", err)
+	}
 
 	var claudeCodeConfig *domain.ClaudeCodeConfig
 	if len(claudeCodeConfigJSON) > 0 && string(claudeCodeConfigJSON) != "{}" {
 		claudeCodeConfig = &domain.ClaudeCodeConfig{}
-		_ = json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig)
+		if err := json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal claude_code_config: %w", err)
+		}
 	}
 
 	// Handle nullable LLMProviderID

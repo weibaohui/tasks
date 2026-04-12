@@ -32,6 +32,7 @@ type CreateAgentCommand struct {
 	HistoryMessages       int
 	SkillsList            []string
 	ToolsList             []string
+	IsActive              *bool
 	IsDefault             bool
 	EnableThinkingProcess bool
 }
@@ -162,6 +163,9 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		EnableThinkingProcess: cmd.EnableThinkingProcess,
 	})
 
+	if cmd.IsActive != nil {
+		agent.SetActive(*cmd.IsActive)
+	}
 	if cmd.IsDefault {
 		agent.SetDefault(true)
 	}

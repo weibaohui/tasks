@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -112,7 +113,9 @@ func scanBinding(scanner interface {
 	entity := domain.NewAgentMCPBinding(domain.NewAgentMCPBindingID(id), domain.NewAgentID(agentID), domain.NewMCPServerID(serverID))
 	if enabledTools.Valid && enabledTools.String != "" && enabledTools.String != "null" {
 		var tools []string
-		_ = json.Unmarshal([]byte(enabledTools.String), &tools)
+		if err := json.Unmarshal([]byte(enabledTools.String), &tools); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal enabled_tools: %w", err)
+		}
 		entity.SetEnabledTools(tools)
 	}
 	entity.SetActive(isActiveInt == 1)

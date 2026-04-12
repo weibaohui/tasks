@@ -88,9 +88,9 @@ type LLMResponse struct {
 
 // Usage token 使用量
 type Usage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 // LLMHook LLM 钩子接口

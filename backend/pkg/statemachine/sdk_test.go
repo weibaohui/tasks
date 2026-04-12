@@ -88,7 +88,10 @@ func TestSDK(t *testing.T) {
 	}
 
 	// 创建 SDK
-	sm := New(context.Background(), WithDB(db))
+	sm, err := New(context.Background(), WithDB(db))
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
 	defer sm.Close()
 
 	ctx := context.Background()

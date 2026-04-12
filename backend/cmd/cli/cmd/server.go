@@ -1,6 +1,6 @@
 package cmd
 
-func init() {
+func registerServerCommands() {
 	serverStartCmd.Flags().Int("port", 0, "服务器端口（默认 13618）")
 	serverStopCmd.Flags().Bool("force", false, "强制停止服务器")
 	serverLogsCmd.Flags().BoolP("follow", "f", false, "实时跟踪日志输出")
@@ -11,6 +11,4 @@ func init() {
 	serverCmd.AddCommand(serverStatusCmd)
 	serverCmd.AddCommand(serverLogsCmd)
 	serverCmd.AddCommand(serverRestartCmd)
-
-	rootCmd.AddCommand(serverCmd)
 }

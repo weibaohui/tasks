@@ -186,7 +186,7 @@ var channelDeleteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerChannelCommands() {
 	channelCmd.AddCommand(channelListCmd)
 	channelCmd.AddCommand(channelCreateCmd)
 	channelCmd.AddCommand(channelUpdateCmd)

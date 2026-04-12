@@ -267,7 +267,7 @@ var agentDisableCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerAgentCommands() {
 	agentCmd.AddCommand(agentListCmd)
 	agentCmd.AddCommand(agentCreateCmd)
 	agentCmd.AddCommand(agentUpdateCmd)

@@ -11,16 +11,18 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/weibh/taskmanager/domain"
 )
 
 // OllamaProvider Ollama 本地模型 provider
 type OllamaProvider struct {
 	config    *Config
 	client    *http.Client
-	lastUsage Usage // 上次调用的 token 使用量
+	lastUsage domain.Usage // 上次调用的 token 使用量
 }
 
-var _ LLMProvider = (*OllamaProvider)(nil)
+var _ domain.LLMClient = (*OllamaProvider)(nil)
 
 // OllamaRequest Ollama 请求格式
 type OllamaRequest struct {
@@ -98,7 +100,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, prompt string) (string, e
 }
 
 // GenerateSubTasks 生成子任务计划
-func (p *OllamaProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error) {
+func (p *OllamaProvider) GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*domain.SubTaskPlan, error) {
 	prompt := SubTaskPrompt(taskName, taskDesc, depth, maxDepth)
 
 	resp, err := p.Generate(ctx, prompt)
@@ -117,9 +119,9 @@ func (p *OllamaProvider) GenerateSubTasks(ctx context.Context, taskName string, 
 }
 
 // GenerateWithTools 生成文本，支持工具调用 (Ollama 版本)
-func (p *OllamaProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error) {
-	// Ollama 的工具调用支持取决于模型，这里暂时委托给普通 Generate
-	// TODO: 实现完整的 Ollama 工具调用支持
+func (p *OllamaProvider) GenerateWithTools(ctx context.Context, prompt string, tools []*domain.ToolRegistry, maxIterations int) (string, []domain.ToolCall, error) {
+	// Ollama 的工具调用支持取决于模型，当前委托给普通 Generate
+	// 完整工具调用支持待后续需求实现
 	resp, err := p.Generate(ctx, prompt)
 	return resp, nil, err
 }
@@ -130,6 +132,6 @@ func (p *OllamaProvider) Name() string {
 }
 
 // GetLastUsage 返回上次调用的 token 使用量
-func (p *OllamaProvider) GetLastUsage() Usage {
+func (p *OllamaProvider) GetLastUsage() domain.Usage {
 	return p.lastUsage
 }

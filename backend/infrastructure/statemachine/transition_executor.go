@@ -96,7 +96,7 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook statemachine.
 	// 所有重试都失败了
 	logger.Error("hook execution failed after all retries", zap.Error(lastErr))
 
-	// TODO: 执行补偿（预留接口）
+	// 触发补偿（当前仅记录日志，待后续扩展）
 	e.executeCompensation(ctx, hook, hookCtx.RequirementID, lastErr)
 }
 

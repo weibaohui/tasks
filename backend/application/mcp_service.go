@@ -183,7 +183,7 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	}
 	cli, err := s.clientFactory.CreateClient(server)
 	if err != nil {
-		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
+		server.MarkClientCreationFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -193,7 +193,7 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := cli.Start(ctx2); err != nil {
-		server.SetStatus("error", fmt.Sprintf("启动失败: %v", err))
+		server.MarkStartFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -201,13 +201,13 @@ func (s *MCPApplicationService) TestServer(ctx context.Context, id domain.MCPSer
 	}
 	err = cli.Initialize(ctx2)
 	if err != nil {
-		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
+		server.MarkInitializationFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
 		return err
 	}
-	server.SetStatus("active", "")
+	server.MarkActive()
 	return s.mcpServerRepo.Update(ctx, server)
 }
 
@@ -222,7 +222,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	}
 	cli, err := s.clientFactory.CreateClient(server)
 	if err != nil {
-		server.SetStatus("error", fmt.Sprintf("创建客户端失败: %v", err))
+		server.MarkClientCreationFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -232,7 +232,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := cli.Start(ctx2); err != nil {
-		server.SetStatus("error", fmt.Sprintf("启动失败: %v", err))
+		server.MarkStartFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -240,7 +240,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	}
 	err = cli.Initialize(ctx2)
 	if err != nil {
-		server.SetStatus("error", fmt.Sprintf("初始化失败: %v", err))
+		server.MarkInitializationFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -248,7 +248,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 	}
 	tools, err := cli.ListTools(ctx2)
 	if err != nil {
-		server.SetStatus("error", fmt.Sprintf("获取工具列表失败: %v", err))
+		server.MarkListToolsFailed(err)
 		if updateErr := s.mcpServerRepo.Update(ctx, server); updateErr != nil {
 			log.Printf("failed to update server status: %v", updateErr)
 		}
@@ -283,7 +283,7 @@ func (s *MCPApplicationService) RefreshCapabilities(ctx context.Context, id doma
 		}
 	}
 	server.SetCapabilities(capabilities)
-	server.SetStatus("active", "")
+	server.MarkActive()
 	return s.mcpServerRepo.Update(ctx, server)
 }
 
@@ -416,4 +416,3 @@ func (s *MCPApplicationService) ExecuteTool(ctx context.Context, serverID domain
 	}
 	return result.Content, nil
 }
-

@@ -7,8 +7,6 @@ import (
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/claudecode"
 	"github.com/weibh/taskmanager/infrastructure/hook"
-	"github.com/weibh/taskmanager/infrastructure/llm"
-	"github.com/weibh/taskmanager/infrastructure/skill"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -24,11 +22,11 @@ type MessageProcessor struct {
 	providerRepo         domain.LLMProviderRepository
 	sessionService       *application.SessionApplicationService
 	idGenerator          domain.IDGenerator
-	toolRegistry         *llm.ToolRegistry
+	toolRegistry         *domain.ToolRegistry
 	hookManager          *hook.Manager
 	factory              domain.LLMProviderFactory
 	mcpService           *application.MCPApplicationService
-	skillsLoader         *skill.SkillsLoader
+	skillsLoader         domain.SkillsLoader
 	requirementRepo      domain.RequirementRepository
 	conversationRepo     domain.ConversationRecordRepository
 	replicaCleanupSvc   domain.ReplicaCleanupService
@@ -48,12 +46,12 @@ func NewMessageProcessor(
 	hookManager *hook.Manager,
 	factory domain.LLMProviderFactory,
 	mcpService *application.MCPApplicationService,
-	skillsLoader *skill.SkillsLoader,
+	skillsLoader domain.SkillsLoader,
 	requirementRepo domain.RequirementRepository,
 	conversationRepo domain.ConversationRecordRepository,
 	replicaCleanupSvc domain.ReplicaCleanupService,
 ) *MessageProcessor {
-	registry := llm.NewToolRegistry()
+	registry := domain.NewToolRegistry()
 	// 注意：Bash 和 MCP 工具不全局注册，而是在 buildAgentToolsRegistry 中按 Agent 配置按需注册
 
 	// 创建命令处理器并设置 sessionManager 引用

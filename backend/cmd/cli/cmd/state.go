@@ -15,7 +15,7 @@ var stateCmd = &cobra.Command{
 	Long:  `获取项目状态统计和需求转换历史`,
 }
 
-func init() {
+func registerStateCommands() {
 	stateCmd.AddCommand(stateSummaryCmd)
 	stateCmd.AddCommand(stateHistoryCmd)
 }

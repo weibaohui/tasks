@@ -233,3 +233,11 @@ type MCPToolLogRepository interface {
 	Create(ctx context.Context, log *MCPToolLog) error
 	ListByServerID(ctx context.Context, serverID MCPServerID, limit int) ([]*MCPToolLog, error)
 }
+
+type UserTokenRepository interface {
+	Save(ctx context.Context, token *UserToken) error
+	FindByID(ctx context.Context, id UserTokenID) (*UserToken, error)
+	FindByTokenHash(ctx context.Context, tokenHash string) (*UserToken, error)
+	FindByUserID(ctx context.Context, userID UserID) ([]*UserToken, error)
+	Delete(ctx context.Context, id UserTokenID) error
+}

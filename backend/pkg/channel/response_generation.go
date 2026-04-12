@@ -101,15 +101,9 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		providerConfig.SetProviderType(provider.ProviderType())
 	}
 
-	result, err := p.factory.Build(providerConfig)
+	llmProvider, err := p.factory.Build(providerConfig)
 	if err != nil {
 		p.logger.Error("创建 LLM Provider 失败", zap.Error(err))
-		return fmt.Sprintf("收到消息: %s\n(LLM 配置错误)", content)
-	}
-
-	llmProvider, ok := result.(llm.LLMProvider)
-	if !ok {
-		p.logger.Error("LLM Provider 类型转换失败")
 		return fmt.Sprintf("收到消息: %s\n(LLM 配置错误)", content)
 	}
 
@@ -171,7 +165,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 
 	// 调用 LLM (带工具支持)
 	var response string
-	var toolCalls []llm.ToolCall
+	var toolCalls []domain.ToolCall
 
 	// 构建 call metadata 从 msg.Metadata
 	callMetadata := make(map[string]string)
@@ -225,7 +219,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 	}
 
 	// 构建工具注册表（包括 Agent 指定的 Bash、MCP、Skills 工具）
-	toolRegistries := []*llm.ToolRegistry{p.toolRegistry}
+	toolRegistries := []*domain.ToolRegistry{p.toolRegistry}
 	if agent != nil {
 		// 构建上下文参数
 		contextParams := map[string]string{

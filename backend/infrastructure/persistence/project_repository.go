@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -113,7 +114,9 @@ func scanProject(scanner rowScanner) (*domain.Project, error) {
 		return nil, err
 	}
 	var initSteps []string
-	_ = json.Unmarshal(initStepsJSON, &initSteps)
+	if err := json.Unmarshal(initStepsJSON, &initSteps); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal init_steps: %w", err)
+	}
 	project := &domain.Project{}
 	project.FromSnapshot(domain.ProjectSnapshot{
 		ID:                        domain.NewProjectID(idStr),

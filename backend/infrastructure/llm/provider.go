@@ -5,44 +5,12 @@
 package llm
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
+	"github.com/weibh/taskmanager/domain"
 	"gopkg.in/yaml.v3"
 )
-
-// SubTask 子任务结构
-type SubTask struct {
-	Goal     string `yaml:"goal"`
-	TaskType string `yaml:"type"` // agent, coding, custom
-}
-
-// SubTaskPlan 子任务计划
-type SubTaskPlan struct {
-	SubTasks []SubTask `yaml:"sub_tasks"`
-	Reason   string    `yaml:"reason,omitempty"`
-}
-
-// LLMProvider LLM provider 接口
-type LLMProvider interface {
-	// Generate 生成文本
-	Generate(ctx context.Context, prompt string) (string, error)
-
-	// GenerateWithTools 生成文本，支持工具调用
-	// tools: 可用的工具列表
-	// maxIterations: 最大工具调用迭代次数
-	GenerateWithTools(ctx context.Context, prompt string, tools []*ToolRegistry, maxIterations int) (string, []ToolCall, error)
-
-	// GenerateSubTasks 根据任务生成子任务计划
-	GenerateSubTasks(ctx context.Context, taskName string, taskDesc string, depth int, maxDepth int) (*SubTaskPlan, error)
-
-	// GetLastUsage 返回上次调用的 token 使用量
-	GetLastUsage() Usage
-
-	// Name 返回 provider 名称
-	Name() string
-}
 
 // Config LLM 配置
 type Config struct {
@@ -55,7 +23,7 @@ type Config struct {
 }
 
 // NewLLMProvider 创建 LLM Provider
-func NewLLMProvider(config *Config) (LLMProvider, error) {
+func NewLLMProvider(config *Config) (domain.LLMClient, error) {
 	switch config.ProviderType {
 	case "openai", "minimax":
 		// minimax 使用 OpenAI 兼容 API，使用 eino 实现
@@ -132,9 +100,9 @@ func ExtractYAML(s string) string {
 }
 
 // tryParseYAML 尝试解析 YAML
-// TryParseYAML 尝试解析 YAML
-func TryParseYAML(s string) (*SubTaskPlan, error) {
-	var plan SubTaskPlan
+// TryParseYAML 从响应中提取并解析 YAML
+func TryParseYAML(s string) (*domain.SubTaskPlan, error) {
+	var plan domain.SubTaskPlan
 
 	// 移除可能的前缀文本，找到 YAML 开始位置
 	yamlStart := strings.Index(s, "sub_tasks:")

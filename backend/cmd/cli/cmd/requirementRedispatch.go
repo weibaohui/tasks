@@ -83,6 +83,6 @@ var requirementCopyDispatchCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementRedispatchCommands() {
 	requirementCmd.AddCommand(requirementCopyDispatchCmd)
 }

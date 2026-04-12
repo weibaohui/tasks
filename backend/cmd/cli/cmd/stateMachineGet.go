@@ -95,7 +95,7 @@ var stateMachineGetCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerStateMachineGetCommands() {
 	stateMachineGetCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineGetCmd.MarkFlagRequired("machine")
 }

@@ -83,7 +83,7 @@ var sessionDeleteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerSessionCommands() {
 	sessionCmd.AddCommand(sessionListCmd)
 	sessionCmd.AddCommand(sessionDeleteCmd)
 

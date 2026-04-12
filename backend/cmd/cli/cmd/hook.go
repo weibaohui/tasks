@@ -10,6 +10,6 @@ var hookCmd = &cobra.Command{
 	Long:  `查看和管理 Hook 配置`,
 }
 
-func init() {
+func registerHookCommands() {
 	hookCmd.AddCommand(hookListCmd)
 }

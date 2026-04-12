@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibh/taskmanager/domain"
 	"go.uber.org/zap"
 )
 
@@ -21,13 +22,13 @@ func TestEinoProvider_GenerateWithTools_AppendAssistantToolCallsFirst(t *testing
 		logger:    zap.NewNop(),
 	}
 
-	reg := NewToolRegistry()
+	reg := domain.NewToolRegistry()
 	reg.Register(&stubTool{
 		name:   "bash",
 		output: "Tue Mar 24 10:54:43 CST 2026",
 	})
 
-	got, toolCalls, err := provider.GenerateWithTools(context.Background(), "请执行 date", []*ToolRegistry{reg}, 3)
+	got, toolCalls, err := provider.GenerateWithTools(context.Background(), "请执行 date", []*domain.ToolRegistry{reg}, 3)
 	if err != nil {
 		t.Fatalf("GenerateWithTools 返回错误: %v", err)
 	}
@@ -126,8 +127,8 @@ func (t *stubTool) Parameters() json.RawMessage {
 }
 
 // Execute 返回固定输出，模拟工具执行成功。
-func (t *stubTool) Execute(ctx context.Context, input json.RawMessage) (*ToolResult, error) {
-	return &ToolResult{
+func (t *stubTool) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
+	return &domain.ToolResult{
 		Output: t.output,
 	}, nil
 }

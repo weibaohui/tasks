@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 )
 
 // CallMCPTool 通用 MCP 工具调用器
@@ -25,7 +24,7 @@ func NewCallMCPTool(mcpService domain.MCPToolService) *CallMCPTool {
 	}
 }
 
-var _ llm.Tool = (*CallMCPTool)(nil)
+var _ domain.Tool = (*CallMCPTool)(nil)
 
 // Name 返回工具名称
 func (t *CallMCPTool) Name() string {
@@ -64,7 +63,7 @@ func (t *CallMCPTool) Parameters() json.RawMessage {
 }
 
 // Execute 执行工具
-func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
+func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
 	var args struct {
 		ServerCode string                 `json:"server_code"`
 		ToolName   string                 `json:"tool_name"`
@@ -72,21 +71,21 @@ func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("解析参数失败: %v", err),
 		}, nil
 	}
 
 	if args.ServerCode == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "server_code 不能为空",
 		}, nil
 	}
 
 	if args.ToolName == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "tool_name 不能为空",
 		}, nil
@@ -100,7 +99,7 @@ func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.
 	// 查找 server
 	servers, err := t.mcpService.ListServers(ctx)
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("获取 MCP Server 列表失败: %v", err),
 		}, nil
@@ -116,7 +115,7 @@ func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.
 	}
 
 	if serverID == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("MCP Server '%s' 不存在", args.ServerCode),
 		}, nil
@@ -125,13 +124,13 @@ func (t *CallMCPTool) Execute(ctx context.Context, input json.RawMessage) (*llm.
 	// 执行 MCP 工具
 	result, err := t.mcpService.ExecuteTool(ctx, *serverID, args.ToolName, args.Params)
 	if err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("执行 MCP 工具失败: %v", err),
 		}, nil
 	}
 
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: result,
 		Error:  "",
 	}, nil

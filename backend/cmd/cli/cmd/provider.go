@@ -245,7 +245,7 @@ var providerTestCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerProviderCommands() {
 	providerCmd.AddCommand(providerListCmd)
 	providerCmd.AddCommand(providerCreateCmd)
 	providerCmd.AddCommand(providerUpdateCmd)

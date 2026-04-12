@@ -34,6 +34,7 @@ type CreateAgentRequest struct {
 	HistoryMessages       int      `json:"history_messages"`
 	SkillsList            []string `json:"skills_list"`
 	ToolsList             []string `json:"tools_list"`
+	IsActive              *bool    `json:"is_active"`
 	IsDefault             bool     `json:"is_default"`
 	EnableThinkingProcess bool     `json:"enable_thinking_process"`
 }
@@ -85,6 +86,7 @@ func (h *AgentHandler) CreateAgent(c *gin.Context) {
 		HistoryMessages:       req.HistoryMessages,
 		SkillsList:            req.SkillsList,
 		ToolsList:             req.ToolsList,
+		IsActive:              req.IsActive,
 		IsDefault:             req.IsDefault,
 		EnableThinkingProcess: req.EnableThinkingProcess,
 	})

@@ -9,23 +9,22 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/weibh/taskmanager/infrastructure/llm"
-	"github.com/weibh/taskmanager/infrastructure/skill"
+	"github.com/weibh/taskmanager/domain"
 )
 
 // UseSkillTool use_skill 工具 - 用于按需加载技能
 type UseSkillTool struct {
-	skillsLoader *skill.SkillsLoader
+	skillsLoader domain.SkillsLoader
 }
 
 // NewUseSkillTool 创建 use_skill 工具
-func NewUseSkillTool(skillsLoader *skill.SkillsLoader) *UseSkillTool {
+func NewUseSkillTool(skillsLoader domain.SkillsLoader) *UseSkillTool {
 	return &UseSkillTool{
 		skillsLoader: skillsLoader,
 	}
 }
 
-var _ llm.Tool = (*UseSkillTool)(nil)
+var _ domain.Tool = (*UseSkillTool)(nil)
 
 // Name 返回工具名称
 func (t *UseSkillTool) Name() string {
@@ -60,21 +59,21 @@ func (t *UseSkillTool) Parameters() json.RawMessage {
 }
 
 // Execute 执行工具
-func (t *UseSkillTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
+func (t *UseSkillTool) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
 	var args struct {
 		SkillName string `json:"skill_name"`
 		Action    string `json:"action"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("解析参数失败: %v", err),
 		}, nil
 	}
 
 	if args.SkillName == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "skill_name 不能为空",
 		}, nil
@@ -91,7 +90,7 @@ func (t *UseSkillTool) Execute(ctx context.Context, input json.RawMessage) (*llm
 	case "info":
 		return t.handleInfo(args.SkillName)
 	default:
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("不支持的操作: %s", args.Action),
 		}, nil
@@ -99,9 +98,9 @@ func (t *UseSkillTool) Execute(ctx context.Context, input json.RawMessage) (*llm
 }
 
 // handleLoad 加载技能
-func (t *UseSkillTool) handleLoad(skillName string) (*llm.ToolResult, error) {
+func (t *UseSkillTool) handleLoad(skillName string) (*domain.ToolResult, error) {
 	if t.skillsLoader == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "技能加载器未配置",
 		}, nil
@@ -111,7 +110,7 @@ func (t *UseSkillTool) handleLoad(skillName string) (*llm.ToolResult, error) {
 	skills := t.skillsLoader.ListSkills()
 
 	// 查找指定技能
-	var skillInfo *skill.SkillInfo
+	var skillInfo *domain.SkillInfo
 	for i, s := range skills {
 		if s.Name == skillName {
 			skillInfo = &skills[i]
@@ -120,14 +119,14 @@ func (t *UseSkillTool) handleLoad(skillName string) (*llm.ToolResult, error) {
 	}
 
 	if skillInfo == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("技能 '%s' 不存在", skillName),
 		}, nil
 	}
 
 	if !skillInfo.Available {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("技能 '%s' 不可用: %s", skillName, skillInfo.Requires),
 		}, nil
@@ -136,7 +135,7 @@ func (t *UseSkillTool) handleLoad(skillName string) (*llm.ToolResult, error) {
 	// 加载技能内容
 	content := t.skillsLoader.LoadSkillContent(skillName)
 	if content == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("技能 '%s' 内容加载失败", skillName),
 		}, nil
@@ -151,16 +150,16 @@ func (t *UseSkillTool) handleLoad(skillName string) (*llm.ToolResult, error) {
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: string(resultJSON),
 		Error:  "",
 	}, nil
 }
 
 // handleInfo 获取技能信息
-func (t *UseSkillTool) handleInfo(skillName string) (*llm.ToolResult, error) {
+func (t *UseSkillTool) handleInfo(skillName string) (*domain.ToolResult, error) {
 	if t.skillsLoader == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  "技能加载器未配置",
 		}, nil
@@ -170,7 +169,7 @@ func (t *UseSkillTool) handleInfo(skillName string) (*llm.ToolResult, error) {
 	skills := t.skillsLoader.ListSkills()
 
 	// 查找指定技能
-	var skillInfo *skill.SkillInfo
+	var skillInfo *domain.SkillInfo
 	for i, s := range skills {
 		if s.Name == skillName {
 			skillInfo = &skills[i]
@@ -179,7 +178,7 @@ func (t *UseSkillTool) handleInfo(skillName string) (*llm.ToolResult, error) {
 	}
 
 	if skillInfo == nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			Output: "",
 			Error:  fmt.Sprintf("技能 '%s' 不存在", skillName),
 		}, nil
@@ -194,7 +193,7 @@ func (t *UseSkillTool) handleInfo(skillName string) (*llm.ToolResult, error) {
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		Output: string(resultJSON),
 		Error:  "",
 	}, nil

@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -22,9 +21,9 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/bus"
 	"github.com/weibh/taskmanager/infrastructure/config"
 	"github.com/weibh/taskmanager/infrastructure/hook"
-	"github.com/weibh/taskmanager/infrastructure/llm"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/cleanup"
+	"github.com/weibh/taskmanager/infrastructure/llm"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/workspace"
 	"github.com/weibh/taskmanager/infrastructure/skill"
@@ -34,10 +33,7 @@ import (
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
 	"github.com/weibh/taskmanager/internal/embed"
-	channelBus "github.com/weibh/taskmanager/pkg/bus"
-	"github.com/weibh/taskmanager/pkg/channel"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
 )
 
@@ -45,15 +41,6 @@ const (
 	DefaultAdminUsername = "admin"
 	DefaultAdminPassword = "admin123"
 )
-
-// Gateway 渠道网关组件
-type Gateway struct {
-	logger         *zap.Logger
-	messageBus     *channelBus.MessageBus
-	sessionManager *channel.SessionManager
-	processor      *channel.MessageProcessor
-	channelManager *channel.Manager
-}
 
 func main() {
 	// 1. 加载配置（先加载配置以获取日志级别）
@@ -291,296 +278,4 @@ func main() {
 	gateway.Shutdown()
 
 	logger.Info("核心服务已关闭")
-}
-
-func runAdminSubcommandIfMatched(logger *zap.Logger) bool {
-	if len(os.Args) < 2 {
-		return false
-	}
-
-	switch os.Args[1] {
-	case "create-admin":
-		if err := runCreateAdmin(logger); err != nil {
-			logger.Fatal("创建默认管理员用户失败", zap.Error(err))
-		}
-		return true
-	case "delete-admin":
-		if err := runDeleteAdmin(logger); err != nil {
-			logger.Fatal("删除默认管理员用户失败", zap.Error(err))
-		}
-		return true
-	default:
-		return false
-	}
-}
-
-func runCreateAdmin(logger *zap.Logger) error {
-	userRepo, idGen, cleanup, err := getDBAndUserRepo(logger)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-	existingUser, err := userRepo.FindByUsername(ctx, DefaultAdminUsername)
-	if err != nil {
-		return fmt.Errorf("检查用户失败: %w", err)
-	}
-	if existingUser != nil {
-		logger.Info("管理员用户已存在", zap.String("username", DefaultAdminUsername))
-		return nil
-	}
-
-	userService := application.NewUserApplicationService(userRepo, idGen)
-	user, err := userService.CreateUser(ctx, application.CreateUserCommand{
-		Username:    DefaultAdminUsername,
-		DisplayName: "系统管理员",
-		Email:       "admin@local.dev",
-		Password:    DefaultAdminPassword,
-	})
-	if err != nil {
-		return fmt.Errorf("创建管理员用户失败: %w", err)
-	}
-
-	logger.Info("管理员用户创建成功",
-		zap.String("username", user.Username()),
-		zap.String("userCode", user.UserCode().String()),
-	)
-	fmt.Printf("初始密码: %s (请登录后立即修改)\n", DefaultAdminPassword)
-	return nil
-}
-
-func runDeleteAdmin(logger *zap.Logger) error {
-	userRepo, _, cleanup, err := getDBAndUserRepo(logger)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-	existingUser, err := userRepo.FindByUsername(ctx, DefaultAdminUsername)
-	if err != nil {
-		return fmt.Errorf("查找用户失败: %w", err)
-	}
-	if existingUser == nil {
-		logger.Info("管理员用户不存在", zap.String("username", DefaultAdminUsername))
-		return nil
-	}
-
-	if err := userRepo.Delete(ctx, existingUser.ID()); err != nil {
-		return fmt.Errorf("删除管理员用户失败: %w", err)
-	}
-
-	logger.Info("管理员用户已删除", zap.String("username", DefaultAdminUsername))
-	return nil
-}
-
-func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func(), error) {
-	dbPath := resolveDBPath()
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("打开数据库失败(%s): %w", dbPath, err)
-	}
-
-	if err := _persistence.InitSchema(db); err != nil {
-		db.Close()
-		return nil, nil, nil, fmt.Errorf("初始化数据库结构失败(%s): %w", dbPath, err)
-	}
-
-	idGenerator := utils.NewNanoIDGenerator(utils.DefaultIDSize)
-
-	userRepo := _persistence.NewSQLiteUserRepository(db)
-	cleanup := func() {
-		db.Close()
-	}
-
-	return userRepo, idGenerator, cleanup, nil
-}
-
-func resolveDBPath() string {
-	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
-		return p
-	}
-	if p := os.Getenv("DB_PATH"); p != "" {
-		return p
-	}
-	if st, err := os.Stat("./cmd/server"); err == nil && st.IsDir() {
-		return filepath.FromSlash("./tasks.db")
-	}
-	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
-		return filepath.FromSlash("./backend/tasks.db")
-	}
-	return filepath.FromSlash("./tasks.db")
-}
-
-func resolveWorkspace() string {
-	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
-		return p
-	}
-	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {
-		return filepath.FromSlash("./backend")
-	}
-	return "."
-}
-
-func initGateway(
-	channelService *application.ChannelApplicationService,
-	sessionService *application.SessionApplicationService,
-	agentRepo domain.AgentRepository,
-	providerRepo domain.LLMProviderRepository,
-	idGenerator *utils.NanoIDGenerator,
-	hookManager *hook.Manager,
-	logger *zap.Logger,
-	mcpService *application.MCPApplicationService,
-	skillsLoader *skill.SkillsLoader,
-	requirementRepo domain.RequirementRepository,
-	conversationRecordRepo domain.ConversationRecordRepository,
-	replicaCleanupSvc *cleanup.ReplicaCleanupService,
-) *Gateway {
-	gw := &Gateway{
-		logger:         logger,
-		messageBus:     channelBus.NewMessageBus(logger),
-		sessionManager: channel.NewSessionManager(logger),
-		channelManager: channel.NewManager(nil),
-	}
-
-	feishuThinkingHook := hooks.NewFeishuThinkingProcessHook(gw.messageBus, logger)
-	hookManager.Register(feishuThinkingHook)
-	logger.Info("已注册 FeishuThinkingProcessHook")
-
-	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, sessionService, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
-	gw.channelManager = channel.NewManager(gw.messageBus)
-	gw.loadChannels(channelService)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	gw.messageBus.StartDispatcher(ctx)
-	_ = cancel
-
-	if err := gw.channelManager.StartAll(ctx); err != nil {
-		logger.Error("启动渠道失败", zap.Error(err))
-	}
-
-	go gw.runMessageLoop(ctx, channelService)
-	logger.Info("渠道网关初始化完成", zap.Int("channels", gw.ChannelCount()))
-
-	return gw
-}
-
-func (g *Gateway) loadChannels(channelService *application.ChannelApplicationService) {
-	registry := channel.DefaultRegistry(g.messageBus, g.logger)
-
-	ctx := context.Background()
-	channels, err := channelService.ListActiveChannels(ctx)
-	if err != nil {
-		g.logger.Error("加载渠道配置失败", zap.Error(err))
-		return
-	}
-
-	for _, ch := range channels {
-		chType := string(ch.Type())
-		chInstance, err := registry.CreateChannel(chType, ch.Config())
-		if err != nil {
-			g.logger.Warn("创建渠道实例失败",
-				zap.String("name", ch.Name()),
-				zap.String("type", chType),
-				zap.Error(err),
-			)
-			continue
-		}
-		g.channelManager.Register(chInstance)
-		g.logger.Info("已注册渠道",
-			zap.String("name", ch.Name()),
-			zap.String("type", chType),
-		)
-	}
-}
-
-func (g *Gateway) runMessageLoop(ctx context.Context, channelService *application.ChannelApplicationService) {
-	g.logger.Info("消息处理循环已启动")
-	for {
-		msg, err := g.messageBus.ConsumeInbound(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				g.logger.Info("消息处理循环上下文已取消")
-				return
-			}
-			g.logger.Error("消费消息失败", zap.Error(err))
-			continue
-		}
-
-		if err := g.processor.Process(ctx, msg); err != nil {
-			g.logger.Error("处理消息失败", zap.Error(err))
-			metadata := make(map[string]any)
-			for k, v := range msg.Metadata {
-				metadata[k] = v
-			}
-			outMsg := &channelBus.OutboundMessage{
-				Channel:  msg.Channel,
-				ChatID:   msg.ChatID,
-				Content:  fmt.Sprintf("处理消息时出错: %v", err),
-				Metadata: metadata,
-			}
-			g.messageBus.PublishOutbound(outMsg)
-		}
-	}
-}
-
-func (g *Gateway) Shutdown() {
-	g.logger.Info("正在关闭渠道网关...")
-	g.channelManager.StopAll()
-	g.messageBus.Stop()
-	g.logger.Info("渠道网关已关闭")
-}
-
-func (g *Gateway) ChannelCount() int {
-	return len(g.channelManager.List())
-}
-
-// initLogger 根据配置的日志级别初始化 zap logger
-func initLogger(level string) *zap.Logger {
-	// 解析日志级别
-	var zapLevel zapcore.Level
-	switch level {
-	case "debug":
-		zapLevel = zapcore.DebugLevel
-	case "info":
-		zapLevel = zapcore.InfoLevel
-	case "warn", "warning":
-		zapLevel = zapcore.WarnLevel
-	case "error":
-		zapLevel = zapcore.ErrorLevel
-	default:
-		zapLevel = zapcore.InfoLevel
-	}
-
-	// 创建自定义配置
-	config := zap.Config{
-		Level:       zap.NewAtomicLevelAt(zapLevel),
-		Development: true,
-		Encoding:    "console",
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "time",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			FunctionKey:    zapcore.OmitKey,
-			MessageKey:     "msg",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-	}
-
-	logger, err := config.Build()
-	if err != nil {
-		// 构建失败时返回默认开发模式 logger
-		fallback, _ := zap.NewDevelopment()
-		return fallback
-	}
-	return logger
 }

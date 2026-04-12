@@ -7,7 +7,7 @@
 //
 //	func main() {
 //	    ctx := context.Background()
-//	    sm := statemachine.New(nil) // 使用默认配置
+//	    sm, err := statemachine.New(nil) // 使用默认配置
 //
 //	    // 创建状态机
 //	    machine, _ := sm.Create(ctx, "DevOps流程", "描述", yamlConfig)
@@ -29,14 +29,15 @@ package statemachine
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/config"
-	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"github.com/weibh/taskmanager/infrastructure/persistence"
+	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
 	"go.uber.org/zap"
 )
 
@@ -66,7 +67,7 @@ func WithLogger(logger *zap.Logger) Option {
 // New 创建 SDK 实例
 // ctx 可以为 nil，使用默认配置
 // 支持通过 Option 自定义配置
-func New(ctx context.Context, opts ...Option) *SDK {
+func New(ctx context.Context, opts ...Option) (*SDK, error) {
 	s := &SDK{}
 
 	// 应用配置
@@ -79,11 +80,11 @@ func New(ctx context.Context, opts ...Option) *SDK {
 		dbPath := config.GetDatabasePath()
 		dbDir := filepath.Dir(dbPath)
 		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			panic("failed to create db dir: " + err.Error())
+			return nil, fmt.Errorf("failed to create db dir: %w", err)
 		}
 		db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 		if err != nil {
-			panic("failed to open db: " + err.Error())
+			return nil, fmt.Errorf("failed to open db: %w", err)
 		}
 		s.db = db
 	}
@@ -93,7 +94,7 @@ func New(ctx context.Context, opts ...Option) *SDK {
 	executor := infra_sm.NewTransitionExecutor(zap.NewNop())
 	s.svc = application.NewStateMachineService(repo, nil, executor, zap.NewNop())
 
-	return s
+	return s, nil
 }
 
 // Create 创建状态机

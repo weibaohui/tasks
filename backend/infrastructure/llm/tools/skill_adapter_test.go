@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/domain"
 	skilltool "github.com/weibh/taskmanager/infrastructure/llm/tools/skill"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 )
@@ -192,7 +192,7 @@ func TestSkillToolAdapter_ImplementsToolInterface(t *testing.T) {
 	adapter := NewSkillToolAdapter(dynamicTool)
 
 	// 使用接口断言验证实现了 Tool 接口
-	var tool llm.Tool = adapter
+	var tool domain.Tool = adapter
 	if tool.Name() != "skill__test-skill" {
 		t.Errorf("期望名称为 skill__test-skill, 实际为 %s", tool.Name())
 	}
@@ -285,7 +285,7 @@ func TestSkillToolsAdapterRegistry_GetToolsForSkills(t *testing.T) {
 
 	loader := skill.NewSkillsLoaderWithPaths([]string{tmpDir})
 
-	skills := []skill.SkillInfo{
+	skills := []domain.SkillInfo{
 		{Name: "skill1", Description: "Skill 1", Available: true},
 		{Name: "skill2", Description: "Skill 2", Available: true},
 	}

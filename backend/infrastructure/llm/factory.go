@@ -24,7 +24,7 @@ func NewLLMProviderFactory() *LLMProviderFactoryImpl {
 }
 
 // Build 根据 domain 配置创建 LLM Provider
-func (f *LLMProviderFactoryImpl) Build(config *domain.LLMProviderConfig) (interface{}, error) {
+func (f *LLMProviderFactoryImpl) Build(config *domain.LLMProviderConfig) (domain.LLMClient, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}

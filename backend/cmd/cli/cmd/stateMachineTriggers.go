@@ -80,7 +80,7 @@ var stateMachineTriggersCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerStateMachineTriggersCommands() {
 	stateMachineTriggersCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineTriggersCmd.Flags().StringP("from", "f", "", "当前状态ID (必填)")
 	stateMachineTriggersCmd.MarkFlagRequired("machine")

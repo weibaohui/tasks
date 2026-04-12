@@ -54,6 +54,6 @@ var hookListCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerHookListCommands() {
 	hookListCmd.Flags().StringP("project-id", "p", "", "项目 ID (可选)")
 }

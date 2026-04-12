@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -210,9 +211,13 @@ func scanProvider(scanner rowScanner) (*domain.LLMProvider, error) {
 	}
 
 	extraHeaders := map[string]string{}
-	_ = json.Unmarshal(extraHeadersJSON, &extraHeaders)
+	if err := json.Unmarshal(extraHeadersJSON, &extraHeaders); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal extra_headers: %w", err)
+	}
 	var supportedModels []domain.ModelInfo
-	_ = json.Unmarshal(supportedModelsJSON, &supportedModels)
+	if err := json.Unmarshal(supportedModelsJSON, &supportedModels); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal supported_models: %w", err)
+	}
 
 	provider := &domain.LLMProvider{}
 	provider.FromSnapshot(domain.LLMProviderSnapshot{

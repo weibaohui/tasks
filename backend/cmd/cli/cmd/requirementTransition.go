@@ -152,7 +152,7 @@ var requirementTransitionCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementTransitionCommands() {
 	requirementTransitionCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 	requirementTransitionCmd.Flags().StringP("trigger", "t", "", "触发器名称 (必填)")
 	requirementTransitionCmd.Flags().StringP("triggered-by", "b", "cli", "触发者标识")

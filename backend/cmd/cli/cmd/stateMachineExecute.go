@@ -135,7 +135,7 @@ var stateMachineExecuteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerStateMachineExecuteCommands() {
 	stateMachineExecuteCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineExecuteCmd.Flags().StringP("from", "f", "", "当前状态ID (必填)")
 	stateMachineExecuteCmd.Flags().StringP("trigger", "t", "", "触发器名称 (必填)")

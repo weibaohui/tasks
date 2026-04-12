@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/weibh/taskmanager/infrastructure/llm"
+	"github.com/weibh/taskmanager/domain"
 )
 
 // BashTool Bash 命令执行工具
@@ -23,7 +23,7 @@ func NewBashTool() *BashTool {
 	return &BashTool{}
 }
 
-var _ llm.Tool = (*BashTool)(nil)
+var _ domain.Tool = (*BashTool)(nil)
 
 // Name 返回工具名称
 func (t *BashTool) Name() string {
@@ -57,14 +57,14 @@ func (t *BashTool) Parameters() json.RawMessage {
 }
 
 // Execute 执行命令
-func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.ToolResult, error) {
+func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*domain.ToolResult, error) {
 	var args struct {
 		Command string  `json:"command"`
 		Timeout float64 `json:"timeout"`
 	}
 
 	if err := json.Unmarshal(input, &args); err != nil {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			ID:     "",
 			Output: "",
 			Error:  fmt.Sprintf("解析参数失败: %v", err),
@@ -72,7 +72,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 	}
 
 	if args.Command == "" {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			ID:     "",
 			Output: "",
 			Error:  "command 参数不能为空",
@@ -106,7 +106,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {
-		return &llm.ToolResult{
+		return &domain.ToolResult{
 			ID:     "",
 			Output: output,
 			Error:  fmt.Sprintf("命令执行超时 (%.0f 秒)", args.Timeout),
@@ -120,7 +120,7 @@ func (t *BashTool) Execute(ctx context.Context, input json.RawMessage) (*llm.Too
 		output += fmt.Sprintf("命令执行失败: %v", err)
 	}
 
-	return &llm.ToolResult{
+	return &domain.ToolResult{
 		ID:     "",
 		Output: output,
 		Error:  "",

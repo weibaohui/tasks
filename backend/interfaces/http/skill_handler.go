@@ -8,16 +8,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/weibh/taskmanager/infrastructure/skill"
+	"github.com/weibh/taskmanager/domain"
 )
 
 // SkillHandler 技能处理器
 type SkillHandler struct {
-	loader *skill.SkillsLoader
+	loader domain.SkillsLoader
 }
 
 // NewSkillHandler 创建技能处理器
-func NewSkillHandler(loader *skill.SkillsLoader) *SkillHandler {
+func NewSkillHandler(loader domain.SkillsLoader) *SkillHandler {
 	return &SkillHandler{
 		loader: loader,
 	}

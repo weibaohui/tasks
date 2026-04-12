@@ -105,7 +105,7 @@ var requirementListCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementListCommands() {
 	requirementListCmd.Flags().StringP("project-id", "p", "", "项目 ID (可选)")
 	requirementListCmd.Flags().BoolP("all", "a", false, "显示所有需求（包括心跳需求）")
 	requirementListCmd.Flags().BoolP("todo", "t", false, "只显示待处理的需求 (status=todo)")

@@ -12,7 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/domain"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,7 +23,7 @@ var upgrader = websocket.Upgrader{
 
 // WebSocketHandler WebSocket处理器
 type WebSocketHandler struct {
-	eventBus *bus.EventBus
+	eventBus domain.EventBus
 	clients  map[string]map[*Client]bool
 	mu       sync.RWMutex
 }
@@ -36,7 +36,7 @@ type Client struct {
 }
 
 // NewWebSocketHandler 创建WebSocket处理器
-func NewWebSocketHandler(eventBus *bus.EventBus) *WebSocketHandler {
+func NewWebSocketHandler(eventBus domain.EventBus) *WebSocketHandler {
 	return &WebSocketHandler{
 		eventBus: eventBus,
 		clients:  make(map[string]map[*Client]bool),

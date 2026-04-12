@@ -53,7 +53,7 @@ var requirementTypeCreateCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementTypeCreateCommands() {
 	requirementTypeCreateCmd.Flags().StringP("project-id", "p", "", "项目 ID (必填)")
 	requirementTypeCreateCmd.Flags().StringP("code", "c", "", "类型代码 (必填)")
 	requirementTypeCreateCmd.Flags().StringP("name", "n", "", "类型名称 (必填)")

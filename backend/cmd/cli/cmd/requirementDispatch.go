@@ -103,6 +103,6 @@ var requirementDispatchCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementDispatchCommands() {
 	// 不再需要 username/password 参数，使用配置文件中的 token
 }

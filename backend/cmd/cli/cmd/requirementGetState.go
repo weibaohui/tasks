@@ -68,7 +68,7 @@ var requirementGetStateCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementGetStateCommands() {
 	requirementGetStateCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 	requirementGetStateCmd.MarkFlagRequired("id")
 }
