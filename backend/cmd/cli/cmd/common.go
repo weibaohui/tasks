@@ -20,6 +20,8 @@ func printJSONError(format string, args ...interface{}) {
 func AddCommands() {
 	rootCmd.AddCommand(serverCmd)
 	registerServerCommands()
+	rootCmd.AddCommand(tunnelCmd)
+	registerTunnelCommands()
 	rootCmd.AddCommand(createAdminCmd)
 	registerCreateAdminCommands()
 	rootCmd.AddCommand(deleteAdminCmd)
