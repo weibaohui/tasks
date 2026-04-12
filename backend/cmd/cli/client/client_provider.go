@@ -111,7 +111,8 @@ type UpdateProviderAPIRequest struct {
 
 // UpdateProvider 更新 Provider
 func (c *Client) UpdateProvider(ctx context.Context, id string, req UpdateProviderAPIRequest) (*LLMProvider, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "/providers", req)
+	path := fmt.Sprintf("/providers?id=%s", id)
+	resp, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return nil, err
 	}

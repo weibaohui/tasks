@@ -87,7 +87,8 @@ type UpdateChannelAPIRequest struct {
 
 // UpdateChannel 更新渠道
 func (c *Client) UpdateChannel(ctx context.Context, id string, req UpdateChannelAPIRequest) (*Channel, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "/channels", req)
+	path := fmt.Sprintf("/channels?id=%s", id)
+	resp, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return nil, err
 	}

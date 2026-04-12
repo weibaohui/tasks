@@ -97,7 +97,8 @@ type UpdateMCPServerAPIRequest struct {
 
 // UpdateMCPServer 更新 MCP 服务器
 func (c *Client) UpdateMCPServer(ctx context.Context, id string, req UpdateMCPServerAPIRequest) (*MCPServer, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "/mcp/servers", req)
+	path := fmt.Sprintf("/mcp/servers?id=%s", id)
+	resp, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return nil, err
 	}

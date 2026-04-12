@@ -83,7 +83,8 @@ type UpdateUserAPIRequest struct {
 
 // UpdateUser 更新用户
 func (c *Client) UpdateUser(ctx context.Context, id string, req UpdateUserAPIRequest) (*User, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "/users", req)
+	path := fmt.Sprintf("/users?id=%s", id)
+	resp, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return nil, err
 	}

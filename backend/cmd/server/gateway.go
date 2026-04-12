@@ -52,6 +52,7 @@ func initGateway(
 
 	gw.processor = channel.NewMessageProcessor(gw.messageBus, gw.sessionManager, logger, agentRepo, providerRepo, sessionService, idGenerator, hookManager, llm.NewLLMProviderFactory(), mcpService, skillsLoader, requirementRepo, conversationRecordRepo, replicaCleanupSvc)
 	gw.channelManager = channel.NewManager(gw.messageBus)
+	gw.loadChannels(channelService)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	gw.messageBus.StartDispatcher(ctx)

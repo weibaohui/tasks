@@ -94,7 +94,8 @@ type UpdateAgentAPIRequest struct {
 
 // UpdateAgent 更新 Agent
 func (c *Client) UpdateAgent(ctx context.Context, id string, req UpdateAgentAPIRequest) (*Agent, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "/agents", req)
+	path := fmt.Sprintf("/agents?id=%s", id)
+	resp, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return nil, err
 	}

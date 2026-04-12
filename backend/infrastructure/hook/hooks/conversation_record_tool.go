@@ -149,10 +149,11 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 	// 生成新的 span_id 用于 tool_error
 	spanID := h.idGenerator.Generate()
 
-	record, err := h.createRecord(traceID, spanID, toolCallSpanID, "tool_error", "tool_error", fmt.Sprintf("%s: %v", callCtx.ToolName, err))
-	if err != nil {
-		h.logger.Error("Failed to create conversation record for tool error", zap.Error(err))
-		return &domain.ToolExecutionResult{Success: false, Error: err}, nil
+	toolErr := err
+	record, recErr := h.createRecord(traceID, spanID, toolCallSpanID, "tool_error", "tool_error", fmt.Sprintf("%s: %v", callCtx.ToolName, toolErr))
+	if recErr != nil {
+		h.logger.Error("Failed to create conversation record for tool error", zap.Error(recErr))
+		return &domain.ToolExecutionResult{Success: false, Error: toolErr}, nil
 	}
 
 	// 设置范围
@@ -169,10 +170,10 @@ func (h *ConversationRecordHook) OnToolError(ctx *domain.HookContext, callCtx *d
 		zap.String("span_id", spanID),
 		zap.String("parent_span_id", toolCallSpanID),
 		zap.String("tool_name", callCtx.ToolName),
-		zap.Error(err))
+		zap.Error(toolErr))
 
 	// 更新 ctx 中的 span_id 为新的 tool_error span_id，供后续调用使用
 	ctx.WithValue(SpanKey, spanID)
 
-	return &domain.ToolExecutionResult{Success: false, Error: err}, nil
+	return &domain.ToolExecutionResult{Success: false, Error: toolErr}, nil
 }
