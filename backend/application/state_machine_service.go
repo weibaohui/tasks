@@ -227,7 +227,7 @@ func (s *StateMachineService) GetStateSummary(ctx context.Context) ([]*StateSumm
 			summaries = append(summaries, &StateSummary{
 				StateID:   state.ID,
 				StateName: state.Name,
-				Count:     0, // TODO: 实现统计查询
+				Count:     0, // 统计查询待后续需求实现
 			})
 		}
 	}
