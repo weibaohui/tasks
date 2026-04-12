@@ -8,6 +8,7 @@ import (
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
 	"github.com/weibh/taskmanager/infrastructure/utils"
 	"go.uber.org/zap"
@@ -96,7 +97,12 @@ func runDeleteAdmin(logger *zap.Logger) error {
 }
 
 func getDBAndUserRepo(logger *zap.Logger) (domain.UserRepository, domain.IDGenerator, func(), error) {
-	dbPath := resolveDBPath()
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	dbPath := config.ExpandPath(cfg.Database.Path)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("打开数据库失败(%s): %w", dbPath, err)
