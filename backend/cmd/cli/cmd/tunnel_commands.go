@@ -79,12 +79,18 @@ func runCloudflaredTunnel(port int) string {
 	time.Sleep(500 * time.Millisecond) // 等待端口释放
 
 	cmd := exec.Command("cloudflared", "tunnel", "--url", fmt.Sprintf("http://localhost:%d", port))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
 	// 创建管道用于捕获输出
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Printf("创建 stdout 管道失败: %v\n", err)
+		return ""
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fmt.Printf("创建 stderr 管道失败: %v\n", err)
+		return ""
+	}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("启动 cloudflared 失败: %v\n", err)
@@ -93,7 +99,7 @@ func runCloudflaredTunnel(port int) string {
 
 	// 异步读取输出，提取 URL
 	var tunnelURL string
-	done := make(chan bool)
+	urlFound := make(chan string, 1)
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -101,10 +107,12 @@ func runCloudflaredTunnel(port int) string {
 			line := scanner.Text()
 			fmt.Println(line)
 			if url := extractTunnelURL(line); url != "" {
-				tunnelURL = url
+				select {
+				case urlFound <- url:
+				default:
+				}
 			}
 		}
-		done <- true
 	}()
 
 	go func() {
@@ -113,26 +121,22 @@ func runCloudflaredTunnel(port int) string {
 			line := scanner.Text()
 			fmt.Println(line)
 			if url := extractTunnelURL(line); url != "" {
-				tunnelURL = url
+				select {
+				case urlFound <- url:
+				default:
+				}
 			}
 		}
-		done <- true
 	}()
 
-	// 等待命令完成或被中断
-	waitDone := false
-	for !waitDone {
-		select {
-		case <-done:
-			waitDone = true
-		default:
-			// 检查进程是否退出
-			if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-				return ""
-			}
-		}
+	// 等待 URL 或进程退出
+	select {
+	case tunnelURL = <-urlFound:
+	case <-time.After(30 * time.Second):
 	}
 
+	// 等待进程结束
+	cmd.Wait()
 	return tunnelURL
 }
 
