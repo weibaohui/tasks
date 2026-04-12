@@ -353,12 +353,6 @@ func migrateAgentLLMProviderID(db *sql.DB) error {
 	return nil
 }
 
-// migrateRequirementsTraceIDIndex 迁移 requirements 表新增 trace_id 索引
-func migrateRequirementsTraceIDIndex(db *sql.DB) error {
-	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_requirements_trace_id ON requirements(trace_id)")
-	return err
-}
-
 // migrateUserTokenValue 迁移 user_tokens 表新增 token_value 列
 func migrateUserTokenValue(db *sql.DB) error {
 	exists, err := tableHasColumn(db, "user_tokens", "token_value")

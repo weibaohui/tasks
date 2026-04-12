@@ -22,12 +22,7 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 
-	// 执行索引创建
-	if _, err := db.Exec(SchemaIndexes); err != nil {
-		return err
-	}
-
-	// 执行迁移
+	// 执行迁移（先建列，再建索引，避免旧库缺列时初始化失败）
 	if err := migrateTasksNewColumns(db); err != nil {
 		return err
 	}
@@ -67,10 +62,15 @@ func InitSchema(db *sql.DB) error {
 	if err := migrateAgentLLMProviderID(db); err != nil {
 		return err
 	}
-	if err := migrateRequirementsTraceIDIndex(db); err != nil {
+	if err := migrateUserTokenValue(db); err != nil {
 		return err
 	}
-	return migrateUserTokenValue(db)
+
+	// 所有列都补齐后再建索引，避免旧库缺列时初始化失败
+	if _, err := db.Exec(SchemaIndexes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // migrateStateMachineTables 迁移状态机相关表（预留，未来可通过 migrations 调用）
