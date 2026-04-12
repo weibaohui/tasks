@@ -94,7 +94,7 @@ var requirementUpdateStateCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementUpdateStateCommands() {
 	requirementUpdateStateCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 	requirementUpdateStateCmd.Flags().StringP("status", "s", "", "新状态 (必填)")
 	requirementUpdateStateCmd.MarkFlagRequired("id")

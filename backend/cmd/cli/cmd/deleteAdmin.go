@@ -77,6 +77,5 @@ var deleteAdminCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(deleteAdminCmd)
+func registerDeleteAdminCommands() {
 }

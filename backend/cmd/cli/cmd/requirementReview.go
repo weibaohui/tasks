@@ -204,6 +204,6 @@ func fetchPRComments(owner, repo string, prNumber int) ([]PRComment, error) {
 	return comments, nil
 }
 
-func init() {
+func registerRequirementReviewCommands() {
 	requirementReviewCmd.Flags().StringP("title", "t", "", "需求标题 (可选)")
 }

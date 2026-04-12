@@ -39,6 +39,6 @@ var requirementTypeListCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementTypeListCommands() {
 	requirementTypeListCmd.Flags().StringP("project-id", "p", "", "项目 ID (必填)")
 }

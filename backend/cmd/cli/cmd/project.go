@@ -1,8 +1,6 @@
 package cmd
 
-func init() {
-	rootCmd.AddCommand(projectCmd)
-
+func registerProjectCommands() {
 	// 注册子命令
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectGetCmd)

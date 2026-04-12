@@ -33,6 +33,6 @@ var requirementResetCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementResetCommands() {
 	requirementResetCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 }

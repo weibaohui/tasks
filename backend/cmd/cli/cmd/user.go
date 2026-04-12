@@ -188,7 +188,7 @@ var userDeleteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerUserCommands() {
 	userCmd.AddCommand(userListCmd)
 	userCmd.AddCommand(userCreateCmd)
 	userCmd.AddCommand(userUpdateCmd)

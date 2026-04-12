@@ -10,7 +10,7 @@ var stateMachineCmd = &cobra.Command{
 	Long:  `创建、管理状态机和触发状态转换`,
 }
 
-func init() {
+func registerStateMachineCommands() {
 	stateMachineCmd.AddCommand(stateMachineListCmd)
 	stateMachineCmd.AddCommand(stateMachineGetCmd)
 	stateMachineCmd.AddCommand(stateMachineTriggersCmd)

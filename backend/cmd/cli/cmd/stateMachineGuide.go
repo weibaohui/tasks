@@ -166,11 +166,8 @@ func getTriggersForState(config client.StateMachineConfig, stateID string) []map
 	return triggers
 }
 
-func init() {
+func registerStateMachineGuideCommands() {
 	stateMachineCmd.AddCommand(stateMachineGuideCmd)
-}
-
-func init() {
 	stateMachineGuideCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineGuideCmd.Flags().StringP("state", "s", "", "状态 ID (必填)")
 	stateMachineGuideCmd.MarkFlagRequired("machine")

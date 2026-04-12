@@ -67,7 +67,7 @@ var requirementUpdateCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerRequirementUpdateCommands() {
 	requirementUpdateCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 	requirementUpdateCmd.Flags().StringP("title", "t", "", "需求标题")
 	requirementUpdateCmd.Flags().StringP("description", "d", "", "需求描述")

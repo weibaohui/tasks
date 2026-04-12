@@ -74,7 +74,7 @@ var skillGetCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerSkillCommands() {
 	skillCmd.AddCommand(skillListCmd)
 	skillCmd.AddCommand(skillGetCmd)
 }

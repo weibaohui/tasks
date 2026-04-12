@@ -81,8 +81,7 @@ var createAdminCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(createAdminCmd)
+func registerCreateAdminCommands() {
 }
 
 // ID 生成器

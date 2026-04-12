@@ -107,6 +107,6 @@ func printRequirementJSON(r *client.Requirement) {
 	fmt.Print(string(jsonBytes))
 }
 
-func init() {
+func registerRequirementGetCommands() {
 	requirementGetCmd.Flags().StringP("id", "i", "", "需求 ID (必填)")
 }

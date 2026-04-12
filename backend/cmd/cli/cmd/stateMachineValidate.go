@@ -126,7 +126,7 @@ var stateMachineValidateCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func registerStateMachineValidateCommands() {
 	stateMachineValidateCmd.Flags().StringP("machine", "m", "", "状态机模板名称 (必填)")
 	stateMachineValidateCmd.Flags().StringP("from", "f", "", "源状态ID (必填)")
 	stateMachineValidateCmd.Flags().StringP("to", "t", "", "目标状态ID (必填)")
