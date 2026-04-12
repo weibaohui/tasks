@@ -22,4 +22,17 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:13618',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:13618',
+        ws: true,
+      },
+    },
+  },
 })
