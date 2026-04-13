@@ -137,7 +137,7 @@ export const UserManagementPage: React.FC = () => {
         <Table<User> rowKey="id" loading={loading} dataSource={users} columns={columns} />
       </Card>
 
-      <Modal title="新建用户" open={createOpen} footer={null} onCancel={() => setCreateOpen(false)}>
+      <Modal title="新建用户" open={createOpen} footer={null} onCancel={() => setCreateOpen(false)} width="100%" styles={{ body: { paddingRight: 8 } }} className="responsive-modal">
         <Form layout="vertical" form={createForm} onFinish={handleCreate}>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input />
@@ -157,7 +157,7 @@ export const UserManagementPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="编辑用户" open={!!editingUser} footer={null} onCancel={() => setEditingUser(null)}>
+      <Modal title="编辑用户" open={!!editingUser} footer={null} onCancel={() => setEditingUser(null)} width="100%" styles={{ body: { paddingRight: 8 } }} className="responsive-modal">
         <Form layout="vertical" form={editForm} onFinish={handleUpdate}>
           <Form.Item label="显示名" name="display_name">
             <Input />
