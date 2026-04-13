@@ -19,7 +19,7 @@ interface ClaudeCodeAdvancedCardProps {
 export const ClaudeCodeAdvancedCard: React.FC<ClaudeCodeAdvancedCardProps> = ({
   form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection,
 }) => {
-  const isEditing = editingSections.claudeCodeAdvanced;
+  const isEditing = !editing || editingSections.claudeCodeAdvanced;
 
   const handleSave = () => {
     const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};

@@ -23,10 +23,11 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
   form, editing, editingSections, toggleSectionEdit, handlePatchSection, screens, modelOptions,
   llmProviderOptions, llmProvidersLoading,
 }) => {
-  const isEditing = editingSections.modelConfig;
+  const isEditing = !editing || editingSections.modelConfig;
 
   const handleSave = () => {
     const values = form.getFieldsValue(['model', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+    values.model = values.model ?? '';
     // 过滤 undefined 值，避免传递给 API
     const filteredValues = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== undefined)
@@ -64,19 +65,19 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
         </div>
       ) : (
         <div>
-          <Form.Item label="LLM Provider" name="llm_provider_id">
+          <Form.Item label="LLM Provider" name="llm_provider_id" rules={[{ required: true, message: '请选择 LLM Provider' }]}>
             <Select
               showSearch
               allowClear
               loading={llmProvidersLoading}
               options={llmProviderOptions}
-              placeholder={llmProvidersLoading ? '正在加载 Provider 列表...' : '请选择 LLM Provider（可选）'}
+              placeholder={llmProvidersLoading ? '正在加载 Provider 列表...' : '请选择 LLM Provider'}
               notFoundContent={llmProvidersLoading ? '正在加载...' : '没有可选 Provider'}
             />
           </Form.Item>
           <Form.Item label="模型" name="model">
             <Select showSearch allowClear options={modelOptions}
-              placeholder="请选择模型（可选）"
+              placeholder="自动匹配 (留空)"
               notFoundContent="没有可选模型"
               filterOption={(input, option) => {
                 const q = input.toLowerCase();

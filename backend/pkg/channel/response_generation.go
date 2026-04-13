@@ -87,7 +87,10 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		model = provider.DefaultModel()
 	}
 	if model == "" {
-		model = "gpt-4"
+		supported := provider.SupportedModels()
+		if len(supported) > 0 {
+			model = supported[0].ID
+		}
 	}
 
 	// 使用工厂模式创建 LLM Provider

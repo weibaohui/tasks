@@ -18,7 +18,7 @@ interface ClaudeCodeSandboxCardProps {
 export const ClaudeCodeSandboxCard: React.FC<ClaudeCodeSandboxCardProps> = ({
   form, editing, editingSections, toggleSectionEdit, handlePatchSection,
 }) => {
-  const isEditing = editingSections.claudeCodeSandbox;
+  const isEditing = !editing || editingSections.claudeCodeSandbox;
 
   const handleSave = () => {
     const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};

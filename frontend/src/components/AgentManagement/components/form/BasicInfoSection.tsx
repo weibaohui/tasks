@@ -18,7 +18,7 @@ interface BasicInfoCardProps {
 export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
   form, editing, editingSections, toggleSectionEdit, handlePatchSection,
 }) => {
-  const isEditing = editingSections.basicInfo;
+  const isEditing = !editing || editingSections.basicInfo;
 
   return (
     <Card
@@ -58,7 +58,7 @@ export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
           </div>
           <div style={{ marginBottom: 8 }}>
             <span style={{ color: '#999', marginRight: 8 }}>类型：</span>
-            <span>{form.getFieldValue('agent_type') || 'BareLLM'}</span>
+            <span>{form.getFieldValue('agent_type') || '未选择'}</span>
           </div>
           <div>
             <span style={{ color: '#999', marginRight: 8 }}>描述：</span>
@@ -70,11 +70,12 @@ export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
           <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]} style={{ marginBottom: 8 }}>
             <Input placeholder="Agent 名称" />
           </Form.Item>
-          <Form.Item label="类型" name="agent_type" style={{ marginBottom: 8 }}>
+          <Form.Item label="类型" name="agent_type" rules={[{ required: true, message: '请选择类型' }]} style={{ marginBottom: 8 }}>
             <Select placeholder="选择 Agent 类型"
+              allowClear
               options={[
                 { value: 'BareLLM', label: '个人助理' },
-                { value: 'CodingAgent', label: 'CodingAgent - 编程 Agent' },
+                { value: 'CodingAgent', label: '编程 Agent' },
               ]} />
           </Form.Item>
           <Form.Item label="描述" name="description" style={{ marginBottom: 0 }}>

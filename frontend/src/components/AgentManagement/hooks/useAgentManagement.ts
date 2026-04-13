@@ -25,19 +25,19 @@ import {
 
 export type AgentFormValues = {
   name: string;
-  agent_type: string;
-  description: string;
+  agent_type?: string;
+  description?: string;
   identity_content: string;
   soul_content: string;
   agents_content: string;
   user_content: string;
   tools_content: string;
-  model: string;
-  llm_provider_id: string;
-  max_tokens: number;
-  temperature: number;
-  max_iterations: number;
-  history_messages: number;
+  model?: string;
+  llm_provider_id?: string;
+  max_tokens?: number;
+  temperature?: number;
+  max_iterations?: number;
+  history_messages?: number;
   skills_list: string[];
   tools_list: string[];
   is_default: boolean;
@@ -46,22 +46,22 @@ export type AgentFormValues = {
   claude_code_config?: ClaudeCodeConfig;
 };
 
-export function getDefaultAgentFormValues(_defaultModel?: string): AgentFormValues {
+export function getDefaultAgentFormValues(_defaultModel?: string): Partial<AgentFormValues> {
   return {
-    name: '',
-    agent_type: 'BareLLM',
-    description: '默认 Agent',
+    name: undefined,
+    agent_type: undefined,
+    description: undefined,
     identity_content: DEFAULT_IDENTITY_CONTENT,
     soul_content: DEFAULT_SOUL_CONTENT,
     agents_content: DEFAULT_AGENTS_CONTENT,
     user_content: DEFAULT_USER_CONTENT,
     tools_content: DEFAULT_TOOLS_CONTENT,
-    model: '',  // 模型可为空，不设默认值
-    llm_provider_id: '',
-    max_tokens: 4096,
-    temperature: 0.7,
-    max_iterations: 15,
-    history_messages: 10,
+    model: undefined,
+    llm_provider_id: undefined,
+    max_tokens: undefined,
+    temperature: undefined,
+    max_iterations: undefined,
+    history_messages: undefined,
     skills_list: [],
     tools_list: [],
     is_default: false,
@@ -392,7 +392,7 @@ export function useAgentManagement({
           name: values.name, agent_type: values.agent_type, description: values.description,
           identity_content: values.identity_content || '', soul_content: values.soul_content || '',
           agents_content: values.agents_content || '', user_content: values.user_content || '',
-          tools_content: values.tools_content || '', model: values.model,
+          tools_content: values.tools_content || '', model: values.model ?? '',
           llm_provider_id: values.llm_provider_id,
           max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,
@@ -408,6 +408,7 @@ export function useAgentManagement({
           description: values.description, identity_content: values.identity_content,
           soul_content: values.soul_content, agents_content: values.agents_content,
           user_content: values.user_content, tools_content: values.tools_content,
+          model: values.model ?? '',
           llm_provider_id: values.llm_provider_id,
           max_tokens: values.max_tokens, temperature: values.temperature,
           max_iterations: values.max_iterations, history_messages: values.history_messages,

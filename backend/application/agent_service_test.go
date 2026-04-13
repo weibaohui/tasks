@@ -1128,9 +1128,9 @@ func TestApplyDefaultAgentCreateConfig_EmptyWhitespace(t *testing.T) {
 		t.Errorf("期望空白 IdentityContent 被替换为默认值, 实际为 '%s'", cmd.IdentityContent)
 	}
 	// Model应该根据环境变量或默认值设置
-	// 注意：这里取决于环境变量设置，不直接断言具体值
-	if strings.TrimSpace(cmd.Model) == "" {
-		t.Error("期望空白 Model 被替换为非空值")
+	// Model 不再自动设置默认值，留空表示自动匹配
+	if strings.TrimSpace(cmd.Model) != "" {
+		t.Errorf("期望空白 Model 被清空, 实际为 '%s'", cmd.Model)
 	}
 }
 

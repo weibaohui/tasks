@@ -14,13 +14,12 @@ interface ClaudeCodeBasicCardProps {
   screens: Record<string, boolean>;
   toggleSectionEdit: (section: string) => void;
   handlePatchSection: (section: string, fields: Record<string, unknown>) => Promise<void>;
-  modelOptions: Array<{ value: string; label: string }>;
 }
 
 export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
-  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection, modelOptions,
+  form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection,
 }) => {
-  const isEditing = editingSections.claudeCodeConfig;
+  const isEditing = !editing || editingSections.claudeCodeConfig;
 
   const permissionModeLabels: Record<string, string> = {
     default: 'Default - 标准处理',
@@ -67,37 +66,19 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
-            <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || '-'}</div>
-            <div><span style={{ color: '#999' }}>最大思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
             <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
             <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
-            <div><span style={{ color: '#999' }}>最大对话轮次：</span>{form.getFieldValue('claude_code_config')?.max_turns ?? '-'}</div>
             <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd ?? '-'}</div>
+            <div><span style={{ color: '#999' }}>思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
+            <div><span style={{ color: '#999' }}>超时(秒)：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.timeout; return v === 0 || v == null ? '-' : v; })()}</div>
           </div>
         </>
       ) : (
         <div>
-          <Form.Item label="模型" name={['claude_code_config', 'model']} style={{ marginBottom: 8 }}>
-            <Select
-              showSearch
-              allowClear
-              placeholder="选择模型"
-              options={modelOptions}
-              filterOption={(input, option) => {
-                const q = input.toLowerCase();
-                const v = String(option?.value || '').toLowerCase();
-                const l = String(option?.label || '').toLowerCase();
-                return v.includes(q) || l.includes(q);
-              }}
-            />
-          </Form.Item>
           <Form.Item label="系统提示词" name={['claude_code_config', 'system_prompt']} style={{ marginBottom: 8 }}>
             <Input.TextArea rows={3} placeholder="设置 Claude Code 的系统提示词" />
           </Form.Item>
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
-            <Form.Item label="最大思考 Token" name={['claude_code_config', 'max_thinking_tokens']}>
-              <InputNumber min={0} style={{ width: '100%' }} placeholder="8000" />
-            </Form.Item>
             <Form.Item label="权限模式" name={['claude_code_config', 'permission_mode']}>
               <Select placeholder="选择权限模式"
                 options={[
@@ -107,11 +88,14 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
                   { value: 'bypassPermissions', label: 'Bypass - 绕过权限' },
                 ]} />
             </Form.Item>
-            <Form.Item label="最大对话轮次" name={['claude_code_config', 'max_turns']}>
-              <InputNumber min={0} style={{ width: '100%' }} placeholder="0 表示无限制" />
-            </Form.Item>
             <Form.Item label="工作目录" name={['claude_code_config', 'cwd']}>
               <Input placeholder="留空使用默认目录" />
+            </Form.Item>
+            <Form.Item label="思考 Token" name={['claude_code_config', 'max_thinking_tokens']}>
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="留空使用默认值" />
+            </Form.Item>
+            <Form.Item label="超时(秒)" name={['claude_code_config', 'timeout']}>
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="留空使用默认值" />
             </Form.Item>
           </div>
           <Form.Item label="恢复会话" name={['claude_code_config', 'resume']} valuePropName="checked" style={{ marginBottom: 0 }}>

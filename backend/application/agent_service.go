@@ -95,9 +95,7 @@ func applyDefaultAgentCreateConfig(cmd *CreateAgentCommand) {
 	if strings.TrimSpace(cmd.ToolsContent) == "" {
 		cmd.ToolsContent = domain.DefaultToolsContent
 	}
-	if strings.TrimSpace(cmd.Model) == "" {
-		cmd.Model = defaultAgentModelFromEnv()
-	}
+	cmd.Model = strings.TrimSpace(cmd.Model)
 	if cmd.MaxTokens <= 0 {
 		cmd.MaxTokens = domain.DefaultMaxTokens
 	}
@@ -116,11 +114,6 @@ func applyDefaultAgentCreateConfig(cmd *CreateAgentCommand) {
 	if cmd.ToolsList == nil {
 		cmd.ToolsList = []string{}
 	}
-}
-
-// defaultAgentModelFromEnv 获取默认模型名称
-func defaultAgentModelFromEnv() string {
-	return domain.DefaultModel
 }
 
 func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAgentCommand) (*domain.Agent, error) {
