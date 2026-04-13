@@ -9,7 +9,6 @@ import {
 } from '@ant-design/icons';
 import { getStatusColor, getStatusLabel } from '../../constants/requirementStatus';
 import type { Requirement } from '../../types/projectRequirement';
-import { useDroppable } from '@dnd-kit/core';
 
 const { Text, Paragraph } = Typography;
 
@@ -68,19 +67,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   const hasMore = loadedCount < totalCount;
   const wipExceeded = groupKey === 'processing' && totalCount > WIP_LIMIT;
 
-  const { setNodeRef, isOver } = useDroppable({ id: groupKey });
-
   return (
     <div
-      ref={setNodeRef}
       style={{
         width: 340,
         minWidth: 340,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: isOver ? '#e6f4ff' : groupColor.bgColor,
+        backgroundColor: groupColor.bgColor,
         borderRadius: 8,
-        border: `1px solid ${isOver ? '#1677ff' : wipExceeded ? '#ff4d4f' : groupColor.borderColor}`,
+        border: `1px solid ${wipExceeded ? '#ff4d4f' : groupColor.borderColor}`,
         transition: 'background-color 0.2s, border-color 0.2s',
       }}
     >
