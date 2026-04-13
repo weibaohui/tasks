@@ -32,6 +32,9 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 
 	// 设置模型
 	model := config.Model
+	if model == "" && agent != nil {
+		model = agent.Model()
+	}
 	if model == "" {
 		if provider != nil {
 			// 当模型为空时，从 provider 获取 API Key 和 Base URL

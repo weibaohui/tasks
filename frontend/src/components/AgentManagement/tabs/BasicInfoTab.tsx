@@ -4,6 +4,7 @@
 import React from 'react';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../types/agent';
+import { BasicInfoCard } from '../components/form/BasicInfoSection';
 import { ModelConfigCard } from '../components/form/ModelConfigSection';
 
 interface BasicInfoTabProps {
@@ -25,6 +26,10 @@ export const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 }) => {
   return (
     <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+      <BasicInfoCard
+        form={form} editing={editing} editingSections={editingSections}
+        toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
+      />
       <ModelConfigCard
         form={form} editing={editing} editingSections={editingSections}
         toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}

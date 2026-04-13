@@ -20,7 +20,7 @@ interface ClaudeCodeBasicCardProps {
 export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
   form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection, modelOptions,
 }) => {
-  const isEditing = editingSections.claudeCodeConfig;
+  const isEditing = !editing || editingSections.claudeCodeConfig;
 
   const permissionModeLabels: Record<string, string> = {
     default: 'Default - 标准处理',
@@ -67,7 +67,6 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
-            <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('claude_code_config')?.model || '-'}</div>
             <div><span style={{ color: '#999' }}>最大思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
             <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
             <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
@@ -77,20 +76,6 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
         </>
       ) : (
         <div>
-          <Form.Item label="模型" name={['claude_code_config', 'model']} style={{ marginBottom: 8 }}>
-            <Select
-              showSearch
-              allowClear
-              placeholder="选择模型"
-              options={modelOptions}
-              filterOption={(input, option) => {
-                const q = input.toLowerCase();
-                const v = String(option?.value || '').toLowerCase();
-                const l = String(option?.label || '').toLowerCase();
-                return v.includes(q) || l.includes(q);
-              }}
-            />
-          </Form.Item>
           <Form.Item label="系统提示词" name={['claude_code_config', 'system_prompt']} style={{ marginBottom: 8 }}>
             <Input.TextArea rows={3} placeholder="设置 Claude Code 的系统提示词" />
           </Form.Item>

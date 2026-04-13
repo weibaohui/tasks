@@ -18,7 +18,7 @@ interface ClaudeCodeToolsCardProps {
 export const ClaudeCodeToolsCard: React.FC<ClaudeCodeToolsCardProps> = ({
   form, editing, editingSections, toggleSectionEdit, handlePatchSection,
 }) => {
-  const isEditing = editingSections.claudeCodeTools;
+  const isEditing = !editing || editingSections.claudeCodeTools;
 
   const handleSave = () => {
     const config = form.getFieldValue('claude_code_config') as ClaudeCodeConfig || {};

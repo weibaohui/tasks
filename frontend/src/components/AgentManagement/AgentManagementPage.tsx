@@ -7,8 +7,7 @@ import { Button, Card, Form, Space, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useAgentManagement, AgentFormValues } from './hooks';
 import { AgentTable } from './components/AgentTable';
-import { BareLLMAgentEditDrawer } from './components/BareLLMAgentEditDrawer';
-import { CodingAgentEditDrawer } from './components/CodingAgentEditDrawer';
+import { AgentEditDrawer } from './components/AgentEditDrawer';
 
 const { Title } = Typography;
 
@@ -27,14 +26,6 @@ export const AgentManagementPage: React.FC = () => {
     handleUpdateBinding, handleDeleteBinding, handleOpenToolsDrawer,
     mcpForm: mcpFormInstance,
   } = useAgentManagement({ form, mcpForm, toolsForm });
-
-  // 新建时使用表单中的类型，默认为 BareLLM
-  const currentAgentType = editing?.agent_type || 'BareLLM';
-  const isCodingAgent = currentAgentType === 'CodingAgent';
-
-  // 控制显示哪个 Drawer：编辑时根据类型，新建时根据选择的类型
-  const showCodingDrawer = open && isCodingAgent;
-  const showBareLLMDrawer = open && !isCodingAgent;
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab as 'basic' | 'skills' | 'personality' | 'claudecode');
@@ -65,27 +56,8 @@ export const AgentManagementPage: React.FC = () => {
         />
       </Card>
 
-      {/* CodingAgent 编辑抽屉 */}
-      <CodingAgentEditDrawer
-        open={showCodingDrawer}
-        editing={editing}
-        form={form}
-        screens={{ xs: false }}
-        saving={saving}
-        activeTab={activeTab}
-        editingSections={editingSections}
-        agentType={currentAgentType}
-        modelOptions={claudeCodeModelOptions}
-        onClose={closeEditor}
-        onSubmit={handleSubmit}
-        onTabChange={handleTabChange}
-        onToggleSectionEdit={toggleSectionEdit}
-        onPatchSection={handlePatchSection}
-      />
-
-      {/* BareLLM Agent 编辑抽屉 */}
-      <BareLLMAgentEditDrawer
-        open={showBareLLMDrawer}
+      <AgentEditDrawer
+        open={open}
         editing={editing}
         form={form}
         screens={{ xs: false }}
@@ -94,6 +66,7 @@ export const AgentManagementPage: React.FC = () => {
         editingSections={editingSections}
         savingSections={savingSections}
         modelOptions={modelOptions}
+        claudeCodeModelOptions={claudeCodeModelOptions}
         llmProviderOptions={llmProviderOptions}
         llmProvidersLoading={providersLoading}
         skillsOptions={skillsOptions}
