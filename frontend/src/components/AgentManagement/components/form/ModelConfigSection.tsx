@@ -74,9 +74,9 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
               notFoundContent={llmProvidersLoading ? '正在加载...' : '没有可选 Provider'}
             />
           </Form.Item>
-          <Form.Item label="模型" name="model" rules={[{ required: true, message: '请选择模型' }]}>
+          <Form.Item label="模型" name="model">
             <Select showSearch allowClear options={modelOptions}
-              placeholder="请选择模型"
+              placeholder="自动匹配 (留空)"
               notFoundContent="没有可选模型"
               filterOption={(input, option) => {
                 const q = input.toLowerCase();

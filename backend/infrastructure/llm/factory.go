@@ -120,8 +120,6 @@ func (f *LLMProviderFactoryImpl) validate(config *domain.LLMProviderConfig) erro
 	if config.ProviderKey() == "" {
 		return fmt.Errorf("provider type is required")
 	}
-	if config.ModelName() == "" {
-		return fmt.Errorf("model is required")
-	}
+	// Model is now optional as some APIs can automatically match models
 	return nil
 }
