@@ -199,6 +199,7 @@ type PatchAgentRequest struct {
 	IsDefault             *bool                    `json:"is_default"`
 	EnableThinkingProcess *bool                    `json:"enable_thinking_process"`
 	ClaudeCodeConfig      *domain.ClaudeCodeConfig `json:"claude_code_config"`
+	OpenCodeConfig        *domain.OpenCodeConfig   `json:"opencode_config"`
 }
 
 func (h *AgentHandler) PatchAgent(c *gin.Context) {
@@ -235,6 +236,7 @@ func (h *AgentHandler) PatchAgent(c *gin.Context) {
 		IsDefault:             req.IsDefault,
 		EnableThinkingProcess: req.EnableThinkingProcess,
 		ClaudeCodeConfig:      req.ClaudeCodeConfig,
+		OpenCodeConfig:        req.OpenCodeConfig,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
@@ -290,6 +292,7 @@ func agentToMap(agent *domain.Agent) map[string]interface{} {
 		"is_default":              agent.IsDefault(),
 		"enable_thinking_process": agent.EnableThinkingProcess(),
 		"claude_code_config":      agent.ClaudeCodeConfig(),
+		"opencode_config":         agent.OpenCodeConfig(),
 		"created_at":              agent.CreatedAt().UnixMilli(),
 		"updated_at":              agent.UpdatedAt().UnixMilli(),
 	}

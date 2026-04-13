@@ -7,6 +7,7 @@ import (
 	"strings"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/claudecode"
+	"github.com/weibh/taskmanager/infrastructure/opencode"
 	"github.com/weibh/taskmanager/infrastructure/llm"
 	"go.uber.org/zap"
 	"github.com/weibh/taskmanager/pkg/bus"
@@ -77,6 +78,30 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		// 流式处理的消息已通过回调发送，这里返回空字符串避免重复发送
 		return ""
 	}
+
+	// 检查是否是 OpenCodeAgent，使用 OpenCodeProcessor 流式处理
+	if agent != nil && agent.AgentType().String() == "OpenCodeAgent" {
+		p.logger.Info("使用 OpenCodeProcessor 流式处理 OpenCodeAgent",
+			zap.String("agent_code", agent.AgentCode().String()),
+			zap.String("session_key", msg.SessionKey()),
+		)
+		// 创建 OpenCodeSession
+		ocSession := &opencode.OpenCodeSession{
+			SessionKey:   msg.SessionKey(),
+			CliSessionID: session.GetCliSessionID(),
+		}
+		// 创建流式回调
+		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
+		// 使用流式处理
+		err := p.openCodeProcessor.ProcessWithStreaming(ctx, msg, ocSession, agent, callback)
+		if err != nil {
+			p.logger.Error("OpenCodeProcessor 流式处理失败", zap.Error(err))
+			return fmt.Sprintf("收到消息: %s\n(OpenCode 处理失败: %v)", content, err)
+		}
+		// 流式处理的消息已通过回调发送，这里返回空字符串避免重复发送
+		return ""
+	}
+
 
 	// 构建 LLM 配置
 	model := ""

@@ -23,12 +23,15 @@ const (
 	AgentTypeBareLLM AgentType = "BareLLM"
 	// AgentTypeCoding 携带代码执行工具的 Agent
 	AgentTypeCoding AgentType = "CodingAgent"
+	// AgentTypeOpenCode OpenCode Agent
+	AgentTypeOpenCode AgentType = "OpenCodeAgent"
 )
 
 // ValidAgentTypes 所有合法的 AgentType
 var ValidAgentTypes = map[AgentType]bool{
-	AgentTypeBareLLM: true,
-	AgentTypeCoding:  true,
+	AgentTypeBareLLM:  true,
+	AgentTypeCoding:   true,
+	AgentTypeOpenCode: true,
 }
 
 func (t AgentType) String() string { return string(t) }
@@ -156,6 +159,7 @@ type Agent struct {
 	enableThinkingProcess bool
 	shadowFrom            string // 分身来源：如果是分身，则记录被分身的 Agent Code
 	claudeCodeConfig      *ClaudeCodeConfig
+	openCodeConfig        *OpenCodeConfig
 	createdAt             time.Time
 	updatedAt             time.Time
 }
@@ -236,6 +240,12 @@ func (a *Agent) ClaudeCodeConfig() *ClaudeCodeConfig {
 		return DefaultClaudeCodeConfig()
 	}
 	return a.claudeCodeConfig
+}
+func (a *Agent) OpenCodeConfig() *OpenCodeConfig {
+	if a.openCodeConfig == nil {
+		return DefaultOpenCodeConfig()
+	}
+	return a.openCodeConfig
 }
 
 func (a *Agent) UpdateProfile(name, description string) error {
@@ -328,6 +338,22 @@ func (a *Agent) SetClaudeCodeConfig(config *ClaudeCodeConfig) {
 	a.updatedAt = time.Now()
 }
 
+func (a *Agent) UpdateOpenCodeConfig(config *OpenCodeConfig) {
+	if config == nil {
+		return
+	}
+	if a.openCodeConfig == nil {
+		a.openCodeConfig = &OpenCodeConfig{}
+	}
+	a.openCodeConfig.MergeWith(config)
+	a.updatedAt = time.Now()
+}
+
+func (a *Agent) SetOpenCodeConfig(config *OpenCodeConfig) {
+	a.openCodeConfig = config
+	a.updatedAt = time.Now()
+}
+
 func (a *Agent) SetLLMProviderID(id LLMProviderID) {
 	a.llmProviderID = id
 	a.updatedAt = time.Now()
@@ -369,6 +395,7 @@ type AgentSnapshot struct {
 	EnableThinkingProcess bool
 	ShadowFrom            string
 	ClaudeCodeConfig      *ClaudeCodeConfig
+	OpenCodeConfig        *OpenCodeConfig
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -399,6 +426,7 @@ func (a *Agent) ToSnapshot() AgentSnapshot {
 		EnableThinkingProcess: a.enableThinkingProcess,
 		ShadowFrom:            a.shadowFrom,
 		ClaudeCodeConfig:      a.claudeCodeConfig,
+			OpenCodeConfig:        a.openCodeConfig,
 		CreatedAt:             a.createdAt,
 		UpdatedAt:             a.updatedAt,
 	}
@@ -429,6 +457,7 @@ func (a *Agent) FromSnapshot(snap AgentSnapshot) {
 	a.enableThinkingProcess = snap.EnableThinkingProcess
 	a.shadowFrom = snap.ShadowFrom
 	a.claudeCodeConfig = snap.ClaudeCodeConfig.Clone()
+	a.openCodeConfig = snap.OpenCodeConfig.Clone()
 	a.createdAt = snap.CreatedAt
 	a.updatedAt = snap.UpdatedAt
 }

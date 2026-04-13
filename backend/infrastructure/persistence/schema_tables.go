@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS agents (
     agent_type TEXT NOT NULL DEFAULT 'BareLLM',
     shadow_from TEXT,
     claude_code_config TEXT,
+    opencode_config TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

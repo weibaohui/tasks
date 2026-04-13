@@ -7,6 +7,7 @@ import (
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/claudecode"
 	"github.com/weibh/taskmanager/infrastructure/hook"
+	"github.com/weibh/taskmanager/infrastructure/opencode"
 	"github.com/weibh/taskmanager/infrastructure/trace"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -31,6 +32,7 @@ type MessageProcessor struct {
 	conversationRepo     domain.ConversationRecordRepository
 	replicaCleanupSvc   domain.ReplicaCleanupService
 	claudeCodeProcessor  claudecode.ClaudeCodeProcessorInterface
+	openCodeProcessor   opencode.OpenCodeProcessorInterface
 	commandProcessor     *CommandProcessor
 }
 
@@ -76,6 +78,7 @@ func NewMessageProcessor(
 		conversationRepo:     conversationRepo,
 		replicaCleanupSvc:   replicaCleanupSvc,
 		claudeCodeProcessor: claudecode.NewClaudeCodeProcessor(logger, hookManager, providerRepo, idGenerator, requirementRepo, replicaCleanupSvc, conversationRepo),
+			openCodeProcessor:   opencode.NewOpenCodeProcessor(logger, hookManager, providerRepo, requirementRepo, replicaCleanupSvc, conversationRepo),
 		commandProcessor:     commandProcessor,
 	}
 }

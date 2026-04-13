@@ -25,6 +25,7 @@ func (r *SQLiteAgentRepository) Save(ctx context.Context, agent *domain.Agent) e
 
 	// 序列化 claude_code_config
 	var configJSON []byte
+	var openCodeConfigJSON []byte
 	// Handle nullable LLMProviderID
 	var llmProviderID interface{}
 	if snap.LLMProviderID.String() != "" {
@@ -41,15 +42,23 @@ var err error
 	} else {
 		configJSON = []byte("{}")
 	}
+	if snap.OpenCodeConfig != nil {
+		openCodeConfigJSON, err = json.Marshal(snap.OpenCodeConfig)
+		if err != nil {
+			openCodeConfigJSON = []byte("{}")
+		}
+	} else {
+		openCodeConfigJSON = []byte("{}")
+	}
 
 	query := `
 		INSERT INTO agents (
 			id, agent_code, user_code, name, description, identity_content, soul_content, agents_content,
 			user_content, tools_content, model, llm_provider_id, max_tokens, temperature, max_iterations, history_messages,
 			skills_list, tools_list, is_active, is_default, enable_thinking_process, agent_type, shadow_from, created_at, updated_at,
-			claude_code_config
+			claude_code_config, opencode_config
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			description=excluded.description,
@@ -72,7 +81,8 @@ var err error
 			agent_type=excluded.agent_type,
 			shadow_from=excluded.shadow_from,
 			updated_at=excluded.updated_at,
-			claude_code_config=excluded.claude_code_config
+			claude_code_config=excluded.claude_code_config,
+			opencode_config=excluded.opencode_config
 	`
 
 	_, err = r.db.ExecContext(
@@ -104,6 +114,7 @@ var err error
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
 		string(configJSON),
+		string(openCodeConfigJSON),
 	)
 	return err
 }
@@ -124,7 +135,8 @@ func (r *SQLiteAgentRepository) FindByID(ctx context.Context, id domain.AgentID)
 		is_active, is_default, enable_thinking_process, agent_type,
 		COALESCE(shadow_from, '') as shadow_from,
 		created_at, updated_at,
-		COALESCE(claude_code_config, '{}') as claude_code_config
+		COALESCE(claude_code_config, '{}') as claude_code_config,
+		COALESCE(opencode_config, '{}') as opencode_config
 		FROM agents WHERE id = ?`, id.String())
 	return scanAgent(row)
 }
@@ -145,7 +157,8 @@ func (r *SQLiteAgentRepository) FindByAgentCode(ctx context.Context, code domain
 		is_active, is_default, enable_thinking_process, agent_type,
 		COALESCE(shadow_from, '') as shadow_from,
 		created_at, updated_at,
-		COALESCE(claude_code_config, '{}') as claude_code_config
+		COALESCE(claude_code_config, '{}') as claude_code_config,
+		COALESCE(opencode_config, '{}') as opencode_config
 		FROM agents WHERE agent_code = ?`, code.String())
 	return scanAgent(row)
 }
@@ -166,7 +179,8 @@ func (r *SQLiteAgentRepository) FindByUserCode(ctx context.Context, userCode str
 		is_active, is_default, enable_thinking_process, agent_type,
 		COALESCE(shadow_from, '') as shadow_from,
 		created_at, updated_at,
-		COALESCE(claude_code_config, '{}') as claude_code_config
+		COALESCE(claude_code_config, '{}') as claude_code_config,
+		COALESCE(opencode_config, '{}') as opencode_config
 		FROM agents WHERE user_code = ? ORDER BY created_at DESC`, userCode)
 	if err != nil {
 		return nil, err
@@ -191,7 +205,8 @@ func (r *SQLiteAgentRepository) FindAll(ctx context.Context) ([]*domain.Agent, e
 		is_active, is_default, enable_thinking_process, agent_type,
 		COALESCE(shadow_from, '') as shadow_from,
 		created_at, updated_at,
-		COALESCE(claude_code_config, '{}') as claude_code_config
+		COALESCE(claude_code_config, '{}') as claude_code_config,
+		COALESCE(opencode_config, '{}') as opencode_config
 		FROM agents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -247,6 +262,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		createdAtUnix        int64
 		updatedAtUnix        int64
 		claudeCodeConfigJSON []byte
+		openCodeConfigJSON   []byte
 	)
 
 	err := scanner.Scan(
@@ -276,6 +292,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		&createdAtUnix,
 		&updatedAtUnix,
 		&claudeCodeConfigJSON,
+		&openCodeConfigJSON,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -298,6 +315,14 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		claudeCodeConfig = &domain.ClaudeCodeConfig{}
 		if err := json.Unmarshal(claudeCodeConfigJSON, claudeCodeConfig); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal claude_code_config: %w", err)
+		}
+	}
+
+	var openCodeConfig *domain.OpenCodeConfig
+	if len(openCodeConfigJSON) > 0 && string(openCodeConfigJSON) != "{}" {
+		openCodeConfig = &domain.OpenCodeConfig{}
+		if err := json.Unmarshal(openCodeConfigJSON, openCodeConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal opencode_config: %w", err)
 		}
 	}
 
@@ -333,6 +358,7 @@ func scanAgent(scanner rowScanner) (*domain.Agent, error) {
 		EnableThinkingProcess: enableThinkingInt == 1,
 		ShadowFrom:            shadowFrom,
 		ClaudeCodeConfig:      claudeCodeConfig,
+		OpenCodeConfig:        openCodeConfig,
 		CreatedAt:             time.Unix(createdAtUnix, 0),
 		UpdatedAt:             time.Unix(updatedAtUnix, 0),
 	})
