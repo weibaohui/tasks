@@ -140,7 +140,6 @@ export const AgentEditDrawer: React.FC<AgentEditDrawerProps> = ({
             screens={screens}
             toggleSectionEdit={onToggleSectionEdit}
             handlePatchSection={onPatchSection}
-            modelOptions={currentModelOptions}
             agentType={agentType}
           />
         ),

@@ -89,6 +89,8 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	// 设置最大对话轮次
 	if config.MaxTurns > 0 {
 		opts = append(opts, claudecode.WithMaxTurns(config.MaxTurns))
+	} else if agent != nil && agent.MaxIterations() > 0 {
+		opts = append(opts, claudecode.WithMaxTurns(agent.MaxIterations()))
 	}
 
 	// 设置工作目录
