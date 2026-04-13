@@ -311,11 +311,12 @@ export const SessionManagementPage: React.FC = () => {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        width={820}
+        width={{ xs: '100%', md: 800 }}
+        styles={{ body: { paddingRight: 8 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleCreate}>
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ flex: '1 1 280px' }}>
               <Form.Item label="Channel" name="channel_code" rules={[{ required: true, message: '请选择 Channel' }]}>
                 <Select
                   placeholder="请选择"
@@ -323,7 +324,7 @@ export const SessionManagementPage: React.FC = () => {
                 />
               </Form.Item>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '1 1 280px' }}>
               <Form.Item label="Agent" name="agent_code" rules={[{ required: true, message: '请选择 Agent' }]}>
                 <Select
                   placeholder="请选择"
@@ -331,20 +332,20 @@ export const SessionManagementPage: React.FC = () => {
                 />
               </Form.Item>
             </div>
-          </Space>
+          </div>
 
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ flex: '1 1 280px' }}>
               <Form.Item label="Session Key" name="session_key" rules={[{ required: true, message: '请输入 Session Key' }]}>
                 <Input />
               </Form.Item>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '1 1 280px' }}>
               <Form.Item label="External ID" name="external_id">
                 <Input />
               </Form.Item>
             </div>
-          </Space>
+          </div>
 
           <Form.Item label="Metadata（JSON）" name="metadata_json" tooltip='例如：{"user_id":"xxx","source":"web"}'>
             <Input.TextArea rows={8} placeholder="可选，必须是 JSON 对象格式" />
@@ -363,7 +364,8 @@ export const SessionManagementPage: React.FC = () => {
         title="会话元数据"
         open={!!metadataDrawer}
         onClose={() => setMetadataDrawer(null)}
-        width={680}
+        size="large"
+        styles={{ body: { paddingRight: 8 } }}
       >
         {metadataDrawer ? (
           <div>
@@ -384,7 +386,8 @@ export const SessionManagementPage: React.FC = () => {
         open={!!editingMetadata}
         onCancel={() => setEditingMetadata(null)}
         footer={null}
-        width={820}
+        width={{ xs: '100%', md: 800 }}
+        styles={{ body: { paddingRight: 8 } }}
       >
         <Form layout="vertical" form={metadataForm} onFinish={handleSaveMetadata}>
           <Form.Item label="Metadata（JSON）" name="metadata_json" rules={[{ required: true, message: '请输入 JSON' }]}>

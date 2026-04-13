@@ -20,3 +20,141 @@ pre {
   border-radius: 4px;
   overflow-x: auto;
 }
+
+/* 响应式基础设置 */
+@media screen and (max-width: 768px) {
+  /* 移动端全局调整 */
+  .ant-layout {
+    font-size: 14px;
+  }
+
+  /* 确保内容区域在移动端不会溢出 */
+  .ant-layout-content {
+    overflow-x: hidden;
+  }
+
+  /* 移动端表格响应式 */
+  .ant-table {
+    font-size: 12px;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 移动端卡片调整 */
+  .ant-card {
+    border-radius: 8px;
+  }
+
+  /* 移动端按钮调整 */
+  .ant-btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  /* 移动端表单调整 */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* 移动端 Modal 调整 */
+  .ant-modal {
+    max-width: calc(100vw - 32px);
+    margin: 8px auto;
+  }
+
+  .ant-modal-content {
+    border-radius: 8px;
+  }
+
+  /* 移动端抽屉调整 */
+  .ant-drawer {
+    max-width: 100vw;
+  }
+
+  /* 移动端 Select 下拉框 */
+  .ant-select {
+    font-size: 14px;
+  }
+}
+
+/* 触摸友好的点击区域 */
+@media (pointer: coarse) {
+  .ant-btn,
+  .ant-tag,
+  .ant-tabs-tab,
+  .ant-menu-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ant-layout-header {
+    padding: 0 12px !important;
+    line-height: 1;
+  }
+
+  .ant-card {
+    margin-bottom: 12px;
+  }
+}
+
+/* iPhone 安全区域适配 */
+@supports (padding: max(0px)) {
+  .ant-layout-header {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  .ant-layout-content {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+/* 响应式 Modal */
+@media screen and (max-width: 768px) {
+  .responsive-modal .ant-modal {
+    max-width: calc(100vw - 32px);
+    margin: 8px auto;
+  }
+
+  .responsive-modal .ant-modal-content {
+    border-radius: 8px;
+  }
+
+  .responsive-drawer .ant-drawer-content {
+    border-radius: 8px 8px 0 0;
+  }
+
+  /* 确保表单在移动端不会溢出 */
+  .ant-form {
+    max-width: 100%;
+  }
+
+  .ant-form-item {
+    margin-bottom: 12px;
+  }
+
+  /* 确保 Space 组件在移动端换行 */
+  .ant-space {
+    flex-wrap: wrap;
+  }
+
+  /* Table 响应式调整 */
+  .ant-table-cell {
+    padding: 8px 4px !important;
+    font-size: 12px;
+  }
+
+  .ant-table-header-cell {
+    padding: 8px 4px !important;
+  }
+}

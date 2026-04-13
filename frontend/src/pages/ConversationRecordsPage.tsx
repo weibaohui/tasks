@@ -118,6 +118,14 @@ export const ConversationRecordsPage: React.FC = () => {
       const limit = pagination.pageSize || 50;
       const current = pagination.current || 1;
 
+      // 处理时间范围
+      let start_time: string | undefined;
+      let end_time: string | undefined;
+      if (values.dateRange && values.dateRange.length === 2) {
+        start_time = values.dateRange[0].toISOString();
+        end_time = values.dateRange[1].toISOString();
+      }
+
       const query: ListConversationRecordsQuery = {
         trace_id: values.trace_id || undefined,
         session_key: values.session_key || undefined,
@@ -125,6 +133,8 @@ export const ConversationRecordsPage: React.FC = () => {
         channel_code: values.channel_code || undefined,
         event_type: values.event_type || undefined,
         role: values.role || undefined,
+        start_time,
+        end_time,
         limit,
         offset: (current - 1) * limit,
         ...queryOverrides,
@@ -280,64 +290,76 @@ export const ConversationRecordsPage: React.FC = () => {
           <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
             <Form<QueryFormValues>
               form={form}
-              layout="inline"
+              layout="vertical"
               onFinish={() => {
                 setPagination((p) => ({ ...p, current: 1 }));
                 fetchList({ offset: 0 });
               }}
             >
-              <Form.Item label="时间范围" name="dateRange">
-                <DatePicker.RangePicker showTime />
-              </Form.Item>
-              <Form.Item label="Trace" name="trace_id">
-                <Input placeholder="trace_id" style={{ width: 180 }} />
-              </Form.Item>
-              <Form.Item label="Session" name="session_key">
-                <Input placeholder="session_key" style={{ width: 180 }} />
-              </Form.Item>
-              <Form.Item label="Agent" name="agent_code">
-                <Select
-                  allowClear
-                  style={{ width: 140 }}
-                  options={agentOptions.map(a => ({ label: a.name || a.code, value: a.code }))}
-                  placeholder="选择Agent"
-                />
-              </Form.Item>
-              <Form.Item label="Channel" name="channel_code">
-                <Select
-                  allowClear
-                  style={{ width: 140 }}
-                  options={channelOptions.map(c => ({ label: c.name || c.code, value: c.code }))}
-                  placeholder="选择Channel"
-                />
-              </Form.Item>
-              <Form.Item label="Role" name="role">
-                <Select
-                  allowClear
-                  style={{ width: 140 }}
-                  options={roleOptions}
-                  placeholder="选择角色"
-                />
-              </Form.Item>
-              <Form.Item label="Event" name="event_type">
-                <Input placeholder="event_type" style={{ width: 140 }} />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>
-                  查询
-                </Button>
-                <Button
-                  icon={<ClearOutlined />}
-                  onClick={() => {
-                    form.resetFields();
-                    setPagination((p) => ({ ...p, current: 1 }));
-                    fetchList({ offset: 0 });
-                  }}
-                  style={{ marginLeft: 8 }}
-                >
-                  重置
-                </Button>
-              </Form.Item>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ minWidth: '200px', flex: '1 1 200px' }}>
+                  <Form.Item label="时间范围" name="dateRange" style={{ marginBottom: 8 }}>
+                    <DatePicker.RangePicker showTime style={{ width: '100%' }} />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '150px', flex: '1 1 150px' }}>
+                  <Form.Item label="Trace" name="trace_id" style={{ marginBottom: 8 }}>
+                    <Input placeholder="trace_id" />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '150px', flex: '1 1 150px' }}>
+                  <Form.Item label="Session" name="session_key" style={{ marginBottom: 8 }}>
+                    <Input placeholder="session_key" />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '130px', flex: '1 1 130px' }}>
+                  <Form.Item label="Agent" name="agent_code" style={{ marginBottom: 8 }}>
+                    <Select
+                      allowClear
+                      options={agentOptions.map(a => ({ label: a.name || a.code, value: a.code }))}
+                      placeholder="选择Agent"
+                    />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '130px', flex: '1 1 130px' }}>
+                  <Form.Item label="Channel" name="channel_code" style={{ marginBottom: 8 }}>
+                    <Select
+                      allowClear
+                      options={channelOptions.map(c => ({ label: c.name || c.code, value: c.code }))}
+                      placeholder="选择Channel"
+                    />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '130px', flex: '1 1 130px' }}>
+                  <Form.Item label="Role" name="role" style={{ marginBottom: 8 }}>
+                    <Select
+                      allowClear
+                      options={roleOptions}
+                      placeholder="选择角色"
+                    />
+                  </Form.Item>
+                </div>
+                <div style={{ minWidth: '130px', flex: '1 1 130px' }}>
+                  <Form.Item label="Event" name="event_type" style={{ marginBottom: 8 }}>
+                    <Input placeholder="event_type" />
+                  </Form.Item>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>
+                    查询
+                  </Button>
+                  <Button
+                    icon={<ClearOutlined />}
+                    onClick={() => {
+                      form.resetFields();
+                      setPagination((p) => ({ ...p, current: 1 }));
+                      fetchList({ offset: 0 });
+                    }}
+                  >
+                    重置
+                  </Button>
+                </div>
+              </div>
             </Form>
           </Card>
         )}

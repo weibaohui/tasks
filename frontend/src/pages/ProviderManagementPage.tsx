@@ -331,29 +331,30 @@ export const ProviderManagementPage: React.FC = () => {
           setEditing(null);
         }}
         footer={null}
-        width={860}
+        width={{ xs: '100%', md: 600, lg: 800 }}
+        styles={{ body: { paddingRight: 8 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ flex: '1 1 200px' }}>
               <Form.Item label="Provider Key" name="provider_key" rules={[{ required: true, message: '请输入 Provider Key' }]}>
                 <Input placeholder="例如：openai / ollama / deepseek" />
               </Form.Item>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '1 1 200px' }}>
               <Form.Item label="Provider 名称" name="provider_name">
                 <Input placeholder="展示名称（可选）" />
               </Form.Item>
             </div>
-          </Space>
+          </div>
 
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ flex: '2 1 300px' }}>
               <Form.Item label="API Base" name="api_base">
                 <Input placeholder="例如：https://api.openai.com/v1 或 http://localhost:11434" />
               </Form.Item>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '2 1 300px' }}>
               <Form.Item
                 label="API Key"
                 name="api_key"
@@ -362,7 +363,7 @@ export const ProviderManagementPage: React.FC = () => {
                 <Input.Password placeholder={editing ? '留空则不更新' : '请输入 API Key'} />
               </Form.Item>
             </div>
-            <div style={{ width: 160 }}>
+            <div style={{ flex: '1 1 140px' }}>
               <Form.Item label="API 类型" name="provider_type" initialValue="openai">
                 <Select>
                   <Select.Option value="openai">OpenAI 格式</Select.Option>
@@ -370,35 +371,35 @@ export const ProviderManagementPage: React.FC = () => {
                 </Select>
               </Form.Item>
             </div>
-          </Space>
+          </div>
 
-          <Space style={{ width: '100%' }} align="start">
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ flex: '1 1 200px' }}>
               <Form.Item label="默认模型" name="default_model">
                 <Input placeholder="例如：gpt-4o-mini / llama3" />
               </Form.Item>
             </div>
-            <div style={{ width: 180 }}>
+            <div style={{ flex: '1 1 140px' }}>
               <Form.Item label="优先级" name="priority" initialValue={0}>
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
             </div>
-            <div style={{ width: 120 }}>
+            <div style={{ flex: '1 1 100px' }}>
               <Form.Item label="设为默认" name="is_default" valuePropName="checked">
                 <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
             </div>
-            <div style={{ width: 120 }}>
+            <div style={{ flex: '1 1 100px' }}>
               <Form.Item label="启用" name="is_active" valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="停用" />
               </Form.Item>
             </div>
-            <div style={{ width: 140 }}>
+            <div style={{ flex: '1 1 120px' }}>
               <Form.Item label="自动合并" name="auto_merge" valuePropName="checked">
                 <Switch checkedChildren="开启" unCheckedChildren="关闭" />
               </Form.Item>
             </div>
-          </Space>
+          </div>
 
           <Form.List name="supported_models">
             {(fields, { add, remove }) => (

@@ -32,6 +32,8 @@ export interface ListConversationRecordsQuery {
   channel_code?: string;
   event_type?: string;
   role?: string;
+  start_time?: string;
+  end_time?: string;
   limit?: number;
   offset?: number;
 }

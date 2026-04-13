@@ -362,7 +362,8 @@ export const ChannelManagementPage: React.FC = () => {
         }}
         onOk={() => form.submit()}
         confirmLoading={saving}
-        width={600}
+        width={{ xs: '100%', md: 600 }}
+        styles={{ body: { paddingRight: 8 } }}
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>

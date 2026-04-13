@@ -111,7 +111,7 @@ func boolPtr(b bool) *bool {
 // DefaultClaudeCodeConfig 返回默认配置
 func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 	return &ClaudeCodeConfig{
-		Model:                "MiniMax-M2.7-highspeed",
+		Model:                "", // 模型可为空，不设默认值
 		MaxThinkingTokens:    8000,
 		PermissionMode:      PermissionModeDefault,
 		Resume:              boolPtr(true),

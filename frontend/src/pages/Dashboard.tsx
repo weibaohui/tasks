@@ -103,12 +103,20 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{
+        marginBottom: 24,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 12
+      }}>
         <Title level={3} style={{ margin: 0 }}>Dashboard</Title>
-        <Space>
+        <Space wrap>
           <RangePicker
             value={dateRange}
             onChange={(dates) => dates && setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
+            style={{ width: '100%', maxWidth: 280 }}
           />
           <Button type="primary" icon={<ReloadOutlined />} onClick={fetchStats} loading={statsLoading}>
             刷新
@@ -116,45 +124,45 @@ export const Dashboard: React.FC = () => {
         </Space>
       </div>
 
-      {/* 对话核心指标 */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+      {/* 对话核心指标 - 响应式布局 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
-              title="总会话数"
+              title={<span style={{ fontSize: 12 }}>总会话数</span>}
               value={stats?.session_stats.total_sessions || 0}
-              valueStyle={{ color: '#1890ff' }}
+              valueStyle={{ color: '#1890ff', fontSize: 20 }}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
-              title="总 Token 数"
+              title={<span style={{ fontSize: 12 }}>总 Token 数</span>}
               value={stats?.token_stats.total_tokens || 0}
-              valueStyle={{ color: '#52c41a' }}
+              valueStyle={{ color: '#52c41a', fontSize: 20 }}
               formatter={(value) => value.toLocaleString()}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
-              title="平均消息数/会话"
+              title={<span style={{ fontSize: 12 }}>平均消息数/会话</span>}
               value={stats?.session_stats.avg_messages_per_session || 0}
               precision={1}
-              valueStyle={{ color: '#fa8c16' }}
+              valueStyle={{ color: '#fa8c16', fontSize: 20 }}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
-              title="平均响应时间"
+              title={<span style={{ fontSize: 12 }}>平均响应时间</span>}
               value={stats?.session_stats.avg_response_time_ms || 0}
               precision={0}
               suffix="ms"
-              valueStyle={{ color: '#722ed1' }}
+              valueStyle={{ color: '#722ed1', fontSize: 20 }}
             />
           </Card>
         </Col>
@@ -194,9 +202,9 @@ export const Dashboard: React.FC = () => {
         </ResponsiveContainer>
       </Card>
 
-      {/* 项目 Token 消耗分布 */}
-      <Row gutter={24} style={{ marginBottom: 24 }}>
-        <Col span={12}>
+      {/* 项目 Token 消耗分布 - 响应式布局 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} lg={12}>
           <Card title="项目 Token 消耗排行">
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={projectDistData} layout="vertical" margin={{ left: 20 }}>
@@ -209,7 +217,7 @@ export const Dashboard: React.FC = () => {
             </ResponsiveContainer>
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card title="项目 Token 消耗占比">
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -236,9 +244,9 @@ export const Dashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Agent / Channel 分布 */}
-      <Row gutter={24} style={{ marginBottom: 24 }}>
-        <Col span={12}>
+      {/* Agent / Channel 分布 - 响应式布局 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} lg={12}>
           <Card title="Agent 使用分布">
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={agentDistData}>
@@ -251,7 +259,7 @@ export const Dashboard: React.FC = () => {
             </ResponsiveContainer>
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card title="Channel 来源分布">
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -278,9 +286,9 @@ export const Dashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 角色分布 / Token 统计 */}
-      <Row gutter={24}>
-        <Col span={12}>
+      {/* 角色分布 / Token 统计 - 响应式布局 */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
           <Card title="角色消息分布">
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -305,26 +313,26 @@ export const Dashboard: React.FC = () => {
             </ResponsiveContainer>
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card title="Token 使用统计">
-            <Row gutter={16}>
-              <Col span={8}>
+            <Row gutter={[8, 8]}>
+              <Col xs={8}>
                 <Statistic
-                  title="Prompt Tokens"
+                  title={<span style={{ fontSize: 11 }}>Prompt Tokens</span>}
                   value={stats?.token_stats.total_prompt_tokens || 0}
                   formatter={(value) => value.toLocaleString()}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={8}>
                 <Statistic
-                  title="Completion Tokens"
+                  title={<span style={{ fontSize: 11 }}>Completion Tokens</span>}
                   value={stats?.token_stats.total_completion_tokens || 0}
                   formatter={(value) => value.toLocaleString()}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={8}>
                 <Statistic
-                  title="总 Token 数"
+                  title={<span style={{ fontSize: 11 }}>总 Token 数</span>}
                   value={stats?.token_stats.total_tokens || 0}
                   formatter={(value) => value.toLocaleString()}
                   valueStyle={{ color: '#1890ff', fontWeight: 'bold' }}
