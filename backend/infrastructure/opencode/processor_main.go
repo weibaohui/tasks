@@ -172,6 +172,104 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 	return nil
 }
 
+// streamContext holds mutable state while processing OpenCode CLI events.
+type streamContext struct {
+	p            *OpenCodeProcessor
+	mu           sync.Mutex
+	result       string
+	tokenUsage   *TokenUsage
+	cliSessionID string
+	callback     StreamingCallback
+	startTime    time.Time
+	sessionKey   string
+	toolAdapter  *hook.ToolHookBridge
+}
+
+func (sc *streamContext) appendResult(text string) {
+	sc.mu.Lock()
+	sc.result += text
+	sc.mu.Unlock()
+}
+
+func (sc *streamContext) handleStepStart() {
+	sc.p.logger.Debug("OpenCode step started",
+		zap.String("session_key", sc.sessionKey))
+}
+
+func (sc *streamContext) handleTextEvent(text string) {
+	if text == "" {
+		return
+	}
+	sc.appendResult(text)
+	sc.callback.OnText(text)
+}
+
+func (sc *streamContext) handleThinkingEvent(thinking string) {
+	if thinking == "" {
+		return
+	}
+	sc.callback.OnThinking(thinking)
+}
+
+func (sc *streamContext) handleToolUseEvent(event OpenCodeEvent) {
+	toolName := event.Part.Tool
+	input := event.Part.State.Input
+
+	sc.p.logger.Info("OpenCode 工具调用",
+		zap.String("session_key", sc.sessionKey),
+		zap.String("tool", toolName))
+
+	if sc.toolAdapter != nil {
+		sc.toolAdapter.PreToolCall(toolName, input)
+	}
+
+	sc.callback.OnToolCall(toolName, input)
+
+	switch event.Part.State.Status {
+	case "completed":
+		output := event.Part.State.Output
+		sc.appendResult(output)
+		sc.callback.OnToolResult(toolName, output)
+
+		if sc.toolAdapter != nil {
+			sc.toolAdapter.PostToolCall(toolName, input, output, true)
+		}
+	case "error":
+		errMsg := ""
+		if event.Part.State.Error != nil {
+			errMsg = *event.Part.State.Error
+		}
+		sc.callback.OnToolResult(toolName, fmt.Sprintf("Error: %s", errMsg))
+
+		if sc.toolAdapter != nil {
+			sc.toolAdapter.PostToolCall(toolName, input, errMsg, false)
+		}
+	}
+
+	if event.SessionID != "" {
+		sc.cliSessionID = event.SessionID
+	}
+}
+
+func (sc *streamContext) handleStepFinishEvent(tokens TokenUsage, reason string) {
+	if tokens.Total > 0 {
+		sc.tokenUsage = &tokens
+	}
+
+	if reason == "stop" {
+		sc.p.logger.Info("OpenCode step finished (stop)",
+			zap.String("session_key", sc.sessionKey),
+			zap.Duration("duration", time.Since(sc.startTime)))
+	}
+}
+
+func (sc *streamContext) handleErrorEvent(errMsg string) {
+	sc.appendResult(fmt.Sprintf("\n[Error: %s]", errMsg))
+	sc.p.logger.Error("OpenCode error",
+		zap.String("session_key", sc.sessionKey),
+		zap.String("error", errMsg))
+}
+
 // queryOpenCodeStreaming 执行 OpenCode CLI 并流式处理输出
 func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	ctx context.Context,
@@ -221,13 +319,7 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	}
 
 	// 创建工具钩子适配器
-	toolAdapter := p.buildToolHookAdapter(msg, traceID, agent)
-
-	// 解析流
-	var cliSessionIDResult string
-	var result string
-	var tokenUsage *TokenUsage
-	var mu sync.Mutex
+	toolAdapter := p.buildToolHookBridge(msg, traceID, agent)
 
 	// 设置超时
 	timeout := 600 // 10 分钟默认超时
@@ -238,6 +330,14 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	// 创建超时 context
 	queryCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
+
+	sc := &streamContext{
+		p:           p,
+		callback:    callback,
+		startTime:   startTime,
+		sessionKey:  sessionKey,
+		toolAdapter: toolAdapter,
+	}
 
 	// 使用 goroutine 解析输出
 	errChan := make(chan error, 1)
@@ -263,92 +363,18 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 			// 处理事件
 			switch event.Type {
 			case "step_start":
-				p.logger.Debug("OpenCode step started",
-					zap.String("session_key", sessionKey))
-
+				sc.handleStepStart()
 			case "text":
-				text := event.Part.Text
-				if text != "" {
-					mu.Lock()
-					result += text
-					mu.Unlock()
-					callback.OnText(text)
-				}
-
+				sc.handleTextEvent(event.Part.Text)
 			case "thinking":
-				thinking := event.Part.Thinking
-				if thinking != "" {
-					callback.OnThinking(thinking)
-				}
-
+				sc.handleThinkingEvent(event.Part.Thinking)
 			case "tool_use":
-				toolName := event.Part.Tool
-				input := event.Part.State.Input
-
-				p.logger.Info("OpenCode 工具调用",
-					zap.String("session_key", sessionKey),
-					zap.String("tool", toolName))
-
-				// 调用 PreToolCall hooks
-				if toolAdapter != nil {
-					toolAdapter.preToolUseAdapter(toolName, input)
-				}
-
-				// 通知工具调用
-				callback.OnToolCall(toolName, input)
-
-				// 如果工具已完成，处理结果
-				if event.Part.State.Status == "completed" {
-					output := event.Part.State.Output
-					mu.Lock()
-					result += output
-					mu.Unlock()
-
-					callback.OnToolResult(toolName, output)
-
-					// 调用 PostToolCall hooks
-					if toolAdapter != nil {
-						toolAdapter.postToolUseAdapter(toolName, input, output, true)
-					}
-				} else if event.Part.State.Status == "error" {
-					errMsg := ""
-					if event.Part.State.Error != nil {
-						errMsg = *event.Part.State.Error
-					}
-					callback.OnToolResult(toolName, fmt.Sprintf("Error: %s", errMsg))
-
-					// 调用 PostToolCall hooks with error
-					if toolAdapter != nil {
-						toolAdapter.postToolUseAdapter(toolName, input, errMsg, false)
-					}
-				}
-
-				// 保存 session ID
-				if event.SessionID != "" {
-					cliSessionIDResult = event.SessionID
-				}
-
+				sc.handleToolUseEvent(event)
 			case "step_finish":
-				// 保存 token 使用量
-				if event.Part.Tokens.Total > 0 {
-					tokenUsage = &event.Part.Tokens
-				}
-
-				if event.Part.Reason == "stop" {
-					p.logger.Info("OpenCode step finished (stop)",
-						zap.String("session_key", sessionKey),
-						zap.Duration("duration", time.Since(startTime)))
-				}
-
+				sc.handleStepFinishEvent(event.Part.Tokens, event.Part.Reason)
 			case "error":
 				if event.Part.State.Error != nil {
-					errMsg := *event.Part.State.Error
-					mu.Lock()
-					result += fmt.Sprintf("\n[Error: %s]", errMsg)
-					mu.Unlock()
-					p.logger.Error("OpenCode error",
-						zap.String("session_key", sessionKey),
-						zap.String("error", errMsg))
+					sc.handleErrorEvent(*event.Part.State.Error)
 				}
 			}
 		}
@@ -377,27 +403,14 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	p.logger.Info("OpenCode 流式接收完成",
 		zap.String("session_key", sessionKey),
 		zap.Duration("duration", time.Since(startTime)),
-		zap.String("result_length", fmt.Sprintf("%d", len(result))))
+		zap.String("result_length", fmt.Sprintf("%d", len(sc.result))))
 
-	callback.OnComplete(result)
-	return cliSessionIDResult, tokenUsage, nil
+	callback.OnComplete(sc.result)
+	return sc.cliSessionID, sc.tokenUsage, nil
 }
 
-// toolHookAdapter bridges OpenCode tool hooks to the domain hook system
-type toolHookAdapter struct {
-	hookManager *hook.Manager
-	logger      *zap.Logger
-	hookCtx     *domain.HookContext
-	sessionKey  string
-	userCode    string
-	agentCode   string
-	channelCode string
-	channelType string
-	traceID     string
-}
-
-// buildToolHookAdapter 构建工具钩子适配器
-func (p *OpenCodeProcessor) buildToolHookAdapter(msg *bus.InboundMessage, traceID string, agent *domain.Agent) *toolHookAdapter {
+// buildToolHookBridge 构建通用的工具钩子桥接器
+func (p *OpenCodeProcessor) buildToolHookBridge(msg *bus.InboundMessage, traceID string, agent *domain.Agent) *hook.ToolHookBridge {
 	if p.hookManager == nil {
 		return nil
 	}
@@ -425,71 +438,15 @@ func (p *OpenCodeProcessor) buildToolHookAdapter(msg *bus.InboundMessage, traceI
 		}
 	}
 
-	return &toolHookAdapter{
-		hookManager: p.hookManager,
-		logger:      p.logger,
-		hookCtx:     hookCtx,
-		sessionKey:  sessionKey,
-		userCode:    userCode,
-		agentCode:   agentCode,
-		channelCode: channelCode,
-		channelType: msg.Channel,
-		traceID:     traceID,
+	return &hook.ToolHookBridge{
+		Manager:     p.hookManager,
+		Logger:      p.logger,
+		HookCtx:     hookCtx,
+		SessionKey:  sessionKey,
+		UserCode:    userCode,
+		AgentCode:   agentCode,
+		ChannelCode: channelCode,
+		ChannelType: msg.Channel,
+		TraceID:     traceID,
 	}
-}
-
-// preToolUseAdapter 调用 PreToolCall hooks
-func (a *toolHookAdapter) preToolUseAdapter(toolName string, input map[string]any) error {
-	if a.hookManager == nil {
-		return nil
-	}
-
-	callCtx := &domain.ToolCallContext{
-		ToolName:     toolName,
-		ToolInput:    input,
-		SessionID:    a.sessionKey,
-		TraceID:      a.traceID,
-		SpanID:       "",
-		ParentSpanID: "",
-	}
-
-	_, err := a.hookManager.PreToolCall(a.hookCtx, callCtx)
-	if err != nil {
-		a.logger.Error("OpenCode PreToolCall hook failed",
-			zap.String("tool", toolName),
-			zap.Error(err))
-	}
-
-	return nil
-}
-
-// postToolUseAdapter 调用 PostToolCall hooks
-func (a *toolHookAdapter) postToolUseAdapter(toolName string, input map[string]any, output string, success bool) error {
-	if a.hookManager == nil {
-		return nil
-	}
-
-	callCtx := &domain.ToolCallContext{
-		ToolName:     toolName,
-		ToolInput:    input,
-		SessionID:    a.sessionKey,
-		TraceID:      a.traceID,
-		SpanID:       "",
-		ParentSpanID: "",
-	}
-
-	execResult := &domain.ToolExecutionResult{
-		Success:  success,
-		Duration: 0,
-		Output:   output,
-	}
-
-	_, err := a.hookManager.PostToolCall(a.hookCtx, callCtx, execResult)
-	if err != nil {
-		a.logger.Error("OpenCode PostToolCall hook failed",
-			zap.String("tool", toolName),
-			zap.Error(err))
-	}
-
-	return nil
 }

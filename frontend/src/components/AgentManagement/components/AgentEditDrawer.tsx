@@ -1,7 +1,7 @@
 /**
  * AgentEditDrawer - 统一的 Agent 编辑抽屉
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button, Drawer, Form, Space, Tabs } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../types/agent';
@@ -64,6 +64,17 @@ export const AgentEditDrawer: React.FC<AgentEditDrawerProps> = ({
   const isCodingAgent = agentType === 'CodingAgent';
   const isOpenCodeAgent = agentType === 'OpenCodeAgent';
   const isBareLLM = agentType === 'BareLLM';
+
+  // 切换 Agent 类型时清理不相关的配置，避免脏数据
+  useEffect(() => {
+    if (!agentType) return;
+    if (!isCodingAgent) {
+      form.setFieldValue('claude_code_config', undefined);
+    }
+    if (!isOpenCodeAgent) {
+      form.setFieldValue('opencode_config', undefined);
+    }
+  }, [agentType, form, isCodingAgent, isOpenCodeAgent]);
 
   // 根据当前 Agent 类型选择对应的模型选项
   const currentModelOptions = isCodingAgent ? claudeCodeModelOptions : modelOptions;
