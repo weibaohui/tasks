@@ -118,6 +118,14 @@ export const ConversationRecordsPage: React.FC = () => {
       const limit = pagination.pageSize || 50;
       const current = pagination.current || 1;
 
+      // 处理时间范围
+      let start_time: string | undefined;
+      let end_time: string | undefined;
+      if (values.dateRange && values.dateRange.length === 2) {
+        start_time = values.dateRange[0].toISOString();
+        end_time = values.dateRange[1].toISOString();
+      }
+
       const query: ListConversationRecordsQuery = {
         trace_id: values.trace_id || undefined,
         session_key: values.session_key || undefined,
@@ -125,6 +133,8 @@ export const ConversationRecordsPage: React.FC = () => {
         channel_code: values.channel_code || undefined,
         event_type: values.event_type || undefined,
         role: values.role || undefined,
+        start_time,
+        end_time,
         limit,
         offset: (current - 1) * limit,
         ...queryOverrides,

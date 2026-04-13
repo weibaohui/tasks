@@ -61,7 +61,14 @@ const MainLayout: React.FC = () => {
   // 监听窗口大小变化
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobileDevice(window.innerWidth < MOBILE_BREAKPOINT);
+      const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+      setIsMobileDevice(mobile);
+      if (mobile) {
+        // 移动端不强制关闭，让用户自己关
+      } else {
+        // 切到桌面端时关闭抽屉
+        setMobileOpen(false);
+      }
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);

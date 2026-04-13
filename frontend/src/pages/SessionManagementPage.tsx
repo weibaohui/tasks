@@ -311,9 +311,8 @@ export const SessionManagementPage: React.FC = () => {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        width="100%"
+        width={{ xs: '100%', md: 800 }}
         styles={{ body: { paddingRight: 8 } }}
-        className="responsive-modal"
       >
         <Form layout="vertical" form={form} onFinish={handleCreate}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -365,9 +364,8 @@ export const SessionManagementPage: React.FC = () => {
         title="会话元数据"
         open={!!metadataDrawer}
         onClose={() => setMetadataDrawer(null)}
-        width="100%"
+        size="large"
         styles={{ body: { paddingRight: 8 } }}
-        className="responsive-drawer"
       >
         {metadataDrawer ? (
           <div>
@@ -388,9 +386,8 @@ export const SessionManagementPage: React.FC = () => {
         open={!!editingMetadata}
         onCancel={() => setEditingMetadata(null)}
         footer={null}
-        width="100%"
+        width={{ xs: '100%', md: 800 }}
         styles={{ body: { paddingRight: 8 } }}
-        className="responsive-modal"
       >
         <Form layout="vertical" form={metadataForm} onFinish={handleSaveMetadata}>
           <Form.Item label="Metadata（JSON）" name="metadata_json" rules={[{ required: true, message: '请输入 JSON' }]}>

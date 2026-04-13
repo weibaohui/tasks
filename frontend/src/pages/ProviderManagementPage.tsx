@@ -331,9 +331,8 @@ export const ProviderManagementPage: React.FC = () => {
           setEditing(null);
         }}
         footer={null}
-        width="100%"
+        width={{ xs: '100%', md: 600, lg: 800 }}
         styles={{ body: { paddingRight: 8 } }}
-        className="responsive-modal"
       >
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
