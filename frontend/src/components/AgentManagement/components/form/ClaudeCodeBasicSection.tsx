@@ -69,6 +69,7 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
             <div><span style={{ color: '#999' }}>权限模式：</span>{getPermissionModeLabel(form.getFieldValue('claude_code_config')?.permission_mode)}</div>
             <div><span style={{ color: '#999' }}>恢复会话：</span>{form.getFieldValue('claude_code_config')?.resume === true ? '是' : form.getFieldValue('claude_code_config')?.resume === false ? '否' : '-'}</div>
             <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('claude_code_config')?.cwd ?? '-'}</div>
+            <div><span style={{ color: '#999' }}>思考 Token：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.max_thinking_tokens; return v === 0 || v == null ? '-' : v; })()}</div>
             <div><span style={{ color: '#999' }}>超时(秒)：</span>{(() => { const v = form.getFieldValue('claude_code_config')?.timeout; return v === 0 || v == null ? '-' : v; })()}</div>
           </div>
         </>
@@ -89,6 +90,9 @@ export const ClaudeCodeBasicCard: React.FC<ClaudeCodeBasicCardProps> = ({
             </Form.Item>
             <Form.Item label="工作目录" name={['claude_code_config', 'cwd']}>
               <Input placeholder="留空使用默认目录" />
+            </Form.Item>
+            <Form.Item label="思考 Token" name={['claude_code_config', 'max_thinking_tokens']}>
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="留空使用默认值" />
             </Form.Item>
             <Form.Item label="超时(秒)" name={['claude_code_config', 'timeout']}>
               <InputNumber min={1} style={{ width: '100%' }} placeholder="留空使用默认值" />

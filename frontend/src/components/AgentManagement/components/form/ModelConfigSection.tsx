@@ -24,19 +24,13 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
   llmProviderOptions, llmProvidersLoading,
 }) => {
   const isEditing = !editing || editingSections.modelConfig;
-  const agentType = Form.useWatch('agent_type', form) || editing?.agent_type;
-  const showClaudeCodeFields = agentType === 'CodingAgent';
 
   const handleSave = () => {
     const values = form.getFieldsValue(['model', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
-    const maxThinkingTokens = form.getFieldValue(['claude_code_config', 'max_thinking_tokens']);
     // 过滤 undefined 值，避免传递给 API
     const filteredValues = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== undefined)
     );
-    if (typeof maxThinkingTokens === 'number') {
-      filteredValues.claude_code_config = { max_thinking_tokens: maxThinkingTokens };
-    }
     handlePatchSection('modelConfig', filteredValues);
   };
 
@@ -67,9 +61,6 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
           <div><span style={{ color: '#999' }}>Temperature：</span>{form.getFieldValue('temperature')}</div>
           <div><span style={{ color: '#999' }}>最大迭代：</span>{form.getFieldValue('max_iterations')}</div>
           <div><span style={{ color: '#999' }}>历史消息数：</span>{form.getFieldValue('history_messages')}</div>
-          {showClaudeCodeFields && (
-            <div><span style={{ color: '#999' }}>Claude Code 思考 Token：</span>{(() => { const v = form.getFieldValue(['claude_code_config', 'max_thinking_tokens']); return v === 0 || v == null ? '-' : v; })()}</div>
-          )}
         </div>
       ) : (
         <div>
@@ -107,11 +98,6 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
             <Form.Item label="历史消息数" name="history_messages">
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
-            {showClaudeCodeFields && (
-              <Form.Item label="Claude Code 思考 Token" name={['claude_code_config', 'max_thinking_tokens']}>
-                <InputNumber min={0} style={{ width: '100%' }} placeholder="留空使用默认值" />
-              </Form.Item>
-            )}
           </div>
         </div>
       )}
