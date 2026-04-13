@@ -20,6 +20,34 @@ export interface SandboxIgnoreViolations {
   network?: string[];
 }
 
+export interface OpenCodeConfig {
+  // 基本配置
+  model?: string;
+  work_dir?: string;
+  timeout?: number; // 秒
+  continue_conversation?: boolean;
+  fork_session?: boolean;
+
+  // Agent 类型
+  agent_type?: 'build' | 'plan' | 'explore' | 'general' | 'compaction';
+
+  // 权限
+  skip_permissions?: boolean;
+
+  // 输出
+  show_thinking?: boolean;
+  share_session?: boolean;
+
+  // 模型变体
+  variant?: string;
+
+  // 系统提示词
+  system_prompt?: string;
+
+  // 环境变量
+  env?: Record<string, string>;
+}
+
 // McpServerConfig MCP 服务器配置
 export interface McpServerConfig {
   command?: string;
@@ -101,6 +129,7 @@ export interface Agent {
   enable_thinking_process: boolean;
   shadow_from?: string; // 分身来源：如果不为空，则表示是某 Agent 的分身
   claude_code_config?: ClaudeCodeConfig;
+  opencode_config?: OpenCodeConfig;
   created_at: number;
   updated_at: number;
 }
@@ -126,6 +155,7 @@ export interface CreateAgentRequest {
   is_default: boolean;
   enable_thinking_process: boolean;
   claude_code_config?: ClaudeCodeConfig;
+  opencode_config?: OpenCodeConfig;
 }
 
 export interface UpdateAgentRequest {

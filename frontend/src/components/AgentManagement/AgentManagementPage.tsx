@@ -28,7 +28,7 @@ export const AgentManagementPage: React.FC = () => {
   } = useAgentManagement({ form, mcpForm, toolsForm });
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'basic' | 'skills' | 'personality' | 'claudecode');
+    setActiveTab(tab as 'basic' | 'skills' | 'personality' | 'claudecode' | 'opencode');
   };
 
   return (
