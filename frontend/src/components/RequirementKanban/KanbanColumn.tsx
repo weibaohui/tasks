@@ -7,9 +7,7 @@ import {
   CloseCircleOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { getStatusColor, getStatusLabel } from '../../constants/requirementStatus';
 import type { Requirement } from '../../types/projectRequirement';
-import { useDroppable } from '@dnd-kit/core';
 
 const { Text, Paragraph } = Typography;
 
@@ -21,6 +19,7 @@ interface KanbanColumnProps {
   label: string;
   groupColor: { color: string; bgColor: string; borderColor: string };
   totalCount: number;
+  groupTotal?: number;
   requirements: Requirement[];
   loadedCount: number;
   loading: boolean;
@@ -59,6 +58,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   label,
   groupColor,
   totalCount,
+  groupTotal,
   requirements,
   loadedCount,
   loading,
@@ -66,21 +66,20 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onCardClick,
 }) => {
   const hasMore = loadedCount < totalCount;
-  const wipExceeded = groupKey === 'processing' && totalCount > WIP_LIMIT;
-
-  const { setNodeRef, isOver } = useDroppable({ id: groupKey });
+  // 如果提供了 groupTotal，则基于大组总量判断 WIP 是否超限，否则基于单列总量
+  const effectiveTotal = groupTotal !== undefined ? groupTotal : totalCount;
+  const wipExceeded = groupKey !== 'todo' && groupKey !== 'completed' && groupKey !== 'done' && effectiveTotal > WIP_LIMIT;
 
   return (
     <div
-      ref={setNodeRef}
       style={{
         width: 340,
         minWidth: 340,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: isOver ? '#e6f4ff' : groupColor.bgColor,
+        backgroundColor: groupColor.bgColor,
         borderRadius: 8,
-        border: `1px solid ${isOver ? '#1677ff' : wipExceeded ? '#ff4d4f' : groupColor.borderColor}`,
+        border: `1px solid ${wipExceeded ? '#ff4d4f' : groupColor.borderColor}`,
         transition: 'background-color 0.2s, border-color 0.2s',
       }}
     >
@@ -136,6 +135,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               key={req.id}
               requirement={req}
               groupKey={groupKey}
+              groupColor={groupColor}
               onClick={() => onCardClick(req)}
             />
           ))
@@ -167,10 +167,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 const RequirementCard: React.FC<{
   requirement: Requirement;
   groupKey: string;
+  groupColor: { color: string; bgColor: string; borderColor: string };
   onClick: () => void;
-}> = ({ requirement: req, groupKey, onClick }) => {
-  const statusColor = getStatusColor(req.status);
-  const isFailed = req.status === 'failed';
+}> = ({ requirement: req, groupColor, onClick }) => {
   const typeConfig = getTypeConfig(req.requirement_type);
   const runtimeIcon = getRuntimeIcon(req.claude_runtime);
 
@@ -180,7 +179,7 @@ const RequirementCard: React.FC<{
       hoverable
       style={{
         cursor: 'pointer',
-        borderLeft: isFailed ? '3px solid #cf1322' : `3px solid ${statusColor.borderColor}`,
+        borderLeft: `3px solid ${groupColor.borderColor}`,
       }}
       bodyStyle={{ padding: '10px 12px' }}
       onClick={onClick}
@@ -203,21 +202,7 @@ const RequirementCard: React.FC<{
         gap: 4,
       }}>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* 处理中列显示实际子状态 */}
-          {groupKey === 'processing' && (
-            <Tag
-              style={{
-                fontSize: 11,
-                lineHeight: '18px',
-                padding: '0 4px',
-                color: statusColor.color,
-                backgroundColor: statusColor.bgColor,
-                borderColor: statusColor.borderColor,
-              }}
-            >
-              {getStatusLabel(req.status)}
-            </Tag>
-          )}
+          {/* 需求状态由列标题表示 */}
           <Tag color={typeConfig.color} style={{ fontSize: 11, lineHeight: '18px', padding: '0 4px' }}>
             {typeConfig.label}
           </Tag>
