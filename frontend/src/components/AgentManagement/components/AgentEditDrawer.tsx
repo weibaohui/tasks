@@ -31,7 +31,7 @@ interface AgentEditDrawerProps {
   mcpLoading: boolean;
   mcpForm: FormInstance<any>;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: () => Promise<void>;
   onTabChange: (tab: string) => void;
   onToggleSectionEdit: (section: string) => void;
   onPatchSection: (section: string, fields: any) => Promise<void>;
@@ -52,9 +52,9 @@ export const AgentEditDrawer: React.FC<AgentEditDrawerProps> = ({
   const handleCreate = async () => {
     try {
       await form.validateFields();
-      onSubmit();
-    } catch {
-      // validation errors shown by form
+      await onSubmit();
+    } catch (error) {
+      // validation or submission errors handled by form
     }
   };
 
