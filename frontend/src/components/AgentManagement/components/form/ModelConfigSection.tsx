@@ -27,6 +27,7 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
 
   const handleSave = () => {
     const values = form.getFieldsValue(['model', 'llm_provider_id', 'max_tokens', 'temperature', 'max_iterations', 'history_messages']);
+    values.model = values.model ?? '';
     // 过滤 undefined 值，避免传递给 API
     const filteredValues = Object.fromEntries(
       Object.entries(values).filter(([, v]) => v !== undefined)
