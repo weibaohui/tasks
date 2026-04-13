@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { message } from 'antd';
 import { listRequirementsPaginated, type StatusStat } from '../../api/projectRequirementApi';
 import type { Requirement } from '../../types/projectRequirement';
-import { statusGroups, getStatusLabel, getStatusColor } from '../../constants/requirementStatus';
+import { getStatusLabel, getStatusColor } from '../../constants/requirementStatus';
 import { KanbanColumn } from './KanbanColumn';
 
 interface RequirementKanbanProps {
@@ -22,7 +22,87 @@ interface ColumnState {
 
 type ColumnsMap = Record<string, ColumnState>;
 
+// 定义大分组结构
+type MajorGroupKey = 'todo' | 'processing' | 'complete';
+interface KanbanStatusDef {
+  status: string;
+  label: string;
+  color: { color: string; bgColor: string; borderColor: string };
+}
+interface KanbanGroupDef {
+  key: MajorGroupKey;
+  label: string;
+  color: { color: string; bgColor: string; borderColor: string };
+  statuses: KanbanStatusDef[];
+}
+
 const PAGE_SIZE = 10;
+
+/**
+ * 动态计算看板分组结构
+ * 逻辑：从数据库返回的现有状态统计(statusStats)中提取。
+ * 1. todo 归为 "待办"
+ * 2. completed, done 归为 "已完成"
+ * 3. 其他所有状态均归为 "处理中" 的子状态
+ */
+function buildDynamicGroups(statusStats: StatusStat[]): KanbanGroupDef[] {
+  const todoStatuses: KanbanStatusDef[] = [];
+  const processingStatuses: KanbanStatusDef[] = [];
+  const completeStatuses: KanbanStatusDef[] = [];
+
+  // 始终确保基础状态列存在（即使暂无数据）
+  const ensureStatus = (status: string, targetList: KanbanStatusDef[]) => {
+    if (!targetList.some((s) => s.status === status)) {
+      targetList.push({
+        status,
+        label: getStatusLabel(status),
+        color: getStatusColor(status),
+      });
+    }
+  };
+
+  ensureStatus('todo', todoStatuses);
+  ensureStatus('completed', completeStatuses);
+
+  // 遍历实际存在数据的状态，进行归类
+  statusStats.forEach((stat) => {
+    const s = stat.status;
+    const def: KanbanStatusDef = {
+      status: s,
+      label: getStatusLabel(s),
+      color: getStatusColor(s),
+    };
+
+    if (s === 'todo') {
+      if (!todoStatuses.some((x) => x.status === s)) todoStatuses.push(def);
+    } else if (s === 'completed' || s === 'done') {
+      if (!completeStatuses.some((x) => x.status === s)) completeStatuses.push(def);
+    } else {
+      if (!processingStatuses.some((x) => x.status === s)) processingStatuses.push(def);
+    }
+  });
+
+  return [
+    {
+      key: 'todo',
+      label: '待办',
+      color: { color: '#666666', bgColor: '#f5f5f5', borderColor: '#d9d9d9' },
+      statuses: todoStatuses,
+    },
+    {
+      key: 'processing',
+      label: '处理中',
+      color: { color: '#0958d9', bgColor: '#e6f4ff', borderColor: '#91caff' },
+      statuses: processingStatuses,
+    },
+    {
+      key: 'complete',
+      label: '已完成',
+      color: { color: '#389e0d', bgColor: '#f6ffed', borderColor: '#b7eb8f' },
+      statuses: completeStatuses,
+    },
+  ];
+}
 
 /** 根据 statusStats 计算每个子状态的总数 */
 function computeStatusTotals(statusStats: StatusStat[]): Record<string, number> {
@@ -41,6 +121,9 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
 }) => {
   const [columns, setColumns] = useState<ColumnsMap>({});
   const [initialLoading, setInitialLoading] = useState(false);
+
+  // 动态生成分组结构
+  const dynamicGroups = useMemo(() => buildDynamicGroups(statusStats), [statusStats]);
 
   const loadColumn = useCallback(async (status: string, offset: number) => {
     setColumns((prev) => ({
@@ -84,11 +167,11 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
     const newColumns: ColumnsMap = {};
     
     // 初始化每个状态的数据结构
-    statusGroups.forEach((group) => {
-      group.statuses.forEach((status) => {
-        newColumns[status] = {
+    dynamicGroups.forEach((group) => {
+      group.statuses.forEach((statusDef) => {
+        newColumns[statusDef.status] = {
           requirements: [],
-          total: statusTotals[status] ?? 0,
+          total: statusTotals[statusDef.status] ?? 0,
           loaded: 0,
           loading: false,
         };
@@ -98,15 +181,15 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
 
     // 发起所有状态的首屏请求
     const promises: Promise<void>[] = [];
-    statusGroups.forEach((group) => {
-      group.statuses.forEach((status) => {
-        promises.push(loadColumn(status, 0));
+    dynamicGroups.forEach((group) => {
+      group.statuses.forEach((statusDef) => {
+        promises.push(loadColumn(statusDef.status, 0));
       });
     });
 
     await Promise.all(promises);
     setInitialLoading(false);
-  }, [projectId, statusStats, loadColumn]);
+  }, [projectId, statusStats, loadColumn, dynamicGroups]);
 
   useEffect(() => {
     loadAllColumns();
@@ -128,9 +211,9 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
       opacity: initialLoading ? 0.6 : 1,
       transition: 'opacity 0.3s',
     }}>
-      {statusGroups.map((group) => {
+      {dynamicGroups.map((group) => {
         // 计算这个大组包含的需求总数
-        const groupTotal = group.statuses.reduce((acc, status) => acc + (columns[status]?.total ?? 0), 0);
+        const groupTotal = group.statuses.reduce((acc, def) => acc + (columns[def.status]?.total ?? 0), 0);
 
         return (
           <div key={group.key} style={{
@@ -163,17 +246,18 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
               </span>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
-              {group.statuses.map((status) => (
+              {group.statuses.map((statusDef) => (
                 <KanbanColumn
-                  key={status}
-                  groupKey={status}
-                  label={getStatusLabel(status)}
-                  groupColor={getStatusColor(status)}
-                  totalCount={columns[status]?.total ?? 0}
-                  requirements={columns[status]?.requirements ?? []}
-                  loadedCount={columns[status]?.loaded ?? 0}
-                  loading={columns[status]?.loading ?? false}
-                  onLoadMore={() => handleLoadMore(status)}
+                  key={statusDef.status}
+                  majorGroupKey={group.key}
+                  groupKey={statusDef.status}
+                  label={statusDef.label}
+                  groupColor={statusDef.color}
+                  totalCount={columns[statusDef.status]?.total ?? 0}
+                  requirements={columns[statusDef.status]?.requirements ?? []}
+                  loadedCount={columns[statusDef.status]?.loaded ?? 0}
+                  loading={columns[statusDef.status]?.loading ?? false}
+                  onLoadMore={() => handleLoadMore(statusDef.status)}
                   onCardClick={onRequirementClick}
                 />
               ))}

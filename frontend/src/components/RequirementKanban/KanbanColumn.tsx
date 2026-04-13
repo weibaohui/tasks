@@ -7,7 +7,6 @@ import {
   CloseCircleOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { getStatusColor, getStatusLabel } from '../../constants/requirementStatus';
 import type { Requirement } from '../../types/projectRequirement';
 
 const { Text, Paragraph } = Typography;
@@ -16,6 +15,7 @@ const { Text, Paragraph } = Typography;
 const WIP_LIMIT = 10;
 
 interface KanbanColumnProps {
+  majorGroupKey: 'todo' | 'processing' | 'complete';
   groupKey: string;
   label: string;
   groupColor: { color: string; bgColor: string; borderColor: string };
@@ -54,6 +54,7 @@ function getRuntimeIcon(runtime?: Requirement['claude_runtime']): React.ReactNod
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
+  majorGroupKey,
   groupKey,
   label,
   groupColor,
@@ -65,7 +66,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onCardClick,
 }) => {
   const hasMore = loadedCount < totalCount;
-  const wipExceeded = groupKey === 'processing' && totalCount > WIP_LIMIT;
+  const wipExceeded = majorGroupKey === 'processing' && totalCount > WIP_LIMIT;
 
   return (
     <div
@@ -132,6 +133,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               key={req.id}
               requirement={req}
               groupKey={groupKey}
+              groupColor={groupColor}
               onClick={() => onCardClick(req)}
             />
           ))
@@ -163,10 +165,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 const RequirementCard: React.FC<{
   requirement: Requirement;
   groupKey: string;
+  groupColor: { color: string; bgColor: string; borderColor: string };
   onClick: () => void;
-}> = ({ requirement: req, groupKey, onClick }) => {
-  const statusColor = getStatusColor(req.status);
-  const isFailed = req.status === 'failed';
+}> = ({ requirement: req, groupColor, onClick }) => {
   const typeConfig = getTypeConfig(req.requirement_type);
   const runtimeIcon = getRuntimeIcon(req.claude_runtime);
 
@@ -176,7 +177,7 @@ const RequirementCard: React.FC<{
       hoverable
       style={{
         cursor: 'pointer',
-        borderLeft: isFailed ? '3px solid #cf1322' : `3px solid ${statusColor.borderColor}`,
+        borderLeft: `3px solid ${groupColor.borderColor}`,
       }}
       bodyStyle={{ padding: '10px 12px' }}
       onClick={onClick}
@@ -199,21 +200,7 @@ const RequirementCard: React.FC<{
         gap: 4,
       }}>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* 处理中列显示实际子状态 */}
-          {groupKey === 'processing' && (
-            <Tag
-              style={{
-                fontSize: 11,
-                lineHeight: '18px',
-                padding: '0 4px',
-                color: statusColor.color,
-                backgroundColor: statusColor.bgColor,
-                borderColor: statusColor.borderColor,
-              }}
-            >
-              {getStatusLabel(req.status)}
-            </Tag>
-          )}
+          {/* 需求状态由列标题表示 */}
           <Tag color={typeConfig.color} style={{ fontSize: 11, lineHeight: '18px', padding: '0 4px' }}>
             {typeConfig.label}
           </Tag>
