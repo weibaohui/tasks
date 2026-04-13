@@ -50,20 +50,6 @@ function buildDynamicGroups(statusStats: StatusStat[]): KanbanGroupDef[] {
   const processingStatuses: KanbanStatusDef[] = [];
   const completeStatuses: KanbanStatusDef[] = [];
 
-  // 始终确保基础状态列存在（即使暂无数据）
-  const ensureStatus = (status: string, targetList: KanbanStatusDef[]) => {
-    if (!targetList.some((s) => s.status === status)) {
-      targetList.push({
-        status,
-        label: getStatusLabel(status),
-        color: getStatusColor(status),
-      });
-    }
-  };
-
-  ensureStatus('todo', todoStatuses);
-  ensureStatus('completed', completeStatuses);
-
   // 遍历实际存在数据的状态，进行归类
   statusStats.forEach((stat) => {
     const s = stat.status;
@@ -249,11 +235,11 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
               {group.statuses.map((statusDef) => (
                 <KanbanColumn
                   key={statusDef.status}
-                  majorGroupKey={group.key}
                   groupKey={statusDef.status}
                   label={statusDef.label}
                   groupColor={statusDef.color}
                   totalCount={columns[statusDef.status]?.total ?? 0}
+                  groupTotal={group.key === 'processing' ? groupTotal : undefined}
                   requirements={columns[statusDef.status]?.requirements ?? []}
                   loadedCount={columns[statusDef.status]?.loaded ?? 0}
                   loading={columns[statusDef.status]?.loading ?? false}

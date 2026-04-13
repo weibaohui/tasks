@@ -15,11 +15,11 @@ const { Text, Paragraph } = Typography;
 const WIP_LIMIT = 10;
 
 interface KanbanColumnProps {
-  majorGroupKey: 'todo' | 'processing' | 'complete';
   groupKey: string;
   label: string;
   groupColor: { color: string; bgColor: string; borderColor: string };
   totalCount: number;
+  groupTotal?: number;
   requirements: Requirement[];
   loadedCount: number;
   loading: boolean;
@@ -54,11 +54,11 @@ function getRuntimeIcon(runtime?: Requirement['claude_runtime']): React.ReactNod
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
-  majorGroupKey,
   groupKey,
   label,
   groupColor,
   totalCount,
+  groupTotal,
   requirements,
   loadedCount,
   loading,
@@ -66,7 +66,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onCardClick,
 }) => {
   const hasMore = loadedCount < totalCount;
-  const wipExceeded = majorGroupKey === 'processing' && totalCount > WIP_LIMIT;
+  // 如果提供了 groupTotal，则基于大组总量判断 WIP 是否超限，否则基于单列总量
+  const effectiveTotal = groupTotal !== undefined ? groupTotal : totalCount;
+  const wipExceeded = groupKey !== 'todo' && groupKey !== 'completed' && groupKey !== 'done' && effectiveTotal > WIP_LIMIT;
 
   return (
     <div
