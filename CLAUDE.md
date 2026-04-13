@@ -83,6 +83,40 @@ sqlite3 ~/.taskmanager/data.db
 tail -f ~/.taskmanager/server.log     # 实时跟踪服务日志
 ```
 
+## 远程调试
+
+通过 Cloudflare Tunnel 创建临时公共 URL，方便外部网络访问本地服务。
+
+**前提条件：**
+- 安装 `cloudflared`：https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+- macOS 用户：`brew install cloudflared`
+
+**使用方式：**
+```bash
+# 1. 启动服务器（如未运行）
+taskmanager server start
+
+# 2. 创建临时隧道
+taskmanager tunnel
+
+# 3. 获取公共 URL（如 https://xxxx.trycloudflare.com）
+#    分享给其他人即可外部访问
+
+# 指定端口（默认从配置文件读取）
+taskmanager tunnel --port 8888
+```
+
+**工作原理：**
+- `cloudflared tunnel --url http://localhost:PORT` 连接到 Cloudflare
+- 生成随机子域名（如 `https://randomname.trycloudflare.com`）
+- 请求自动转发到本地服务器
+- 按 `Ctrl+C` 停止隧道
+
+**注意事项：**
+- 最多 200 并发请求
+- 不支持 SSE
+- 仅供开发测试使用，无 SLA 保障
+
 ## 详细文档
 
 | 文档 | 内容 |
