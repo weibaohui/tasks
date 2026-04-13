@@ -10,6 +10,7 @@ import { BasicInfoTab } from '../tabs/BasicInfoTab';
 import { SkillsToolsTab } from '../tabs/SkillsToolsTab';
 import { PersonalityTab } from '../tabs/PersonalityTab';
 import { ClaudeCodeTab } from '../tabs/ClaudeCodeTab';
+import { OpenCodeTab } from '../tabs/OpenCodeTab';
 
 interface AgentEditDrawerProps {
   open: boolean;
@@ -61,6 +62,7 @@ export const AgentEditDrawer: React.FC<AgentEditDrawerProps> = ({
   // 监听表单类型变化，决定显示哪些 Tab
   const agentType = Form.useWatch('agent_type', form) || (editing?.agent_type);
   const isCodingAgent = agentType === 'CodingAgent';
+  const isOpenCodeAgent = agentType === 'OpenCodeAgent';
   const isBareLLM = agentType === 'BareLLM';
 
   // 根据当前 Agent 类型选择对应的模型选项
@@ -134,6 +136,24 @@ export const AgentEditDrawer: React.FC<AgentEditDrawerProps> = ({
         label: 'Claude Code 配置',
         children: (
           <ClaudeCodeTab
+            form={form}
+            editing={editing}
+            editingSections={editingSections}
+            screens={screens}
+            toggleSectionEdit={onToggleSectionEdit}
+            handlePatchSection={onPatchSection}
+            agentType={agentType}
+          />
+        ),
+      }
+    );
+  } else if (isOpenCodeAgent) {
+    tabItems.push(
+      {
+        key: 'opencode',
+        label: 'OpenCode 配置',
+        children: (
+          <OpenCodeTab
             form={form}
             editing={editing}
             editingSections={editingSections}

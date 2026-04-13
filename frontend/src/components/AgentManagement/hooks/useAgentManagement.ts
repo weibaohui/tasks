@@ -9,7 +9,7 @@ import { createBinding, deleteBinding, getMCPErrorMessage, listBindings, listMCP
 import { listBuiltInTools } from '../../../api/toolsApi';
 import { listSkillsSimple, type Skill } from '../../../api/skillApi';
 import { useAuthStore } from '../../../stores/authStore';
-import type { Agent, ClaudeCodeConfig, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../../../types/agent';
+import type { Agent, ClaudeCodeConfig, OpenCodeConfig, CreateAgentRequest, PatchAgentRequest, UpdateAgentRequest } from '../../../types/agent';
 import type { LLMProvider } from '../../../types/provider';
 import type { AgentMCPBinding, MCPServer, MCPTool } from '../../../types/mcp';
 import type { BuiltInTool } from '../../../types/task';
@@ -44,6 +44,7 @@ export type AgentFormValues = {
   is_active: boolean;
   enable_thinking_process: boolean;
   claude_code_config?: ClaudeCodeConfig;
+  opencode_config?: OpenCodeConfig;
 };
 
 export function getDefaultAgentFormValues(_defaultModel?: string): Partial<AgentFormValues> {
@@ -90,7 +91,7 @@ export interface UseAgentManagementReturn {
   claudeCodeModelOptions: Array<{ value: string; label: string }>;
   llmProviderOptions: Array<{ value: string; label: string }>;
   watchedModel: string | undefined;
-  activeTab: 'basic' | 'skills' | 'personality' | 'claudecode';
+  activeTab: 'basic' | 'skills' | 'personality' | 'claudecode' | 'opencode';
   mcpLoading: boolean;
   mcpServers: MCPServer[];
   mcpBindings: AgentMCPBinding[];
@@ -114,7 +115,7 @@ export interface UseAgentManagementReturn {
   handleToggleThinking: (agent: Agent, enabled: boolean) => Promise<void>;
   handleUpdateAgent: (id: string, fields: { name?: string; description?: string }) => Promise<void>;
   handleSubmit: () => Promise<void>;
-  setActiveTab: (tab: 'basic' | 'skills' | 'personality' | 'claudecode') => void;
+  setActiveTab: (tab: 'basic' | 'skills' | 'personality' | 'claudecode' | 'opencode') => void;
   toggleSectionEdit: (section: string) => void;
   reloadMCP: () => Promise<void>;
   handleCreateBinding: (mcpServerId: string) => Promise<void>;
@@ -148,7 +149,7 @@ export function useAgentManagement({
   const [editing, setEditing] = useState<Agent | null>(null);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality' | 'claudecode'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality' | 'claudecode' | 'opencode'>('basic');
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [mcpBindings, setMcpBindings] = useState<AgentMCPBinding[]>([]);
@@ -280,7 +281,8 @@ export function useAgentManagement({
   const openEditor = useCallback(async (agent: Agent | null) => {
     setEditing(agent);
     const isCoding = agent?.agent_type === 'CodingAgent';
-    setActiveTab(isCoding ? 'claudecode' : 'basic');
+    const isOpenCode = agent?.agent_type === 'OpenCodeAgent';
+    setActiveTab(isCoding ? 'claudecode' : isOpenCode ? 'opencode' : 'basic');
     setEditingBinding(null);
     setToolsDrawerOpen(false);
     setToolsForServer([]);
@@ -299,6 +301,7 @@ export function useAgentManagement({
         is_default: agent.is_default, is_active: agent.is_active,
         enable_thinking_process: agent.enable_thinking_process,
         claude_code_config: agent.claude_code_config,
+        opencode_config: agent.opencode_config,
       });
       // Pass agent.id explicitly to avoid stale closure issue
       await reloadMCP(agent.id);
@@ -347,6 +350,7 @@ export function useAgentManagement({
           is_default: found.is_default, is_active: found.is_active,
           enable_thinking_process: found.enable_thinking_process,
           claude_code_config: found.claude_code_config,
+          opencode_config: found.opencode_config,
         });
       }
     } catch { message.error('保存失败'); }

@@ -75,7 +75,8 @@ export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
               allowClear
               options={[
                 { value: 'BareLLM', label: '个人助理' },
-                { value: 'CodingAgent', label: '编程 Agent' },
+                { value: 'CodingAgent', label: '编程 Agent (Claude Code)' },
+                { value: 'OpenCodeAgent', label: '编程 Agent (OpenCode)' },
               ]} />
           </Form.Item>
           <Form.Item label="描述" name="description" style={{ marginBottom: 0 }}>

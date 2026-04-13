@@ -30,6 +30,7 @@ type PatchAgentCommand struct {
 	EnableThinkingProcess *bool
 	AgentType             *string
 	ClaudeCodeConfig      *domain.ClaudeCodeConfig
+	OpenCodeConfig        *domain.OpenCodeConfig
 }
 
 // agentConfigPatchFields 通用配置 patch 字段提取接口
@@ -198,6 +199,9 @@ func (s *AgentApplicationService) PatchAgent(ctx context.Context, cmd PatchAgent
 
 	if cmd.ClaudeCodeConfig != nil {
 		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
+	}
+	if cmd.OpenCodeConfig != nil {
+		agent.UpdateOpenCodeConfig(cmd.OpenCodeConfig)
 	}
 	agent.ApplyLLMProvider(cmd.LLMProviderID)
 

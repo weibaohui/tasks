@@ -73,7 +73,8 @@ export const AgentTable: React.FC<AgentTableProps> = ({
 
   const typeMap: Record<string, { label: string; color: string }> = {
     BareLLM: { label: '个人助理', color: 'default' },
-    CodingAgent: { label: '编程', color: 'blue' },
+    CodingAgent: { label: 'Claude Code', color: 'blue' },
+    OpenCodeAgent: { label: 'OpenCode', color: 'green' },
   };
 
   const cardStyle: React.CSSProperties = {
