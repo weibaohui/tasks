@@ -21,6 +21,7 @@ import {
   FilterOutlined,
   ClearOutlined,
   SearchOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -231,9 +232,29 @@ export const ConversationRecordsPage: React.FC = () => {
         title: 'Session',
         dataIndex: 'session_key',
         key: 'session_key',
-        width: 180,
+        width: 200,
         ellipsis: true,
-        render: (v: string) => (v ? <Tag color="blue">{v.slice(0, 16)}...</Tag> : <Tag>-</Tag>),
+        render: (v: string) =>
+          v ? (
+            <Space size={4}>
+              <Tag color="blue" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {v.slice(0, 16)}...
+              </Tag>
+              <Tooltip title="复制 Session Key">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(v).then(() => message.success('已复制 Session Key'));
+                  }}
+                />
+              </Tooltip>
+            </Space>
+          ) : (
+            <Tag>-</Tag>
+          ),
       },
       {
         title: 'Tokens',
