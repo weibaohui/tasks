@@ -174,6 +174,9 @@ func SetupRoutesWithManagement(
 		reqTypes.DELETE("", requirementTypeHandler.DeleteRequirementType)
 	}
 
+	// OpenCode 路由
+	v1.GET("/opencode/models", requireAuth, ListOpenCodeModels)
+
 	// 工具路由
 	toolsHandler := NewToolsHandler()
 	v1.GET("/tools/builtin", toolsHandler.ListBuiltInTools)
