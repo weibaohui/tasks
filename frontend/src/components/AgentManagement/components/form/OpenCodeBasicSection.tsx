@@ -1,11 +1,12 @@
 /**
  * OpenCodeBasicCard - OpenCode 基本配置卡片
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CodeOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent, OpenCodeConfig } from '../../../../types/agent';
+import { listOpenCodeModels } from '../../../../api/opencodeApi';
 
 interface OpenCodeBasicCardProps {
   form: FormInstance;
@@ -20,6 +21,16 @@ export const OpenCodeBasicCard: React.FC<OpenCodeBasicCardProps> = ({
   form, editing, editingSections, screens, toggleSectionEdit, handlePatchSection,
 }) => {
   const isEditing = !editing || editingSections.openCodeConfig;
+  const [modelOptions, setModelOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  useEffect(() => {
+    setModelsLoading(true);
+    listOpenCodeModels()
+      .then((models) => setModelOptions(models.map((m) => ({ value: m, label: m }))))
+      .catch(() => setModelOptions([]))
+      .finally(() => setModelsLoading(false));
+  }, []);
 
   const agentTypeLabels: Record<string, string> = {
     build: 'Build - 全功能构建',
@@ -69,6 +80,7 @@ export const OpenCodeBasicCard: React.FC<OpenCodeBasicCardProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 8 }}>
             <div><span style={{ color: '#999' }}>Agent 类型：</span>{getAgentTypeLabel(form.getFieldValue('opencode_config')?.agent_type)}</div>
             <div><span style={{ color: '#999' }}>工作目录：</span>{form.getFieldValue('opencode_config')?.work_dir || '-'}</div>
+            <div><span style={{ color: '#999' }}>模型：</span>{form.getFieldValue('opencode_config')?.model || '-'}</div>
             <div><span style={{ color: '#999' }}>超时(秒)：</span>{(() => { const v = form.getFieldValue('opencode_config')?.timeout; return v === 0 || v == null ? '-' : v; })()}</div>
             <div><span style={{ color: '#999' }}>模型变体：</span>{form.getFieldValue('opencode_config')?.variant || '-'}</div>
             <div><span style={{ color: '#999' }}>继续会话：</span>{form.getFieldValue('opencode_config')?.continue_conversation === true ? '是' : form.getFieldValue('opencode_config')?.continue_conversation === false ? '否' : '-'}</div>
@@ -95,6 +107,14 @@ export const OpenCodeBasicCard: React.FC<OpenCodeBasicCardProps> = ({
             </Form.Item>
             <Form.Item label="工作目录" name={['opencode_config', 'work_dir']}>
               <Input placeholder="留空使用默认目录" />
+            </Form.Item>
+            <Form.Item label="模型" name={['opencode_config', 'model']}>
+              <Select
+                loading={modelsLoading}
+                placeholder="选择 OpenCode 模型"
+                options={modelOptions}
+                allowClear
+              />
             </Form.Item>
             <Form.Item label="超时(秒)" name={['opencode_config', 'timeout']}>
               <InputNumber min={1} style={{ width: '100%' }} placeholder="留空使用默认值" />
