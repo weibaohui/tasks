@@ -244,6 +244,16 @@ func (sc *streamContext) handleToolUseEvent(event OpenCodeEvent) {
 		if sc.toolAdapter != nil {
 			sc.toolAdapter.PostToolCall(toolName, input, errMsg, false)
 		}
+	case "pending":
+		// pending 状态下工具尚未完成，调用 PostToolCall 以关闭 span 防止资源泄漏
+		if sc.toolAdapter != nil {
+			sc.toolAdapter.PostToolCall(toolName, input, "", false)
+		}
+	default:
+		// 未知状态：同样调用 PostToolCall 确保 span 关闭
+		if sc.toolAdapter != nil {
+			sc.toolAdapter.PostToolCall(toolName, input, "", false)
+		}
 	}
 
 	if event.SessionID != "" {
