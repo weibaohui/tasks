@@ -142,6 +142,27 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 	// 生成 trace ID
 	traceID := fmt.Sprintf("oc_%d", time.Now().UnixNano())
 
+	// 保存 trace_id 到需求表
+	if msg.Metadata != nil {
+		if requirementIDStr, ok := msg.Metadata["requirement_id"].(string); ok && requirementIDStr != "" {
+			requirementID := domain.NewRequirementID(requirementIDStr)
+			requirement, err := p.requirementRepo.FindByID(ctx, requirementID)
+			if err != nil {
+				p.logger.Warn("查找需求失败，无法保存 trace_id", zap.Error(err))
+			} else if requirement != nil {
+				requirement.SetTraceID(traceID)
+				if err := p.requirementRepo.Save(ctx, requirement); err != nil {
+					p.logger.Warn("保存 trace_id 到需求表失败", zap.Error(err))
+				} else {
+					p.logger.Info("已保存 trace_id 到需求表",
+						zap.String("requirement_id", requirementIDStr),
+						zap.String("trace_id", traceID),
+					)
+				}
+			}
+		}
+	}
+
 	// 解析 Provider
 	provider, err := p.resolveProvider(agent)
 	if err != nil {
@@ -157,17 +178,27 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 	}
 
 	// 执行流式处理
-	result, _, err := p.queryOpenCodeStreaming(
+	result, tokenUsage, err := p.queryOpenCodeStreaming(
 		ctx, msg, userInput, cliSessionID, traceID, provider, agent, callback,
 	)
 
 	if err != nil {
+		p.logger.Error("OpenCode 流式调用失败", zap.Error(err))
+		p.triggerOpenCodeFinishedHook(ctx, msg, agent, false, "", nil)
 		return fmt.Errorf("OpenCode query failed: %w", err)
+	}
+
+	totalTokens := 0
+	if tokenUsage != nil {
+		totalTokens = tokenUsage.Total
 	}
 
 	p.logger.Info("OpenCode 处理完成",
 		zap.String("session_key", sessionKey),
-		zap.String("result_length", fmt.Sprintf("%d", len(result))))
+		zap.String("result_length", fmt.Sprintf("%d", len(result))),
+		zap.Int("total_tokens", totalTokens))
+
+	p.triggerOpenCodeFinishedHook(ctx, msg, agent, true, result, tokenUsage)
 
 	return nil
 }
@@ -328,9 +359,6 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 		return "", nil, fmt.Errorf("启动 OpenCode 失败: %w", err)
 	}
 
-	// 创建工具钩子适配器
-	toolAdapter := p.buildToolHookBridge(msg, traceID, agent)
-
 	// 设置超时
 	timeout := 600 // 10 分钟默认超时
 	if config != nil && config.Timeout > 0 {
@@ -342,11 +370,79 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	defer cancel()
 
 	sc := &streamContext{
-		p:           p,
-		callback:    callback,
-		startTime:   startTime,
-		sessionKey:  sessionKey,
-		toolAdapter: toolAdapter,
+		p:          p,
+		callback:   callback,
+		startTime:  startTime,
+		sessionKey: sessionKey,
+	}
+
+	// 创建工具钩子适配器并设置 LLM Hook
+	var toolAdapter *hook.ToolHookBridge
+	var hookCtx *domain.HookContext
+	var llmCallCtx *domain.LLMCallContext
+
+	if p.hookManager != nil {
+		hookCtx = domain.NewHookContext(ctx)
+		hookCtx.SetMetadata("session_key", sessionKey)
+		hookCtx.SetMetadata("trace_id", traceID)
+		hookCtx.SetMetadata("enable_thinking_process", "true")
+		hookCtx.SetMetadata("chat_id", msg.ChatID)
+		hookCtx.SetMetadata("channel_type", msg.Channel)
+
+		userCode := ""
+		agentCode := ""
+		if agent != nil {
+			agentCode = agent.AgentCode().String()
+			userCode = agent.UserCode()
+		}
+
+		channelCode := ""
+		if msg.Metadata != nil {
+			if v, ok := msg.Metadata["channel_code"].(string); ok {
+				channelCode = v
+			}
+		}
+
+		llmCallCtx = &domain.LLMCallContext{
+			Prompt:    userInput,
+			UserInput: userInput,
+			Model:     "opencode",
+			SessionID: sessionKey,
+			TraceID:   traceID,
+			Metadata: map[string]string{
+				"session_key":  sessionKey,
+				"trace_id":     traceID,
+				"user_code":    userCode,
+				"agent_code":   agentCode,
+				"channel_code": channelCode,
+				"channel_type": msg.Channel,
+				"chat_id":      msg.ChatID,
+			},
+		}
+
+		modifiedCtx, err := p.hookManager.PreLLMCall(hookCtx, llmCallCtx)
+		if err != nil {
+			p.logger.Error("PreLLMCall failed", zap.Error(err))
+		}
+		if modifiedCtx != nil {
+			llmCallCtx = modifiedCtx
+		}
+
+		defer func() {
+			resp := &domain.LLMResponse{Content: sc.result}
+			if sc.tokenUsage != nil {
+				resp.Usage = domain.Usage{
+					PromptTokens:     sc.tokenUsage.Input,
+					CompletionTokens: sc.tokenUsage.Output,
+					TotalTokens:      sc.tokenUsage.Total,
+				}
+			}
+			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
+			p.hookManager.OnToolExecutionComplete(hookCtx)
+		}()
+
+		toolAdapter = p.buildToolHookBridge(msg, traceID, agent, hookCtx)
+		sc.toolAdapter = toolAdapter
 	}
 
 	// 使用 goroutine 解析输出
@@ -402,11 +498,11 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	select {
 	case <-queryCtx.Done():
 		cmd.Process.Kill()
-		return "", nil, queryCtx.Err()
+		return sc.result, sc.tokenUsage, queryCtx.Err()
 	case err := <-errChan:
 		cmd.Wait()
 		if err != nil {
-			return "", nil, err
+			return sc.result, sc.tokenUsage, err
 		}
 	}
 
@@ -416,23 +512,16 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 		zap.String("result_length", fmt.Sprintf("%d", len(sc.result))))
 
 	callback.OnComplete(sc.result)
-	return sc.cliSessionID, sc.tokenUsage, nil
+	return sc.result, sc.tokenUsage, nil
 }
 
 // buildToolHookBridge 构建通用的工具钩子桥接器
-func (p *OpenCodeProcessor) buildToolHookBridge(msg *bus.InboundMessage, traceID string, agent *domain.Agent) *hook.ToolHookBridge {
+func (p *OpenCodeProcessor) buildToolHookBridge(msg *bus.InboundMessage, traceID string, agent *domain.Agent, hookCtx *domain.HookContext) *hook.ToolHookBridge {
 	if p.hookManager == nil {
 		return nil
 	}
 
 	sessionKey := msg.SessionKey()
-
-	hookCtx := domain.NewHookContext(context.Background())
-	hookCtx.SetMetadata("session_key", sessionKey)
-	hookCtx.SetMetadata("trace_id", traceID)
-	hookCtx.SetMetadata("enable_thinking_process", "true")
-	hookCtx.SetMetadata("chat_id", msg.ChatID)
-	hookCtx.SetMetadata("channel_type", msg.Channel)
 
 	userCode := ""
 	agentCode := ""

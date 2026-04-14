@@ -3,6 +3,7 @@ package opencode
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -11,10 +12,19 @@ import (
 func buildCLIArgs(userInput, workDir string, provider *domain.LLMProvider, config *domain.OpenCodeConfig, sessionID string) []string {
 	args := []string{"run"}
 
-	// 模型
+	// 模型（opencode CLI 要求 provider/model 格式）
 	model := config.Model
 	if model == "" && provider != nil {
 		model = provider.DefaultModel()
+	}
+	if model != "" && provider != nil {
+		providerType := provider.ProviderType()
+		if providerType == "" {
+			providerType = "anthropic"
+		}
+		if !strings.Contains(model, "/") {
+			model = providerType + "/" + model
+		}
 	}
 	if model != "" {
 		args = append(args, "--model", model)

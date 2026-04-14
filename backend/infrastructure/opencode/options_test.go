@@ -53,7 +53,7 @@ func TestBuildCLIArgs(t *testing.T) {
 			provider:  provider,
 			config:    &domain.OpenCodeConfig{},
 			sessionID: "",
-			want:      []string{"run", "--model", "claude-sonnet-4", "--format", "json", "--", "test"},
+			want:      []string{"run", "--model", "anthropic/claude-sonnet-4", "--format", "json", "--", "test"},
 		},
 		{
 			name:      "workDir fallback",
