@@ -40,13 +40,14 @@ export interface Requirement {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
-  claude_runtime?: {
+  agent_runtime?: {
     status?: string;
     last_error?: string;
     started_at?: number | null;
     ended_at?: number | null;
     prompt?: string;
     result?: string;
+    agent_type?: string;
   } | null;
   started_at: number | null;
   completed_at: number | null;

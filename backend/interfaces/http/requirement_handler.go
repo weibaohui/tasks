@@ -203,7 +203,7 @@ func (h *RequirementHandler) requirementToMap(requirement *domain.Requirement) m
 		"updated_at":           requirement.UpdatedAt().UnixMilli(),
 		"requirement_type":     requirement.RequirementType(),
 	}
-	resp["claude_runtime"] = h.getClaudeRuntimeByRequirement(requirement)
+	resp["agent_runtime"] = h.getAgentRuntimeByRequirement(requirement)
 	resp["assignee_agent"] = h.agentBriefByCode(requirement.AssigneeAgentCode())
 	resp["replica_agent"] = h.agentBriefByCode(requirement.ReplicaAgentCode())
 	return resp
@@ -230,7 +230,7 @@ func (h *RequirementHandler) agentBriefByCode(code string) map[string]interface{
 	}
 }
 
-func (h *RequirementHandler) getClaudeRuntimeByRequirement(requirement *domain.Requirement) map[string]interface{} {
+func (h *RequirementHandler) getAgentRuntimeByRequirement(requirement *domain.Requirement) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	// 先检查 nil，避免空指针
@@ -238,19 +238,20 @@ func (h *RequirementHandler) getClaudeRuntimeByRequirement(requirement *domain.R
 		return result
 	}
 
-	// 从 requirement 直接获取所有 Claude Runtime 状态字段（已持久化到数据库）
-	result["prompt"] = requirement.ClaudeRuntimePrompt()
-	result["result"] = requirement.ClaudeRuntimeResult()
-	result["status"] = requirement.ClaudeRuntimeStatus()
-	result["last_error"] = requirement.ClaudeRuntimeError()
+	// 从 requirement 直接获取所有 Agent Runtime 状态字段（已持久化到数据库）
+	result["prompt"] = requirement.AgentRuntimePrompt()
+	result["result"] = requirement.AgentRuntimeResult()
+	result["status"] = requirement.AgentRuntimeStatus()
+	result["last_error"] = requirement.AgentRuntimeError()
+	result["agent_type"] = requirement.AgentRuntimeAgentType()
 
-	if startedAt := requirement.ClaudeRuntimeStartedAt(); startedAt != nil {
+	if startedAt := requirement.AgentRuntimeStartedAt(); startedAt != nil {
 		result["started_at"] = startedAt.UnixMilli()
 	} else {
 		result["started_at"] = nil
 	}
 
-	if endedAt := requirement.ClaudeRuntimeEndedAt(); endedAt != nil {
+	if endedAt := requirement.AgentRuntimeEndedAt(); endedAt != nil {
 		result["ended_at"] = endedAt.UnixMilli()
 	} else {
 		result["ended_at"] = nil

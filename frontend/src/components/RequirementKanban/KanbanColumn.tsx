@@ -39,7 +39,7 @@ function getTypeConfig(type?: string): { label: string; color: string } {
   return { label: type, color: 'purple' };
 }
 
-function getRuntimeIcon(runtime?: Requirement['claude_runtime']): React.ReactNode {
+function getRuntimeIcon(runtime?: Requirement['agent_runtime']): React.ReactNode {
   if (!runtime?.status) return null;
   switch (runtime.status) {
     case 'running':
@@ -171,7 +171,7 @@ const RequirementCard: React.FC<{
   onClick: () => void;
 }> = ({ requirement: req, groupColor, onClick }) => {
   const typeConfig = getTypeConfig(req.requirement_type);
-  const runtimeIcon = getRuntimeIcon(req.claude_runtime);
+  const runtimeIcon = getRuntimeIcon(req.agent_runtime);
 
   return (
     <Card

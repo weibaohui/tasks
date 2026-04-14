@@ -89,14 +89,15 @@ type Requirement struct {
 	updatedAt          time.Time
 	// 需求类型：normal（普通需求，不自动触发）| heartbeat（心跳需求，自动触发）
 	requirementType RequirementType
-	// Claude Runtime 状态（持久化）
-	claudeRuntimeStatus    string // running, completed, failed, ""
-	claudeRuntimeStartedAt *time.Time
-	claudeRuntimeEndedAt   *time.Time
-	claudeRuntimeError     string
-	claudeRuntimeResult    string // Claude Code 执行结果摘要
-	claudeRuntimePrompt    string // Claude Code 执行提示词
-	traceId                string // Claude Code 执行时的 trace_id，用于关联对话记录
+	// Agent Runtime 状态（持久化）
+	agentRuntimeStatus    string // running, completed, failed, ""
+	agentRuntimeStartedAt *time.Time
+	agentRuntimeEndedAt   *time.Time
+	agentRuntimeError     string
+	agentRuntimeResult    string // Agent 执行结果摘要
+	agentRuntimePrompt    string // Agent 执行提示词
+	agentRuntimeAgentType string // 执行使用的 Agent 类型，如 CodingAgent / OpenCodeAgent
+	traceId                string // Agent 执行时的 trace_id，用于关联对话记录
 	// Token 消耗统计（从对话记录计算）
 	promptTokens     int
 	completionTokens int
@@ -164,28 +165,29 @@ func (r *Requirement) CompletedAt() *time.Time          { return copyTimePtr(r.c
 func (r *Requirement) CreatedAt() time.Time             { return r.createdAt }
 func (r *Requirement) UpdatedAt() time.Time             { return r.updatedAt }
 func (r *Requirement) RequirementType() RequirementType { return r.requirementType }
-func (r *Requirement) ClaudeRuntimeStatus() string      { return r.claudeRuntimeStatus }
-func (r *Requirement) ClaudeRuntimeStartedAt() *time.Time {
-	return copyTimePtr(r.claudeRuntimeStartedAt)
+func (r *Requirement) AgentRuntimeStatus() string      { return r.agentRuntimeStatus }
+func (r *Requirement) AgentRuntimeStartedAt() *time.Time {
+	return copyTimePtr(r.agentRuntimeStartedAt)
 }
-func (r *Requirement) ClaudeRuntimeEndedAt() *time.Time { return copyTimePtr(r.claudeRuntimeEndedAt) }
-func (r *Requirement) ClaudeRuntimeError() string       { return r.claudeRuntimeError }
-func (r *Requirement) ClaudeRuntimeResult() string      { return r.claudeRuntimeResult }
-func (r *Requirement) ClaudeRuntimePrompt() string      { return r.claudeRuntimePrompt }
+func (r *Requirement) AgentRuntimeEndedAt() *time.Time { return copyTimePtr(r.agentRuntimeEndedAt) }
+func (r *Requirement) AgentRuntimeError() string       { return r.agentRuntimeError }
+func (r *Requirement) AgentRuntimeResult() string      { return r.agentRuntimeResult }
+func (r *Requirement) AgentRuntimePrompt() string      { return r.agentRuntimePrompt }
+func (r *Requirement) AgentRuntimeAgentType() string   { return r.agentRuntimeAgentType }
 
-// SetClaudeRuntimeResult 设置 Claude Code 执行结果
-func (r *Requirement) SetClaudeRuntimeResult(result string) {
-	r.claudeRuntimeResult = result
-}
-
-// SetClaudeRuntimePrompt 设置 Claude Code 执行提示词
-func (r *Requirement) SetClaudeRuntimePrompt(prompt string) {
-	r.claudeRuntimePrompt = prompt
+// SetAgentRuntimeResult 设置 Agent 执行结果
+func (r *Requirement) SetAgentRuntimeResult(result string) {
+	r.agentRuntimeResult = result
 }
 
-// SetClaudeRuntimeError 设置 Claude Code 错误信息
-func (r *Requirement) SetClaudeRuntimeError(errMsg string) {
-	r.claudeRuntimeError = errMsg
+// SetAgentRuntimePrompt 设置 Agent 执行提示词
+func (r *Requirement) SetAgentRuntimePrompt(prompt string) {
+	r.agentRuntimePrompt = prompt
+}
+
+// SetAgentRuntimeError 设置 Agent 错误信息
+func (r *Requirement) SetAgentRuntimeError(errMsg string) {
+	r.agentRuntimeError = errMsg
 }
 
 func (r *Requirement) TraceID() string { return r.traceId }
@@ -235,26 +237,27 @@ func (r *Requirement) CanRedispatch() bool {
 	return r.status != RequirementStatusTodo
 }
 
-// StartClaudeRuntime 开始 Claude Runtime
-func (r *Requirement) StartClaudeRuntime() {
+// StartAgentRuntime 开始 Agent Runtime
+func (r *Requirement) StartAgentRuntime(agentType string) {
 	now := time.Now()
-	r.claudeRuntimeStatus = RuntimeStatusRunning
-	r.claudeRuntimeStartedAt = &now
-	r.claudeRuntimeEndedAt = nil
-	r.claudeRuntimeError = ""
+	r.agentRuntimeStatus = RuntimeStatusRunning
+	r.agentRuntimeAgentType = agentType
+	r.agentRuntimeStartedAt = &now
+	r.agentRuntimeEndedAt = nil
+	r.agentRuntimeError = ""
 	r.updatedAt = now
 }
 
-// EndClaudeRuntime 结束 Claude Runtime
-func (r *Requirement) EndClaudeRuntime(success bool, errMsg string) {
+// EndAgentRuntime 结束 Agent Runtime
+func (r *Requirement) EndAgentRuntime(success bool, errMsg string) {
 	now := time.Now()
 	if success {
-		r.claudeRuntimeStatus = RuntimeStatusCompleted
+		r.agentRuntimeStatus = RuntimeStatusCompleted
 	} else {
-		r.claudeRuntimeStatus = RuntimeStatusFailed
-		r.claudeRuntimeError = errMsg
+		r.agentRuntimeStatus = RuntimeStatusFailed
+		r.agentRuntimeError = errMsg
 	}
-	r.claudeRuntimeEndedAt = &now
+	r.agentRuntimeEndedAt = &now
 	r.updatedAt = now
 }
 
@@ -278,7 +281,7 @@ func (r *Requirement) Redispatch() error {
 	r.lastError = ""
 	r.startedAt = nil
 	r.completedAt = nil
-	r.claudeRuntimePrompt = ""
+	r.agentRuntimePrompt = ""
 	r.updatedAt = now
 
 	return nil
@@ -459,13 +462,14 @@ type RequirementSnapshot struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	RequirementType        RequirementType
-	ClaudeRuntimeStatus    string
-	ClaudeRuntimeStartedAt *time.Time
-	ClaudeRuntimeEndedAt   *time.Time
-	ClaudeRuntimeError     string
-	ClaudeRuntimeResult    string
-	ClaudeRuntimePrompt    string
-	TraceID                string
+	AgentRuntimeStatus      string
+	AgentRuntimeStartedAt   *time.Time
+	AgentRuntimeEndedAt     *time.Time
+	AgentRuntimeError       string
+	AgentRuntimeResult      string
+	AgentRuntimePrompt      string
+	AgentRuntimeAgentType   string
+	TraceID                 string
 	PromptTokens           int
 	CompletionTokens       int
 	TotalTokens            int
@@ -490,13 +494,14 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		CreatedAt:              r.createdAt,
 		UpdatedAt:              r.updatedAt,
 		RequirementType:        r.requirementType,
-		ClaudeRuntimeStatus:    r.claudeRuntimeStatus,
-		ClaudeRuntimeStartedAt: copyTimePtr(r.claudeRuntimeStartedAt),
-		ClaudeRuntimeEndedAt:   copyTimePtr(r.claudeRuntimeEndedAt),
-		ClaudeRuntimeError:     r.claudeRuntimeError,
-		ClaudeRuntimeResult:    r.claudeRuntimeResult,
-		ClaudeRuntimePrompt:    r.claudeRuntimePrompt,
-		TraceID:                r.traceId,
+		AgentRuntimeStatus:      r.agentRuntimeStatus,
+		AgentRuntimeStartedAt:   copyTimePtr(r.agentRuntimeStartedAt),
+		AgentRuntimeEndedAt:     copyTimePtr(r.agentRuntimeEndedAt),
+		AgentRuntimeError:       r.agentRuntimeError,
+		AgentRuntimeResult:      r.agentRuntimeResult,
+		AgentRuntimePrompt:      r.agentRuntimePrompt,
+		AgentRuntimeAgentType:   r.agentRuntimeAgentType,
+		TraceID:                 r.traceId,
 		PromptTokens:           r.promptTokens,
 		CompletionTokens:       r.completionTokens,
 		TotalTokens:            r.totalTokens,
@@ -521,12 +526,13 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.createdAt = s.CreatedAt
 	r.updatedAt = s.UpdatedAt
 	r.requirementType = s.RequirementType
-	r.claudeRuntimeStatus = s.ClaudeRuntimeStatus
-	r.claudeRuntimeStartedAt = copyTimePtr(s.ClaudeRuntimeStartedAt)
-	r.claudeRuntimeEndedAt = copyTimePtr(s.ClaudeRuntimeEndedAt)
-	r.claudeRuntimeError = s.ClaudeRuntimeError
-	r.claudeRuntimeResult = s.ClaudeRuntimeResult
-	r.claudeRuntimePrompt = s.ClaudeRuntimePrompt
+	r.agentRuntimeStatus = s.AgentRuntimeStatus
+	r.agentRuntimeStartedAt = copyTimePtr(s.AgentRuntimeStartedAt)
+	r.agentRuntimeEndedAt = copyTimePtr(s.AgentRuntimeEndedAt)
+	r.agentRuntimeError = s.AgentRuntimeError
+	r.agentRuntimeResult = s.AgentRuntimeResult
+	r.agentRuntimePrompt = s.AgentRuntimePrompt
+	r.agentRuntimeAgentType = s.AgentRuntimeAgentType
 	r.traceId = s.TraceID
 	r.promptTokens = s.PromptTokens
 	r.completionTokens = s.CompletionTokens

@@ -25,10 +25,10 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			id, project_id, title, description, acceptance_criteria, status,
 			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, last_error,
 			started_at, completed_at, created_at, updated_at,
-			requirement_type, claude_runtime_status, claude_runtime_started_at, claude_runtime_ended_at, claude_runtime_error, claude_runtime_result, claude_runtime_prompt, trace_id,
+			requirement_type, agent_runtime_status, agent_runtime_started_at, agent_runtime_ended_at, agent_runtime_error, agent_runtime_result, agent_runtime_prompt, agent_runtime_agent_type, trace_id,
 			prompt_tokens, completion_tokens, total_tokens
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -44,12 +44,13 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			completed_at=excluded.completed_at,
 			updated_at=excluded.updated_at,
 			requirement_type=excluded.requirement_type,
-			claude_runtime_status=excluded.claude_runtime_status,
-			claude_runtime_started_at=excluded.claude_runtime_started_at,
-			claude_runtime_ended_at=excluded.claude_runtime_ended_at,
-			claude_runtime_error=excluded.claude_runtime_error,
-			claude_runtime_result=excluded.claude_runtime_result,
-			claude_runtime_prompt=excluded.claude_runtime_prompt,
+			agent_runtime_status=excluded.agent_runtime_status,
+			agent_runtime_started_at=excluded.agent_runtime_started_at,
+			agent_runtime_ended_at=excluded.agent_runtime_ended_at,
+			agent_runtime_error=excluded.agent_runtime_error,
+			agent_runtime_result=excluded.agent_runtime_result,
+			agent_runtime_prompt=excluded.agent_runtime_prompt,
+			agent_runtime_agent_type=excluded.agent_runtime_agent_type,
 		    trace_id=excluded.trace_id,
 			prompt_tokens=excluded.prompt_tokens,
 			completion_tokens=excluded.completion_tokens,
@@ -75,12 +76,13 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
 		string(snap.RequirementType),
-		snap.ClaudeRuntimeStatus,
-		timePtrToUnix(snap.ClaudeRuntimeStartedAt),
-		timePtrToUnix(snap.ClaudeRuntimeEndedAt),
-		snap.ClaudeRuntimeError,
-		snap.ClaudeRuntimeResult,
-		snap.ClaudeRuntimePrompt,
+		snap.AgentRuntimeStatus,
+		timePtrToUnix(snap.AgentRuntimeStartedAt),
+		timePtrToUnix(snap.AgentRuntimeEndedAt),
+		snap.AgentRuntimeError,
+		snap.AgentRuntimeResult,
+		snap.AgentRuntimePrompt,
+		snap.AgentRuntimeAgentType,
 		snap.TraceID,
 		snap.PromptTokens,
 		snap.CompletionTokens,
@@ -95,7 +97,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
+		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements WHERE id = ?`, id.String())
 	return scanRequirement(row)
 }
@@ -106,7 +108,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
+		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements WHERE project_id = ? ORDER BY created_at DESC`, projectID.String())
 	if err != nil {
 		return nil, err
@@ -121,7 +123,7 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-		       COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
+		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens
 		FROM requirements ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -134,7 +136,7 @@ const requirementColumns = `id, project_id, title, COALESCE(description, ''), CO
 	status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
 	COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 	COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
-	COALESCE(requirement_type, 'normal'), COALESCE(claude_runtime_status, ''), claude_runtime_started_at, claude_runtime_ended_at, COALESCE(claude_runtime_error, ''), COALESCE(claude_runtime_result, ''), COALESCE(claude_runtime_prompt, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens`
+	COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens`
 
 func (r *SQLiteRequirementRepository) List(ctx context.Context, filter domain.RequirementListFilter) ([]*domain.Requirement, error) {
 	where, args := r.buildWhereClause(filter)
@@ -251,12 +253,13 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		createdAtUnix            int64
 		updatedAtUnix            int64
 		requirementType         string
-		claudeRuntimeStatus     string
-		claudeRuntimeStartedAt  sql.NullInt64
-		claudeRuntimeEndedAt    sql.NullInt64
-		claudeRuntimeError      string
-		claudeRuntimeResult     string
-		claudeRuntimePrompt     string
+		agentRuntimeStatus      string
+		agentRuntimeStartedAt   sql.NullInt64
+		agentRuntimeEndedAt     sql.NullInt64
+		agentRuntimeError       string
+		agentRuntimeResult      string
+		agentRuntimePrompt      string
+		agentRuntimeAgentType   string
 		traceID                 string
 		promptTokens            int
 		completionTokens        int
@@ -280,12 +283,13 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&createdAtUnix,
 		&updatedAtUnix,
 		&requirementType,
-		&claudeRuntimeStatus,
-		&claudeRuntimeStartedAt,
-		&claudeRuntimeEndedAt,
-		&claudeRuntimeError,
-		&claudeRuntimeResult,
-		&claudeRuntimePrompt,
+		&agentRuntimeStatus,
+		&agentRuntimeStartedAt,
+		&agentRuntimeEndedAt,
+		&agentRuntimeError,
+		&agentRuntimeResult,
+		&agentRuntimePrompt,
+		&agentRuntimeAgentType,
 		&traceID,
 		&promptTokens,
 		&completionTokens,
@@ -316,12 +320,13 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		CreatedAt:               time.Unix(createdAtUnix, 0),
 		UpdatedAt:               time.Unix(updatedAtUnix, 0),
 		RequirementType:         domain.RequirementType(requirementType),
-		ClaudeRuntimeStatus:     claudeRuntimeStatus,
-		ClaudeRuntimeStartedAt:  unixToTimePtr(claudeRuntimeStartedAt),
-		ClaudeRuntimeEndedAt:    unixToTimePtr(claudeRuntimeEndedAt),
-		ClaudeRuntimeError:      claudeRuntimeError,
-		ClaudeRuntimeResult:    claudeRuntimeResult,
-		ClaudeRuntimePrompt:    claudeRuntimePrompt,
+		AgentRuntimeStatus:      agentRuntimeStatus,
+		AgentRuntimeStartedAt:   unixToTimePtr(agentRuntimeStartedAt),
+		AgentRuntimeEndedAt:     unixToTimePtr(agentRuntimeEndedAt),
+		AgentRuntimeError:       agentRuntimeError,
+		AgentRuntimeResult:      agentRuntimeResult,
+		AgentRuntimePrompt:      agentRuntimePrompt,
+		AgentRuntimeAgentType:   agentRuntimeAgentType,
 		TraceID:                 traceID,
 		PromptTokens:            promptTokens,
 		CompletionTokens:        completionTokens,

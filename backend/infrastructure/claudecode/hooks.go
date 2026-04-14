@@ -59,7 +59,7 @@ func (p *ClaudeCodeProcessor) triggerClaudeCodeFinishedHook(ctx context.Context,
 	// 成功完成时，标记需求为 completed 状态并保存执行结果
 	if success {
 		requirement.MarkCompleted()
-		requirement.SetClaudeRuntimeResult(finalResult)
+		requirement.SetAgentRuntimeResult(finalResult)
 		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
 			p.logger.Error("Claude Code 完成，保存 requirement 失败",
 				zap.String("requirement_id", requirementIDStr),
