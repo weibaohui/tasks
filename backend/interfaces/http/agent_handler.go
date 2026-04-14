@@ -17,48 +17,52 @@ func NewAgentHandler(agentService *application.AgentApplicationService) *AgentHa
 }
 
 type CreateAgentRequest struct {
-	UserCode              string   `json:"user_code"`
-	Name                  string   `json:"name"`
-	AgentType             string   `json:"agent_type"`
-	Description           string   `json:"description"`
-	IdentityContent       string   `json:"identity_content"`
-	SoulContent           string   `json:"soul_content"`
-	AgentsContent         string   `json:"agents_content"`
-	UserContent           string   `json:"user_content"`
-	ToolsContent          string   `json:"tools_content"`
-	Model                 string   `json:"model"`
-	LLMProviderID         *string  `json:"llm_provider_id"`
-	MaxTokens             int      `json:"max_tokens"`
-	Temperature           float64  `json:"temperature"`
-	MaxIterations         int      `json:"max_iterations"`
-	HistoryMessages       int      `json:"history_messages"`
-	SkillsList            []string `json:"skills_list"`
-	ToolsList             []string `json:"tools_list"`
-	IsActive              *bool    `json:"is_active"`
-	IsDefault             bool     `json:"is_default"`
-	EnableThinkingProcess bool     `json:"enable_thinking_process"`
+	UserCode              string                    `json:"user_code"`
+	Name                  string                    `json:"name"`
+	AgentType             string                    `json:"agent_type"`
+	Description           string                    `json:"description"`
+	IdentityContent       string                    `json:"identity_content"`
+	SoulContent           string                    `json:"soul_content"`
+	AgentsContent         string                    `json:"agents_content"`
+	UserContent           string                    `json:"user_content"`
+	ToolsContent          string                    `json:"tools_content"`
+	Model                 string                    `json:"model"`
+	LLMProviderID         *string                   `json:"llm_provider_id"`
+	MaxTokens             int                       `json:"max_tokens"`
+	Temperature           float64                   `json:"temperature"`
+	MaxIterations         int                       `json:"max_iterations"`
+	HistoryMessages       int                       `json:"history_messages"`
+	SkillsList            []string                  `json:"skills_list"`
+	ToolsList             []string                  `json:"tools_list"`
+	IsActive              *bool                     `json:"is_active"`
+	IsDefault             bool                      `json:"is_default"`
+	EnableThinkingProcess bool                      `json:"enable_thinking_process"`
+	ClaudeCodeConfig      *domain.ClaudeCodeConfig  `json:"claude_code_config"`
+	OpenCodeConfig        *domain.OpenCodeConfig    `json:"opencode_config"`
 }
 
 type UpdateAgentRequest struct {
-	Name                  *string   `json:"name"`
-	AgentType             *string   `json:"agent_type"`
-	Description           *string   `json:"description"`
-	IdentityContent       *string   `json:"identity_content"`
-	SoulContent           *string   `json:"soul_content"`
-	AgentsContent         *string   `json:"agents_content"`
-	UserContent           *string   `json:"user_content"`
-	ToolsContent          *string   `json:"tools_content"`
-	Model                 *string   `json:"model"`
-	LLMProviderID         *string   `json:"llm_provider_id"`
-	MaxTokens             *int      `json:"max_tokens"`
-	Temperature           *float64  `json:"temperature"`
-	MaxIterations         *int      `json:"max_iterations"`
-	HistoryMessages       *int      `json:"history_messages"`
-	SkillsList            *[]string `json:"skills_list"`
-	ToolsList             *[]string `json:"tools_list"`
-	IsActive              *bool     `json:"is_active"`
-	IsDefault             *bool     `json:"is_default"`
-	EnableThinkingProcess *bool     `json:"enable_thinking_process"`
+	Name                  *string                  `json:"name"`
+	AgentType             *string                  `json:"agent_type"`
+	Description           *string                  `json:"description"`
+	IdentityContent       *string                  `json:"identity_content"`
+	SoulContent           *string                  `json:"soul_content"`
+	AgentsContent         *string                  `json:"agents_content"`
+	UserContent           *string                  `json:"user_content"`
+	ToolsContent          *string                  `json:"tools_content"`
+	Model                 *string                  `json:"model"`
+	LLMProviderID         *string                  `json:"llm_provider_id"`
+	MaxTokens             *int                     `json:"max_tokens"`
+	Temperature           *float64                 `json:"temperature"`
+	MaxIterations         *int                     `json:"max_iterations"`
+	HistoryMessages       *int                     `json:"history_messages"`
+	SkillsList            *[]string                `json:"skills_list"`
+	ToolsList             *[]string                `json:"tools_list"`
+	IsActive              *bool                    `json:"is_active"`
+	IsDefault             *bool                    `json:"is_default"`
+	EnableThinkingProcess *bool                    `json:"enable_thinking_process"`
+	ClaudeCodeConfig      *domain.ClaudeCodeConfig `json:"claude_code_config"`
+	OpenCodeConfig        *domain.OpenCodeConfig   `json:"opencode_config"`
 }
 
 func (h *AgentHandler) CreateAgent(c *gin.Context) {
@@ -89,6 +93,8 @@ func (h *AgentHandler) CreateAgent(c *gin.Context) {
 		IsActive:              req.IsActive,
 		IsDefault:             req.IsDefault,
 		EnableThinkingProcess: req.EnableThinkingProcess,
+		ClaudeCodeConfig:      req.ClaudeCodeConfig,
+		OpenCodeConfig:        req.OpenCodeConfig,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
@@ -169,6 +175,8 @@ func (h *AgentHandler) UpdateAgent(c *gin.Context) {
 		IsActive:              req.IsActive,
 		IsDefault:             req.IsDefault,
 		EnableThinkingProcess: req.EnableThinkingProcess,
+		ClaudeCodeConfig:      req.ClaudeCodeConfig,
+		OpenCodeConfig:        req.OpenCodeConfig,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})

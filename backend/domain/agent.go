@@ -475,20 +475,34 @@ func NewReplicaAgent(base *Agent, id AgentID, agentCode AgentCode, requirementID
 	snap.Name = fmt.Sprintf("%s-replica-%s", base.Name(), requirementID)
 	snap.IsDefault = false
 	snap.IsActive = true
+	snap.AgentType = base.AgentType()
 	snap.CreatedAt = now
 	snap.UpdatedAt = now
 
-	if snap.ClaudeCodeConfig == nil {
-		snap.ClaudeCodeConfig = DefaultClaudeCodeConfig()
-	} else {
-		cfg := *snap.ClaudeCodeConfig
-		snap.ClaudeCodeConfig = &cfg
+	if snap.AgentType == AgentTypeCoding {
+		if snap.ClaudeCodeConfig == nil {
+			snap.ClaudeCodeConfig = DefaultClaudeCodeConfig()
+		} else {
+			cfg := *snap.ClaudeCodeConfig
+			snap.ClaudeCodeConfig = &cfg
+		}
+		snap.ClaudeCodeConfig.Cwd = workspacePath
+		continueConversation := false
+		forkSession := true
+		snap.ClaudeCodeConfig.ContinueConversation = &continueConversation
+		snap.ClaudeCodeConfig.ForkSession = &forkSession
 	}
-	snap.ClaudeCodeConfig.Cwd = workspacePath
-	continueConversation := false
-	forkSession := true
-	snap.ClaudeCodeConfig.ContinueConversation = &continueConversation
-	snap.ClaudeCodeConfig.ForkSession = &forkSession
+
+	if snap.AgentType == AgentTypeOpenCode {
+		if snap.OpenCodeConfig == nil {
+			snap.OpenCodeConfig = DefaultOpenCodeConfig()
+		} else {
+			cfg := *snap.OpenCodeConfig
+			snap.OpenCodeConfig = &cfg
+		}
+		snap.OpenCodeConfig.WorkDir = workspacePath
+	}
+
 	snap.ShadowFrom = base.AgentCode().String()
 
 	replica := &Agent{}
