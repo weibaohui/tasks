@@ -19,6 +19,7 @@ import { getProjectStateMachineByType } from '../api/projectStateMachineApi';
 import { getStateMachine } from '../api/stateMachineApi';
 import type { State } from '../types/stateMachine';
 import { statusLabels, getStatusColor } from '../constants/requirementStatus';
+import type { Breakpoint } from 'antd/es/_util/responsiveObserver';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
@@ -606,7 +607,7 @@ export const ProjectRequirementPage: React.FC = () => {
           </Dropdown>
         );
       },
-        width: 100,
+        width: 80,
         fixed: 'left' as const
     },
     {
@@ -614,9 +615,10 @@ export const ProjectRequirementPage: React.FC = () => {
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
+      minWidth: 150,
       render: (title: string, item: Requirement) => {
         if (!item.trace_id) return title;
-        
+
         return (
           <Button
             type="link"
@@ -635,6 +637,7 @@ export const ProjectRequirementPage: React.FC = () => {
       title: '类型',
       key: 'requirement_type',
       width: 90,
+      responsive: ['sm'] as Breakpoint[],
       render: (_: unknown, item: Requirement) => {
         const display = getTypeDisplay(item.requirement_type || 'normal');
         return <Tag color={display.color}>{display.label}</Tag>;
@@ -643,7 +646,7 @@ export const ProjectRequirementPage: React.FC = () => {
     {
       title: '状态',
       key: 'status',
-      width: 120,
+      width: 100,
       render: (_: unknown, item: Requirement) => (
         <Tag color={statusColorMap[item.status] || 'default'}>{item.status}</Tag>
       ),
@@ -652,6 +655,7 @@ export const ProjectRequirementPage: React.FC = () => {
       title: 'Agent',
       key: 'agent',
       width: 140,
+      responsive: ['sm'] as Breakpoint[],
       render: (_: unknown, item: Requirement) => {
         const agent = item.replica_agent?.name
           ? item.replica_agent
@@ -672,6 +676,7 @@ export const ProjectRequirementPage: React.FC = () => {
       title: 'Agent状态',
       key: 'agent_runtime',
       width: 140,
+      responsive: ['sm'] as Breakpoint[],
       render: (_: unknown, item: Requirement) => {
         const runtimeStatus = item.agent_runtime?.status || '';
         if (!runtimeStatus) {
@@ -690,6 +695,7 @@ export const ProjectRequirementPage: React.FC = () => {
       title: 'Token消耗',
       key: 'tokens',
       width: 100,
+      responsive: ['sm'] as Breakpoint[],
       render: (_: unknown, item: Requirement) => {
         const totalTokens = item.total_tokens || 0;
         if (totalTokens === 0) {
@@ -707,6 +713,7 @@ export const ProjectRequirementPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 160,
+      responsive: ['sm'] as Breakpoint[],
       render: (createdAt: string) => createdAt ? new Date(createdAt).toLocaleString() : '-',
     },
   ];
