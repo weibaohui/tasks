@@ -101,6 +101,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	}
 
 	// 设置分配信息和 session key
+	if err := requirement.StartDispatch(cmd.AgentCode); err != nil {
+		return nil, err
+	}
 	requirement.SetDispatchSessionKey(cmd.SessionKey)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
