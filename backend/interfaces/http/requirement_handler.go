@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,12 +14,14 @@ import (
 type RequirementHandler struct {
 	requirementService *application.RequirementApplicationService
 	dispatchService    *application.RequirementDispatchService
+	agentRepo          domain.AgentRepository
 }
 
-func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService) *RequirementHandler {
+func NewRequirementHandler(requirementService *application.RequirementApplicationService, dispatchService *application.RequirementDispatchService, agentRepo domain.AgentRepository) *RequirementHandler {
 	return &RequirementHandler{
 		requirementService: requirementService,
 		dispatchService:    dispatchService,
+		agentRepo:          agentRepo,
 	}
 }
 
@@ -201,7 +204,30 @@ func (h *RequirementHandler) requirementToMap(requirement *domain.Requirement) m
 		"requirement_type":     requirement.RequirementType(),
 	}
 	resp["claude_runtime"] = h.getClaudeRuntimeByRequirement(requirement)
+	resp["assignee_agent"] = h.agentBriefByCode(requirement.AssigneeAgentCode())
+	resp["replica_agent"] = h.agentBriefByCode(requirement.ReplicaAgentCode())
 	return resp
+}
+
+func (h *RequirementHandler) agentBriefByCode(code string) map[string]interface{} {
+	if code == "" || h.agentRepo == nil {
+		return nil
+	}
+	agent, err := h.agentRepo.FindByAgentCode(context.Background(), domain.NewAgentCode(code))
+	if err != nil || agent == nil {
+		return map[string]interface{}{
+			"id":         "",
+			"agent_code": code,
+			"name":       "",
+			"shadow_from": "",
+		}
+	}
+	return map[string]interface{}{
+		"id":          agent.ID().String(),
+		"agent_code":  agent.AgentCode().String(),
+		"name":        agent.Name(),
+		"shadow_from": agent.ShadowFrom(),
+	}
 }
 
 func (h *RequirementHandler) getClaudeRuntimeByRequirement(requirement *domain.Requirement) map[string]interface{} {

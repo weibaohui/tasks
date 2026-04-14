@@ -51,7 +51,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			CliSessionID: session.GetCliSessionID(),
 		}
 		// 创建流式回调
-		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
+		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager, agent.AgentType().String())
 		p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "running", "")
 		// 更新需求的 Claude Runtime 状态
 		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
@@ -91,7 +91,7 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 			CliSessionID: session.GetCliSessionID(),
 		}
 		// 创建流式回调
-		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager)
+		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager, agent.AgentType().String())
 		// 使用流式处理
 		err := p.openCodeProcessor.ProcessWithStreaming(ctx, msg, ocSession, agent, callback)
 		if err != nil {

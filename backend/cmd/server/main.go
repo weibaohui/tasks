@@ -203,7 +203,7 @@ func main() {
 		replicaCleanupSvc,
 		stateMachineRepo,
 	)
-	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService)
+	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, agentRepo)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 
 	authSecret := os.Getenv("AUTH_SECRET")

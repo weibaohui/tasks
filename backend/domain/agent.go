@@ -475,7 +475,6 @@ func NewReplicaAgent(base *Agent, id AgentID, agentCode AgentCode, requirementID
 	snap.Name = fmt.Sprintf("%s-replica-%s", base.Name(), requirementID)
 	snap.IsDefault = false
 	snap.IsActive = true
-	snap.AgentType = AgentTypeCoding
 	snap.CreatedAt = now
 	snap.UpdatedAt = now
 
@@ -490,6 +489,7 @@ func NewReplicaAgent(base *Agent, id AgentID, agentCode AgentCode, requirementID
 	forkSession := true
 	snap.ClaudeCodeConfig.ContinueConversation = &continueConversation
 	snap.ClaudeCodeConfig.ForkSession = &forkSession
+	snap.ShadowFrom = base.AgentCode().String()
 
 	replica := &Agent{}
 	replica.FromSnapshot(snap)

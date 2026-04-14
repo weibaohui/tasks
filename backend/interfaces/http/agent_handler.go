@@ -291,6 +291,7 @@ func agentToMap(agent *domain.Agent) map[string]interface{} {
 		"is_active":               agent.IsActive(),
 		"is_default":              agent.IsDefault(),
 		"enable_thinking_process": agent.EnableThinkingProcess(),
+		"shadow_from":             agent.ShadowFrom(),
 		"claude_code_config":      agent.ClaudeCodeConfig(),
 		"opencode_config":         agent.OpenCodeConfig(),
 		"created_at":              agent.CreatedAt().UnixMilli(),

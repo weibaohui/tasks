@@ -14,6 +14,13 @@ export interface Project {
   updated_at: number;
 }
 
+export interface RequirementAgentInfo {
+  id?: string;
+  agent_code?: string;
+  name?: string;
+  shadow_from?: string;
+}
+
 export interface Requirement {
   id: string;
   project_id: string;
@@ -24,6 +31,8 @@ export interface Requirement {
   status: string;
   assignee_agent_code: string;
   replica_agent_code: string;
+  assignee_agent?: RequirementAgentInfo | null;
+  replica_agent?: RequirementAgentInfo | null;
   workspace_path: string;
   last_error: string;
   dispatch_session_key: string;

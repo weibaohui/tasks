@@ -211,7 +211,7 @@ export const ProjectRequirementPage: React.FC = () => {
     }
     try {
       const data = await listAgents(user.user_code);
-      setAgents(data.filter((agent) => agent.agent_type === 'CodingAgent'));
+      setAgents(data.filter((agent) => ['CodingAgent', 'OpenCodeAgent'].includes(agent.agent_type)));
     } catch (_error) {
       message.error('获取 Agent 列表失败');
     }
@@ -649,6 +649,26 @@ export const ProjectRequirementPage: React.FC = () => {
       ),
     },
     {
+      title: 'Agent',
+      key: 'agent',
+      width: 140,
+      render: (_: unknown, item: Requirement) => {
+        const agent = item.replica_agent?.name
+          ? item.replica_agent
+          : item.assignee_agent?.name
+            ? item.assignee_agent
+            : null;
+        if (!agent) {
+          return <span>-</span>;
+        }
+        return (
+          <Tooltip title={`${agent.name} (${agent.agent_code})`}>
+            <Tag color="cyan">{agent.name}</Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: 'Claude状态',
       key: 'claude_runtime',
       width: 140,
@@ -906,7 +926,7 @@ export const ProjectRequirementPage: React.FC = () => {
           </Form.Item>
           <Form.Item label="默认执行 Agent" name="agent_code">
             <Select
-              options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
+              options={agents.filter((a) => ['CodingAgent', 'OpenCodeAgent'].includes(a.agent_type)).map((a) => ({
                 label: `${a.name} (${a.agent_code})`,
                 value: a.agent_code,
               }))}
@@ -1062,11 +1082,11 @@ export const ProjectRequirementPage: React.FC = () => {
                   >
                     <Form.Item label="默认执行 Agent" name="agent_code">
                       <Select
-                        options={agents.filter((a) => a.agent_type === 'CodingAgent').map((a) => ({
+                        options={agents.filter((a) => ['CodingAgent', 'OpenCodeAgent'].includes(a.agent_type)).map((a) => ({
                           label: `${a.name} (${a.agent_code})`,
                           value: a.agent_code,
                         }))}
-                        placeholder="选择用于执行需求、心跳和 Hook 的默认 Coding Agent"
+                        placeholder="选择用于执行需求、心跳和 Hook 的默认 Agent"
                         style={{ width: 300 }}
                         allowClear
                       />
@@ -1290,11 +1310,31 @@ export const ProjectRequirementPage: React.FC = () => {
                     </div>
                     <div>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分配Agent</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.assignee_agent_code || '-'}</div>
+                      <div>
+                        {detailRequirement.assignee_agent?.name ? (
+                          <Tag color="blue">{detailRequirement.assignee_agent.name}</Tag>
+                        ) : (
+                          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.assignee_agent_code || '-'}</span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
+                    <div>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分身Agent</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.replica_agent_code || '-'}</div>
+                      <div>
+                        {detailRequirement.replica_agent?.name ? (
+                          <Tag color="cyan">{detailRequirement.replica_agent.name}</Tag>
+                        ) : (
+                          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.replica_agent_code || '-'}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>分身来源</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                        {detailRequirement.replica_agent?.shadow_from
+                          ? `${detailRequirement.replica_agent.shadow_from}`
+                          : '-'}
+                      </div>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>最近错误</div>

@@ -24,6 +24,7 @@ type feishuStreamingCallback struct {
 	traceID     string
 	spanID      string
 	hookManager *hook.Manager
+	agentType   string
 	mu          sync.Mutex
 	finalResult string // 存储最终结果
 }
@@ -35,7 +36,7 @@ func (c *feishuStreamingCallback) GetFinalResult() string {
 	return c.finalResult
 }
 
-func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound *bus.InboundMessage, traceID, spanID string, hookManager *hook.Manager) *feishuStreamingCallback {
+func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound *bus.InboundMessage, traceID, spanID string, hookManager *hook.Manager, agentType string) *feishuStreamingCallback {
 	return &feishuStreamingCallback{
 		bus:         bus,
 		logger:      logger,
@@ -43,7 +44,16 @@ func newFeishuStreamingCallback(bus *bus.MessageBus, logger *zap.Logger, inbound
 		traceID:     traceID,
 		spanID:      spanID,
 		hookManager: hookManager,
+		agentType:   agentType,
 	}
+}
+
+// displayName 返回用于消息标题展示的 Agent 名称
+func (c *feishuStreamingCallback) displayName() string {
+	if c.agentType == "OpenCodeAgent" {
+		return "OpenCode"
+	}
+	return "Claude Code"
 }
 
 // escapeJSON 转义 JSON 字符串中的特殊字符
@@ -145,7 +155,7 @@ func (c *feishuStreamingCallback) OnThinking(thinking string) {
 	elements := []map[string]interface{}{
 		{"tag": "markdown", "content": fmt.Sprintf("```\n%s\n```", escapeJSON(thinking))},
 	}
-	cardContent := buildThinkingCard("🤔 思考过程", elements)
+	cardContent := buildThinkingCard(fmt.Sprintf("🤔 %s 思考过程", c.displayName()), elements)
 
 	metadata := map[string]any{
 		"msg_type":  "interactive",
@@ -192,9 +202,9 @@ func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 	elements := []map[string]interface{}{
 		{"tag": "markdown", "content": finalResult},
 	}
-	c.sendCard("🤖 Claude Code 响应", elements)
+	c.sendCard(fmt.Sprintf("🤖 %s 响应", c.displayName()), elements)
 
-	c.logger.Info("Claude Code 流式处理完成",
+	c.logger.Info(fmt.Sprintf("%s 流式处理完成", c.displayName()),
 		zap.String("trace_id", c.traceID),
 		zap.Any("final_result_length", len(finalResult)),
 	)
