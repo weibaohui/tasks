@@ -12,21 +12,17 @@ import (
 func buildCLIArgs(userInput, workDir string, provider *domain.LLMProvider, config *domain.OpenCodeConfig, sessionID string) []string {
 	args := []string{"run"}
 
-	// 模型（opencode CLI 要求 provider/model 格式）
-	model := config.Model
-	if model == "" && provider != nil {
-		model = provider.DefaultModel()
-	}
-	if model != "" && provider != nil {
-		providerType := provider.ProviderType()
-		if providerType == "" {
-			providerType = "anthropic"
-		}
-		if !strings.Contains(model, "/") {
+	// 模型：仅当用户在 opencode_config 中显式配置时才传入
+	// 不传 --model 时 opencode 会使用默认内置免费模型
+	if config != nil && config.Model != "" {
+		model := config.Model
+		if provider != nil && !strings.Contains(model, "/") {
+			providerType := provider.ProviderType()
+			if providerType == "" {
+				providerType = "anthropic"
+			}
 			model = providerType + "/" + model
 		}
-	}
-	if model != "" {
 		args = append(args, "--model", model)
 	}
 
@@ -89,15 +85,8 @@ func buildCLIArgs(userInput, workDir string, provider *domain.LLMProvider, confi
 func buildEnv(provider *domain.LLMProvider, config *domain.OpenCodeConfig) []string {
 	env := os.Environ()
 
-	// 如果有 Provider，从 Provider 获取认证信息
-	if provider != nil {
-		if apiKey := provider.APIKey(); apiKey != "" {
-			env = append(env, "ANTHROPIC_AUTH_TOKEN="+apiKey)
-		}
-		if baseURL := provider.APIBase(); baseURL != "" {
-			env = append(env, "ANTHROPIC_BASE_URL="+baseURL)
-		}
-	}
+	// 注意：不自动注入 Provider 的 API key/baseURL，避免干扰 opencode 使用默认内置免费模型。
+	// 如需指定凭证或模型，请通过 config.Env 显式传入。
 
 	// 从配置中合并环境变量
 	if config != nil && len(config.Env) > 0 {
