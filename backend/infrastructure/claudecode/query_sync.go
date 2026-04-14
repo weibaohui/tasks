@@ -7,6 +7,7 @@ import (
 
 	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
 )
@@ -38,15 +39,17 @@ func (p *ClaudeCodeProcessor) queryClaudeCode(ctx context.Context, msg *bus.Inbo
 		}
 
 		ccToolHookAdapter = &toolHookAdapter{
-			hookManager: p.hookManager,
-			logger:      p.logger,
-			hookCtx:     hookCtx,
-			sessionKey:  sessionKey,
-			userCode:    userCode,
-			agentCode:   agentCode,
-			channelCode: channelCode,
-			channelType: msg.Channel,
-			traceID:     traceID,
+			bridge: &hook.ToolHookBridge{
+				Manager:     p.hookManager,
+				Logger:      p.logger,
+				HookCtx:     hookCtx,
+				SessionKey:  sessionKey,
+				UserCode:    userCode,
+				AgentCode:   agentCode,
+				ChannelCode: channelCode,
+				ChannelType: msg.Channel,
+				TraceID:     traceID,
+			},
 		}
 	}
 

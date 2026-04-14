@@ -391,6 +391,12 @@ export function useAgentManagement({
     setSaving(true);
     try {
       const values = form.getFieldsValue() as AgentFormValues;
+      // 根据 Agent 类型清理不相关的配置，避免脏数据提交
+      const isCoding = values.agent_type === 'CodingAgent';
+      const isOpenCode = values.agent_type === 'OpenCodeAgent';
+      const claudeCodeConfig = isCoding ? values.claude_code_config : undefined;
+      const opencodeConfig = isOpenCode ? values.opencode_config : undefined;
+
       if (editing) {
         await updateAgent(editing.id, {
           name: values.name, agent_type: values.agent_type, description: values.description,
@@ -403,7 +409,8 @@ export function useAgentManagement({
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
           is_default: values.is_default, is_active: values.is_active,
           enable_thinking_process: values.enable_thinking_process,
-          claude_code_config: values.claude_code_config,
+          claude_code_config: claudeCodeConfig,
+          opencode_config: opencodeConfig,
         } as UpdateAgentRequest);
         message.success('更新成功');
       } else {
@@ -418,7 +425,8 @@ export function useAgentManagement({
           max_iterations: values.max_iterations, history_messages: values.history_messages,
           skills_list: values.skills_list || [], tools_list: values.tools_list || [],
           is_default: values.is_default, enable_thinking_process: values.enable_thinking_process,
-          claude_code_config: values.claude_code_config,
+          claude_code_config: claudeCodeConfig,
+          opencode_config: opencodeConfig,
         } as CreateAgentRequest);
         message.success('创建成功');
       }
