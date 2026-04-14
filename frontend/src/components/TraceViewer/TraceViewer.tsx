@@ -21,6 +21,7 @@ import {
   MessageOutlined,
   BranchesOutlined,
 } from '@ant-design/icons';
+import { XMarkdown } from '@ant-design/x-markdown';
 import type { DataNode } from 'antd/es/tree';
 import dayjs from 'dayjs';
 import { getConversationRecordsByTrace } from '../../api/conversationRecordApi';
@@ -377,11 +378,14 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
                       </div>
                       <div
                         style={{
-                          whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
                         }}
                       >
-                        {r.content || ''}
+                        {r.role === 'user' ? (
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{r.content || ''}</div>
+                        ) : (
+                          <XMarkdown content={r.content || ''} />
+                        )}
                       </div>
                       <div
                         style={{

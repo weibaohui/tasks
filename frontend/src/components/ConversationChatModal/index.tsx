@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, Button, Row, Col, Statistic, Divider, Spin, message } from 'antd';
+import { XMarkdown } from '@ant-design/x-markdown';
 import { getConversationRecordsByTrace } from '../../api/conversationRecordApi';
 import type { ConversationRecord } from '../../types/conversationRecord';
 import dayjs from 'dayjs';
@@ -112,8 +113,12 @@ export const ConversationChatModal: React.FC<ConversationChatModalProps> = ({ tr
                   <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
                     {getRoleLabel(r.role)} · {r.total_tokens || 0} tokens
                   </div>
-                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {r.content || ''}
+                  <div style={{ wordBreak: 'break-word' }}>
+                    {r.role === 'user' ? (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{r.content || ''}</div>
+                    ) : (
+                      <XMarkdown content={r.content || ''} />
+                    )}
                   </div>
                   <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
                     {dayjs(r.timestamp).format('HH:mm:ss')}
