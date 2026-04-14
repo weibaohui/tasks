@@ -35,6 +35,8 @@ type CreateAgentCommand struct {
 	IsActive              *bool
 	IsDefault             bool
 	EnableThinkingProcess bool
+	ClaudeCodeConfig      *domain.ClaudeCodeConfig
+	OpenCodeConfig        *domain.OpenCodeConfig
 }
 
 type UpdateAgentCommand struct {
@@ -58,6 +60,8 @@ type UpdateAgentCommand struct {
 	IsDefault             *bool
 	EnableThinkingProcess *bool
 	AgentType             *string
+	ClaudeCodeConfig      *domain.ClaudeCodeConfig
+	OpenCodeConfig        *domain.OpenCodeConfig
 }
 
 type AgentApplicationService struct {
@@ -155,6 +159,13 @@ func (s *AgentApplicationService) CreateAgent(ctx context.Context, cmd CreateAge
 		ToolsList:             cmd.ToolsList,
 		EnableThinkingProcess: cmd.EnableThinkingProcess,
 	})
+
+	if cmd.ClaudeCodeConfig != nil {
+		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
+	}
+	if cmd.OpenCodeConfig != nil {
+		agent.UpdateOpenCodeConfig(cmd.OpenCodeConfig)
+	}
 
 	if cmd.IsActive != nil {
 		agent.SetActive(*cmd.IsActive)

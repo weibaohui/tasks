@@ -47,13 +47,13 @@ func TestBuildCLIArgs(t *testing.T) {
 			want:      []string{"run", "--model", "claude-opus-4", "--format", "json", "--", "test"},
 		},
 		{
-			name:      "model fallback to provider default",
+			name:      "no model fallback to provider default",
 			userInput: "test",
 			workDir:   "",
 			provider:  provider,
 			config:    &domain.OpenCodeConfig{},
 			sessionID: "",
-			want:      []string{"run", "--model", "claude-sonnet-4", "--format", "json", "--", "test"},
+			want:      []string{"run", "--format", "json", "--", "test"},
 		},
 		{
 			name:      "workDir fallback",
@@ -151,11 +151,11 @@ func TestBuildEnv(t *testing.T) {
 		missing  []string
 	}{
 		{
-			name:     "provider only",
+			name:     "provider only does not inject auth env",
 			provider: provider,
 			config:   nil,
-			contains: []string{"ANTHROPIC_AUTH_TOKEN=sk-secret", "ANTHROPIC_BASE_URL=https://api.example.com"},
-			missing:  []string{"OPENCODE_SYSTEM_PROMPT"},
+			contains: []string{},
+			missing:  []string{"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "OPENCODE_SYSTEM_PROMPT"},
 		},
 		{
 			name:     "config env and system prompt",
@@ -168,19 +168,17 @@ func TestBuildEnv(t *testing.T) {
 			missing:  []string{"ANTHROPIC_AUTH_TOKEN"},
 		},
 		{
-			name:     "provider and config combined",
+			name:     "provider and config combined does not inject auth env",
 			provider: provider,
 			config: &domain.OpenCodeConfig{
 				Env:          map[string]string{"FOO": "bar"},
 				SystemPrompt: "System prompt",
 			},
 			contains: []string{
-				"ANTHROPIC_AUTH_TOKEN=sk-secret",
-				"ANTHROPIC_BASE_URL=https://api.example.com",
 				"FOO=bar",
 				"OPENCODE_SYSTEM_PROMPT=System prompt",
 			},
-			missing: []string{},
+			missing: []string{"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"},
 		},
 		{
 			name:     "nil provider and nil config",
