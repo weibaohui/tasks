@@ -1314,7 +1314,9 @@ export const ProjectRequirementPage: React.FC = () => {
                         {detailRequirement.assignee_agent?.name ? (
                           <Tag color="blue">{detailRequirement.assignee_agent.name}</Tag>
                         ) : (
-                          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{detailRequirement.assignee_agent_code || '-'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                            {detailRequirement.assignee_agent_code || detailRequirement.replica_agent?.shadow_from || '-'}
+                          </span>
                         )}
                       </div>
                     </div>
