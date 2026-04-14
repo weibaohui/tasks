@@ -7,15 +7,23 @@ type StreamingCallback interface {
 	OnToolResult(toolName string, result string)
 	OnText(text string)
 	OnComplete(finalResult string)
+	OnError(err error)
 	GetFinalResult() string
 }
 
 // OpenCodeEvent OpenCode CLI JSON 事件
 type OpenCodeEvent struct {
-	Type      string    `json:"type"`
-	Timestamp int64     `json:"timestamp"`
-	SessionID string    `json:"sessionID"`
-	Part      EventPart `json:"part"`
+	Type      string     `json:"type"`
+	Timestamp int64      `json:"timestamp"`
+	SessionID string     `json:"sessionID"`
+	Part      EventPart  `json:"part"`
+	Error     *EventError `json:"error,omitempty"`
+}
+
+// EventError 顶层错误信息（opencode 在 type=error 时直接在顶层输出 error 字段）
+type EventError struct {
+	Name string                 `json:"name"`
+	Data map[string]interface{} `json:"data"`
 }
 
 // EventPart 事件内容

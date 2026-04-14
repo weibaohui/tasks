@@ -224,7 +224,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	// 使用状态机的当前状态（可能已经初始化为 todo 或其他状态）
 	requirement.SyncStatusFromStateMachine(currentState)
 
-	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide, smConfig)
+	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide, smConfig, baseAgent.AgentType())
 
 	// 保存 Claude Runtime 执行提示词
 	requirement.SetClaudeRuntimePrompt(dispatchPrompt)

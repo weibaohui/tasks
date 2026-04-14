@@ -183,6 +183,24 @@ func (c *feishuStreamingCallback) OnText(text string) {
 	// 忽略中间文本，不立即发送
 }
 
+func (c *feishuStreamingCallback) OnError(err error) {
+	if err == nil {
+		return
+	}
+	errMsg := err.Error()
+	if len(errMsg) > 2000 {
+		errMsg = errMsg[:2000] + "..."
+	}
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": fmt.Sprintf("**执行失败**\n```\n%s\n```", escapeJSON(errMsg))},
+	}
+	c.sendCard(fmt.Sprintf("❌ %s 执行失败", c.displayName()), elements)
+	c.logger.Error(fmt.Sprintf("%s 执行失败", c.displayName()),
+		zap.String("trace_id", c.traceID),
+		zap.Error(err),
+	)
+}
+
 func (c *feishuStreamingCallback) OnComplete(finalResult string) {
 	// 最终结果使用卡片格式发送
 	// 思考内容已在 OnThinking 中单独发送，不需要过滤

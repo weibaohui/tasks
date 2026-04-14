@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,6 +123,7 @@ func (c *syncCallback) OnComplete(finalResult string) {
 		c.onComplete(finalResult)
 	}
 }
+func (c *syncCallback) OnError(err error) {}
 func (c *syncCallback) GetFinalResult() string { return "" }
 
 // ProcessWithStreaming 处理消息（流式版本）
@@ -184,6 +187,9 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 
 	if err != nil {
 		p.logger.Error("OpenCode 流式调用失败", zap.Error(err))
+		if callback != nil {
+			callback.OnError(err)
+		}
 		p.triggerOpenCodeFinishedHook(ctx, msg, agent, false, "", nil)
 		return fmt.Errorf("OpenCode query failed: %w", err)
 	}
@@ -208,6 +214,7 @@ type streamContext struct {
 	p            *OpenCodeProcessor
 	mu           sync.Mutex
 	result       string
+	err          error
 	tokenUsage   *TokenUsage
 	cliSessionID string
 	callback     StreamingCallback
@@ -306,6 +313,9 @@ func (sc *streamContext) handleStepFinishEvent(tokens TokenUsage, reason string)
 
 func (sc *streamContext) handleErrorEvent(errMsg string) {
 	sc.appendResult(fmt.Sprintf("\n[Error: %s]", errMsg))
+	sc.mu.Lock()
+	sc.err = fmt.Errorf("%s", errMsg)
+	sc.mu.Unlock()
 	sc.p.logger.Error("OpenCode error",
 		zap.String("session_key", sc.sessionKey),
 		zap.String("error", errMsg))
@@ -348,16 +358,26 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	cmd.Env = env
 	cmd.Dir = workDir
 
-	// 创建 stdout pipe
+	// 创建 stdout / stderr pipe
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", nil, fmt.Errorf("创建 stdout pipe 失败: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", nil, fmt.Errorf("创建 stderr pipe 失败: %w", err)
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
 		return "", nil, fmt.Errorf("启动 OpenCode 失败: %w", err)
 	}
+
+	// 在后台读取 stderr
+	var stderrBuilder strings.Builder
+	go func() {
+		io.Copy(&stderrBuilder, stderr)
+	}()
 
 	// 设置超时
 	timeout := 600 // 10 分钟默认超时
@@ -479,8 +499,18 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 			case "step_finish":
 				sc.handleStepFinishEvent(event.Part.Tokens, event.Part.Reason)
 			case "error":
-				if event.Part.State.Error != nil {
-					sc.handleErrorEvent(*event.Part.State.Error)
+				errMsg := ""
+				if event.Error != nil {
+					if m, ok := event.Error.Data["message"].(string); ok && m != "" {
+						errMsg = fmt.Sprintf("%s: %s", event.Error.Name, m)
+					} else {
+						errMsg = event.Error.Name
+					}
+				} else if event.Part.State.Error != nil {
+					errMsg = *event.Part.State.Error
+				}
+				if errMsg != "" {
+					sc.handleErrorEvent(errMsg)
 				}
 			}
 		}
@@ -500,9 +530,24 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 		cmd.Process.Kill()
 		return sc.result, sc.tokenUsage, queryCtx.Err()
 	case err := <-errChan:
-		cmd.Wait()
+		waitErr := cmd.Wait()
+		stderrStr := strings.TrimSpace(stderrBuilder.String())
+		if stderrStr != "" {
+			p.logger.Warn("OpenCode stderr",
+				zap.String("session_key", sessionKey),
+				zap.String("stderr", stderrStr))
+		}
 		if err != nil {
 			return sc.result, sc.tokenUsage, err
+		}
+		if waitErr != nil {
+			if stderrStr != "" {
+				return sc.result, sc.tokenUsage, fmt.Errorf("OpenCode 进程退出失败: %w (stderr: %s)", waitErr, stderrStr)
+			}
+			return sc.result, sc.tokenUsage, fmt.Errorf("OpenCode 进程退出失败: %w", waitErr)
+		}
+		if sc.err != nil {
+			return sc.result, sc.tokenUsage, fmt.Errorf("OpenCode 执行中出现错误: %w", sc.err)
 		}
 	}
 

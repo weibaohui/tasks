@@ -36,18 +36,20 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 		model = agent.Model()
 	}
 	if model == "" {
-		if provider != nil {
-			// 当模型为空时，从 provider 获取 API Key 和 Base URL
-			if provider.APIKey() != "" {
-				env["ANTHROPIC_API_KEY"] = provider.APIKey()
-			}
-			if provider.APIBase() != "" {
-				env["ANTHROPIC_BASE_URL"] = provider.APIBase()
-			}
-			// 模型保持为空，让 Claude Code 使用默认模型
-		} else {
+		if provider == nil {
 			// 没有 provider 时，使用默认模型
 			model = "MiniMax-M2.7-highspeed"
+		}
+		// 若 provider 存在，模型保持为空，让 Claude Code 使用默认模型
+	}
+
+	// 注入 Provider 的 API Key 和 Base URL（只要 provider 存在就注入，不受 model 是否为空影响）
+	if provider != nil {
+		if provider.APIKey() != "" {
+			env["ANTHROPIC_API_KEY"] = provider.APIKey()
+		}
+		if provider.APIBase() != "" {
+			env["ANTHROPIC_BASE_URL"] = provider.APIBase()
 		}
 	}
 

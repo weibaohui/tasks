@@ -21,6 +21,7 @@ type StreamingCallback interface {
 	OnToolResult(toolName string, result string)
 	OnText(text string)
 	OnComplete(finalResult string)
+	OnError(err error)
 	GetFinalResult() string
 }
 
