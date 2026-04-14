@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -15,12 +16,26 @@ import (
 	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
+const (
+	tunnelPIDFileName = "tunnel.pid"
+	tunnelLogFileName = "tunnel.log"
+)
+
 var tunnelCmd = &cobra.Command{
 	Use:   "tunnel",
 	Short: "创建临时 Cloudflare Tunnel",
 	Long: "创建临时公共 URL，通过 Cloudflare Tunnel 访问本地服务器。\n\t无需配置 Cloudflare 账号，适合开发测试使用。\n\n\t需要先安装 cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
-	Example: `  taskmanager tunnel
-	  taskmanager tunnel --port 8888`,
+	Example: `  taskmanager tunnel start
+  taskmanager tunnel start --port 8888
+  taskmanager tunnel stop
+  taskmanager tunnel status`,
+}
+
+var tunnelStartCmd = &cobra.Command{
+	Use:   "start",
+	Short: "在后台启动 Cloudflare Tunnel",
+	Example: `  taskmanager tunnel start
+  taskmanager tunnel start --port 8888`,
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
 		if port == 0 {
@@ -35,6 +50,13 @@ var tunnelCmd = &cobra.Command{
 			return
 		}
 
+		// 检查是否已在运行
+		if isTunnelRunning() {
+			fmt.Println("Tunnel 已在运行中")
+			printTunnelStatus()
+			return
+		}
+
 		// 检查服务器是否运行
 		if !isRunning() {
 			fmt.Println("错误: 服务器未运行，请先启动服务器: taskmanager server start")
@@ -45,24 +67,156 @@ var tunnelCmd = &cobra.Command{
 		fmt.Printf("本地服务器: http://localhost:%d\n", port)
 		fmt.Println()
 
-		// 启动 cloudflared tunnel
-		url := runCloudflaredTunnel(port)
-		if url == "" {
-			fmt.Println("创建 Tunnel 失败")
+		// 清理残留进程并准备日志文件
+		_ = exec.Command("pkill", "-x", "cloudflared").Run()
+		time.Sleep(500 * time.Millisecond)
+
+		configDir := getConfigDir()
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			fmt.Printf("创建配置目录失败: %v\n", err)
 			return
 		}
 
-		fmt.Println()
-		fmt.Println("=" + strings.Repeat("=", 50))
-		fmt.Println("Tunnel 已创建成功!")
-		fmt.Printf("公共 URL: %s\n", url)
-		fmt.Println()
-		fmt.Println("按 Ctrl+C 停止 Tunnel")
-		fmt.Println("=" + strings.Repeat("=", 50))
-		fmt.Println()
+		logFile := getTunnelLogFile()
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			fmt.Printf("打开日志文件失败: %v\n", err)
+			return
+		}
+		defer f.Close()
 
-		// 等待中断信号
-		waitForInterrupt()
+		// 后台启动 cloudflared
+		command := exec.Command("cloudflared", "tunnel", "--url", fmt.Sprintf("http://localhost:%d", port))
+		command.Stdout = f
+		command.Stderr = f
+		command.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+
+		if err := command.Start(); err != nil {
+			fmt.Printf("启动 cloudflared 失败: %v\n", err)
+			return
+		}
+
+		pidFile := getTunnelPIDFilePath()
+		if err := os.WriteFile(pidFile, []byte(strconv.Itoa(command.Process.Pid)), 0644); err != nil {
+			fmt.Printf("写入 PID 文件失败: %v\n", err)
+			_ = command.Process.Kill()
+			return
+		}
+
+		// 轮询日志提取 URL（最多 30 秒）
+		var tunnelURL string
+		logFileReader, err := os.Open(logFile)
+		if err != nil {
+			fmt.Printf("打开日志文件读取失败: %v\n", err)
+			return
+		}
+		defer logFileReader.Close()
+
+		scanner := bufio.NewScanner(logFileReader)
+	timeout := time.After(30 * time.Second)
+	pollTick := time.NewTicker(500 * time.Millisecond)
+	defer pollTick.Stop()
+
+	pollLoop:
+		for {
+			select {
+			case <-timeout:
+				break pollLoop
+			case <-pollTick.C:
+				for scanner.Scan() {
+					line := scanner.Text()
+					if url := extractTunnelURL(line); url != "" {
+						tunnelURL = url
+						break pollLoop
+					}
+				}
+				if err := scanner.Err(); err != nil {
+					fmt.Printf("读取日志失败: %v\n", err)
+					break pollLoop
+				}
+				// 重新打开文件继续读取新内容
+				logFileReader.Close()
+				logFileReader, _ = os.Open(logFile)
+				if logFileReader != nil {
+					// 跳到末尾已读过的位置不太方便，简单方案：
+					// 重新扫描全部（日志很短）
+					scanner = bufio.NewScanner(logFileReader)
+				}
+			}
+		}
+
+		if tunnelURL != "" {
+			fmt.Println("=" + strings.Repeat("=", 50))
+			fmt.Println("Tunnel 已创建成功!")
+			fmt.Printf("公共 URL: %s\n", tunnelURL)
+			fmt.Println()
+			fmt.Println("按 Ctrl+C 停止 Tunnel")
+			fmt.Println("=" + strings.Repeat("=", 50))
+			fmt.Println()
+		} else {
+			fmt.Println("Warning: 未能从日志中提取 Tunnel URL，请检查日志")
+			fmt.Printf("日志文件: %s\n", logFile)
+		}
+	},
+}
+
+var tunnelStopCmd = &cobra.Command{
+	Use:   "stop",
+	Short: "停止后台 Cloudflare Tunnel",
+	Example: `  taskmanager tunnel stop`,
+	Run: func(cmd *cobra.Command, args []string) {
+		force, _ := cmd.Flags().GetBool("force")
+
+		pid := getTunnelPID()
+		if pid == 0 {
+			fmt.Println("Tunnel 未运行")
+			return
+		}
+
+		var err error
+		if force {
+			err = syscall.Kill(pid, syscall.SIGKILL)
+		} else {
+			err = syscall.Kill(pid, syscall.SIGTERM)
+		}
+
+		if err != nil {
+			fmt.Printf("发送终止信号失败: %v\n", err)
+			if strings.Contains(err.Error(), "no such process") {
+				cleanupTunnelPIDFile()
+				fmt.Println("Tunnel 已停止（PID 文件已清理）")
+			}
+			return
+		}
+
+		if !force {
+			fmt.Println("正在停止 Tunnel...")
+			for i := 0; i < 30; i++ {
+				if !isProcessRunning(pid) {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+
+		if isProcessRunning(pid) && !force {
+			fmt.Println("Tunnel 未能及时关闭，强制终止...")
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+
+		cleanupTunnelPIDFile()
+		fmt.Println("Tunnel 已停止")
+	},
+}
+
+var tunnelStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "查看 Tunnel 运行状态",
+	Example: `  taskmanager tunnel status`,
+	Run: func(cmd *cobra.Command, args []string) {
+		printTunnelStatus()
 	},
 }
 
@@ -72,92 +226,97 @@ func isCloudflaredInstalled() bool {
 	return err == nil
 }
 
-// runCloudflaredTunnel 启动 cloudflared tunnel 并返回 URL
-func runCloudflaredTunnel(port int) string {
-	// 清理残留的 cloudflared 进程
-	_ = exec.Command("pkill", "-f", "cloudflared").Run()
-	time.Sleep(500 * time.Millisecond) // 等待端口释放
-
-	cmd := exec.Command("cloudflared", "tunnel", "--url", fmt.Sprintf("http://localhost:%d", port))
-
-	// 创建管道用于捕获输出
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("创建 stdout 管道失败: %v\n", err)
-		return ""
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fmt.Printf("创建 stderr 管道失败: %v\n", err)
-		return ""
-	}
-
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("启动 cloudflared 失败: %v\n", err)
-		return ""
-	}
-
-	// 异步读取输出，提取 URL
-	var tunnelURL string
-	urlFound := make(chan string, 1)
-
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Println(line)
-			if url := extractTunnelURL(line); url != "" {
-				select {
-				case urlFound <- url:
-				default:
-				}
-			}
-		}
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Println(line)
-			if url := extractTunnelURL(line); url != "" {
-				select {
-				case urlFound <- url:
-				default:
-				}
-			}
-		}
-	}()
-
-	// 等待 URL 或进程退出
-	select {
-	case tunnelURL = <-urlFound:
-	case <-time.After(30 * time.Second):
-	}
-
-	// 等待进程结束
-	cmd.Wait()
-	return tunnelURL
-}
-
 // extractTunnelURL 从 cloudflared 输出中提取 Tunnel URL
 func extractTunnelURL(line string) string {
-	// cloudflared 输出格式: https://randomname.trycloudflare.com
-	// 或者: .*https://[a-z0-9-]+\.trycloudflare\.com.*
 	re := regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
 	matches := re.FindString(line)
 	return matches
 }
 
-// waitForInterrupt 等待中断信号
-func waitForInterrupt() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	fmt.Println("\n正在停止 Tunnel...")
+// getTunnelPIDFilePath 获取 Tunnel PID 文件路径
+func getTunnelPIDFilePath() string {
+	return filepath.Join(getConfigDir(), tunnelPIDFileName)
+}
+
+// getTunnelPID 获取 tunnel 进程 PID
+func getTunnelPID() int {
+	pidFile := getTunnelPIDFilePath()
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return pid
+}
+
+// cleanupTunnelPIDFile 清理 Tunnel PID 文件
+func cleanupTunnelPIDFile() {
+	pidFile := getTunnelPIDFilePath()
+	_ = os.Remove(pidFile)
+}
+
+// isTunnelRunning 检查 tunnel 是否正在运行
+func isTunnelRunning() bool {
+	pid := getTunnelPID()
+	if pid == 0 {
+		return false
+	}
+	return isProcessRunning(pid)
+}
+
+// getTunnelLogFile 获取 tunnel 日志文件路径
+func getTunnelLogFile() string {
+	return filepath.Join(getConfigDir(), tunnelLogFileName)
+}
+
+// printTunnelStatus 打印 tunnel 状态
+func printTunnelStatus() {
+	if !isTunnelRunning() {
+		fmt.Println("Tunnel 状态: 未运行")
+		return
+	}
+
+	pid := getTunnelPID()
+	fmt.Println("Tunnel 状态: 运行中")
+	fmt.Printf("PID: %d\n", pid)
+
+	// 尝试从日志中提取 URL
+	logFile := getTunnelLogFile()
+	if url := extractTunnelURLFromLog(logFile); url != "" {
+		fmt.Printf("公共 URL: %s\n", url)
+	}
+	fmt.Printf("日志文件: %s\n", logFile)
+}
+
+// extractTunnelURLFromLog 从日志文件中提取最新的 Tunnel URL
+func extractTunnelURLFromLog(logFile string) string {
+	file, err := os.Open(logFile)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	// 读取全部行，找最后一个匹配的 URL
+	var lastURL string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if url := extractTunnelURL(line); url != "" {
+			lastURL = url
+		}
+	}
+	return lastURL
 }
 
 // registerTunnelCommands 注册 tunnel 子命令
 func registerTunnelCommands() {
-	tunnelCmd.Flags().IntP("port", "p", 0, "本地服务器端口 (默认使用 SERVER_PORT 或 13618)")
+	tunnelStartCmd.Flags().IntP("port", "p", 0, "本地服务器端口 (默认使用 SERVER_PORT 或 13618)")
+	tunnelStopCmd.Flags().Bool("force", false, "强制停止 Tunnel")
+
+	tunnelCmd.AddCommand(tunnelStartCmd)
+	tunnelCmd.AddCommand(tunnelStopCmd)
+	tunnelCmd.AddCommand(tunnelStatusCmd)
 }
