@@ -159,6 +159,12 @@ func (s *AgentApplicationService) UpdateAgent(ctx context.Context, cmd UpdateAge
 			return nil, err
 		}
 	}
+	if cmd.ClaudeCodeConfig != nil {
+		agent.UpdateClaudeCodeConfig(cmd.ClaudeCodeConfig)
+	}
+	if cmd.OpenCodeConfig != nil {
+		agent.UpdateOpenCodeConfig(cmd.OpenCodeConfig)
+	}
 	agent.ApplyLLMProvider(cmd.LLMProviderID)
 
 	if err := s.agentRepo.Save(ctx, agent); err != nil {
