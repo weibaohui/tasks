@@ -21,10 +21,12 @@ const (
 	tunnelLogFileName = "tunnel.log"
 )
 
+var tunnelURLRegex = regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
+
 var tunnelCmd = &cobra.Command{
 	Use:   "tunnel",
 	Short: "创建临时 Cloudflare Tunnel",
-	Long: "创建临时公共 URL，通过 Cloudflare Tunnel 访问本地服务器。\n\t无需配置 Cloudflare 账号，适合开发测试使用。\n\n\t需要先安装 cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
+	Long:  "创建临时公共 URL，通过 Cloudflare Tunnel 访问本地服务器。\n\t无需配置 Cloudflare 账号，适合开发测试使用。\n\n\t需要先安装 cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
 	Example: `  taskmanager tunnel start
   taskmanager tunnel start --port 8888
   taskmanager tunnel stop
@@ -68,7 +70,7 @@ var tunnelStartCmd = &cobra.Command{
 		fmt.Println()
 
 		// 清理残留进程并准备日志文件
-		_ = exec.Command("pkill", "-x", "cloudflared").Run()
+		cleanupPreviousTunnel()
 		time.Sleep(500 * time.Millisecond)
 
 		configDir := getConfigDir()
@@ -115,9 +117,9 @@ var tunnelStartCmd = &cobra.Command{
 		defer logFileReader.Close()
 
 		scanner := bufio.NewScanner(logFileReader)
-	timeout := time.After(30 * time.Second)
-	pollTick := time.NewTicker(500 * time.Millisecond)
-	defer pollTick.Stop()
+		timeout := time.After(30 * time.Second)
+		pollTick := time.NewTicker(500 * time.Millisecond)
+		defer pollTick.Stop()
 
 	pollLoop:
 		for {
@@ -138,12 +140,15 @@ var tunnelStartCmd = &cobra.Command{
 				}
 				// 重新打开文件继续读取新内容
 				logFileReader.Close()
-				logFileReader, _ = os.Open(logFile)
-				if logFileReader != nil {
-					// 跳到末尾已读过的位置不太方便，简单方案：
-					// 重新扫描全部（日志很短）
-					scanner = bufio.NewScanner(logFileReader)
+				var openErr error
+				logFileReader, openErr = os.Open(logFile)
+				if openErr != nil {
+					fmt.Printf("重新打开日志文件失败: %v\n", openErr)
+					continue
 				}
+				// 跳到末尾已读过的位置不太方便，简单方案：
+				// 重新扫描全部（日志很短）
+				scanner = bufio.NewScanner(logFileReader)
 			}
 		}
 
@@ -152,7 +157,7 @@ var tunnelStartCmd = &cobra.Command{
 			fmt.Println("Tunnel 已创建成功!")
 			fmt.Printf("公共 URL: %s\n", tunnelURL)
 			fmt.Println()
-			fmt.Println("按 Ctrl+C 停止 Tunnel")
+			fmt.Println("使用 'taskmanager tunnel stop' 停止 Tunnel")
 			fmt.Println("=" + strings.Repeat("=", 50))
 			fmt.Println()
 		} else {
@@ -163,8 +168,8 @@ var tunnelStartCmd = &cobra.Command{
 }
 
 var tunnelStopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "停止后台 Cloudflare Tunnel",
+	Use:     "stop",
+	Short:   "停止后台 Cloudflare Tunnel",
 	Example: `  taskmanager tunnel stop`,
 	Run: func(cmd *cobra.Command, args []string) {
 		force, _ := cmd.Flags().GetBool("force")
@@ -212,12 +217,33 @@ var tunnelStopCmd = &cobra.Command{
 }
 
 var tunnelStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "查看 Tunnel 运行状态",
+	Use:     "status",
+	Short:   "查看 Tunnel 运行状态",
 	Example: `  taskmanager tunnel status`,
 	Run: func(cmd *cobra.Command, args []string) {
 		printTunnelStatus()
 	},
+}
+
+// cleanupPreviousTunnel 清理上一次启动的 tunnel 进程
+func cleanupPreviousTunnel() {
+	pid := getTunnelPID()
+	if pid == 0 {
+		return
+	}
+	if isProcessRunning(pid) {
+		_ = syscall.Kill(pid, syscall.SIGTERM)
+		for i := 0; i < 20; i++ {
+			if !isProcessRunning(pid) {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if isProcessRunning(pid) {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+	cleanupTunnelPIDFile()
 }
 
 // isCloudflaredInstalled 检查 cloudflared 是否已安装
@@ -228,9 +254,7 @@ func isCloudflaredInstalled() bool {
 
 // extractTunnelURL 从 cloudflared 输出中提取 Tunnel URL
 func extractTunnelURL(line string) string {
-	re := regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
-	matches := re.FindString(line)
-	return matches
+	return tunnelURLRegex.FindString(line)
 }
 
 // getTunnelPIDFilePath 获取 Tunnel PID 文件路径
