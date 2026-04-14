@@ -1,8 +1,6 @@
 package application
 
 import (
-	"strings"
-
 	"github.com/weibh/taskmanager/domain"
 )
 
@@ -18,11 +16,8 @@ func (s *RequirementDispatchService) requirementWorkspaceRoot(requirement *domai
 }
 
 func resolveReplicaAgentCwd(requirement *domain.Requirement, workspacePath string) string {
-	if requirement != nil {
-		if tempWorkspace := strings.TrimSpace(requirement.TempWorkspaceRoot()); tempWorkspace != "" {
-			return tempWorkspace
-		}
-	}
+	// workspacePath 已经由 DispatchRequirement 计算为包含 project_id 和 requirement_id 的完整路径
+	// 无需再被 TempWorkspaceRoot 覆盖
 	return workspacePath
 }
 

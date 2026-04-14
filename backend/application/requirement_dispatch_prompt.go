@@ -8,11 +8,19 @@ import (
 	"github.com/weibh/taskmanager/domain/statemachine"
 )
 
-func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *statemachine.Config) string {
+func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *domain.Project, workspacePath string, stateMachineName string, currentState string, aiGuide map[string]interface{}, smConfig *statemachine.Config, agentType domain.AgentType) string {
 	isHeartbeat := requirement.RequirementType() == domain.RequirementTypeHeartbeat
 	requirementType := "普通需求"
 	if isHeartbeat {
 		requirementType = "心跳需求"
+	}
+
+	// 根据 Agent 类型确定提示词中的称呼
+	agentTypeName := "CodingAgent"
+	toolName := "Claude Code"
+	if agentType == domain.AgentTypeOpenCode {
+		agentTypeName = "OpenCodeAgent"
+		toolName = "OpenCode"
 	}
 
 	// 构建状态机使用指南和 AI 指南
@@ -73,7 +81,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 		if len(initSteps) > 0 {
 			initStepsText = strings.Join(initSteps, "\n")
 		}
-		prompt = fmt.Sprintf(`你是当前需求的 CodingAgent 分身，请直接使用 Claude Code 在当前工作目录完成开发。
+		prompt = fmt.Sprintf(`你是当前需求的 %s 分身，请直接使用 %s 在当前工作目录完成开发。
 
 【执行契约 - 严格遵守】
 当前阶段：%s
@@ -134,7 +142,8 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 
 【状态机附录 - 调试参考】
 %s
-`, firstNonEmpty(currentState, "未初始化"),
+`, agentTypeName, toolName,
+			firstNonEmpty(currentState, "未初始化"),
 			requirement.ID().String(), requirementType, requirement.Title(), firstNonEmpty(requirement.Description(), "无"),
 			project.ID().String(), project.Name(),
 			firstNonEmpty(requirement.AcceptanceCriteria(), "完成需求并通过验证"),

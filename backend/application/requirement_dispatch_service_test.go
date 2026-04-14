@@ -21,8 +21,8 @@ func TestResolveReplicaAgentCwd(t *testing.T) {
 		t.Fatalf("创建需求失败: %v", err)
 	}
 
-	if got := resolveReplicaAgentCwd(requirementWithTemp, workspacePath); got != "/tmp/custom-workspace" {
-		t.Fatalf("期望使用需求临时工作目录，实际为: %s", got)
+	if got := resolveReplicaAgentCwd(requirementWithTemp, workspacePath); got != workspacePath {
+		t.Fatalf("期望始终使用完整派发工作目录，实际为: %s", got)
 	}
 
 	requirementWithoutTemp, err := domain.NewRequirement(
