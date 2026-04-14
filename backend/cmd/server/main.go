@@ -75,6 +75,10 @@ func main() {
 	if err := _persistence.InitSchema(db); err != nil {
 		logger.Fatal("Failed to init schema", zap.Error(err))
 	}
+	// 兼容旧数据库：迁移 claude_runtime 列到 agent_runtime
+	if err := _persistence.MigrateClaudeRuntimeColumns(db); err != nil {
+		logger.Fatal("Failed to migrate schema", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖

@@ -54,7 +54,7 @@ func (p *OpenCodeProcessor) triggerOpenCodeFinishedHook(ctx context.Context, msg
 
 	if success {
 		requirement.MarkCompleted()
-		requirement.SetClaudeRuntimeResult(finalResult)
+		requirement.SetAgentRuntimeResult(finalResult)
 		if err := p.requirementRepo.Save(ctx, requirement); err != nil {
 			p.logger.Error("OpenCode 完成，保存 requirement 失败",
 				zap.String("requirement_id", requirementIDStr),

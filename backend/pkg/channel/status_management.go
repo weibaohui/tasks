@@ -9,14 +9,14 @@ import (
 	"github.com/weibh/taskmanager/application"
 )
 
-func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, sessionKey, status, lastError string) {
+func (p *MessageProcessor) updateAgentRuntimeStatus(ctx context.Context, sessionKey, agentType, status, lastError string) {
 	if p.sessionService == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
 
 	metadata, err := p.sessionService.GetSessionMetadata(ctx, sessionKey)
 	if err != nil {
-		p.logger.Debug("更新 Claude Code 运行状态时读取会话失败",
+		p.logger.Debug("更新 Agent 运行状态时读取会话失败",
 			zap.String("session_key", sessionKey),
 			zap.Error(err),
 		)
@@ -29,7 +29,7 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, se
 	}
 
 	runtime := map[string]interface{}{}
-	if existingRuntime, ok := merged["claude_code_runtime"].(map[string]interface{}); ok {
+	if existingRuntime, ok := merged["agent_runtime"].(map[string]interface{}); ok {
 		for k, v := range existingRuntime {
 			runtime[k] = v
 		}
@@ -37,6 +37,7 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, se
 
 	now := time.Now().UnixMilli()
 	runtime["status"] = status
+	runtime["agent_type"] = agentType
 	runtime["is_running"] = status == "running"
 	runtime["updated_at"] = now
 	if status == "running" {
@@ -47,13 +48,13 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, se
 		runtime["ended_at"] = now
 		runtime["last_error"] = lastError
 	}
-	merged["claude_code_runtime"] = runtime
+	merged["agent_runtime"] = runtime
 
 	if err := p.sessionService.UpdateSessionMetadata(ctx, application.UpdateSessionMetadataCommand{
 		SessionKey: sessionKey,
 		Metadata:   merged,
 	}); err != nil {
-		p.logger.Warn("更新 Claude Code 运行状态失败",
+		p.logger.Warn("更新 Agent 运行状态失败",
 			zap.String("session_key", sessionKey),
 			zap.String("status", status),
 			zap.Error(err),
@@ -61,15 +62,15 @@ func (p *MessageProcessor) updateClaudeCodeRuntimeStatus(ctx context.Context, se
 	}
 }
 
-// updateRequirementClaudeRuntimeStatus 更新需求的 Claude Runtime 状态
-func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(ctx context.Context, requirementID string, status string, lastError string) {
+// updateRequirementAgentRuntimeStatus 更新需求的 Agent Runtime 状态
+func (p *MessageProcessor) updateRequirementAgentRuntimeStatus(ctx context.Context, requirementID string, agentType string, status string, lastError string) {
 	if p.requirementRepo == nil || strings.TrimSpace(requirementID) == "" {
 		return
 	}
 
 	req, err := p.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 	if err != nil || req == nil {
-		p.logger.Debug("更新需求 Claude Runtime 状态时查找需求失败",
+		p.logger.Debug("更新需求 Agent Runtime 状态时查找需求失败",
 			zap.String("requirement_id", requirementID),
 			zap.Error(err),
 		)
@@ -78,13 +79,13 @@ func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(ctx context.Cont
 
 	switch status {
 	case "running":
-		req.StartClaudeRuntime()
+		req.StartAgentRuntime(agentType)
 	case "completed":
-		req.EndClaudeRuntime(true, "")
+		req.EndAgentRuntime(true, "")
 	case "failed":
-		req.EndClaudeRuntime(false, lastError)
+		req.EndAgentRuntime(false, lastError)
 	default:
-		p.logger.Warn("未知的 Claude Runtime 状态",
+		p.logger.Warn("未知的 Agent Runtime 状态",
 			zap.String("requirement_id", requirementID),
 			zap.String("status", status),
 		)
@@ -92,7 +93,7 @@ func (p *MessageProcessor) updateRequirementClaudeRuntimeStatus(ctx context.Cont
 	}
 
 	if err := p.requirementRepo.Save(ctx, req); err != nil {
-		p.logger.Warn("更新需求 Claude Runtime 状态失败",
+		p.logger.Warn("更新需求 Agent Runtime 状态失败",
 			zap.String("requirement_id", requirementID),
 			zap.String("status", status),
 			zap.Error(err),

@@ -414,8 +414,8 @@ func TestRequirement_Redispatch_Success(t *testing.T) {
 		t.Error("期望 CompletedAt 被清空")
 	}
 
-	if req.ClaudeRuntimePrompt() != "" {
-		t.Errorf("期望 ClaudeRuntimePrompt 被清空, 实际为 %s", req.ClaudeRuntimePrompt())
+	if req.AgentRuntimePrompt() != "" {
+		t.Errorf("期望 AgentRuntimePrompt 被清空, 实际为 %s", req.AgentRuntimePrompt())
 	}
 }
 
@@ -513,7 +513,7 @@ func TestRequirement_UpdateContent_TitleWithOnlySpaces(t *testing.T) {
 	}
 }
 
-func TestRequirement_StartClaudeRuntime(t *testing.T) {
+func TestRequirement_StartAgentRuntime(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -526,26 +526,31 @@ func TestRequirement_StartClaudeRuntime(t *testing.T) {
 	oldUpdatedAt := req.UpdatedAt()
 	time.Sleep(10 * time.Millisecond)
 
-	req.StartClaudeRuntime()
+	req.StartAgentRuntime("CodingAgent")
 
 	// 验证状态
-	if req.ClaudeRuntimeStatus() != RuntimeStatusRunning {
-		t.Errorf("期望 ClaudeRuntimeStatus 为 'running', 实际为 %s", req.ClaudeRuntimeStatus())
+	if req.AgentRuntimeStatus() != RuntimeStatusRunning {
+		t.Errorf("期望 AgentRuntimeStatus 为 'running', 实际为 %s", req.AgentRuntimeStatus())
+	}
+
+	// 验证 AgentType
+	if req.AgentRuntimeAgentType() != "CodingAgent" {
+		t.Errorf("期望 AgentRuntimeAgentType 为 'CodingAgent', 实际为 %s", req.AgentRuntimeAgentType())
 	}
 
 	// 验证开始时间
-	if req.ClaudeRuntimeStartedAt() == nil {
-		t.Error("期望 ClaudeRuntimeStartedAt 被设置")
+	if req.AgentRuntimeStartedAt() == nil {
+		t.Error("期望 AgentRuntimeStartedAt 被设置")
 	}
 
 	// 验证结束时间被清空
-	if req.ClaudeRuntimeEndedAt() != nil {
-		t.Error("期望 ClaudeRuntimeEndedAt 被清空")
+	if req.AgentRuntimeEndedAt() != nil {
+		t.Error("期望 AgentRuntimeEndedAt 被清空")
 	}
 
 	// 验证错误被清空
-	if req.ClaudeRuntimeError() != "" {
-		t.Errorf("期望 ClaudeRuntimeError 被清空, 实际为 %s", req.ClaudeRuntimeError())
+	if req.AgentRuntimeError() != "" {
+		t.Errorf("期望 AgentRuntimeError 被清空, 实际为 %s", req.AgentRuntimeError())
 	}
 
 	// 验证 UpdatedAt
@@ -554,7 +559,7 @@ func TestRequirement_StartClaudeRuntime(t *testing.T) {
 	}
 }
 
-func TestRequirement_EndClaudeRuntime_Success(t *testing.T) {
+func TestRequirement_EndAgentRuntime_Success(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -564,27 +569,27 @@ func TestRequirement_EndClaudeRuntime_Success(t *testing.T) {
 		"",
 	)
 
-	req.StartClaudeRuntime()
+	req.StartAgentRuntime("CodingAgent")
 	time.Sleep(10 * time.Millisecond)
 
 	oldUpdatedAt := req.UpdatedAt()
 	time.Sleep(10 * time.Millisecond)
 
-	req.EndClaudeRuntime(true, "")
+	req.EndAgentRuntime(true, "")
 
 	// 验证状态
-	if req.ClaudeRuntimeStatus() != RuntimeStatusCompleted {
-		t.Errorf("期望 ClaudeRuntimeStatus 为 'completed', 实际为 %s", req.ClaudeRuntimeStatus())
+	if req.AgentRuntimeStatus() != RuntimeStatusCompleted {
+		t.Errorf("期望 AgentRuntimeStatus 为 'completed', 实际为 %s", req.AgentRuntimeStatus())
 	}
 
 	// 验证结束时间
-	if req.ClaudeRuntimeEndedAt() == nil {
-		t.Error("期望 ClaudeRuntimeEndedAt 被设置")
+	if req.AgentRuntimeEndedAt() == nil {
+		t.Error("期望 AgentRuntimeEndedAt 被设置")
 	}
 
 	// 验证错误为空
-	if req.ClaudeRuntimeError() != "" {
-		t.Errorf("期望 ClaudeRuntimeError 为空, 实际为 %s", req.ClaudeRuntimeError())
+	if req.AgentRuntimeError() != "" {
+		t.Errorf("期望 AgentRuntimeError 为空, 实际为 %s", req.AgentRuntimeError())
 	}
 
 	// 验证 UpdatedAt
@@ -593,7 +598,7 @@ func TestRequirement_EndClaudeRuntime_Success(t *testing.T) {
 	}
 }
 
-func TestRequirement_EndClaudeRuntime_Failure(t *testing.T) {
+func TestRequirement_EndAgentRuntime_Failure(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -603,24 +608,24 @@ func TestRequirement_EndClaudeRuntime_Failure(t *testing.T) {
 		"",
 	)
 
-	req.StartClaudeRuntime()
+	req.StartAgentRuntime("CodingAgent")
 	time.Sleep(10 * time.Millisecond)
 
-	req.EndClaudeRuntime(false, "执行超时")
+	req.EndAgentRuntime(false, "执行超时")
 
 	// 验证状态
-	if req.ClaudeRuntimeStatus() != RuntimeStatusFailed {
-		t.Errorf("期望 ClaudeRuntimeStatus 为 'failed', 实际为 %s", req.ClaudeRuntimeStatus())
+	if req.AgentRuntimeStatus() != RuntimeStatusFailed {
+		t.Errorf("期望 AgentRuntimeStatus 为 'failed', 实际为 %s", req.AgentRuntimeStatus())
 	}
 
 	// 验证错误信息
-	if req.ClaudeRuntimeError() != "执行超时" {
-		t.Errorf("期望 ClaudeRuntimeError 为 '执行超时', 实际为 %s", req.ClaudeRuntimeError())
+	if req.AgentRuntimeError() != "执行超时" {
+		t.Errorf("期望 AgentRuntimeError 为 '执行超时', 实际为 %s", req.AgentRuntimeError())
 	}
 
 	// 验证结束时间
-	if req.ClaudeRuntimeEndedAt() == nil {
-		t.Error("期望 ClaudeRuntimeEndedAt 被设置")
+	if req.AgentRuntimeEndedAt() == nil {
+		t.Error("期望 AgentRuntimeEndedAt 被设置")
 	}
 }
 
@@ -658,7 +663,7 @@ func TestRequirement_SetTokenUsage(t *testing.T) {
 	}
 }
 
-func TestRequirement_SetClaudeRuntimeResult(t *testing.T) {
+func TestRequirement_SetAgentRuntimeResult(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -668,14 +673,14 @@ func TestRequirement_SetClaudeRuntimeResult(t *testing.T) {
 		"",
 	)
 
-	req.SetClaudeRuntimeResult("执行成功，创建了3个文件")
+	req.SetAgentRuntimeResult("执行成功，创建了3个文件")
 
-	if req.ClaudeRuntimeResult() != "执行成功，创建了3个文件" {
-		t.Errorf("期望 ClaudeRuntimeResult 为 '执行成功，创建了3个文件', 实际为 %s", req.ClaudeRuntimeResult())
+	if req.AgentRuntimeResult() != "执行成功，创建了3个文件" {
+		t.Errorf("期望 AgentRuntimeResult 为 '执行成功，创建了3个文件', 实际为 %s", req.AgentRuntimeResult())
 	}
 }
 
-func TestRequirement_SetClaudeRuntimePrompt(t *testing.T) {
+func TestRequirement_SetAgentRuntimePrompt(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -685,10 +690,10 @@ func TestRequirement_SetClaudeRuntimePrompt(t *testing.T) {
 		"",
 	)
 
-	req.SetClaudeRuntimePrompt("请实现登录功能")
+	req.SetAgentRuntimePrompt("请实现登录功能")
 
-	if req.ClaudeRuntimePrompt() != "请实现登录功能" {
-		t.Errorf("期望 ClaudeRuntimePrompt 为 '请实现登录功能', 实际为 %s", req.ClaudeRuntimePrompt())
+	if req.AgentRuntimePrompt() != "请实现登录功能" {
+		t.Errorf("期望 AgentRuntimePrompt 为 '请实现登录功能', 实际为 %s", req.AgentRuntimePrompt())
 	}
 }
 
@@ -891,8 +896,8 @@ func TestRequirement_ToSnapshot(t *testing.T) {
 	req.SetDispatchSessionKey("session-001")
 	req.SetTraceID("trace-001")
 	req.SetTokenUsage(1000, 500, 1500)
-	req.SetClaudeRuntimeResult("执行结果")
-	req.SetClaudeRuntimePrompt("执行提示词")
+	req.SetAgentRuntimeResult("执行结果")
+	req.SetAgentRuntimePrompt("执行提示词")
 
 	snap := req.ToSnapshot()
 
@@ -949,12 +954,12 @@ func TestRequirement_ToSnapshot(t *testing.T) {
 		t.Errorf("快照 TotalTokens 期望 1500, 实际 %d", snap.TotalTokens)
 	}
 
-	if snap.ClaudeRuntimeResult != "执行结果" {
-		t.Errorf("快照 ClaudeRuntimeResult 期望 '执行结果', 实际 %s", snap.ClaudeRuntimeResult)
+	if snap.AgentRuntimeResult != "执行结果" {
+		t.Errorf("快照 AgentRuntimeResult 期望 '执行结果', 实际 %s", snap.AgentRuntimeResult)
 	}
 
-	if snap.ClaudeRuntimePrompt != "执行提示词" {
-		t.Errorf("快照 ClaudeRuntimePrompt 期望 '执行提示词', 实际 %s", snap.ClaudeRuntimePrompt)
+	if snap.AgentRuntimePrompt != "执行提示词" {
+		t.Errorf("快照 AgentRuntimePrompt 期望 '执行提示词', 实际 %s", snap.AgentRuntimePrompt)
 	}
 }
 
@@ -984,12 +989,13 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 		CreatedAt:              createdAt,
 		UpdatedAt:              updatedAt,
 		RequirementType:        RequirementTypeHeartbeat,
-		ClaudeRuntimeStatus:    RuntimeStatusCompleted,
-		ClaudeRuntimeStartedAt: &claudeStartedAt,
-		ClaudeRuntimeEndedAt:   &claudeEndedAt,
-		ClaudeRuntimeError:     "",
-		ClaudeRuntimeResult:    "执行完成",
-		ClaudeRuntimePrompt:    "提示词",
+		AgentRuntimeStatus:    RuntimeStatusCompleted,
+		AgentRuntimeStartedAt: &claudeStartedAt,
+		AgentRuntimeEndedAt:   &claudeEndedAt,
+		AgentRuntimeError:     "",
+		AgentRuntimeResult:    "执行完成",
+		AgentRuntimePrompt:    "提示词",
+		AgentRuntimeAgentType: "CodingAgent",
 		TraceID:                "trace-001",
 		PromptTokens:           1000,
 		CompletionTokens:       500,
@@ -1052,16 +1058,20 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 		t.Errorf("RequirementType 期望 heartbeat, 实际 %s", req.RequirementType())
 	}
 
-	if req.ClaudeRuntimeStatus() != RuntimeStatusCompleted {
-		t.Errorf("ClaudeRuntimeStatus 期望 'completed', 实际 %s", req.ClaudeRuntimeStatus())
+	if req.AgentRuntimeStatus() != RuntimeStatusCompleted {
+		t.Errorf("AgentRuntimeStatus 期望 'completed', 实际 %s", req.AgentRuntimeStatus())
 	}
 
-	if req.ClaudeRuntimeResult() != "执行完成" {
-		t.Errorf("ClaudeRuntimeResult 期望 '执行完成', 实际 %s", req.ClaudeRuntimeResult())
+	if req.AgentRuntimeAgentType() != "CodingAgent" {
+		t.Errorf("AgentRuntimeAgentType 期望 'CodingAgent', 实际 %s", req.AgentRuntimeAgentType())
 	}
 
-	if req.ClaudeRuntimePrompt() != "提示词" {
-		t.Errorf("ClaudeRuntimePrompt 期望 '提示词', 实际 %s", req.ClaudeRuntimePrompt())
+	if req.AgentRuntimeResult() != "执行完成" {
+		t.Errorf("AgentRuntimeResult 期望 '执行完成', 实际 %s", req.AgentRuntimeResult())
+	}
+
+	if req.AgentRuntimePrompt() != "提示词" {
+		t.Errorf("AgentRuntimePrompt 期望 '提示词', 实际 %s", req.AgentRuntimePrompt())
 	}
 
 	if req.TraceID() != "trace-001" {
@@ -1089,12 +1099,12 @@ func TestRequirement_FromSnapshot(t *testing.T) {
 		t.Error("CompletedAt 不匹配")
 	}
 
-	if req.ClaudeRuntimeStartedAt() == nil || !req.ClaudeRuntimeStartedAt().Equal(claudeStartedAt) {
-		t.Error("ClaudeRuntimeStartedAt 不匹配")
+	if req.AgentRuntimeStartedAt() == nil || !req.AgentRuntimeStartedAt().Equal(claudeStartedAt) {
+		t.Error("AgentRuntimeStartedAt 不匹配")
 	}
 
-	if req.ClaudeRuntimeEndedAt() == nil || !req.ClaudeRuntimeEndedAt().Equal(claudeEndedAt) {
-		t.Error("ClaudeRuntimeEndedAt 不匹配")
+	if req.AgentRuntimeEndedAt() == nil || !req.AgentRuntimeEndedAt().Equal(claudeEndedAt) {
+		t.Error("AgentRuntimeEndedAt 不匹配")
 	}
 
 	if !req.CreatedAt().Equal(createdAt) {
@@ -1180,12 +1190,13 @@ func TestRequirement_SnapshotRoundTrip(t *testing.T) {
 		CreatedAt:              time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC),
 		UpdatedAt:              time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
 		RequirementType:        RequirementTypeNormal,
-		ClaudeRuntimeStatus:    RuntimeStatusCompleted,
-		ClaudeRuntimeStartedAt: &claudeStartedAt,
-		ClaudeRuntimeEndedAt:   &claudeEndedAt,
-		ClaudeRuntimeError:     "",
-		ClaudeRuntimeResult:    "执行完成",
-		ClaudeRuntimePrompt:    "提示词",
+		AgentRuntimeStatus:    RuntimeStatusCompleted,
+		AgentRuntimeStartedAt: &claudeStartedAt,
+		AgentRuntimeEndedAt:   &claudeEndedAt,
+		AgentRuntimeError:     "",
+		AgentRuntimeResult:    "执行完成",
+		AgentRuntimePrompt:    "提示词",
+		AgentRuntimeAgentType: "CodingAgent",
 		TraceID:                "trace-001",
 		PromptTokens:           1000,
 		CompletionTokens:       500,
@@ -1228,7 +1239,7 @@ func TestRequirement_SnapshotRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRequirement_ClaudeRuntimeTimeCopy(t *testing.T) {
+func TestRequirement_AgentRuntimeTimeCopy(t *testing.T) {
 	req, _ := NewRequirement(
 		NewRequirementID("req-001"),
 		NewProjectID("proj-001"),
@@ -1238,20 +1249,20 @@ func TestRequirement_ClaudeRuntimeTimeCopy(t *testing.T) {
 		"",
 	)
 
-	req.StartClaudeRuntime()
+	req.StartAgentRuntime("CodingAgent")
 
 	// 获取时间点
-	startedAt1 := req.ClaudeRuntimeStartedAt()
-	startedAt2 := req.ClaudeRuntimeStartedAt()
+	startedAt1 := req.AgentRuntimeStartedAt()
+	startedAt2 := req.AgentRuntimeStartedAt()
 
 	// 验证返回的是不同的指针
 	if startedAt1 == startedAt2 {
-		t.Error("ClaudeRuntimeStartedAt 应返回不同的指针")
+		t.Error("AgentRuntimeStartedAt 应返回不同的指针")
 	}
 
 	// 验证值相同
 	if !startedAt1.Equal(*startedAt2) {
-		t.Error("ClaudeRuntimeStartedAt 返回的时间值应相同")
+		t.Error("AgentRuntimeStartedAt 返回的时间值应相同")
 	}
 }
 

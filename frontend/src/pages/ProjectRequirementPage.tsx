@@ -34,7 +34,7 @@ const statusColorMap: Record<string, string> = {
   done: 'success',
 };
 
-const claudeRuntimeColorMap: Record<string, string> = {
+const agentRuntimeColorMap: Record<string, string> = {
   running: 'processing',
   completed: 'success',
   failed: 'error',
@@ -669,18 +669,18 @@ export const ProjectRequirementPage: React.FC = () => {
       },
     },
     {
-      title: 'Claude状态',
-      key: 'claude_runtime',
+      title: 'Agent状态',
+      key: 'agent_runtime',
       width: 140,
       render: (_: unknown, item: Requirement) => {
-        const runtimeStatus = item.claude_runtime?.status || '';
+        const runtimeStatus = item.agent_runtime?.status || '';
         if (!runtimeStatus) {
           return <span>-</span>;
         }
         const isRunning = runtimeStatus === 'running';
         return (
           <Space size={4}>
-            <Tag color={claudeRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
+            <Tag color={agentRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
             {isRunning && <Tag color="processing">运行中</Tag>}
           </Space>
         );
@@ -1345,16 +1345,16 @@ export const ProjectRequirementPage: React.FC = () => {
               },
               {
                 key: 'claude',
-                label: 'Claude执行',
+                label: 'Agent执行',
                 children: (
                   <div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                       <div>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行状态</div>
                         <div>
-                          {detailRequirement.claude_runtime?.status ? (
-                            <Tag color={claudeRuntimeColorMap[detailRequirement.claude_runtime.status] || 'default'}>
-                              {detailRequirement.claude_runtime.status}
+                          {detailRequirement.agent_runtime?.status ? (
+                            <Tag color={agentRuntimeColorMap[detailRequirement.agent_runtime.status] || 'default'}>
+                              {detailRequirement.agent_runtime.status}
                             </Tag>
                           ) : (
                             '-'
@@ -1364,9 +1364,9 @@ export const ProjectRequirementPage: React.FC = () => {
                       <div>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>运行状态</div>
                         <div>
-                          {detailRequirement.claude_runtime?.status ? (
-                            <Tag color={detailRequirement.claude_runtime.status === 'running' ? 'processing' : 'default'}>
-                              {detailRequirement.claude_runtime.status === 'running' ? '运行中' : '已停止'}
+                          {detailRequirement.agent_runtime?.status ? (
+                            <Tag color={detailRequirement.agent_runtime.status === 'running' ? 'processing' : 'default'}>
+                              {detailRequirement.agent_runtime.status === 'running' ? '运行中' : '已停止'}
                             </Tag>
                           ) : (
                             '-'
@@ -1376,16 +1376,16 @@ export const ProjectRequirementPage: React.FC = () => {
                       <div>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>开始时间</div>
                         <div>
-                          {detailRequirement.claude_runtime?.started_at
-                            ? new Date(detailRequirement.claude_runtime.started_at).toLocaleString()
+                          {detailRequirement.agent_runtime?.started_at
+                            ? new Date(detailRequirement.agent_runtime.started_at).toLocaleString()
                             : '-'}
                         </div>
                       </div>
                       <div>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>结束时间</div>
                         <div>
-                          {detailRequirement.claude_runtime?.ended_at
-                            ? new Date(detailRequirement.claude_runtime.ended_at).toLocaleString()
+                          {detailRequirement.agent_runtime?.ended_at
+                            ? new Date(detailRequirement.agent_runtime.ended_at).toLocaleString()
                             : '-'}
                         </div>
                       </div>
@@ -1398,7 +1398,7 @@ export const ProjectRequirementPage: React.FC = () => {
                           size="small"
                           icon={<CopyOutlined />}
                           onClick={() => {
-                            navigator.clipboard.writeText(detailRequirement.claude_runtime?.prompt || '');
+                            navigator.clipboard.writeText(detailRequirement.agent_runtime?.prompt || '');
                             message.success('已复制到剪贴板');
                           }}
                         >
@@ -1417,7 +1417,7 @@ export const ProjectRequirementPage: React.FC = () => {
                           border: '1px solid #adc6ff',
                         }}
                       >
-                        {detailRequirement.claude_runtime?.prompt || '无'}
+                        {detailRequirement.agent_runtime?.prompt || '无'}
                       </pre>
                     </div>
 
@@ -1435,11 +1435,11 @@ export const ProjectRequirementPage: React.FC = () => {
                           border: '1px solid #b7eb8f',
                         }}
                       >
-                        {detailRequirement.claude_runtime?.result || '无'}
+                        {detailRequirement.agent_runtime?.result || '无'}
                       </pre>
                     </div>
 
-                    {detailRequirement.claude_runtime?.last_error && (
+                    {detailRequirement.agent_runtime?.last_error && (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>执行错误</div>
                         <pre
@@ -1453,7 +1453,7 @@ export const ProjectRequirementPage: React.FC = () => {
                             color: '#ff4d4f',
                           }}
                         >
-                          {detailRequirement.claude_runtime.last_error}
+                          {detailRequirement.agent_runtime.last_error}
                         </pre>
                       </div>
                     )}

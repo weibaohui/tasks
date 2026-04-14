@@ -52,24 +52,24 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 		// 创建流式回调
 		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager, agent.AgentType().String())
-		p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "running", "")
-		// 更新需求的 Claude Runtime 状态
+		p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "CodingAgent", "running", "")
+		// 更新需求的 Agent Runtime 状态
 		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-			p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "running", "")
+			p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "CodingAgent", "running", "")
 		}
 		// 使用流式处理
 		err := p.claudeCodeProcessor.ProcessWithStreaming(ctx, msg, ccSession, agent, callback)
 		if err != nil {
-			p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "failed", err.Error())
+			p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "CodingAgent", "failed", err.Error())
 			if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-				p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "failed", err.Error())
+				p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "CodingAgent", "failed", err.Error())
 			}
 			p.logger.Error("ClaudeCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(Claude Code 处理失败: %v)", content, err)
 		}
-		p.updateClaudeCodeRuntimeStatus(ctx, msg.SessionKey(), "completed", "")
+		p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "CodingAgent", "completed", "")
 		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
-			p.updateRequirementClaudeRuntimeStatus(ctx, requirementID, "completed", "")
+			p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "CodingAgent", "completed", "")
 		}
 		// 更新 session 的 CLI Session ID
 		if ccSession.CliSessionID != "" {
@@ -92,11 +92,24 @@ func (p *MessageProcessor) generateResponse(ctx context.Context, msg *bus.Inboun
 		}
 		// 创建流式回调
 		callback := newFeishuStreamingCallback(p.bus, p.logger, msg, traceID, parentSpanID, p.hookManager, agent.AgentType().String())
+		p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "OpenCodeAgent", "running", "")
+		// 更新需求的 Agent Runtime 状态
+		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+			p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "OpenCodeAgent", "running", "")
+		}
 		// 使用流式处理
 		err := p.openCodeProcessor.ProcessWithStreaming(ctx, msg, ocSession, agent, callback)
 		if err != nil {
+			p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "OpenCodeAgent", "failed", err.Error())
+			if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+				p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "OpenCodeAgent", "failed", err.Error())
+			}
 			p.logger.Error("OpenCodeProcessor 流式处理失败", zap.Error(err))
 			return fmt.Sprintf("收到消息: %s\n(OpenCode 处理失败: %v)", content, err)
+		}
+		p.updateAgentRuntimeStatus(ctx, msg.SessionKey(), "OpenCodeAgent", "completed", "")
+		if requirementID, ok := msg.Metadata["requirement_id"].(string); ok {
+			p.updateRequirementAgentRuntimeStatus(ctx, requirementID, "OpenCodeAgent", "completed", "")
 		}
 		// 流式处理的消息已通过回调发送，这里返回空字符串避免重复发送
 		return ""

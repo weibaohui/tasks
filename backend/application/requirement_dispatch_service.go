@@ -113,7 +113,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	replicaAgent, err := s.createReplicaAgent(ctx, baseAgent, requirement, workspacePath)
 	if err != nil {
 		requirement.SetWorkspacePath(workspacePath)
-		requirement.SetClaudeRuntimeError(err.Error())
+		requirement.SetAgentRuntimeError(err.Error())
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
@@ -132,7 +132,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 
 	channelType, chatID, err := parseSessionKey(cmd.SessionKey)
 	if err != nil {
-		requirement.SetClaudeRuntimeError(err.Error())
+		requirement.SetAgentRuntimeError(err.Error())
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
@@ -142,7 +142,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, err
 	}
 	if s.inboundPublisher == nil {
-		requirement.SetClaudeRuntimeError(ErrInboundPublisherNotConfigured.Error())
+		requirement.SetAgentRuntimeError(ErrInboundPublisherNotConfigured.Error())
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
@@ -152,7 +152,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		return nil, ErrInboundPublisherNotConfigured
 	}
 	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
-		requirement.SetClaudeRuntimeError(err.Error())
+		requirement.SetAgentRuntimeError(err.Error())
 		if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 			log.Printf("requirementRepo.Save failed: %v", errSave)
 		}
@@ -227,7 +227,7 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	dispatchPrompt := buildRequirementDispatchPrompt(requirement, project, workspacePath, stateMachineName, currentState, aiGuide, smConfig, baseAgent.AgentType())
 
 	// 保存 Claude Runtime 执行提示词
-	requirement.SetClaudeRuntimePrompt(dispatchPrompt)
+	requirement.SetAgentRuntimePrompt(dispatchPrompt)
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
 		return nil, err
 	}
