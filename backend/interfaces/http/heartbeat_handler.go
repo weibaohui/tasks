@@ -1,0 +1,137 @@
+package http
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/weibh/taskmanager/application"
+	"github.com/weibh/taskmanager/domain"
+)
+
+type HeartbeatHandler struct {
+	service   *application.HeartbeatApplicationService
+	scheduler *application.HeartbeatScheduler
+}
+
+func NewHeartbeatHandler(service *application.HeartbeatApplicationService, scheduler *application.HeartbeatScheduler) *HeartbeatHandler {
+	return &HeartbeatHandler{service: service, scheduler: scheduler}
+}
+
+type CreateHeartbeatRequest struct {
+	ProjectID       string `json:"project_id" binding:"required"`
+	Name            string `json:"name" binding:"required"`
+	IntervalMinutes int    `json:"interval_minutes" binding:"required,min=1"`
+	MDContent       string `json:"md_content"`
+	AgentCode       string `json:"agent_code" binding:"required"`
+	RequirementType string `json:"requirement_type"`
+}
+
+type UpdateHeartbeatRequest struct {
+	Name            string `json:"name" binding:"required"`
+	IntervalMinutes int    `json:"interval_minutes" binding:"required,min=1"`
+	MDContent       string `json:"md_content"`
+	AgentCode       string `json:"agent_code" binding:"required"`
+	RequirementType string `json:"requirement_type"`
+	Enabled         bool   `json:"enabled"`
+}
+
+func (h *HeartbeatHandler) ListHeartbeats(c *gin.Context) {
+	projectID := c.Query("project_id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
+		return
+	}
+	heartbeats, err := h.service.ListHeartbeatsByProject(c.Request.Context(), projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	resp := make([]map[string]interface{}, 0, len(heartbeats))
+	for _, hb := range heartbeats {
+		resp = append(resp, heartbeatToMap(hb))
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *HeartbeatHandler) CreateHeartbeat(c *gin.Context) {
+	var req CreateHeartbeatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	hb, err := h.service.CreateHeartbeat(c.Request.Context(), application.CreateHeartbeatCommand{
+		ProjectID:       req.ProjectID,
+		Name:            req.Name,
+		IntervalMinutes: req.IntervalMinutes,
+		MDContent:       req.MDContent,
+		AgentCode:       req.AgentCode,
+		RequirementType: req.RequirementType,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, heartbeatToMap(hb))
+}
+
+func (h *HeartbeatHandler) GetHeartbeat(c *gin.Context) {
+	id := c.Param("id")
+	hb, err := h.service.GetHeartbeat(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	if hb == nil {
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "heartbeat not found"})
+		return
+	}
+	c.JSON(http.StatusOK, heartbeatToMap(hb))
+}
+
+func (h *HeartbeatHandler) UpdateHeartbeat(c *gin.Context) {
+	id := c.Param("id")
+	var req UpdateHeartbeatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	hb, err := h.service.UpdateHeartbeat(c.Request.Context(), application.UpdateHeartbeatCommand{
+		ID:              id,
+		Name:            req.Name,
+		IntervalMinutes: req.IntervalMinutes,
+		MDContent:       req.MDContent,
+		AgentCode:       req.AgentCode,
+		RequirementType: req.RequirementType,
+		Enabled:         req.Enabled,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, heartbeatToMap(hb))
+}
+
+func (h *HeartbeatHandler) DeleteHeartbeat(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.service.DeleteHeartbeat(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+func heartbeatToMap(hb *domain.Heartbeat) map[string]interface{} {
+	return map[string]interface{}{
+		"id":               hb.ID().String(),
+		"project_id":       hb.ProjectID().String(),
+		"name":             hb.Name(),
+		"enabled":          hb.Enabled(),
+		"interval_minutes": hb.IntervalMinutes(),
+		"md_content":       hb.MDContent(),
+		"agent_code":       hb.AgentCode(),
+		"requirement_type": hb.RequirementType(),
+		"sort_order":       hb.SortOrder(),
+		"created_at":       hb.CreatedAt().UnixMilli(),
+		"updated_at":       hb.UpdatedAt().UnixMilli(),
+	}
+}

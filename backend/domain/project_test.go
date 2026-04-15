@@ -108,13 +108,6 @@ func TestNewProject(t *testing.T) {
 				t.Errorf("期望默认分支 %s, 实际 %s", expectedBranch, project.DefaultBranch())
 			}
 
-			// 验证心跳默认值
-			if project.HeartbeatEnabled() != false {
-				t.Errorf("期望心跳默认禁用, 实际 %v", project.HeartbeatEnabled())
-			}
-			if project.HeartbeatIntervalMinutes() != 60 {
-				t.Errorf("期望心跳间隔默认60分钟, 实际 %d", project.HeartbeatIntervalMinutes())
-			}
 		})
 	}
 }
@@ -146,18 +139,6 @@ func TestProjectAccessors(t *testing.T) {
 	}
 	if !reflect.DeepEqual(project.InitSteps(), initSteps) {
 		t.Errorf("InitSteps() 期望 %v, 实际 %v", initSteps, project.InitSteps())
-	}
-	if project.HeartbeatEnabled() != false {
-		t.Errorf("HeartbeatEnabled() 期望 false, 实际 %v", project.HeartbeatEnabled())
-	}
-	if project.HeartbeatIntervalMinutes() != 60 {
-		t.Errorf("HeartbeatIntervalMinutes() 期望 60, 实际 %d", project.HeartbeatIntervalMinutes())
-	}
-	if project.HeartbeatMDContent() != "" {
-		t.Errorf("HeartbeatMDContent() 期望空字符串, 实际 %s", project.HeartbeatMDContent())
-	}
-	if project.AgentCode() != "" {
-		t.Errorf("AgentCode() 期望空字符串, 实际 %s", project.AgentCode())
 	}
 	if project.DispatchChannelCode() != "" {
 		t.Errorf("DispatchChannelCode() 期望空字符串, 实际 %s", project.DispatchChannelCode())
@@ -282,89 +263,6 @@ func TestProjectUpdateValidation(t *testing.T) {
 	}
 }
 
-func TestProjectUpdateHeartbeatConfig(t *testing.T) {
-	project, err := NewProject(
-		NewProjectID("proj-001"),
-		"测试项目",
-		"https://github.com/test/project.git",
-		"main",
-		[]string{},
-	)
-	if err != nil {
-		t.Fatalf("创建项目失败: %v", err)
-	}
-
-	oldUpdatedAt := project.UpdatedAt()
-	time.Sleep(10 * time.Millisecond)
-
-	// 测试更新所有字段
-	enabled := true
-	interval := 30
-	mdContent := "# Heartbeat Content"
-	agentCode := "agent-001"
-
-	project.UpdateHeartbeatConfig(&enabled, &interval, &mdContent, &agentCode)
-
-	if project.HeartbeatEnabled() != true {
-		t.Errorf("期望心跳启用, 实际 %v", project.HeartbeatEnabled())
-	}
-	if project.HeartbeatIntervalMinutes() != 30 {
-		t.Errorf("期望心跳间隔30分钟, 实际 %d", project.HeartbeatIntervalMinutes())
-	}
-	if project.HeartbeatMDContent() != "# Heartbeat Content" {
-		t.Errorf("期望心跳内容正确, 实际 %s", project.HeartbeatMDContent())
-	}
-	if project.AgentCode() != "agent-001" {
-		t.Errorf("期望Agent代码正确, 实际 %s", project.AgentCode())
-	}
-	if !project.UpdatedAt().After(oldUpdatedAt) {
-		t.Error("期望 UpdatedAt 被更新")
-	}
-}
-
-func TestProjectUpdateHeartbeatConfigNilValues(t *testing.T) {
-	project, err := NewProject(
-		NewProjectID("proj-001"),
-		"测试项目",
-		"https://github.com/test/project.git",
-		"main",
-		[]string{},
-	)
-	if err != nil {
-		t.Fatalf("创建项目失败: %v", err)
-	}
-
-	// 先更新一次
-	enabled := true
-	interval := 30
-	mdContent := "# Content"
-	agentCode := "agent-001"
-	project.UpdateHeartbeatConfig(&enabled, &interval, &mdContent, &agentCode)
-
-	oldUpdatedAt := project.UpdatedAt()
-	time.Sleep(10 * time.Millisecond)
-
-	// 测试 nil 值不更新
-	project.UpdateHeartbeatConfig(nil, nil, nil, nil)
-
-	if project.HeartbeatEnabled() != true {
-		t.Errorf("nil enabled 不应改变值, 实际 %v", project.HeartbeatEnabled())
-	}
-	if project.HeartbeatIntervalMinutes() != 30 {
-		t.Errorf("nil interval 不应改变值, 实际 %d", project.HeartbeatIntervalMinutes())
-	}
-	if project.HeartbeatMDContent() != "# Content" {
-		t.Errorf("nil mdContent 不应改变值, 实际 %s", project.HeartbeatMDContent())
-	}
-	if project.AgentCode() != "agent-001" {
-		t.Errorf("nil agentCode 不应改变值, 实际 %s", project.AgentCode())
-	}
-	// nil 值不更新，但 UpdatedAt 仍应被更新
-	if !project.UpdatedAt().After(oldUpdatedAt) {
-		t.Error("期望 UpdatedAt 被更新")
-	}
-}
-
 func TestProjectUpdateDispatchConfig(t *testing.T) {
 	project, err := NewProject(
 		NewProjectID("proj-001"),
@@ -448,13 +346,8 @@ func TestProjectToSnapshot(t *testing.T) {
 	}
 
 	// 设置额外字段
-	enabled := true
-	interval := 30
-	mdContent := "# Content"
-	agentCode := "agent-001"
 	channelCode := "feishu"
 	sessionKey := "session-001"
-	project.UpdateHeartbeatConfig(&enabled, &interval, &mdContent, &agentCode)
 	project.UpdateDispatchConfig(&channelCode, &sessionKey)
 
 	snap := project.ToSnapshot()
@@ -474,18 +367,6 @@ func TestProjectToSnapshot(t *testing.T) {
 	if !reflect.DeepEqual(snap.InitSteps, initSteps) {
 		t.Errorf("快照初始化步骤期望 %v, 实际 %v", initSteps, snap.InitSteps)
 	}
-	if snap.HeartbeatEnabled != true {
-		t.Errorf("快照心跳启用期望 true, 实际 %v", snap.HeartbeatEnabled)
-	}
-	if snap.HeartbeatIntervalMinutes != 30 {
-		t.Errorf("快照心跳间隔期望 30, 实际 %d", snap.HeartbeatIntervalMinutes)
-	}
-	if snap.HeartbeatMDContent != "# Content" {
-		t.Errorf("快照心跳内容期望 '# Content', 实际 %s", snap.HeartbeatMDContent)
-	}
-	if snap.AgentCode != "agent-001" {
-		t.Errorf("快照Agent代码期望 'agent-001', 实际 %s", snap.AgentCode)
-	}
 	if snap.DispatchChannelCode != "feishu" {
 		t.Errorf("快照派发通道代码期望 'feishu', 实际 %s", snap.DispatchChannelCode)
 	}
@@ -502,19 +383,15 @@ func TestProjectToSnapshot(t *testing.T) {
 
 func TestProjectFromSnapshot(t *testing.T) {
 	snap := ProjectSnapshot{
-		ID:                       NewProjectID("proj-001"),
-		Name:                     "快照项目",
-		GitRepoURL:               "https://github.com/snapshot/project.git",
-		DefaultBranch:            "feature-branch",
-		InitSteps:                []string{"snap-step1", "snap-step2"},
-		HeartbeatEnabled:         true,
-		HeartbeatIntervalMinutes: 45,
-		HeartbeatMDContent:       "# Snapshot Content",
-		AgentCode:                "snap-agent",
-		DispatchChannelCode:      "snap-channel",
-		DispatchSessionKey:       "snap-session",
-		CreatedAt:                time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-		UpdatedAt:                time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+		ID:                  NewProjectID("proj-001"),
+		Name:                "快照项目",
+		GitRepoURL:          "https://github.com/snapshot/project.git",
+		DefaultBranch:       "feature-branch",
+		InitSteps:           []string{"snap-step1", "snap-step2"},
+		DispatchChannelCode: "snap-channel",
+		DispatchSessionKey:  "snap-session",
+		CreatedAt:           time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt:           time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 	}
 
 	project := &Project{}
@@ -535,18 +412,6 @@ func TestProjectFromSnapshot(t *testing.T) {
 	expectedSteps := []string{"snap-step1", "snap-step2"}
 	if !reflect.DeepEqual(project.InitSteps(), expectedSteps) {
 		t.Errorf("初始化步骤期望 %v, 实际 %v", expectedSteps, project.InitSteps())
-	}
-	if project.HeartbeatEnabled() != true {
-		t.Errorf("心跳启用期望 true, 实际 %v", project.HeartbeatEnabled())
-	}
-	if project.HeartbeatIntervalMinutes() != 45 {
-		t.Errorf("心跳间隔期望 45, 实际 %d", project.HeartbeatIntervalMinutes())
-	}
-	if project.HeartbeatMDContent() != "# Snapshot Content" {
-		t.Errorf("心跳内容期望 '# Snapshot Content', 实际 %s", project.HeartbeatMDContent())
-	}
-	if project.AgentCode() != "snap-agent" {
-		t.Errorf("Agent代码期望 snap-agent, 实际 %s", project.AgentCode())
 	}
 	if project.DispatchChannelCode() != "snap-channel" {
 		t.Errorf("派发通道代码期望 snap-channel, 实际 %s", project.DispatchChannelCode())
@@ -576,13 +441,8 @@ func TestProjectSnapshotRoundTrip(t *testing.T) {
 	}
 
 	// 设置所有配置
-	enabled := true
-	interval := 120
-	mdContent := "# Original MD"
-	agentCode := "original-agent"
 	channelCode := "original-channel"
 	sessionKey := "original-session"
-	original.UpdateHeartbeatConfig(&enabled, &interval, &mdContent, &agentCode)
 	original.UpdateDispatchConfig(&channelCode, &sessionKey)
 
 	// 转换为快照
@@ -607,18 +467,6 @@ func TestProjectSnapshotRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(restored.InitSteps(), original.InitSteps()) {
 		t.Errorf("初始化步骤不匹配: 期望 %v, 实际 %v", original.InitSteps(), restored.InitSteps())
-	}
-	if restored.HeartbeatEnabled() != original.HeartbeatEnabled() {
-		t.Errorf("心跳启用不匹配")
-	}
-	if restored.HeartbeatIntervalMinutes() != original.HeartbeatIntervalMinutes() {
-		t.Errorf("心跳间隔不匹配: 期望 %d, 实际 %d", original.HeartbeatIntervalMinutes(), restored.HeartbeatIntervalMinutes())
-	}
-	if restored.HeartbeatMDContent() != original.HeartbeatMDContent() {
-		t.Errorf("心跳内容不匹配")
-	}
-	if restored.AgentCode() != original.AgentCode() {
-		t.Errorf("Agent代码不匹配")
 	}
 	if restored.DispatchChannelCode() != original.DispatchChannelCode() {
 		t.Errorf("派发通道代码不匹配")

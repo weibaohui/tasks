@@ -74,7 +74,7 @@ func buildRequirementDispatchPrompt(requirement *domain.Requirement, project *do
 			project.GitRepoURL(), project.DefaultBranch(), workspacePath,
 			stateAIGuide,
 			stateMachineGuide,
-			project.HeartbeatMDContent())
+			requirement.Description())
 	} else {
 		initSteps := project.InitSteps()
 		initStepsText := "无"

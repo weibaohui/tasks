@@ -12,11 +12,11 @@ import (
 
 // SetupRoutes 设置路由
 func SetupRoutes() *gin.Engine {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *gin.Engine {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -34,6 +34,7 @@ func SetupRoutesWithManagement(
 	stateMachineHandler *StateMachineHandler,
 	projectStateMachineHandler *ProjectStateMachineHandler,
 	requirementTypeHandler *RequirementTypeHandler,
+	heartbeatHandler *HeartbeatHandler,
 ) *gin.Engine {
 	engine := gin.Default()
 
@@ -147,6 +148,15 @@ func SetupRoutesWithManagement(
 		projects.GET("", projectHandler.handleGetProjects)
 		projects.PUT("", projectHandler.UpdateProject)
 		projects.DELETE("", projectHandler.DeleteProject)
+	}
+
+	if heartbeatHandler != nil {
+		heartbeats := v1.Group("/heartbeats", requireAuth)
+		heartbeats.GET("", heartbeatHandler.ListHeartbeats)
+		heartbeats.POST("", heartbeatHandler.CreateHeartbeat)
+		heartbeats.GET("/:id", heartbeatHandler.GetHeartbeat)
+		heartbeats.PUT("/:id", heartbeatHandler.UpdateHeartbeat)
+		heartbeats.DELETE("/:id", heartbeatHandler.DeleteHeartbeat)
 	}
 
 	if requirementHandler != nil {

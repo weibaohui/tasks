@@ -15,21 +15,24 @@ import (
 
 // HeartbeatScheduler 心跳调度器
 type HeartbeatScheduler struct {
-	cron                     *cron.Cron
-	projectRepo              domain.ProjectRepository
-	agentRepo                domain.AgentRepository
-	requirementRepo          domain.RequirementRepository
-	idGenerator              domain.IDGenerator
-	inboundPublisher         interface {
+	cron                       *cron.Cron
+	heartbeatRepo              domain.HeartbeatRepository
+	projectRepo                domain.ProjectRepository
+	agentRepo                  domain.AgentRepository
+	requirementRepo            domain.RequirementRepository
+	idGenerator                domain.IDGenerator
+	inboundPublisher           interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	requirementDispatchService *RequirementDispatchService
-	stateMachineService         *StateMachineService
-	rootCtx                     context.Context
+	stateMachineService        *StateMachineService
+	rootCtx                    context.Context
+	entries                    map[string]cron.EntryID
 }
 
 // NewHeartbeatScheduler 创建心跳调度器
 func NewHeartbeatScheduler(
+	heartbeatRepo domain.HeartbeatRepository,
 	projectRepo domain.ProjectRepository,
 	agentRepo domain.AgentRepository,
 	requirementRepo domain.RequirementRepository,
@@ -41,14 +44,16 @@ func NewHeartbeatScheduler(
 	stateMachineService *StateMachineService,
 ) *HeartbeatScheduler {
 	return &HeartbeatScheduler{
-		cron:                      cron.New(cron.WithSeconds()),
-		projectRepo:               projectRepo,
-		agentRepo:                 agentRepo,
-		requirementRepo:           requirementRepo,
-		idGenerator:               idGenerator,
-		inboundPublisher:          inboundPublisher,
+		cron:                       cron.New(cron.WithSeconds()),
+		heartbeatRepo:              heartbeatRepo,
+		projectRepo:                projectRepo,
+		agentRepo:                  agentRepo,
+		requirementRepo:            requirementRepo,
+		idGenerator:                idGenerator,
+		inboundPublisher:           inboundPublisher,
 		requirementDispatchService: requirementDispatchService,
-		stateMachineService:       stateMachineService,
+		stateMachineService:        stateMachineService,
+		entries:                    make(map[string]cron.EntryID),
 	}
 }
 
@@ -59,22 +64,19 @@ func (s *HeartbeatScheduler) Start(ctx context.Context) error {
 	// 启动时清理过期的需求（服务器被kill时可能留下）
 	s.cleanupStaleRequirements(ctx)
 
-	// 加载所有启用心跳的项目
-	projects, err := s.projectRepo.FindAll(ctx)
+	// 加载所有启用心跳
+	heartbeats, err := s.heartbeatRepo.FindAllEnabled(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load projects: %w", err)
+		return fmt.Errorf("failed to load heartbeats: %w", err)
 	}
 
-	log.Printf("[HEARTBEAT] found %d projects total", len(projects))
-	for _, project := range projects {
-		log.Printf("[HEARTBEAT] checking project %s: heartbeat_enabled=%v, agent_code=%s", project.Name(), project.HeartbeatEnabled(), project.AgentCode())
-		if project.HeartbeatEnabled() && project.AgentCode() != "" {
-			if err := s.scheduleProject(project); err != nil {
-				log.Printf("failed to schedule heartbeat for project %s: %v", project.ID(), err)
-			} else {
-				log.Printf("heartbeat scheduled for project %s (interval: %d minutes)",
-					project.Name(), project.HeartbeatIntervalMinutes())
-			}
+	log.Printf("[HEARTBEAT] found %d enabled heartbeats", len(heartbeats))
+	for _, hb := range heartbeats {
+		if err := s.scheduleHeartbeat(hb); err != nil {
+			log.Printf("failed to schedule heartbeat %s: %v", hb.ID(), err)
+		} else {
+			log.Printf("heartbeat scheduled: %s (project: %s, interval: %d minutes)",
+				hb.Name(), hb.ProjectID(), hb.IntervalMinutes())
 		}
 	}
 
@@ -154,45 +156,75 @@ func (s *HeartbeatScheduler) Stop() {
 	log.Printf("heartbeat scheduler stopped")
 }
 
-// scheduleProject 为项目调度心跳
-func (s *HeartbeatScheduler) scheduleProject(project *domain.Project) error {
-	// 将分钟转换为 cron 表达式（每N分钟执行一次）
-	interval := project.HeartbeatIntervalMinutes()
+// scheduleHeartbeat 为心跳调度任务
+func (s *HeartbeatScheduler) scheduleHeartbeat(hb *domain.Heartbeat) error {
+	interval := hb.IntervalMinutes()
 	if interval < 1 {
 		interval = 60
 	}
-	cronExpr := fmt.Sprintf("0 */%d * * * *", interval) // 每N分钟的 cron 表达式
+	cronExpr := fmt.Sprintf("0 */%d * * * *", interval)
 
-	projectID := project.ID()
-	_, err := s.cron.AddFunc(cronExpr, func() {
-		s.executeHeartbeat(s.rootCtx, projectID.String())
+	heartbeatID := hb.ID().String()
+	entryID, err := s.cron.AddFunc(cronExpr, func() {
+		s.executeHeartbeat(s.rootCtx, heartbeatID)
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	s.entries[heartbeatID] = entryID
+	return nil
+}
+
+// RefreshSchedule 刷新单条心跳的调度
+func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context, heartbeatID string) error {
+	if entryID, exists := s.entries[heartbeatID]; exists {
+		s.cron.Remove(entryID)
+		delete(s.entries, heartbeatID)
+	}
+
+	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
+	if err != nil {
+		return fmt.Errorf("failed to find heartbeat %s: %w", heartbeatID, err)
+	}
+	if hb != nil && hb.Enabled() {
+		return s.scheduleHeartbeat(hb)
+	}
+	return nil
 }
 
 // executeHeartbeat 执行心跳
-func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID string) {
+func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, heartbeatID string) {
+	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
+	if err != nil || hb == nil {
+		log.Printf("heartbeat: failed to find heartbeat %s: %v", heartbeatID, err)
+		return
+	}
+	if !hb.Enabled() {
+		return
+	}
 
-	project, err := s.projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	project, err := s.projectRepo.FindByID(ctx, hb.ProjectID())
 	if err != nil || project == nil {
-		log.Printf("heartbeat: failed to find project %s: %v", projectID, err)
+		log.Printf("heartbeat: failed to find project for heartbeat %s: %v", heartbeatID, err)
 		return
 	}
 
-	if !project.HeartbeatEnabled() {
-		return
-	}
-
-	log.Printf("[HEARTBEAT] executing heartbeat for project %s", project.Name())
+	log.Printf("[HEARTBEAT] executing heartbeat %s for project %s", hb.Name(), project.Name())
 
 	// 替换模板变量
-	prompt := s.renderTemplate(project.HeartbeatMDContent(), project)
+	prompt := hb.RenderPrompt(project)
+
+	// 确定需求类型
+	reqType := hb.RequirementType()
+	if reqType == "" {
+		reqType = string(domain.RequirementTypeHeartbeat)
+	}
 
 	// 创建心跳需求
 	requirement, err := domain.NewRequirement(
 		domain.NewRequirementID(s.idGenerator.Generate()),
 		project.ID(),
-		fmt.Sprintf("[心跳] %s - %s", project.Name(), time.Now().Format("2006-01-02 15:04")),
+		fmt.Sprintf("[心跳] %s - %s", hb.Name(), time.Now().Format("2006-01-02 15:04")),
 		prompt,
 		"心跳自动生成",
 		"",
@@ -202,8 +234,8 @@ func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID str
 		return
 	}
 
-	// 标记为心跳需求类型
-	requirement.SetRequirementType(domain.RequirementTypeHeartbeat)
+	// 设置需求类型
+	requirement.SetRequirementType(domain.RequirementType(reqType))
 
 	// 保存需求
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
@@ -213,7 +245,7 @@ func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID str
 
 	// 初始化状态机状态（如果项目绑定了状态机）
 	if s.stateMachineService != nil {
-		psm, err := s.stateMachineService.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementTypeHeartbeat)
+		psm, err := s.stateMachineService.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementType(reqType))
 		if err == nil && psm != nil {
 			rs, err := s.stateMachineService.InitializeRequirementState(ctx, requirement.ID().String(), psm.StateMachineID())
 			if err != nil {
@@ -224,11 +256,10 @@ func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID str
 		}
 	}
 
-	log.Printf("[HEARTBEAT] created requirement %s for project %s, dispatching...", requirement.ID(), project.Name())
+	log.Printf("[HEARTBEAT] created requirement %s for heartbeat %s, dispatching...", requirement.ID(), hb.Name())
 
 	// 直接派发心跳需求
 	if s.requirementDispatchService != nil {
-		// 使用项目配置的派发渠道和 session_key
 		channelCode := project.DispatchChannelCode()
 		sessionKey := project.DispatchSessionKey()
 		if channelCode == "" || sessionKey == "" {
@@ -237,9 +268,9 @@ func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID str
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
-			AgentCode:    project.AgentCode(),
-			ChannelCode:  channelCode,
-			SessionKey:   sessionKey,
+			AgentCode:     hb.AgentCode(),
+			ChannelCode:   channelCode,
+			SessionKey:    sessionKey,
 		})
 		if err != nil {
 			log.Printf("heartbeat: failed to dispatch requirement %s: %v", requirement.ID(), err)
@@ -251,7 +282,7 @@ func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, projectID str
 	}
 }
 
-// renderTemplate 渲染模板变量
+// renderTemplate 渲染模板变量（保留兼容）
 func (s *HeartbeatScheduler) renderTemplate(template string, project *domain.Project) string {
 	result := template
 	result = strings.ReplaceAll(result, "${project.id}", project.ID().String())
@@ -260,38 +291,4 @@ func (s *HeartbeatScheduler) renderTemplate(template string, project *domain.Pro
 	result = strings.ReplaceAll(result, "${project.default_branch}", project.DefaultBranch())
 	result = strings.ReplaceAll(result, "${timestamp}", time.Now().Format("2006-01-02 15:04:05"))
 	return result
-}
-
-// UpdateProjectHeartbeat 更新项目心跳配置
-func (s *HeartbeatScheduler) UpdateProjectHeartbeat(ctx context.Context, projectID string, enabled bool, intervalMinutes int, mdContent, agentID string) error {
-	project, err := s.projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
-	if err != nil || project == nil {
-		return fmt.Errorf("project not found")
-	}
-
-	project.UpdateHeartbeatConfig(&enabled, &intervalMinutes, &mdContent, &agentID)
-	return s.projectRepo.Save(ctx, project)
-}
-
-// RefreshSchedule 刷新调度（当项目心跳配置变更时调用）
-func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context) error {
-	// 停止所有现有任务
-	s.cron.Stop()
-
-	// 重新加载并调度
-	projects, err := s.projectRepo.FindAll(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load projects: %w", err)
-	}
-
-	for _, project := range projects {
-		if project.HeartbeatEnabled() && project.AgentCode() != "" {
-			if err := s.scheduleProject(project); err != nil {
-				log.Printf("failed to schedule heartbeat for project %s: %v", project.ID(), err)
-			}
-		}
-	}
-
-	s.cron.Start()
-	return nil
 }

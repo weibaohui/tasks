@@ -8,19 +8,15 @@ import (
 )
 
 type Project struct {
-	ID                       string   `json:"id"`
-	Name                     string   `json:"name"`
-	GitRepoURL               string   `json:"git_repo_url"`
-	DefaultBranch            string   `json:"default_branch"`
-	InitSteps                []string `json:"init_steps"`
-	HeartbeatEnabled         bool     `json:"heartbeat_enabled"`
-	HeartbeatIntervalMinutes int      `json:"heartbeat_interval_minutes"`
-	HeartbeatMDContent       string   `json:"heartbeat_md_content"`
-	AgentCode                string   `json:"agent_code"`
-	DispatchChannelCode      string   `json:"dispatch_channel_code"`
-	DispatchSessionKey       string   `json:"dispatch_session_key"`
-	CreatedAt                int64    `json:"created_at"`
-	UpdatedAt                int64    `json:"updated_at"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	GitRepoURL          string   `json:"git_repo_url"`
+	DefaultBranch       string   `json:"default_branch"`
+	InitSteps           []string `json:"init_steps"`
+	DispatchChannelCode string   `json:"dispatch_channel_code"`
+	DispatchSessionKey  string   `json:"dispatch_session_key"`
+	CreatedAt           int64    `json:"created_at"`
+	UpdatedAt           int64    `json:"updated_at"`
 }
 
 // CreateProjectRequest 创建项目请求
@@ -93,17 +89,13 @@ func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
 
 // UpdateProjectRequest 更新项目请求
 type UpdateProjectRequest struct {
-	ID                       string   `json:"id"`
-	Name                     string   `json:"name,omitempty"`
-	GitRepoURL               string   `json:"git_repo_url,omitempty"`
-	DefaultBranch            string   `json:"default_branch,omitempty"`
-	InitSteps                []string `json:"init_steps,omitempty"`
-	HeartbeatEnabled         *bool    `json:"heartbeat_enabled,omitempty"`
-	HeartbeatIntervalMinutes *int     `json:"heartbeat_interval_minutes,omitempty"`
-	HeartbeatMDContent       *string  `json:"heartbeat_md_content,omitempty"`
-	AgentCode                *string  `json:"agent_code,omitempty"`
-	DispatchChannelCode      *string  `json:"dispatch_channel_code,omitempty"`
-	DispatchSessionKey       *string  `json:"dispatch_session_key,omitempty"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name,omitempty"`
+	GitRepoURL          string   `json:"git_repo_url,omitempty"`
+	DefaultBranch       string   `json:"default_branch,omitempty"`
+	InitSteps           []string `json:"init_steps,omitempty"`
+	DispatchChannelCode *string  `json:"dispatch_channel_code,omitempty"`
+	DispatchSessionKey  *string  `json:"dispatch_session_key,omitempty"`
 }
 
 // UpdateProject 更新项目
@@ -124,18 +116,6 @@ func (c *Client) UpdateProject(ctx context.Context, req UpdateProjectRequest) (*
 	}
 
 	return &result, nil
-}
-
-// UpdateProjectHeartbeat 更新项目心跳配置
-func (c *Client) UpdateProjectHeartbeat(ctx context.Context, projectID string, enabled bool, intervalMinutes int, mdContent, agentCode string) (*Project, error) {
-	req := UpdateProjectRequest{
-		ID:                       projectID,
-		HeartbeatEnabled:         &enabled,
-		HeartbeatIntervalMinutes: &intervalMinutes,
-		HeartbeatMDContent:       &mdContent,
-		AgentCode:                &agentCode,
-	}
-	return c.UpdateProject(ctx, req)
 }
 
 // DeleteProject 删除项目

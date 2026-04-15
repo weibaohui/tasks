@@ -33,21 +33,15 @@ var projectListCmd = &cobra.Command{
 
 		fmt.Printf("\n项目列表 (共 %d 个):\n", len(projects))
 		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("%-20s %-10s %-15s %s\n", "ID", "心跳", "间隔(分钟)", "项目名称")
+		fmt.Printf("%-20s %s\n", "ID", "项目名称")
 		fmt.Println("--------------------------------------------------------------------------------")
 		for _, project := range projects {
 			idStr := project.ID
 			if len(idStr) > 16 {
 				idStr = idStr[:16] + "..."
 			}
-			heartbeatStatus := "关闭"
-			if project.HeartbeatEnabled {
-				heartbeatStatus = "开启"
-			}
-			fmt.Printf("%-20s %-10s %-15d %s\n",
+			fmt.Printf("%-20s %s\n",
 				idStr,
-				heartbeatStatus,
-				project.HeartbeatIntervalMinutes,
 				project.Name)
 		}
 		fmt.Println()
@@ -81,9 +75,6 @@ var projectGetCmd = &cobra.Command{
 		fmt.Printf("%-20s %s\n", "名称", project.Name)
 		fmt.Printf("%-20s %s\n", "Git仓库", project.GitRepoURL)
 		fmt.Printf("%-20s %s\n", "默认分支", project.DefaultBranch)
-		fmt.Printf("%-20s %t\n", "心跳", project.HeartbeatEnabled)
-		fmt.Printf("%-20s %d 分钟\n", "心跳间隔", project.HeartbeatIntervalMinutes)
-		fmt.Printf("%-20s %s\n", "Agent", project.AgentCode)
 		fmt.Printf("%-20s %s\n", "派发渠道", project.DispatchChannelCode)
 		fmt.Printf("%-20s %s\n", "派发SessionKey", project.DispatchSessionKey)
 

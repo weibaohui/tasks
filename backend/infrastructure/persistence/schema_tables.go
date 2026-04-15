@@ -342,4 +342,22 @@ CREATE TABLE IF NOT EXISTS requirement_types (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     UNIQUE(project_id, code)
 );
+
+CREATE TABLE IF NOT EXISTS heartbeats (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    interval_minutes INTEGER NOT NULL DEFAULT 60,
+    md_content TEXT NOT NULL DEFAULT '',
+    agent_code TEXT NOT NULL DEFAULT '',
+    requirement_type TEXT NOT NULL DEFAULT 'heartbeat',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeats_project_id ON heartbeats(project_id);
+CREATE INDEX IF NOT EXISTS idx_heartbeats_enabled ON heartbeats(enabled);
 `
