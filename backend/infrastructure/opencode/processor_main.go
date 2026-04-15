@@ -180,9 +180,9 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 		cliSessionID = session.CliSessionID
 	}
 
-	// 执行流式处理
+	// 执行流式处理（使用独立 context，避免受父 context 取消影响）
 	result, tokenUsage, err := p.queryOpenCodeStreaming(
-		ctx, msg, userInput, cliSessionID, traceID, provider, agent, callback,
+		context.Background(), msg, userInput, cliSessionID, traceID, provider, agent, callback,
 	)
 
 	if err != nil {
@@ -466,8 +466,9 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	}
 
 	// 使用 goroutine 解析输出
-	errChan := make(chan error, 1)
+	scannerDone := make(chan struct{})
 	go func() {
+		defer close(scannerDone)
 		scanner := bufio.NewScanner(stdout)
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024)
@@ -517,28 +518,32 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 
 		if err := scanner.Err(); err != nil {
 			if queryCtx.Err() == nil {
-				errChan <- fmt.Errorf("读取 stdout 失败: %w", err)
+				sc.mu.Lock()
+				sc.err = fmt.Errorf("读取 stdout 失败: %w", err)
+				sc.mu.Unlock()
 			}
 		}
+	}()
 
-		close(errChan)
+	// 在后台等待进程结束
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
 	}()
 
 	// 等待完成或超时
 	select {
 	case <-queryCtx.Done():
 		cmd.Process.Kill()
+		go func() { <-waitDone }() // 异步回收进程，避免僵尸
 		return sc.result, sc.tokenUsage, queryCtx.Err()
-	case err := <-errChan:
-		waitErr := cmd.Wait()
+	case waitErr := <-waitDone:
+		<-scannerDone
 		stderrStr := strings.TrimSpace(stderrBuilder.String())
 		if stderrStr != "" {
 			p.logger.Warn("OpenCode stderr",
 				zap.String("session_key", sessionKey),
 				zap.String("stderr", stderrStr))
-		}
-		if err != nil {
-			return sc.result, sc.tokenUsage, err
 		}
 		if waitErr != nil {
 			if stderrStr != "" {
