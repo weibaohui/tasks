@@ -79,6 +79,10 @@ func main() {
 	if err := _persistence.MigrateClaudeRuntimeColumns(db); err != nil {
 		logger.Fatal("Failed to migrate schema", zap.Error(err))
 	}
+	// 兼容旧数据库：添加 progress_data 列
+	if err := _persistence.MigrateProgressDataColumn(db); err != nil {
+		logger.Fatal("Failed to migrate progress_data column", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
@@ -122,6 +126,8 @@ func main() {
 		},
 	})
 	hookManager.Register(convRecordHook)
+	progressTrackingHook := hooks.NewProgressTrackingHook(requirementRepo, logger)
+	hookManager.Register(progressTrackingHook)
 	logger.Info("Hook Manager 初始化完成", zap.Int("hooks", len(hookManager.List())))
 
 	// 5. 初始化应用服务

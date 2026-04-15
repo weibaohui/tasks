@@ -143,6 +143,7 @@ type RequirementRepository interface {
 	Save(ctx context.Context, requirement *Requirement) error
 	FindByID(ctx context.Context, id RequirementID) (*Requirement, error)
 	FindByProjectID(ctx context.Context, projectID ProjectID) ([]*Requirement, error)
+	FindByTraceID(ctx context.Context, traceID string) (*Requirement, error)
 	FindAll(ctx context.Context) ([]*Requirement, error)
 	List(ctx context.Context, filter RequirementListFilter) ([]*Requirement, error)
 	Count(ctx context.Context, filter RequirementListFilter) (int, error)
