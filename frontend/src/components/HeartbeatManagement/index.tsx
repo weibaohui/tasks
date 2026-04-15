@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, message, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, MinusCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { Heartbeat } from '../../types/heartbeat';
 import type { HeartbeatTemplate } from '../../types/heartbeat_template';
 import type { Agent } from '../../types/agent';
 import { listHeartbeats, createHeartbeat, updateHeartbeat, deleteHeartbeat } from '../../api/heartbeatApi';
 import { listHeartbeatTemplates, createHeartbeatTemplate, deleteHeartbeatTemplate } from '../../api/heartbeatTemplateApi';
-import { HeartbeatTemplateEditor } from '../HeartbeatTemplate';
 
 interface HeartbeatManagementProps {
   projectId: string;
@@ -306,13 +305,22 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
             </Space>
           </Form.Item>
 
-          <Form.Item name="md_content" hidden>
-            <Input />
+          <Form.Item
+            name="md_content"
+            label={
+              <Space>
+                <FileTextOutlined />
+                <span>心跳模板</span>
+              </Space>
+            }
+            extra="使用模板变量：\${project.id}, \${project.name}, \${project.git_repo_url}, \${project.default_branch}, \${timestamp}"
+          >
+            <Input.TextArea
+              rows={20}
+              style={{ fontFamily: 'monospace' }}
+              placeholder="输入心跳模板内容..."
+            />
           </Form.Item>
-          <HeartbeatTemplateEditor
-            value={form.getFieldValue('md_content')}
-            onChange={(value) => form.setFieldValue('md_content', value)}
-          />
         </Form>
       </Modal>
 
