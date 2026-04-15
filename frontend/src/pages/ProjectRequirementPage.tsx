@@ -367,6 +367,10 @@ export const ProjectRequirementPage: React.FC = () => {
   };
 
   const openCreateRequirement = () => {
+    if (requirementTypes.length === 0) {
+      message.warning('需求类型加载中，请稍候');
+      return;
+    }
     setEditingRequirement(null);
     requirementForm.resetFields();
     requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops', requirement_type: requirementTypes[0]?.code || '' });

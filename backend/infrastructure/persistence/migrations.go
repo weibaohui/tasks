@@ -70,6 +70,11 @@ func MigrateRequirementTypeSystemColumn(db *sql.DB) error {
 		}
 	}
 
+	// 兼容旧数据：将已有的 normal 和 heartbeat 标记为系统类型
+	if _, err := db.Exec("UPDATE requirement_types SET is_system = 1 WHERE code IN ('normal', 'heartbeat')"); err != nil {
+		return fmt.Errorf("更新系统类型标志失败: %w", err)
+	}
+
 	return nil
 }
 
