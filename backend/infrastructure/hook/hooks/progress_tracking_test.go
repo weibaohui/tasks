@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/weibh/taskmanager/domain"
@@ -291,23 +290,19 @@ func TestProgressTrackingHook_PreToolCall_updatesRequirement(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	progressJSON := updated.ProgressData()
-	if progressJSON == "" {
+	progressData := updated.ProgressData()
+	if progressData == nil {
 		t.Fatal("expected progress_data to be updated")
 	}
 
-	var data domain.ProgressData
-	if err := json.Unmarshal([]byte(progressJSON), &data); err != nil {
-		t.Fatalf("failed to unmarshal progress data: %v", err)
+	if len(progressData.Items) != 2 {
+		t.Fatalf("expected 2 progress items, got %d", len(progressData.Items))
 	}
-	if len(data.Items) != 2 {
-		t.Fatalf("expected 2 progress items, got %d", len(data.Items))
+	if progressData.Percent != 50 {
+		t.Errorf("expected percent 50, got %d", progressData.Percent)
 	}
-	if data.Percent != 50 {
-		t.Errorf("expected percent 50, got %d", data.Percent)
-	}
-	if data.Items[0].Content != "步骤1" || data.Items[0].Status != "completed" {
-		t.Errorf("unexpected first progress item: %+v", data.Items[0])
+	if progressData.Items[0].Content != "步骤1" || progressData.Items[0].Status != "completed" {
+		t.Errorf("unexpected first progress item: %+v", progressData.Items[0])
 	}
 }
 

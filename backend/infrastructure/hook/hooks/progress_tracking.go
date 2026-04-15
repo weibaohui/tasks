@@ -168,7 +168,7 @@ func (h *ProgressTrackingHook) updateRequirementProgress(ctx context.Context, tr
 		return fmt.Errorf("requirement not found for trace_id: %s", traceID)
 	}
 
-	requirement.SetProgressData(data.ToJSON())
+	requirement.SetProgressData(data)
 	return h.requirementRepo.Save(ctx, requirement)
 }
 
