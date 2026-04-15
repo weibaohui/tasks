@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col } from 'antd';
-import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
+import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
-import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement } from '../types/projectRequirement';
+import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement, ProgressData, TodoItem } from '../types/projectRequirement';
 import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
@@ -82,6 +82,11 @@ export const ProjectRequirementPage: React.FC = () => {
   const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null);
   // 需求状态转换历史
   const [transitionHistory, setTransitionHistory] = useState<TransitionLog[]>([]);
+
+  // 进度详情弹窗状态
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [progressModalData, setProgressModalData] = useState<ProgressData | null>(null);
+  const [progressModalTitle, setProgressModalTitle] = useState('');
 
   // 需求状态过滤
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -522,6 +527,27 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
+  // 解析 progress_data（后端可能是 JSON 字符串或对象）
+  const parseProgressData = (item: Requirement): ProgressData | null => {
+    if (!item.progress_data) return null;
+    if (typeof item.progress_data === 'string') {
+      try {
+        return JSON.parse(item.progress_data) as ProgressData;
+      } catch {
+        return null;
+      }
+    }
+    return item.progress_data as ProgressData;
+  };
+
+  const openProgressModal = (item: Requirement) => {
+    const data = parseProgressData(item);
+    if (!data) return;
+    setProgressModalData(data);
+    setProgressModalTitle(item.title);
+    setProgressModalOpen(true);
+  };
+
   // 获取类型配置（用于显示）
   const getTypeDisplay = (code: string): { label: string; color: string } => {
     const typeConfig = requirementTypes.find((t) => t.code === code);
@@ -688,6 +714,23 @@ export const ProjectRequirementPage: React.FC = () => {
             <Tag color={agentRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
             {isRunning && <Tag color="processing">运行中</Tag>}
           </Space>
+        );
+      },
+    },
+    {
+      title: '进度',
+      key: 'progress',
+      width: 120,
+      responsive: ['sm'] as Breakpoint[],
+      render: (_: unknown, item: Requirement) => {
+        const data = parseProgressData(item);
+        if (!data || !data.items || data.items.length === 0) {
+          return <span>-</span>;
+        }
+        return (
+          <div style={{ cursor: 'pointer', minWidth: 80 }} onClick={() => openProgressModal(item)}>
+            <Progress percent={data.percent} size="small" strokeColor={data.percent === 100 ? '#52c41a' : '#1890ff'} />
+          </div>
         );
       },
     },
@@ -1400,6 +1443,43 @@ export const ProjectRequirementPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* 进度详情 */}
+                    {(() => {
+                      const progressData = parseProgressData(detailRequirement);
+                      if (!progressData || progressData.items.length === 0) return null;
+                      return (
+                        <div style={{ marginBottom: 16, padding: 12, background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
+                          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#666', fontSize: 12 }}>执行进度</span>
+                            <span style={{ fontSize: 12, color: '#52c41a', fontWeight: 500 }}>{progressData.percent}%</span>
+                          </div>
+                          <div style={{ marginBottom: 12 }}>
+                            <Progress percent={progressData.percent} size="small" strokeColor={progressData.percent === 100 ? '#52c41a' : '#1890ff'} />
+                          </div>
+                          <List
+                            size="small"
+                            dataSource={progressData.items}
+                            renderItem={(todo: TodoItem) => {
+                              const statusLower = (todo.status || '').toLowerCase();
+                              const isDone = statusLower === 'completed' || statusLower === 'done';
+                              const isRunning = statusLower === 'in_progress' || statusLower === 'running' || statusLower === 'doing';
+                              const icon = isDone ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : isRunning ? <SyncOutlined spin style={{ color: '#1890ff' }} /> : <ClockCircleOutlined style={{ color: '#999' }} />;
+                              return (
+                                <List.Item style={{ padding: '4px 0', borderBottom: 'none' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                                    {icon}
+                                    <span style={{ flex: 1, fontSize: 13, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#999' : '#333' }}>{todo.content}</span>
+                                    <Tag color={isDone ? 'success' : isRunning ? 'processing' : 'default'}>{todo.status || 'pending'}</Tag>
+                                    {todo.priority && <Tag color="warning">{todo.priority}</Tag>}
+                                  </div>
+                                </List.Item>
+                              );
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
+
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>执行提示词</span>
@@ -1544,6 +1624,56 @@ export const ProjectRequirementPage: React.FC = () => {
           />
         )}
       </Drawer>
+
+      {/* 进度详情弹窗 */}
+      <Modal
+        title={`进度详情 - ${progressModalTitle}`}
+        open={progressModalOpen}
+        onCancel={() => setProgressModalOpen(false)}
+        footer={null}
+        width={560}
+      >
+        {progressModalData ? (
+          <div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, color: '#666' }}>整体进度</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: progressModalData.percent === 100 ? '#52c41a' : '#1890ff' }}>
+                {progressModalData.percent}%
+              </span>
+            </div>
+            <Progress percent={progressModalData.percent} size="small" strokeColor={progressModalData.percent === 100 ? '#52c41a' : '#1890ff'} />
+            {progressModalData.updated_at && (
+              <div style={{ marginTop: 4, marginBottom: 16, fontSize: 12, color: '#999', textAlign: 'right' }}>
+                更新时间: {new Date(progressModalData.updated_at).toLocaleString()}
+              </div>
+            )}
+            <List
+              size="small"
+              dataSource={progressModalData.items}
+              renderItem={(todo: TodoItem) => {
+                const statusLower = (todo.status || '').toLowerCase();
+                const isDone = statusLower === 'completed' || statusLower === 'done';
+                const isRunning = statusLower === 'in_progress' || statusLower === 'running' || statusLower === 'doing';
+                const icon = isDone ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : isRunning ? <SyncOutlined spin style={{ color: '#1890ff' }} /> : <ClockCircleOutlined style={{ color: '#999' }} />;
+                return (
+                  <List.Item style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+                      {icon}
+                      <span style={{ flex: 1, fontSize: 14, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#999' : '#333' }}>
+                        {todo.content}
+                      </span>
+                      <Tag color={isDone ? 'success' : isRunning ? 'processing' : 'default'}>{todo.status || 'pending'}</Tag>
+                      {todo.priority && <Tag color="warning">{todo.priority}</Tag>}
+                    </div>
+                  </List.Item>
+                );
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无进度数据</div>
+        )}
+      </Modal>
 
       {/* Trace Viewer 弹窗 */}
       <TraceViewer

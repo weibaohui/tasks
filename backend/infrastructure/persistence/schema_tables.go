@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     total_tokens INTEGER DEFAULT 0,
     requirement_type TEXT NOT NULL DEFAULT 'normal',
     previous_status TEXT,
+    progress_data TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 

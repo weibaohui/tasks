@@ -206,6 +206,7 @@ func (h *RequirementHandler) requirementToMap(requirement *domain.Requirement) m
 	resp["agent_runtime"] = h.getAgentRuntimeByRequirement(requirement)
 	resp["assignee_agent"] = h.agentBriefByCode(requirement.AssigneeAgentCode())
 	resp["replica_agent"] = h.agentBriefByCode(requirement.ReplicaAgentCode())
+	resp["progress_data"] = requirement.ProgressData()
 	return resp
 }
 

@@ -41,6 +41,22 @@ func MigrateClaudeRuntimeColumns(db *sql.DB) error {
 	return nil
 }
 
+// MigrateProgressDataColumn 兼容旧数据库：在 requirements 表中添加 progress_data 列
+func MigrateProgressDataColumn(db *sql.DB) error {
+	columns, err := getTableColumns(db, "requirements")
+	if err != nil {
+		return fmt.Errorf("获取 requirements 表列信息失败: %w", err)
+	}
+
+	if _, exists := columns["progress_data"]; !exists {
+		if _, err := db.Exec("ALTER TABLE requirements ADD COLUMN progress_data TEXT"); err != nil {
+			return fmt.Errorf("添加 progress_data 列失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
 	if err != nil {

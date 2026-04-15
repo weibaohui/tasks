@@ -112,6 +112,15 @@ func (m *mockRequirementRepo) GetStatusStats(ctx context.Context, projectID *dom
 	return nil, nil
 }
 
+func (m *mockRequirementRepo) FindByTraceID(ctx context.Context, traceID string) (*domain.Requirement, error) {
+	for _, req := range m.requirements {
+		if req.TraceID() == traceID {
+			return req, nil
+		}
+	}
+	return nil, nil
+}
+
 type mockRequirementIDGen struct {
 	count int
 }

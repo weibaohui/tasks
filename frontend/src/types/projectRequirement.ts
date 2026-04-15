@@ -21,6 +21,18 @@ export interface RequirementAgentInfo {
   shadow_from?: string;
 }
 
+export interface TodoItem {
+  content: string;
+  status: string;
+  priority?: string;
+}
+
+export interface ProgressData {
+  items: TodoItem[];
+  percent: number;
+  updated_at: number;
+}
+
 export interface Requirement {
   id: string;
   project_id: string;
@@ -40,6 +52,7 @@ export interface Requirement {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  progress_data?: ProgressData | string | null;
   agent_runtime?: {
     status?: string;
     last_error?: string;
