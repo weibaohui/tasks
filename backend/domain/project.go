@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ErrProjectIDRequired      = errors.New("project id is required")
-	ErrProjectNameRequired    = errors.New("project name is required")
-	ErrProjectRepoURLRequired = errors.New("project git repo url is required")
+	ErrProjectIDRequired               = errors.New("project id is required")
+	ErrProjectNameRequired             = errors.New("project name is required")
+	ErrProjectRepoURLRequired          = errors.New("project git repo url is required")
+	ErrProjectMaxConcurrentAgentsInvalid = errors.New("project max concurrent agents must be between 1 and 10")
 )
 
 type ProjectID struct {
@@ -36,6 +37,7 @@ type Project struct {
 	agentCode                string
 	dispatchChannelCode      string
 	dispatchSessionKey       string
+	maxConcurrentAgents      int
 	createdAt                time.Time
 	updatedAt                time.Time
 }
@@ -66,6 +68,7 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 		agentCode:                "",
 		dispatchChannelCode:      "",
 		dispatchSessionKey:       "",
+		maxConcurrentAgents:      2,
 		createdAt:                now,
 		updatedAt:                now,
 	}, nil
@@ -82,6 +85,7 @@ func (p *Project) HeartbeatMDContent() string    { return p.heartbeatMDContent }
 func (p *Project) AgentCode() string             { return p.agentCode }
 func (p *Project) DispatchChannelCode() string   { return p.dispatchChannelCode }
 func (p *Project) DispatchSessionKey() string    { return p.dispatchSessionKey }
+func (p *Project) MaxConcurrentAgents() int      { return p.maxConcurrentAgents }
 func (p *Project) CreatedAt() time.Time          { return p.createdAt }
 func (p *Project) UpdatedAt() time.Time          { return p.updatedAt }
 
@@ -131,6 +135,16 @@ func (p *Project) UpdateDispatchConfig(channelCode, sessionKey *string) {
 	p.updatedAt = time.Now()
 }
 
+// SetMaxConcurrentAgents 设置最大并发 Agent 数量（范围 1-10）
+func (p *Project) SetMaxConcurrentAgents(value int) error {
+	if value < 1 || value > 10 {
+		return ErrProjectMaxConcurrentAgentsInvalid
+	}
+	p.maxConcurrentAgents = value
+	p.updatedAt = time.Now()
+	return nil
+}
+
 type ProjectSnapshot struct {
 	ID                       ProjectID
 	Name                     string
@@ -143,6 +157,7 @@ type ProjectSnapshot struct {
 	AgentCode                string
 	DispatchChannelCode      string
 	DispatchSessionKey       string
+	MaxConcurrentAgents      int
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
 }
@@ -160,6 +175,7 @@ func (p *Project) ToSnapshot() ProjectSnapshot {
 		AgentCode:                p.agentCode,
 		DispatchChannelCode:      p.dispatchChannelCode,
 		DispatchSessionKey:       p.dispatchSessionKey,
+		MaxConcurrentAgents:      p.maxConcurrentAgents,
 		CreatedAt:                p.createdAt,
 		UpdatedAt:                p.updatedAt,
 	}
@@ -177,6 +193,7 @@ func (p *Project) FromSnapshot(s ProjectSnapshot) {
 	p.agentCode = s.AgentCode
 	p.dispatchChannelCode = s.DispatchChannelCode
 	p.dispatchSessionKey = s.DispatchSessionKey
+	p.maxConcurrentAgents = s.MaxConcurrentAgents
 	p.createdAt = s.CreatedAt
 	p.updatedAt = s.UpdatedAt
 }

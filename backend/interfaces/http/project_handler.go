@@ -37,6 +37,7 @@ type UpdateProjectRequest struct {
 	AgentCode                *string  `json:"agent_code,omitempty"`
 	DispatchChannelCode      *string  `json:"dispatch_channel_code,omitempty"`
 	DispatchSessionKey       *string  `json:"dispatch_session_key,omitempty"`
+	MaxConcurrentAgents      *int     `json:"max_concurrent_agents,omitempty"`
 }
 
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
@@ -103,6 +104,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		AgentCode:                req.AgentCode,
 		DispatchChannelCode:      req.DispatchChannelCode,
 		DispatchSessionKey:       req.DispatchSessionKey,
+		MaxConcurrentAgents:      req.MaxConcurrentAgents,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
@@ -152,6 +154,7 @@ func projectToMap(project *domain.Project) map[string]interface{} {
 		"agent_code":                project.AgentCode(),
 		"dispatch_channel_code":     project.DispatchChannelCode(),
 		"dispatch_session_key":      project.DispatchSessionKey(),
+		"max_concurrent_agents":     project.MaxConcurrentAgents(),
 		"created_at":                project.CreatedAt().UnixMilli(),
 		"updated_at":                project.UpdatedAt().UnixMilli(),
 	}

@@ -767,3 +767,101 @@ func TestProjectNewProjectStepsCopy(t *testing.T) {
 		t.Errorf("NewProject 应复制 steps: 期望 step1, 实际 %s", retrievedSteps[0])
 	}
 }
+
+func TestProjectMaxConcurrentAgentsDefault(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	if project.MaxConcurrentAgents() != 2 {
+		t.Errorf("期望默认最大并发 Agent 数为 2, 实际 %d", project.MaxConcurrentAgents())
+	}
+}
+
+func TestProjectSetMaxConcurrentAgentsValid(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	validValues := []int{1, 5, 10}
+	for _, v := range validValues {
+		oldUpdatedAt := project.UpdatedAt()
+		time.Sleep(10 * time.Millisecond)
+
+		if err := project.SetMaxConcurrentAgents(v); err != nil {
+			t.Errorf("SetMaxConcurrentAgents(%d) 不应返回错误, 实际 %v", v, err)
+		}
+		if project.MaxConcurrentAgents() != v {
+			t.Errorf("期望 MaxConcurrentAgents 为 %d, 实际 %d", v, project.MaxConcurrentAgents())
+		}
+		if !project.UpdatedAt().After(oldUpdatedAt) {
+			t.Errorf("SetMaxConcurrentAgents(%d) 应更新 UpdatedAt", v)
+		}
+	}
+}
+
+func TestProjectSetMaxConcurrentAgentsInvalid(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	invalidValues := []int{0, 11, -1}
+	for _, v := range invalidValues {
+		oldValue := project.MaxConcurrentAgents()
+		if err := project.SetMaxConcurrentAgents(v); err != ErrProjectMaxConcurrentAgentsInvalid {
+			t.Errorf("SetMaxConcurrentAgents(%d) 应返回 ErrProjectMaxConcurrentAgentsInvalid, 实际 %v", v, err)
+		}
+		if project.MaxConcurrentAgents() != oldValue {
+			t.Errorf("非法值不应改变 MaxConcurrentAgents: 期望 %d, 实际 %d", oldValue, project.MaxConcurrentAgents())
+		}
+	}
+}
+
+func TestProjectMaxConcurrentAgentsSnapshotRoundTrip(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	if err := project.SetMaxConcurrentAgents(3); err != nil {
+		t.Fatalf("设置并发数失败: %v", err)
+	}
+
+	snap := project.ToSnapshot()
+	if snap.MaxConcurrentAgents != 3 {
+		t.Errorf("快照 MaxConcurrentAgents 期望 3, 实际 %d", snap.MaxConcurrentAgents)
+	}
+
+	restored := &Project{}
+	restored.FromSnapshot(snap)
+	if restored.MaxConcurrentAgents() != 3 {
+		t.Errorf("恢复后 MaxConcurrentAgents 期望 3, 实际 %d", restored.MaxConcurrentAgents())
+	}
+}

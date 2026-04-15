@@ -30,6 +30,7 @@ type UpdateProjectCommand struct {
 	AgentCode                *string
 	DispatchChannelCode      *string
 	DispatchSessionKey       *string
+	MaxConcurrentAgents      *int
 }
 
 type ProjectApplicationService struct {
@@ -150,6 +151,11 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	if cmd.DispatchChannelCode != nil && *cmd.DispatchChannelCode != "" ||
 		cmd.DispatchSessionKey != nil && *cmd.DispatchSessionKey != "" {
 		project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
+	}
+	if cmd.MaxConcurrentAgents != nil {
+		if err := project.SetMaxConcurrentAgents(*cmd.MaxConcurrentAgents); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err

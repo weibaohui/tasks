@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
+import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, InputNumber, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
 import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, getRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
@@ -332,11 +332,12 @@ export const ProjectRequirementPage: React.FC = () => {
       agent_code: project.agent_code || '',
       dispatch_channel_code: project.dispatch_channel_code || '',
       dispatch_session_key: project.dispatch_session_key || '',
+      max_concurrent_agents: project.max_concurrent_agents ?? 2,
     });
     setProjectModalOpen(true);
   };
 
-  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string; agent_code?: string; dispatch_channel_code?: string; dispatch_session_key?: string }) => {
+  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string; agent_code?: string; dispatch_channel_code?: string; dispatch_session_key?: string; max_concurrent_agents?: number }) => {
     const payload: CreateProjectRequest = {
       name: values.name,
       git_repo_url: values.git_repo_url,
@@ -354,6 +355,7 @@ export const ProjectRequirementPage: React.FC = () => {
           agent_code: values.agent_code || '',
           dispatch_channel_code: values.dispatch_channel_code || '',
           dispatch_session_key: values.dispatch_session_key || '',
+          max_concurrent_agents: values.max_concurrent_agents ?? 2,
         });
         message.success('更新项目成功');
       } else {
@@ -1107,6 +1109,9 @@ export const ProjectRequirementPage: React.FC = () => {
           <Form.Item label="默认 SessionKey" name="dispatch_session_key">
             <Input placeholder="例如：feishu:ou_xxx" />
           </Form.Item>
+          <Form.Item label="最大并发 Agent 数" name="max_concurrent_agents" rules={[{ required: true, message: '请输入最大并发 Agent 数' }]}>
+            <InputNumber min={1} max={10} style={{ width: '100%' }} />
+          </Form.Item>
           <Button type="primary" htmlType="submit" block>
             保存
           </Button>
@@ -1213,6 +1218,7 @@ export const ProjectRequirementPage: React.FC = () => {
                       agent_code: configProject?.agent_code || '',
                       dispatch_channel_code: configProject?.dispatch_channel_code || '',
                       dispatch_session_key: configProject?.dispatch_session_key || '',
+                      max_concurrent_agents: configProject?.max_concurrent_agents ?? 2,
                     }}
                     onFinish={async (values) => {
                       if (!configProject) return;
@@ -1229,6 +1235,7 @@ export const ProjectRequirementPage: React.FC = () => {
                           agent_code: values.agent_code,
                           dispatch_channel_code: values.dispatch_channel_code,
                           dispatch_session_key: values.dispatch_session_key,
+                          max_concurrent_agents: values.max_concurrent_agents ?? 2,
                         });
                         message.success('基本信息保存成功');
                         fetchProjects();
@@ -1263,6 +1270,10 @@ export const ProjectRequirementPage: React.FC = () => {
 
                     <Form.Item label="默认 SessionKey" name="dispatch_session_key">
                       <Input placeholder="例如：feishu:ou_xxx" style={{ width: 400 }} />
+                    </Form.Item>
+
+                    <Form.Item label="最大并发 Agent 数" name="max_concurrent_agents" rules={[{ required: true, message: '请输入最大并发 Agent 数' }]}>
+                      <InputNumber min={1} max={10} style={{ width: 120 }} />
                     </Form.Item>
 
                     <Form.Item>
