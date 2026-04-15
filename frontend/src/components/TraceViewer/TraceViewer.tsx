@@ -70,14 +70,13 @@ function getRoleLabel(role?: string): string {
 
 function getTraceStats(records: ConversationRecord[]) {
   if (records.length === 0) {
-    return { count: 0, totalTokens: 0, duration: 0 };
+    return { count: 0, totalTokens: 0, duration: 0, durationMs: 0 };
   }
   const sorted = [...records].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const totalTokens = records.reduce((sum, r) => sum + (r.total_tokens || 0), 0);
-  const duration = Math.round(
-    ((sorted[sorted.length - 1]?.timestamp || 0) - (sorted[0]?.timestamp || 0)) / 1000
-  );
-  return { count: records.length, totalTokens, duration };
+  const durationMs = (sorted[sorted.length - 1]?.timestamp || 0) - (sorted[0]?.timestamp || 0);
+  const duration = Math.round(durationMs / 1000);
+  return { count: records.length, totalTokens, duration, durationMs };
 }
 
 function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
@@ -124,7 +123,7 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
           )}
           {duration > 0 && (
             <Text type="success" style={{ fontSize: 12 }}>
-              +{(duration / 1000).toFixed(1)}s
+              +{duration > 60000 ? `${(duration / 1000).toFixed(1)}s (${(duration / 60000).toFixed(1)}分钟)` : `${(duration / 1000).toFixed(1)}s`}
             </Text>
           )}
         </Space>
@@ -288,7 +287,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
                 <Col span={8}>
                   <Statistic 
                     title={<span style={{ fontSize: 12 }}>总耗时</span>} 
-                    value={`${traceStats.duration}s`} 
+                    value={traceStats.durationMs > 60000 ? `${traceStats.duration}s (${(traceStats.durationMs / 60000).toFixed(1)}分钟)` : `${traceStats.duration}s`} 
                     valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
