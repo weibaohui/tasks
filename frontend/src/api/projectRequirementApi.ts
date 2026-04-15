@@ -66,6 +66,14 @@ export async function updateRequirement(payload: UpdateRequirementRequest): Prom
   return response.data;
 }
 
+// 获取单个需求详情
+export async function getRequirement(id: string): Promise<Requirement> {
+  const response = await apiClient.get<Requirement>('/requirements', {
+    params: { id },
+  });
+  return response.data;
+}
+
 export async function dispatchRequirement(requirementId: string, agentCode: string, channelCode: string, sessionKey: string): Promise<{
   requirement_id: string;
   status: string;
