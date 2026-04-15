@@ -124,7 +124,7 @@ function buildTraceTree(records: ConversationRecord[]): TraceNode[] {
           )}
           {duration > 0 && (
             <Text type="success" style={{ fontSize: 12 }}>
-              +{(duration / 1000).toFixed(1)}s
+              +{duration >= 60000 ? `${(duration / 1000).toFixed(1)}s (${(duration / 60000).toFixed(1)}分钟)` : `${(duration / 1000).toFixed(1)}s`}
             </Text>
           )}
         </Space>
@@ -288,7 +288,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
                 <Col span={8}>
                   <Statistic 
                     title={<span style={{ fontSize: 12 }}>总耗时</span>} 
-                    value={`${traceStats.duration}s`} 
+                    value={traceStats.duration >= 60 ? `${traceStats.duration}s (${(traceStats.duration / 60).toFixed(1)}分钟)` : `${traceStats.duration}s`} 
                     valueStyle={{ fontSize: 14 }} 
                   />
                 </Col>
