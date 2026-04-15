@@ -36,6 +36,7 @@ type RequirementTypeEntity struct {
 	color       string           // 颜色
 	sortOrder   int              // 排序
 	stateMachineID string        // 绑定的状态机ID（可选）
+	isSystem    bool             // 是否为系统内置类型，不可删除
 	createdAt   time.Time
 	updatedAt   time.Time
 }
@@ -106,6 +107,15 @@ func (rt *RequirementTypeEntity) SetStateMachineID(smID string) {
 	rt.updatedAt = time.Now()
 }
 
+func (rt *RequirementTypeEntity) IsSystem() bool {
+	return rt.isSystem
+}
+
+func (rt *RequirementTypeEntity) SetIsSystem(v bool) {
+	rt.isSystem = v
+	rt.updatedAt = time.Now()
+}
+
 // RequirementTypeEntitySnapshot 需求类型快照
 type RequirementTypeEntitySnapshot struct {
 	ID             RequirementTypeEntityID
@@ -117,6 +127,7 @@ type RequirementTypeEntitySnapshot struct {
 	Color          string
 	SortOrder      int
 	StateMachineID string
+	IsSystem       bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -132,6 +143,7 @@ func (rt *RequirementTypeEntity) ToSnapshot() RequirementTypeEntitySnapshot {
 		Color:          rt.color,
 		SortOrder:      rt.sortOrder,
 		StateMachineID: rt.stateMachineID,
+		IsSystem:       rt.isSystem,
 		CreatedAt:      rt.createdAt,
 		UpdatedAt:      rt.updatedAt,
 	}
@@ -147,6 +159,7 @@ func (rt *RequirementTypeEntity) FromSnapshot(s RequirementTypeEntitySnapshot) {
 	rt.color = s.Color
 	rt.sortOrder = s.SortOrder
 	rt.stateMachineID = s.StateMachineID
+	rt.isSystem = s.IsSystem
 	rt.createdAt = s.CreatedAt
 	rt.updatedAt = s.UpdatedAt
 }

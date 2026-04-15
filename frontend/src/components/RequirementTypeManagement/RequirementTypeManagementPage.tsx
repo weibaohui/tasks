@@ -8,12 +8,6 @@ import { requirementTypeApi, type RequirementType, type CreateRequirementTypeReq
 
 const { Title } = Typography;
 
-// 内置需求类型代码，这些类型不允许删除
-const BUILT_IN_TYPES = ['normal', 'heartbeat'];
-
-// 检查是否为内置类型
-const isBuiltInType = (code: string): boolean => BUILT_IN_TYPES.includes(code);
-
 interface RequirementTypeManagementPageProps {
   projectId: string;
 }
@@ -47,9 +41,10 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       return;
     }
 
-    // 检查是否为内置类型代码
-    if (isBuiltInType(newCode.trim())) {
-      message.warning('不能使用内置类型代码');
+    // 检查是否与现有系统类型代码冲突
+    const existingSystemType = types.find((t) => t.code === newCode.trim() && t.is_system);
+    if (existingSystemType) {
+      message.warning('不能使用系统类型代码');
       return;
     }
 
@@ -73,8 +68,8 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
   };
 
   const handleDelete = async (type: RequirementType) => {
-    if (isBuiltInType(type.code)) {
-      message.error('内置类型不能删除');
+    if (type.is_system) {
+      message.error('系统类型不能删除');
       return;
     }
 
@@ -84,7 +79,7 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       fetchTypes();
     } catch (error: any) {
       if (error?.response?.status === 403) {
-        message.error('内置类型不能删除');
+        message.error('系统类型不能删除');
       } else {
         message.error('删除失败');
       }
@@ -96,7 +91,7 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
             title: '操作',
             key: 'action',
             render: (_: unknown, record: RequirementType) => {
-              if (isBuiltInType(record.code)) {
+              if (record.is_system) {
                 return <span style={{ color: '#999' }}>不可删除</span>;
               }
               return (
@@ -119,10 +114,10 @@ export const RequirementTypeManagementPage: React.FC<RequirementTypeManagementPa
       title: '代码',
       dataIndex: 'code',
       key: 'code',
-      render: (code: string) => (
+      render: (_code: string, record: RequirementType) => (
         <Space>
-          <span>{code}</span>
-          {isBuiltInType(code) && <Tag color="blue">内置</Tag>}
+          <span>{record.code}</span>
+          {record.is_system && <Tag color="blue">系统</Tag>}
         </Space>
       ),
     },

@@ -54,16 +54,12 @@ func (h *RequirementTypeHandler) EnsureDefaultRequirementTypes(ctx context.Conte
 			return err
 		}
 		rt.SetColor(dt.color)
+		rt.SetIsSystem(true)
 		if err := h.requirementTypeRepo.Save(ctx, rt); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// IsBuiltInRequirementType 检查是否为内置需求类型
-func IsBuiltInRequirementType(code string) bool {
-	return code == "normal" || code == "heartbeat"
 }
 
 type CreateRequirementTypeRequest struct {
@@ -152,8 +148,8 @@ func (h *RequirementTypeHandler) DeleteRequirementType(c *gin.Context) {
 		return
 	}
 
-	// 检查是否为内置类型，不允许删除
-	if IsBuiltInRequirementType(rt.Code()) {
+	// 检查是否为系统内置类型，不允许删除
+	if rt.IsSystem() {
 		c.JSON(http.StatusForbidden, HTTPError{Code: http.StatusForbidden, Message: "cannot delete built-in requirement type"})
 		return
 	}
@@ -177,6 +173,7 @@ func (h *RequirementTypeHandler) requirementTypeToMap(rt *domain.RequirementType
 		"color":            rt.Color(),
 		"sort_order":       rt.SortOrder(),
 		"state_machine_id": rt.StateMachineID(),
+		"is_system":        rt.IsSystem(),
 		"created_at":       rt.CreatedAt().UnixMilli(),
 		"updated_at":       rt.UpdatedAt().UnixMilli(),
 	}

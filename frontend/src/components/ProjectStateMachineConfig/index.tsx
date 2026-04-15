@@ -16,19 +16,6 @@ interface ProjectStateMachineConfigProps {
   projectId: string;
 }
 
-// Default fallback type config when API data is not available
-const defaultTypeConfig: Record<string, { label: string; color: string; description: string }> = {
-  normal: {
-    label: '普通需求',
-    color: 'blue',
-    description: '普通流程需求，需要人工触发',
-  },
-  heartbeat: {
-    label: '心跳需求',
-    color: 'green',
-    description: '自动触发的心跳任务',
-  },
-};
 
 export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps> = ({ projectId }) => {
   const [form] = Form.useForm();
@@ -72,7 +59,7 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
     }
   };
 
-  // 获取类型配置（优先从 API，失败时使用默认配置）
+  // 获取类型配置（从 API 返回的类型列表中查找）
   const getTypeConfig = (code: string): { label: string; color: string; description: string } => {
     const apiType = requirementTypes.find((t) => t.code === code);
     if (apiType) {
@@ -82,7 +69,7 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
         description: apiType.description || '',
       };
     }
-    return defaultTypeConfig[code] || { label: code, color: 'default', description: '' };
+    return { label: code, color: 'default', description: '' };
   };
 
   useEffect(() => {
@@ -177,19 +164,10 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
   // 获取未配置的需求类型
   const getAvailableTypes = () => {
     const configuredTypes = new Set(mappings.map((m) => m.requirement_type));
-    // 合并 API 类型和默认类型
     const allTypes: Array<[string, { label: string; color: string; description: string }]> = [];
 
-    // 添加默认类型
-    Object.entries(defaultTypeConfig).forEach(([code, config]) => {
-      if (!configuredTypes.has(code)) {
-        allTypes.push([code, config]);
-      }
-    });
-
-    // 添加 API 返回的类型（跳过已配置的）
     requirementTypes.forEach((t) => {
-      if (!configuredTypes.has(t.code) && !defaultTypeConfig[t.code]) {
+      if (!configuredTypes.has(t.code)) {
         allTypes.push([t.code, { label: t.name, color: t.color || 'default', description: t.description || '' }]);
       }
     });
