@@ -57,6 +57,22 @@ func MigrateProgressDataColumn(db *sql.DB) error {
 	return nil
 }
 
+// MigrateRequirementTypeSystemColumn 兼容旧数据库：在 requirement_types 表中添加 is_system 列
+func MigrateRequirementTypeSystemColumn(db *sql.DB) error {
+	columns, err := getTableColumns(db, "requirement_types")
+	if err != nil {
+		return fmt.Errorf("获取 requirement_types 表列信息失败: %w", err)
+	}
+
+	if _, exists := columns["is_system"]; !exists {
+		if _, err := db.Exec("ALTER TABLE requirement_types ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("添加 is_system 列失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
 	if err != nil {

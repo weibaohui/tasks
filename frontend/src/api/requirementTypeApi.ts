@@ -13,6 +13,7 @@ export interface RequirementType {
   color?: string;
   sort_order: number;
   state_machine_id?: string;
+  is_system?: boolean;
   created_at: number;
   updated_at: number;
 }

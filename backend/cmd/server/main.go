@@ -83,6 +83,10 @@ func main() {
 	if err := _persistence.MigrateProgressDataColumn(db); err != nil {
 		logger.Fatal("Failed to migrate progress_data column", zap.Error(err))
 	}
+	// 兼容旧数据库：添加 requirement_types.is_system 列
+	if err := _persistence.MigrateRequirementTypeSystemColumn(db); err != nil {
+		logger.Fatal("Failed to migrate requirement_types is_system column", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖

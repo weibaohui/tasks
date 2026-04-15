@@ -8,6 +8,7 @@ import {
   RobotOutlined,
 } from '@ant-design/icons';
 import type { Requirement } from '../../types/projectRequirement';
+import type { RequirementType } from '../../api/requirementTypeApi';
 
 const { Text, Paragraph } = Typography;
 
@@ -25,6 +26,7 @@ interface KanbanColumnProps {
   loading: boolean;
   onLoadMore: () => void;
   onCardClick: (requirement: Requirement) => void;
+  requirementTypes: RequirementType[];
 }
 
 function formatTime(unixMilli: number | null): string {
@@ -33,10 +35,13 @@ function formatTime(unixMilli: number | null): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function getTypeConfig(type?: string): { label: string; color: string } {
-  if (!type || type === 'normal') return { label: '普通', color: 'default' };
-  if (type === 'heartbeat') return { label: '心跳', color: 'orange' };
-  return { label: type, color: 'purple' };
+function getTypeConfig(type: string | undefined, requirementTypes: RequirementType[]): { label: string; color: string } {
+  if (!type) return { label: '-', color: 'default' };
+  const config = requirementTypes.find((t) => t.code === type);
+  if (config) {
+    return { label: config.name || type, color: config.color || 'default' };
+  }
+  return { label: type, color: 'default' };
 }
 
 function getRuntimeIcon(runtime?: Requirement['agent_runtime']): React.ReactNode {
@@ -64,6 +69,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   loading,
   onLoadMore,
   onCardClick,
+  requirementTypes,
 }) => {
   const hasMore = loadedCount < totalCount;
   // 如果提供了 groupTotal，则基于大组总量判断 WIP 是否超限，否则基于单列总量
@@ -137,6 +143,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               groupKey={groupKey}
               groupColor={groupColor}
               onClick={() => onCardClick(req)}
+              requirementTypes={requirementTypes}
             />
           ))
         )}
@@ -169,8 +176,9 @@ const RequirementCard: React.FC<{
   groupKey: string;
   groupColor: { color: string; bgColor: string; borderColor: string };
   onClick: () => void;
-}> = ({ requirement: req, groupColor, onClick }) => {
-  const typeConfig = getTypeConfig(req.requirement_type);
+  requirementTypes: RequirementType[];
+}> = ({ requirement: req, groupColor, onClick, requirementTypes }) => {
+  const typeConfig = getTypeConfig(req.requirement_type, requirementTypes);
   const runtimeIcon = getRuntimeIcon(req.agent_runtime);
 
   return (

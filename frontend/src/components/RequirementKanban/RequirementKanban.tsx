@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { message } from 'antd';
 import { listRequirementsPaginated, type StatusStat } from '../../api/projectRequirementApi';
 import type { Requirement } from '../../types/projectRequirement';
+import type { RequirementType } from '../../api/requirementTypeApi';
 import { getStatusLabel, getStatusColor } from '../../constants/requirementStatus';
 import { KanbanColumn } from './KanbanColumn';
 
@@ -11,6 +12,7 @@ interface RequirementKanbanProps {
   onRequirementClick: (requirement: Requirement) => void;
   refreshTrigger: number;
   onRefresh: () => void;
+  requirementTypes: RequirementType[];
 }
 
 interface ColumnState {
@@ -104,6 +106,7 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
   statusStats,
   onRequirementClick,
   refreshTrigger,
+  requirementTypes,
 }) => {
   const [columns, setColumns] = useState<ColumnsMap>({});
   const [initialLoading, setInitialLoading] = useState(false);
@@ -245,6 +248,7 @@ export const RequirementKanban: React.FC<RequirementKanbanProps> = ({
                   loading={columns[statusDef.status]?.loading ?? false}
                   onLoadMore={() => handleLoadMore(statusDef.status)}
                   onCardClick={onRequirementClick}
+                  requirementTypes={requirementTypes}
                 />
               ))}
             </div>

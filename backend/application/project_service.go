@@ -108,6 +108,7 @@ func (s *ProjectApplicationService) ensureDefaultRequirementTypes(ctx context.Co
 			return err
 		}
 		rt.SetColor(dt.color)
+		rt.SetIsSystem(true)
 		if err := s.requirementTypeRepo.Save(ctx, rt); err != nil {
 			return err
 		}

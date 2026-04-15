@@ -119,7 +119,7 @@ export const ProjectRequirementPage: React.FC = () => {
         setStateMachineLoadAttempted(false);
         return;
       }
-      const types = ['normal', 'heartbeat', ...requirementTypes.map(t => t.code)];
+      const types = requirementTypes.map(t => t.code);
       const newStatesByType: Record<string, State[]> = {};
       for (const type of types) {
         try {
@@ -143,7 +143,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const filteredRequirements = useMemo(() => {
     return requirements.filter((req) => {
       const matchStatus = !statusFilter || req.status === statusFilter;
-      const matchType = !typeFilter || req.requirement_type === typeFilter || (typeFilter === 'normal' && !req.requirement_type);
+      const matchType = !typeFilter || req.requirement_type === typeFilter;
       return matchStatus && matchType;
     });
   }, [requirements, statusFilter, typeFilter]);
@@ -329,7 +329,7 @@ export const ProjectRequirementPage: React.FC = () => {
       description: values.description || '',
       acceptance_criteria: values.acceptance_criteria || '',
       temp_workspace_root: values.temp_workspace_root || '',
-      requirement_type: values.requirement_type || 'normal',
+      requirement_type: values.requirement_type || (requirementTypes[0]?.code || ''),
     };
     try {
       if (editingRequirement) {
@@ -369,7 +369,7 @@ export const ProjectRequirementPage: React.FC = () => {
   const openCreateRequirement = () => {
     setEditingRequirement(null);
     requirementForm.resetFields();
-    requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops', requirement_type: 'normal' });
+    requirementForm.setFieldsValue({ project_id: selectedProjectId, temp_workspace_root: '/tmp/ai-devops', requirement_type: requirementTypes[0]?.code || '' });
     setRequirementModalOpen(true);
   };
 
@@ -389,7 +389,7 @@ export const ProjectRequirementPage: React.FC = () => {
       description: item.description,
       acceptance_criteria: item.acceptance_criteria,
       temp_workspace_root: item.temp_workspace_root,
-      requirement_type: item.requirement_type || 'normal',
+      requirement_type: item.requirement_type || '',
     });
     setRequirementModalOpen(true);
   };
@@ -596,10 +596,7 @@ export const ProjectRequirementPage: React.FC = () => {
     if (typeConfig) {
       return { label: typeConfig.name || code, color: typeConfig.color || 'default' };
     }
-    // 默认配置
-    if (code === 'heartbeat') return { label: '心跳', color: 'orange' };
-    if (code === 'normal') return { label: '普通', color: 'default' };
-    return { label: code, color: 'default' };
+    return { label: code || '-', color: 'default' };
   };
 
   const requirementColumns = [
@@ -608,7 +605,7 @@ export const ProjectRequirementPage: React.FC = () => {
       key: 'action',
       render: (_: unknown, item: Requirement) => {
         // 根据需求类型获取对应的状态
-        const reqType = item.requirement_type || 'normal';
+        const reqType = item.requirement_type || '';
         const availableStates = statesByType[reqType] || [];
 
         // 构建状态子菜单
@@ -707,7 +704,7 @@ export const ProjectRequirementPage: React.FC = () => {
       width: 90,
       responsive: ['sm'] as Breakpoint[],
       render: (_: unknown, item: Requirement) => {
-        const display = getTypeDisplay(item.requirement_type || 'normal');
+        const display = getTypeDisplay(item.requirement_type || '');
         return <Tag color={display.color}>{display.label}</Tag>;
       },
     },
@@ -934,8 +931,6 @@ export const ProjectRequirementPage: React.FC = () => {
                   value={typeFilter || undefined}
                   options={[
                     { label: '全部类型', value: '' },
-                    { label: '普通 (normal)', value: 'normal' },
-                    { label: '心跳 (heartbeat)', value: 'heartbeat' },
                     ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
                   ]}
                   onChange={(value) => setTypeFilter(value || '')}
@@ -992,6 +987,7 @@ export const ProjectRequirementPage: React.FC = () => {
             }}
             refreshTrigger={kanbanRefreshTrigger}
             onRefresh={() => fetchRequirements(selectedProjectId)}
+            requirementTypes={requirementTypes}
           />
         )}
       </Card>
@@ -1059,12 +1055,9 @@ export const ProjectRequirementPage: React.FC = () => {
           <Form.Item label="验收标准" name="acceptance_criteria">
             <Input.TextArea rows={4} />
           </Form.Item>
-          <Form.Item label="需求类型" name="requirement_type" initialValue="normal">
+          <Form.Item label="需求类型" name="requirement_type" initialValue={requirementTypes[0]?.code || ''}>
             <Select
-              options={[
-                { label: '普通 (normal)', value: 'normal' },
-                ...requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code })),
-              ]}
+              options={requirementTypes.map((t) => ({ label: `${t.name} (${t.code})`, value: t.code }))}
               placeholder="选择需求类型"
             />
           </Form.Item>
@@ -1330,7 +1323,11 @@ export const ProjectRequirementPage: React.FC = () => {
                     </div>
                     <div>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>需求类型</div>
-                      <div>{detailRequirement.requirement_type || 'normal'}</div>
+                      <div>
+                        <Tag color={getTypeDisplay(detailRequirement.requirement_type || '').color}>
+                          {getTypeDisplay(detailRequirement.requirement_type || '').label}
+                        </Tag>
+                      </div>
                     </div>
                     <div>
                       <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>创建时间</div>
