@@ -87,16 +87,17 @@ type DailyTokenTrend struct {
 }
 
 type ConversationStats struct {
-	TotalPromptTokens     int
-	TotalCompletionTokens int
-	TotalTokens           int
-	DailyTrends           []DailyTokenTrend
-	AgentDistribution     []AgentStats
-	ChannelDistribution   []ChannelStats
-	RoleDistribution      []RoleStats
-	ProjectDistribution   []ProjectStats
-	TotalSessions         int
-	TotalRecords          int
+	TotalPromptTokens       int
+	TotalCompletionTokens   int
+	TotalTokens             int
+	DailyTrends             []DailyTokenTrend
+	AgentDistribution      []AgentStats
+	ChannelDistribution    []ChannelStats
+	RoleDistribution       []RoleStats
+	ProjectDistribution    []ProjectStats
+	AgentTypeDistribution  []AgentTypeStats
+	TotalSessions          int
+	TotalRecords           int
 }
 
 type AgentStats struct {
@@ -119,6 +120,11 @@ type RoleStats struct {
 type ProjectStats struct {
 	ProjectID string
 	Name      string
+	Tokens    int
+}
+
+type AgentTypeStats struct {
+	AgentType string
 	Tokens    int
 }
 

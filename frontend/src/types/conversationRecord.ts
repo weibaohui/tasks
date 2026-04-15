@@ -76,6 +76,11 @@ export interface ProjectDistribution {
   tokens: number;
 }
 
+export interface AgentTypeDistribution {
+  agent_type: string;
+  tokens: number;
+}
+
 export interface SessionStats {
   total_sessions: number;
   avg_messages_per_session: number;
@@ -88,5 +93,6 @@ export interface ConversationStats {
   channel_distribution: ChannelDistribution[];
   role_distribution: RoleDistribution[];
   project_distribution: ProjectDistribution[];
+  agent_type_distribution: AgentTypeDistribution[];
   session_stats: SessionStats;
 }

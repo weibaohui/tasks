@@ -426,16 +426,32 @@ func (r *SQLiteConversationRecordRepository) GetStats(ctx context.Context, filte
 		projectDistribution = append(projectDistribution, ps)
 	}
 
+	agentTypeRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(r.agent_runtime_agent_type, 'BareLLM'), COALESCE(SUM(cr.total_tokens), 0) FROM conversation_records cr LEFT JOIN requirements r ON cr.trace_id = r.trace_id`+whereClause+` GROUP BY COALESCE(r.agent_runtime_agent_type, 'BareLLM') ORDER BY COALESCE(SUM(cr.total_tokens), 0) DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer agentTypeRows.Close()
+
+	agentTypeDistribution := make([]domain.AgentTypeStats, 0)
+	for agentTypeRows.Next() {
+		var ats domain.AgentTypeStats
+		if err := agentTypeRows.Scan(&ats.AgentType, &ats.Tokens); err != nil {
+			return nil, err
+		}
+		agentTypeDistribution = append(agentTypeDistribution, ats)
+	}
+
 	return &domain.ConversationStats{
-		TotalPromptTokens:     totalPromptTokens,
-		TotalCompletionTokens: totalCompletionTokens,
-		TotalTokens:           totalTokens,
-		DailyTrends:           dailyTrends,
-		AgentDistribution:     agentDistribution,
-		ChannelDistribution:   channelDistribution,
-		RoleDistribution:      roleDistribution,
-		ProjectDistribution:   projectDistribution,
-		TotalSessions:         totalSessions,
-		TotalRecords:          totalRecords,
+		TotalPromptTokens:       totalPromptTokens,
+		TotalCompletionTokens:   totalCompletionTokens,
+		TotalTokens:             totalTokens,
+		DailyTrends:             dailyTrends,
+		AgentDistribution:      agentDistribution,
+		ChannelDistribution:    channelDistribution,
+		RoleDistribution:       roleDistribution,
+		ProjectDistribution:    projectDistribution,
+		AgentTypeDistribution:  agentTypeDistribution,
+		TotalSessions:          totalSessions,
+		TotalRecords:           totalRecords,
 	}, nil
 }

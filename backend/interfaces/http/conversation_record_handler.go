@@ -271,13 +271,22 @@ func (h *ConversationRecordHandler) GetStats(c *gin.Context) {
 		})
 	}
 
+	agentTypeDist := make([]map[string]interface{}, 0, len(stats.AgentTypeDistribution))
+	for _, at := range stats.AgentTypeDistribution {
+		agentTypeDist = append(agentTypeDist, map[string]interface{}{
+			"agent_type": at.AgentType,
+			"tokens":     at.Tokens,
+		})
+	}
+
 	c.JSON(http.StatusOK, map[string]interface{}{
-		"token_stats":          tokenStats,
-		"agent_distribution":   agentDist,
-		"channel_distribution": channelDist,
-		"role_distribution":    roleDist,
-		"project_distribution": projectDist,
-		"session_stats":        sessionStats,
+		"token_stats":            tokenStats,
+		"agent_distribution":     agentDist,
+		"channel_distribution":   channelDist,
+		"role_distribution":     roleDist,
+		"project_distribution":   projectDist,
+		"agent_type_distribution": agentTypeDist,
+		"session_stats":         sessionStats,
 	})
 }
 
