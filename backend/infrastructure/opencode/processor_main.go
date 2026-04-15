@@ -380,7 +380,7 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	}()
 
 	// 设置超时
-	timeout := 600 // 10 分钟默认超时
+	timeout := 3600 // 1 小时默认超时
 	if config != nil && config.Timeout > 0 {
 		timeout = config.Timeout
 	}
