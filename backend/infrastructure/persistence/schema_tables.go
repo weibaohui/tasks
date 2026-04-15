@@ -360,4 +360,13 @@ CREATE TABLE IF NOT EXISTS heartbeats (
 
 CREATE INDEX IF NOT EXISTS idx_heartbeats_project_id ON heartbeats(project_id);
 CREATE INDEX IF NOT EXISTS idx_heartbeats_enabled ON heartbeats(enabled);
+
+CREATE TABLE IF NOT EXISTS heartbeat_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    md_content TEXT NOT NULL DEFAULT '',
+    requirement_type TEXT NOT NULL DEFAULT 'heartbeat',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 `
