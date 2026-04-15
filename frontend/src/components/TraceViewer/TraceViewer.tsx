@@ -255,14 +255,14 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
         }}
         destroyOnClose
       >
-        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {loading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
         ) : records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>无数据</div>
         ) : (
-          <div>
-            <Card size="small" style={{ marginBottom: 16 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Card size="small" style={{ marginBottom: 16, flexShrink: 0 }}>
               <div style={{ marginBottom: 16 }}>
                 <Text strong style={{ display: 'block', marginBottom: 8 }}>对话时间线</Text>
                 {/* 高度从 25 缩小到 16，约等于原先的 2/3 */}
@@ -271,41 +271,36 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
               <Divider style={{ margin: '12px 0' }} />
               <Row gutter={16}>
                 <Col span={8}>
-                  <Statistic 
-                    title={<span style={{ fontSize: 12 }}>总消息数</span>} 
-                    value={traceStats.count} 
-                    valueStyle={{ fontSize: 14 }} 
+                  <Statistic
+                    title={<span style={{ fontSize: 12 }}>总消息数</span>}
+                    value={traceStats.count}
+                    valueStyle={{ fontSize: 14 }}
                   />
                 </Col>
                 <Col span={8}>
-                  <Statistic 
-                    title={<span style={{ fontSize: 12 }}>总Token</span>} 
-                    value={traceStats.totalTokens.toLocaleString()} 
-                    valueStyle={{ fontSize: 14 }} 
+                  <Statistic
+                    title={<span style={{ fontSize: 12 }}>总Token</span>}
+                    value={traceStats.totalTokens.toLocaleString()}
+                    valueStyle={{ fontSize: 14 }}
                   />
                 </Col>
                 <Col span={8}>
-                  <Statistic 
-                    title={<span style={{ fontSize: 12 }}>总耗时</span>} 
-                    value={traceStats.durationMs > 60000 ? `${traceStats.duration}s (${(traceStats.durationMs / 60000).toFixed(1)}分钟)` : `${traceStats.duration}s`} 
-                    valueStyle={{ fontSize: 14 }} 
+                  <Statistic
+                    title={<span style={{ fontSize: 12 }}>总耗时</span>}
+                    value={traceStats.durationMs > 60000 ? `${traceStats.duration}s (${(traceStats.durationMs / 60000).toFixed(1)}分钟)` : `${traceStats.duration}s`}
+                    valueStyle={{ fontSize: 14 }}
                   />
                 </Col>
               </Row>
             </Card>
-            <Divider style={{ margin: '12px 0' }} />
-            <Tree
-              treeData={treeData}
-              showLine
-              defaultExpandAll
-              style={{
-                background: '#fafafa',
-                padding: 16,
-                borderRadius: 8,
-                maxHeight: 500,
-                overflowY: 'auto',
-              }}
-            />
+            <Divider style={{ margin: '12px 0', flexShrink: 0 }} />
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#fafafa', padding: 16, borderRadius: 8 }}>
+              <Tree
+                treeData={treeData}
+                showLine
+                defaultExpandAll
+              />
+            </div>
           </div>
         )}
         </div>
