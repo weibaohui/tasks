@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
 import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
-import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
+import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, getRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
 import { useAuthStore } from '../stores/authStore';
@@ -87,6 +87,9 @@ export const ProjectRequirementPage: React.FC = () => {
   const [progressModalOpen, setProgressModalOpen] = useState(false);
   const [progressModalData, setProgressModalData] = useState<ProgressData | null>(null);
   const [progressModalTitle, setProgressModalTitle] = useState('');
+  const [progressModalReqId, setProgressModalReqId] = useState<string>('');
+  const [progressModalLoading, setProgressModalLoading] = useState(false);
+  const [agentProgressLoading, setAgentProgressLoading] = useState(false);
 
   // 需求状态过滤
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -545,7 +548,46 @@ export const ProjectRequirementPage: React.FC = () => {
     if (!data) return;
     setProgressModalData(data);
     setProgressModalTitle(item.title);
+    setProgressModalReqId(item.id);
     setProgressModalOpen(true);
+  };
+
+  const refreshProgressModal = async () => {
+    if (!progressModalReqId) return;
+    setProgressModalLoading(true);
+    try {
+      const item = await getRequirement(progressModalReqId);
+      const data = parseProgressData(item);
+      if (data) {
+        setProgressModalData(data);
+        setProgressModalTitle(item.title);
+      }
+      // 同时刷新列表中的数据
+      if (selectedProjectId) {
+        await fetchRequirements(selectedProjectId);
+      }
+    } catch (err) {
+      message.error('刷新进度失败');
+    } finally {
+      setProgressModalLoading(false);
+    }
+  };
+
+  const refreshAgentProgress = async () => {
+    if (!detailRequirement) return;
+    setAgentProgressLoading(true);
+    try {
+      const item = await getRequirement(detailRequirement.id);
+      setDetailRequirement(item);
+      if (selectedProjectId) {
+        await fetchRequirements(selectedProjectId);
+      }
+      message.success('刷新进度成功');
+    } catch (err) {
+      message.error('刷新进度失败');
+    } finally {
+      setAgentProgressLoading(false);
+    }
   };
 
   // 获取类型配置（用于显示）
@@ -1448,35 +1490,58 @@ export const ProjectRequirementPage: React.FC = () => {
                       const progressData = parseProgressData(detailRequirement);
                       if (!progressData || progressData.items.length === 0) return null;
                       return (
-                        <div style={{ marginBottom: 16, padding: 12, background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
-                          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#666', fontSize: 12 }}>执行进度</span>
-                            <span style={{ fontSize: 12, color: '#52c41a', fontWeight: 500 }}>{progressData.percent}%</span>
-                          </div>
-                          <div style={{ marginBottom: 12 }}>
+                        <Card
+                          title="执行进度"
+                          size="small"
+                          style={{ marginBottom: 16 }}
+                          extra={
+                            <Button
+                              size="small"
+                              icon={<SyncOutlined spin={agentProgressLoading} />}
+                              loading={agentProgressLoading}
+                              onClick={refreshAgentProgress}
+                            >
+                              刷新
+                            </Button>
+                          }
+                        >
+                          <div style={{ opacity: agentProgressLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: 14, color: '#666' }}>整体进度</span>
+                              <span style={{ fontSize: 16, fontWeight: 600, color: progressData.percent === 100 ? '#52c41a' : '#1890ff' }}>
+                                {progressData.percent}%
+                              </span>
+                            </div>
                             <Progress percent={progressData.percent} size="small" strokeColor={progressData.percent === 100 ? '#52c41a' : '#1890ff'} />
+                            {progressData.updated_at && (
+                              <div style={{ marginTop: 4, marginBottom: 12, fontSize: 12, color: '#999', textAlign: 'right' }}>
+                                更新时间: {new Date(progressData.updated_at).toLocaleString()}
+                              </div>
+                            )}
+                            <List
+                              size="small"
+                              dataSource={progressData.items}
+                              renderItem={(todo: TodoItem) => {
+                                const statusLower = (todo.status || '').toLowerCase();
+                                const isDone = statusLower === 'completed' || statusLower === 'done';
+                                const isRunning = statusLower === 'in_progress' || statusLower === 'running' || statusLower === 'doing';
+                                const icon = isDone ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : isRunning ? <SyncOutlined spin style={{ color: '#1890ff' }} /> : <ClockCircleOutlined style={{ color: '#999' }} />;
+                                return (
+                                  <List.Item style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+                                      {icon}
+                                      <span style={{ flex: 1, fontSize: 14, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#999' : '#333' }}>
+                                        {todo.content}
+                                      </span>
+                                      <Tag color={isDone ? 'success' : isRunning ? 'processing' : 'default'}>{todo.status || 'pending'}</Tag>
+                                      {todo.priority && <Tag color="warning">{todo.priority}</Tag>}
+                                    </div>
+                                  </List.Item>
+                                );
+                              }}
+                            />
                           </div>
-                          <List
-                            size="small"
-                            dataSource={progressData.items}
-                            renderItem={(todo: TodoItem) => {
-                              const statusLower = (todo.status || '').toLowerCase();
-                              const isDone = statusLower === 'completed' || statusLower === 'done';
-                              const isRunning = statusLower === 'in_progress' || statusLower === 'running' || statusLower === 'doing';
-                              const icon = isDone ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : isRunning ? <SyncOutlined spin style={{ color: '#1890ff' }} /> : <ClockCircleOutlined style={{ color: '#999' }} />;
-                              return (
-                                <List.Item style={{ padding: '4px 0', borderBottom: 'none' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-                                    {icon}
-                                    <span style={{ flex: 1, fontSize: 13, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#999' : '#333' }}>{todo.content}</span>
-                                    <Tag color={isDone ? 'success' : isRunning ? 'processing' : 'default'}>{todo.status || 'pending'}</Tag>
-                                    {todo.priority && <Tag color="warning">{todo.priority}</Tag>}
-                                  </div>
-                                </List.Item>
-                              );
-                            }}
-                          />
-                        </div>
+                        </Card>
                       );
                     })()}
 
@@ -1627,14 +1692,26 @@ export const ProjectRequirementPage: React.FC = () => {
 
       {/* 进度详情弹窗 */}
       <Modal
-        title={`进度详情 - ${progressModalTitle}`}
+        title={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 32 }}>
+            <span>进度详情 - {progressModalTitle}</span>
+            <Button
+              size="small"
+              icon={<SyncOutlined spin={progressModalLoading} />}
+              loading={progressModalLoading}
+              onClick={refreshProgressModal}
+            >
+              刷新
+            </Button>
+          </div>
+        }
         open={progressModalOpen}
         onCancel={() => setProgressModalOpen(false)}
         footer={null}
         width={560}
       >
         {progressModalData ? (
-          <div>
+          <div style={{ opacity: progressModalLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 14, color: '#666' }}>整体进度</span>
               <span style={{ fontSize: 16, fontWeight: 600, color: progressModalData.percent === 100 ? '#52c41a' : '#1890ff' }}>
