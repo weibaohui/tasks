@@ -189,6 +189,10 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       dataIndex: 'agent_code',
       key: 'agent_code',
       width: 140,
+      render: (code: string) => {
+        const agent = agents.find((a) => a.agent_code === code);
+        return agent?.name || code;
+      },
     },
     {
       title: '需求类型',
