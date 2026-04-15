@@ -72,7 +72,8 @@ export const BasicInfoCard: React.FC<BasicInfoCardProps> = ({
           </Form.Item>
           <Form.Item label="类型" name="agent_type" rules={[{ required: true, message: '请选择类型' }]} style={{ marginBottom: 8 }}>
             <Select placeholder="选择 Agent 类型"
-              allowClear
+              disabled={!editing}
+              allowClear={!!editing}
               options={[
                 { value: 'BareLLM', label: '个人助理' },
                 { value: 'CodingAgent', label: '编程 Agent (Claude Code)' },
