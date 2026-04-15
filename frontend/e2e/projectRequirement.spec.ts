@@ -6,7 +6,7 @@ function uniqueName(prefix: string) {
 
 test.describe('项目需求管理', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000/projects');
+    await page.goto('/projects');
     // wait for project cards or requirements view to render
     await page.waitForLoadState('networkidle');
   });
@@ -51,6 +51,20 @@ test.describe('项目需求管理', () => {
     // Should see requirements toolbar
     await expect(page.getByRole('button', { name: '新建需求' })).toBeVisible();
     await expect(page.locator('.ant-table')).toBeVisible();
+  });
+
+  test('PR3.1 - 需求列表表格包含耗时列', async ({ page }) => {
+    const projectName = uniqueName('E2E耗时列');
+    await page.getByRole('button', { name: '新建项目' }).click();
+    await page.getByLabel('项目名称').fill(projectName);
+    await page.getByLabel('Git 仓库地址').fill('https://github.com/test/e2e-repo');
+    await page.getByLabel('默认分支').fill('main');
+    await page.locator('.ant-drawer-footer button[type="submit"], .ant-drawer-body button[type="submit"]').click();
+    await expect(page.getByText('创建项目成功')).toBeVisible();
+
+    await page.locator('.ant-card').getByText(projectName).click();
+    await expect(page.getByRole('button', { name: '新建需求' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '耗时' })).toBeVisible();
   });
 
   test('PR4 - 成功创建新需求', async ({ page }) => {
