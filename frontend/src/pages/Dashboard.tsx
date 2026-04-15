@@ -90,6 +90,22 @@ export const Dashboard: React.FC = () => {
       value: item.tokens,
     })) || [];
 
+  // Agent Type Token 分布图表数据
+  const agentTypeDistData =
+    stats?.agent_type_distribution.map((item) => ({
+      name: getAgentTypeLabel(item.agent_type),
+      value: item.tokens,
+    })) || [];
+
+  function getAgentTypeLabel(agentType: string): string {
+    const labels: Record<string, string> = {
+      BareLLM: 'BareLLM',
+      CodingAgent: 'CodingAgent',
+      OpenCodeAgent: 'OpenCodeAgent',
+    };
+    return labels[agentType] || agentType;
+  }
+
   function getRoleLabel(role: string): string {
     const labels: Record<string, string> = {
       user: '用户',
@@ -339,6 +355,48 @@ export const Dashboard: React.FC = () => {
                 />
               </Col>
             </Row>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Agent Type Token 分布 - 响应式布局 */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={12}>
+          <Card title="Agent Type Token 消耗排行">
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={agentTypeDistData} layout="vertical" margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis dataKey="name" type="category" width={100} />
+                <Tooltip formatter={(value) => (typeof value === 'number' ? value.toLocaleString() : value)} />
+                <Bar dataKey="value" name="Token 数" fill="#1890ff" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Agent Type Token 消耗占比">
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={agentTypeDistData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={(props: any) =>
+                    `${props.name || ''}: ${((props.percent || 0) * 100).toFixed(0)}%`
+                  }
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {agentTypeDistData.map((_entry, index) => (
+                    <Cell key={`cell-agenttype-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: any) => typeof value === 'number' ? value.toLocaleString() : value} />
+              </PieChart>
+            </ResponsiveContainer>
           </Card>
         </Col>
       </Row>
