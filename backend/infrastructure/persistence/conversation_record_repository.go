@@ -426,7 +426,7 @@ func (r *SQLiteConversationRecordRepository) GetStats(ctx context.Context, filte
 		projectDistribution = append(projectDistribution, ps)
 	}
 
-	agentTypeRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(r.agent_runtime_agent_type, 'BareLLM'), COALESCE(SUM(cr.total_tokens), 0) FROM conversation_records cr LEFT JOIN requirements r ON cr.trace_id = r.trace_id`+whereClause+` GROUP BY COALESCE(r.agent_runtime_agent_type, 'BareLLM')`, args...)
+	agentTypeRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(r.agent_runtime_agent_type, 'BareLLM'), COALESCE(SUM(cr.total_tokens), 0) FROM conversation_records cr LEFT JOIN requirements r ON cr.trace_id = r.trace_id`+whereClause+` GROUP BY COALESCE(r.agent_runtime_agent_type, 'BareLLM') ORDER BY COALESCE(SUM(cr.total_tokens), 0) DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
