@@ -6,7 +6,7 @@ help:
 	@echo "可用的命令:"
 	@echo "  make setup        - 安装依赖 (包括 air)"
 	@echo "  make build        - 构建后端（含前端嵌入）"
-	@echo "  make install      - 安装 taskmanager 到 /usr/local/bin"
+	@echo "  make install      - 安装 taskmanager 到 ~/bin"
 	@echo "  make clean        - 清理构建产物"
 	@echo "  make dev          - 启动开发环境 (后端+前端热重载)"
 	@echo "  make dev-server   - 启动开发环境 (air 热重载)"
@@ -46,10 +46,14 @@ prepare-embed:
 
 # 安装
 install: build
-	@echo "安装 taskmanager 到 /usr/local/bin..."
-	@cp backend/bin/taskmanager-server /usr/local/bin/taskmanager-server
-	@cp backend/bin/taskmanager /usr/local/bin/taskmanager
+	@echo "安装 taskmanager 到 ~/bin..."
+	@mkdir -p $(HOME)/bin
+	@cp backend/bin/taskmanager-server $(HOME)/bin/taskmanager-server
+	@cp backend/bin/taskmanager $(HOME)/bin/taskmanager
 	@echo "安装完成！"
+	@echo ""
+	@echo "请确保 ~/bin 在 PATH 中:"
+	@echo "  export PATH=\"$$HOME/bin:$$PATH\""
 	@echo ""
 	@echo "用法:"
 	@echo "  taskmanager server start    启动服务"

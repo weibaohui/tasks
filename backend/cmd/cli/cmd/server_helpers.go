@@ -126,11 +126,15 @@ func printStatus() {
 
 // findServerExecutable 查找 server 可执行文件
 func findServerExecutable(cliPath string) string {
+	home, _ := os.UserHomeDir()
+
 	// 可能的 server 可执行文件路径（按优先级）
 	possiblePaths := []string{
 		// 与 CLI 同目录下的 server
 		filepath.Join(filepath.Dir(cliPath), "taskmanager-server"),
-		// 标准安装路径
+		// 用户本地安装路径
+		filepath.Join(home, "bin", "taskmanager-server"),
+		// 标准系统安装路径（兼容旧版本）
 		"/usr/local/bin/taskmanager-server",
 		// 开发环境路径
 		"./backend/bin/taskmanager-server",
