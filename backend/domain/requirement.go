@@ -103,7 +103,7 @@ type Requirement struct {
 	completionTokens int
 	totalTokens      int
 	// 进度数据（从对话记录中的 todo 工具提取）
-	progressData string // JSON 格式存储的 ProgressData
+	progressData *ProgressData
 }
 
 // NewRedispatchedRequirement 创建重新派发的需求副本
@@ -210,13 +210,13 @@ func (r *Requirement) SetTokenUsage(promptTokens, completionTokens, totalTokens 
 	r.updatedAt = time.Now()
 }
 
-// ProgressData 返回进度数据（JSON 字符串）
-func (r *Requirement) ProgressData() string {
+// ProgressData 返回进度数据（领域值对象）
+func (r *Requirement) ProgressData() *ProgressData {
 	return r.progressData
 }
 
-// SetProgressData 设置进度数据（JSON 字符串）
-func (r *Requirement) SetProgressData(data string) {
+// SetProgressData 设置进度数据（领域值对象）
+func (r *Requirement) SetProgressData(data *ProgressData) {
 	r.progressData = data
 	r.updatedAt = time.Now()
 }
@@ -519,7 +519,7 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		PromptTokens:           r.promptTokens,
 		CompletionTokens:       r.completionTokens,
 		TotalTokens:            r.totalTokens,
-		ProgressData:           r.progressData,
+		ProgressData:           func() string { if r.progressData != nil { return r.progressData.ToJSON() }; return "" }(),
 	}
 }
 
@@ -552,7 +552,11 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.promptTokens = s.PromptTokens
 	r.completionTokens = s.CompletionTokens
 	r.totalTokens = s.TotalTokens
-	r.progressData = s.ProgressData
+	if s.ProgressData != "" {
+		r.progressData = ProgressDataFromJSON(s.ProgressData)
+	} else {
+		r.progressData = nil
+	}
 	return nil
 }
 
