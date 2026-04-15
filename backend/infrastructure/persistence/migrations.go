@@ -139,18 +139,30 @@ func MigrateHeartbeatToTable(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("查询旧心跳项目失败: %w", err)
 	}
-	defer rows.Close()
 
-	now := time.Now().Unix()
+	type oldProject struct {
+		projectID       string
+		intervalMinutes int
+		mdContent       string
+		agentCode       string
+	}
+	var projects []oldProject
 	for rows.Next() {
-		var projectID string
-		var intervalMinutes int
-		var mdContent, agentCode string
-		if err := rows.Scan(&projectID, &intervalMinutes, &mdContent, &agentCode); err != nil {
+		var p oldProject
+		if err := rows.Scan(&p.projectID, &p.intervalMinutes, &p.mdContent, &p.agentCode); err != nil {
+			rows.Close()
 			return fmt.Errorf("扫描旧心跳项目失败: %w", err)
 		}
+		projects = append(projects, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("读取旧心跳项目失败: %w", err)
+	}
 
-		heartbeatID := "hb_" + projectID
+	now := time.Now().Unix()
+	for _, p := range projects {
+		heartbeatID := "hb_" + p.projectID
 		// 检查是否已存在
 		var exists int
 		if err := db.QueryRow(`SELECT 1 FROM heartbeats WHERE id = ?`, heartbeatID).Scan(&exists); err == nil {
@@ -160,12 +172,12 @@ func MigrateHeartbeatToTable(db *sql.DB) error {
 		_, err := db.Exec(`
 			INSERT INTO heartbeats (id, project_id, name, enabled, interval_minutes, md_content, agent_code, requirement_type, sort_order, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, heartbeatID, projectID, "默认心跳", 1, intervalMinutes, mdContent, agentCode, "heartbeat", 0, now, now)
+		`, heartbeatID, p.projectID, "默认心跳", 1, p.intervalMinutes, p.mdContent, p.agentCode, "heartbeat", 0, now, now)
 		if err != nil {
-			return fmt.Errorf("插入默认心跳失败 project=%s: %w", projectID, err)
+			return fmt.Errorf("插入默认心跳失败 project=%s: %w", p.projectID, err)
 		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {
