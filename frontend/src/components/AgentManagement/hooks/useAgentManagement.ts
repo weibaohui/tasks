@@ -84,6 +84,7 @@ export interface UseAgentManagementReturn {
   saving: boolean;
   open: boolean;
   editing: Agent | null;
+  createTypeOpen: boolean;
   providers: LLMProvider[];
   providersLoading: boolean;
   activeProviders: LLMProvider[];
@@ -131,6 +132,9 @@ export interface UseAgentManagementReturn {
   setToolsForServer: (tools: MCPTool[]) => void;
   toolsForm: FormInstance<{ all_tools: boolean; enabled_tools: string[] }>;
   mcpForm: FormInstance<{ mcp_server_id: string; is_active: boolean; auto_load: boolean }>;
+  startCreateFlow: () => void;
+  selectCreateType: (type: string) => Promise<void>;
+  cancelCreateType: () => void;
 }
 
 export function useAgentManagement({
@@ -147,6 +151,7 @@ export function useAgentManagement({
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
+  const [createTypeOpen, setCreateTypeOpen] = useState(false);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'skills' | 'personality' | 'claudecode' | 'opencode'>('basic');
@@ -277,6 +282,38 @@ export function useAgentManagement({
     } catch (e) { message.error(getMCPErrorMessage(e) || '获取 MCP 绑定信息失败'); }
     finally { setMcpLoading(false); }
   }, [editing]);
+
+  const startCreateFlow = useCallback(() => {
+    setCreateTypeOpen(true);
+  }, []);
+
+  const cancelCreateType = useCallback(() => {
+    setCreateTypeOpen(false);
+  }, []);
+
+  const selectCreateType = useCallback(async (type: string) => {
+    setCreateTypeOpen(false);
+    const isCoding = type === 'CodingAgent';
+    const isOpenCode = type === 'OpenCodeAgent';
+    setEditing(null);
+    setActiveTab(isCoding ? 'claudecode' : isOpenCode ? 'opencode' : 'basic');
+    setEditingBinding(null);
+    setToolsDrawerOpen(false);
+    setToolsForServer([]);
+    setEditingSections({});
+
+    form.resetFields();
+    form.setFieldsValue({
+      agent_type: type,
+      ...getDefaultAgentFormValues(defaultModelFromProviders),
+    });
+
+    try { setMcpServers(await listMCPServers()); }
+    catch (e) { message.error(getMCPErrorMessage(e) || '获取 MCP 服务器列表失败'); }
+    setMcpBindings([]);
+
+    setOpen(true);
+  }, [form, defaultModelFromProviders]);
 
   const openEditor = useCallback(async (agent: Agent | null) => {
     setEditing(agent);
@@ -519,7 +556,7 @@ export function useAgentManagement({
   }, [open, editing, mcpBindings, form]);
 
   return {
-    items, loading, saving, open, editing, providers, providersLoading,
+    items, loading, saving, open, editing, createTypeOpen, providers, providersLoading,
     activeProviders, modelOptions, claudeCodeModelOptions, llmProviderOptions, watchedModel, activeTab,
     mcpLoading, mcpServers, mcpBindings,
     toolsDrawerOpen, toolsDrawerLoading, toolsForServer, editingBinding,
@@ -532,5 +569,6 @@ export function useAgentManagement({
     handleCloseToolsDrawer, handleSaveTools, setEditingSections,
     setToolsDrawerOpen, setEditingBinding, setToolsDrawerLoading, setToolsForServer,
     toolsForm, mcpForm,
+    startCreateFlow, selectCreateType, cancelCreateType,
   };
 }

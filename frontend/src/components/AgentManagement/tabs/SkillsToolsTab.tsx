@@ -11,6 +11,7 @@ import type { Agent } from '../../../types/agent';
 import { SkillsConfigCard } from '../components/form/SkillsConfigSection';
 import { MCPServerBindingCard } from '../components/form/MCPServerBindingSection';
 import { ToolsConfigCard } from '../components/form/ToolsConfigSection';
+import { QuickEntryCard } from '../components/form/QuickEntryCard';
 
 interface SkillsToolsTabProps {
   form: FormInstance;
@@ -38,6 +39,18 @@ export const SkillsToolsTab: React.FC<SkillsToolsTabProps> = ({
 }) => {
   return (
     <div style={{ padding: '0 0 4px', overflow: 'auto' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+        <QuickEntryCard
+          title="Skills 库"
+          description="管理全局 Skills 列表"
+          onClick={() => window.open('/skills', '_blank')}
+        />
+        <QuickEntryCard
+          title="MCP 服务"
+          description="管理 MCP 服务器配置"
+          onClick={() => window.open('/mcp', '_blank')}
+        />
+      </div>
       <SkillsConfigCard
         form={form} editing={editing} editingSections={editingSections}
         toggleSectionEdit={toggleSectionEdit} handlePatchSection={handlePatchSection}
