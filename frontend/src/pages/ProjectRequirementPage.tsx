@@ -20,10 +20,58 @@ import { getStateMachine } from '../api/stateMachineApi';
 import type { State } from '../types/stateMachine';
 import { statusLabels, getStatusColor } from '../constants/requirementStatus';
 import type { Breakpoint } from 'antd/es/_util/responsiveObserver';
+import humanizeDuration from 'humanize-duration';
 
 const splitLines = (input: string): string[] => input.split('\n').map((item) => item.trim()).filter((item) => item !== '');
 
 const joinLines = (items: string[]): string => items.join('\n');
+
+/**
+ * 将毫秒时长格式化为紧凑字符串（例如 1h28m、3m、2d5h）。
+ */
+const compactDurationHumanizer = humanizeDuration.humanizer({
+  delimiter: '',
+  spacer: '',
+  largest: 2,
+  round: true,
+  units: ['d', 'h', 'm', 's'],
+  language: 'compactEn',
+  languages: {
+    compactEn: {
+      y: () => 'y',
+      mo: () => 'mo',
+      w: () => 'w',
+      d: () => 'd',
+      h: () => 'h',
+      m: () => 'm',
+      s: () => 's',
+      ms: () => 'ms',
+    },
+  },
+});
+
+/**
+ * 计算需求从开始到最后的耗时（毫秒）。
+ * - 优先使用 started_at/completed_at
+ * - 不足时回退到 agent_runtime.started_at/ended_at
+ * - 结束时间缺失时，使用 nowMs 作为“最后时间”
+ */
+const getRequirementDurationMs = (item: Requirement, nowMs: number = Date.now()): number | null => {
+  const startedAt = item.started_at ?? item.agent_runtime?.started_at ?? null;
+  if (!startedAt) return null;
+
+  const endedAt = item.completed_at ?? item.agent_runtime?.ended_at ?? nowMs;
+  return Math.max(0, endedAt - startedAt);
+};
+
+/**
+ * 将需求耗时格式化为紧凑文本；无法计算时返回 null。
+ */
+const formatRequirementDuration = (item: Requirement): string | null => {
+  const durationMs = getRequirementDurationMs(item);
+  if (durationMs === null) return null;
+  return compactDurationHumanizer(durationMs);
+};
 
 const statusColorMap: Record<string, string> = {
   todo: 'default',
@@ -757,6 +805,26 @@ export const ProjectRequirementPage: React.FC = () => {
             <Tag color={agentRuntimeColorMap[runtimeStatus] || 'default'}>{runtimeStatus}</Tag>
             {isRunning && <Tag color="processing">运行中</Tag>}
           </Space>
+        );
+      },
+    },
+    {
+      title: '耗时',
+      key: 'duration',
+      width: 120,
+      responsive: ['sm'] as Breakpoint[],
+      render: (_: unknown, item: Requirement) => {
+        const startedAt = item.started_at ?? item.agent_runtime?.started_at ?? null;
+        if (!startedAt) return <span>-</span>;
+
+        const endedAt = item.completed_at ?? item.agent_runtime?.ended_at ?? Date.now();
+        const text = formatRequirementDuration(item);
+        if (!text) return <span>-</span>;
+
+        return (
+          <Tooltip title={`${new Date(startedAt).toLocaleString()} → ${new Date(endedAt).toLocaleString()}`}>
+            <span>{text}</span>
+          </Tooltip>
         );
       },
     },
