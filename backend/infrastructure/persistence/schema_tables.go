@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS projects (
     agent_code TEXT NOT NULL DEFAULT '',
     dispatch_channel_code TEXT NOT NULL DEFAULT '',
     dispatch_session_key TEXT NOT NULL DEFAULT '',
+    max_concurrent_agents INTEGER NOT NULL DEFAULT 2,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

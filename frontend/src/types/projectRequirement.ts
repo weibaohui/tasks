@@ -10,6 +10,7 @@ export interface Project {
   agent_code: string;
   dispatch_channel_code: string;
   dispatch_session_key: string;
+  max_concurrent_agents: number;
   created_at: number;
   updated_at: number;
 }
@@ -88,6 +89,7 @@ export interface UpdateProjectRequest {
   agent_code?: string;
   dispatch_channel_code?: string;
   dispatch_session_key?: string;
+  max_concurrent_agents?: number;
 }
 
 export interface CreateRequirementRequest {

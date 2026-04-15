@@ -1,9 +1,10 @@
 package application
 
 import (
-	"log"
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -16,6 +17,7 @@ var (
 	ErrBaseAgentNotFound             = errors.New("base agent not found")
 	ErrInboundPublisherNotConfigured = errors.New("inbound publisher is not configured")
 	ErrInvalidSessionKey             = errors.New("invalid session key")
+	ErrMaxConcurrentAgentsReached    = errors.New("max concurrent agents limit reached for project")
 )
 
 type DispatchRequirementCommand struct {
@@ -92,6 +94,20 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 	if project == nil {
 		return nil, ErrProjectNotFound
 	}
+
+	// 检查项目并发 Agent 数量限制
+	projectID := requirement.ProjectID()
+	runningCount, err := s.requirementRepo.Count(ctx, domain.RequirementListFilter{
+		ProjectID: &projectID,
+		Statuses:  []string{string(domain.RequirementStatusPreparing), string(domain.RequirementStatusCoding)},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count running requirements: %w", err)
+	}
+	if runningCount >= project.MaxConcurrentAgents() {
+		return nil, ErrMaxConcurrentAgentsReached
+	}
+
 	baseAgent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(cmd.AgentCode))
 	if err != nil {
 		return nil, err

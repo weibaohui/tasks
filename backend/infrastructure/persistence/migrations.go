@@ -78,6 +78,22 @@ func MigrateRequirementTypeSystemColumn(db *sql.DB) error {
 	return nil
 }
 
+// MigrateMaxConcurrentAgentsColumn 兼容旧数据库：在 projects 表中添加 max_concurrent_agents 列
+func MigrateMaxConcurrentAgentsColumn(db *sql.DB) error {
+	columns, err := getTableColumns(db, "projects")
+	if err != nil {
+		return fmt.Errorf("获取 projects 表列信息失败: %w", err)
+	}
+
+	if _, exists := columns["max_concurrent_agents"]; !exists {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN max_concurrent_agents INTEGER NOT NULL DEFAULT 2"); err != nil {
+			return fmt.Errorf("添加 max_concurrent_agents 列失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
 	if err != nil {

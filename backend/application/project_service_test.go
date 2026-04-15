@@ -348,3 +348,51 @@ func TestProjectService_DeleteProject_NotFound(t *testing.T) {
 		t.Errorf("期望 ErrProjectNotFound, 实际为 %v", err)
 	}
 }
+
+func TestProjectService_UpdateProject_MaxConcurrentAgents(t *testing.T) {
+	svc := setupTestProjectSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateProject(ctx, CreateProjectCommand{
+		Name:       "ConcurrentTestProject",
+		GitRepoURL: "https://github.com/a/b.git",
+	})
+
+	maxAgents := 4
+	updated, err := svc.UpdateProject(ctx, UpdateProjectCommand{
+		ID:                  created.ID(),
+		Name:                "ConcurrentTestProject",
+		GitRepoURL:          "https://github.com/a/b.git",
+		MaxConcurrentAgents: &maxAgents,
+	})
+
+	if err != nil {
+		t.Fatalf("期望无错误, 实际为 %v", err)
+	}
+
+	if updated.MaxConcurrentAgents() != 4 {
+		t.Errorf("期望 max_concurrent_agents 为 4, 实际为 %d", updated.MaxConcurrentAgents())
+	}
+}
+
+func TestProjectService_UpdateProject_MaxConcurrentAgentsInvalid(t *testing.T) {
+	svc := setupTestProjectSvc()
+	ctx := context.Background()
+
+	created, _ := svc.CreateProject(ctx, CreateProjectCommand{
+		Name:       "ConcurrentInvalidProject",
+		GitRepoURL: "https://github.com/a/b.git",
+	})
+
+	invalidValue := 11
+	_, err := svc.UpdateProject(ctx, UpdateProjectCommand{
+		ID:                  created.ID(),
+		Name:                "ConcurrentInvalidProject",
+		GitRepoURL:          "https://github.com/a/b.git",
+		MaxConcurrentAgents: &invalidValue,
+	})
+
+	if err != domain.ErrProjectMaxConcurrentAgentsInvalid {
+		t.Errorf("期望 ErrProjectMaxConcurrentAgentsInvalid, 实际为 %v", err)
+	}
+}
