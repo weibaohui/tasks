@@ -91,6 +91,10 @@ func main() {
 	if err := _persistence.MigrateMaxConcurrentAgentsColumn(db); err != nil {
 		logger.Fatal("Failed to migrate projects max_concurrent_agents column", zap.Error(err))
 	}
+	// 兼容旧数据库：将单心跳配置迁移到 heartbeats 表
+	if err := _persistence.MigrateHeartbeatToTable(db); err != nil {
+		logger.Fatal("Failed to migrate heartbeat to table", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
@@ -105,6 +109,7 @@ func main() {
 	sessionRepo := _persistence.NewSQLiteSessionRepository(db)
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
+	heartbeatRepo := _persistence.NewSQLiteHeartbeatRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
 	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
@@ -179,6 +184,7 @@ func main() {
 
 	// 8. 初始化心跳调度器
 	heartbeatScheduler := application.NewHeartbeatScheduler(
+		heartbeatRepo,
 		projectRepo,
 		agentRepo,
 		requirementRepo,
@@ -206,6 +212,7 @@ func main() {
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator, llm.TestLLMConnection)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator)
+	heartbeatService := application.NewHeartbeatApplicationService(heartbeatRepo, idGenerator, heartbeatScheduler)
 
 	userHandler := httpHandler.NewUserHandler(userService)
 	agentHandler := httpHandler.NewAgentHandler(agentService)
@@ -213,7 +220,8 @@ func main() {
 	channelHandler := httpHandler.NewChannelHandler(channelService)
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
-	projectHandler := httpHandler.NewProjectHandler(projectService, heartbeatScheduler)
+	projectHandler := httpHandler.NewProjectHandler(projectService)
+	heartbeatHandler := httpHandler.NewHeartbeatHandler(heartbeatService, heartbeatScheduler)
 	requirementService := application.NewRequirementApplicationService(
 		requirementRepo,
 		projectRepo,
@@ -246,7 +254,7 @@ func main() {
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
 		requirementHandler, stateMachineHandler, projectStateMachineHandler,
-		requirementTypeHandler,
+		requirementTypeHandler, heartbeatHandler,
 	)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）

@@ -327,21 +327,21 @@ func TestCLI_ProjectList(t *testing.T) {
 	t.Logf("project list 输出:\n%s", output)
 }
 
-func TestCLI_ProjectHeartbeatStatus(t *testing.T) {
+func TestCLI_ProjectHeartbeatList(t *testing.T) {
 	requiresAPIToken(t)
 	buildCLI(t)
 
-	output, err := runCLI("project", "heartbeat", "status")
+	output, err := runCLI("project", "heartbeat", "list", "test-project-id")
 	if err != nil {
-		t.Fatalf("project heartbeat status 失败: %v\n%s", err, output)
+		t.Fatalf("project heartbeat list 失败: %v\n%s", err, output)
 	}
 
-	// 验证输出包含心跳状态表头
-	if !strings.Contains(output, "项目心跳状态") {
-		t.Errorf("输出不包含 '项目心跳状态':\n%s", output)
+	// 验证输出包含心跳列表表头
+	if !strings.Contains(output, "项目心跳列表") {
+		t.Errorf("输出不包含 '项目心跳列表':\n%s", output)
 	}
 
-	t.Logf("project heartbeat status 输出:\n%s", output)
+	t.Logf("project heartbeat list 输出:\n%s", output)
 }
 
 // ========== Requirement 命令测试 ==========
@@ -598,10 +598,12 @@ func TestCLI_ProjectHeartbeatHelp(t *testing.T) {
 
 	// 验证输出包含心跳子命令
 	expectedSubcommands := []string{
+		"list",
+		"create",
+		"update",
+		"delete",
 		"enable",
 		"disable",
-		"set-interval",
-		"status",
 	}
 
 	for _, cmd := range expectedSubcommands {

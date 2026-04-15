@@ -3,6 +3,7 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // MigrateClaudeRuntimeColumns 兼容旧数据库：将 claude_runtime_* 列重命名为 agent_runtime_*
@@ -92,6 +93,79 @@ func MigrateMaxConcurrentAgentsColumn(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// MigrateHeartbeatToTable 将旧项目的心跳配置迁移到独立的 heartbeats 表
+func MigrateHeartbeatToTable(db *sql.DB) error {
+	// 1. 创建 heartbeats 表（若不存在）
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS heartbeats (
+		id TEXT PRIMARY KEY,
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		interval_minutes INTEGER NOT NULL DEFAULT 60,
+		md_content TEXT NOT NULL DEFAULT '',
+		agent_code TEXT NOT NULL DEFAULT '',
+		requirement_type TEXT NOT NULL DEFAULT 'heartbeat',
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_heartbeats_project_id ON heartbeats(project_id);
+	CREATE INDEX IF NOT EXISTS idx_heartbeats_enabled ON heartbeats(enabled);
+	`
+	if _, err := db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("创建 heartbeats 表失败: %w", err)
+	}
+
+	// 2. 检查是否需要迁移：projects 表是否还有旧的心跳列
+	columns, err := getTableColumns(db, "projects")
+	if err != nil {
+		return fmt.Errorf("获取 projects 表列信息失败: %w", err)
+	}
+	if _, hasHeartbeatEnabled := columns["heartbeat_enabled"]; !hasHeartbeatEnabled {
+		// 没有旧列，说明不需要迁移
+		return nil
+	}
+
+	// 3. 查询所有启用心跳且配置了 agent_code 的旧项目
+	rows, err := db.Query(`
+		SELECT id, heartbeat_interval_minutes, heartbeat_md_content, agent_code
+		FROM projects
+		WHERE heartbeat_enabled = 1 AND agent_code != ''
+	`)
+	if err != nil {
+		return fmt.Errorf("查询旧心跳项目失败: %w", err)
+	}
+	defer rows.Close()
+
+	now := time.Now().Unix()
+	for rows.Next() {
+		var projectID string
+		var intervalMinutes int
+		var mdContent, agentCode string
+		if err := rows.Scan(&projectID, &intervalMinutes, &mdContent, &agentCode); err != nil {
+			return fmt.Errorf("扫描旧心跳项目失败: %w", err)
+		}
+
+		heartbeatID := "hb_" + projectID
+		// 检查是否已存在
+		var exists int
+		if err := db.QueryRow(`SELECT 1 FROM heartbeats WHERE id = ?`, heartbeatID).Scan(&exists); err == nil {
+			continue // 已存在，跳过
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO heartbeats (id, project_id, name, enabled, interval_minutes, md_content, agent_code, requirement_type, sort_order, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, heartbeatID, projectID, "默认心跳", 1, intervalMinutes, mdContent, agentCode, "heartbeat", 0, now, now)
+		if err != nil {
+			return fmt.Errorf("插入默认心跳失败 project=%s: %w", projectID, err)
+		}
+	}
+	return rows.Err()
 }
 
 func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {

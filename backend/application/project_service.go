@@ -19,18 +19,14 @@ type CreateProjectCommand struct {
 }
 
 type UpdateProjectCommand struct {
-	ID                       domain.ProjectID
-	Name                     string
-	GitRepoURL               string
-	DefaultBranch            string
-	InitSteps                []string
-	HeartbeatEnabled         *bool
-	HeartbeatIntervalMinutes *int
-	HeartbeatMDContent       *string
-	AgentCode                *string
-	DispatchChannelCode      *string
-	DispatchSessionKey       *string
-	MaxConcurrentAgents      *int
+	ID                  domain.ProjectID
+	Name                string
+	GitRepoURL          string
+	DefaultBranch       string
+	InitSteps           []string
+	DispatchChannelCode *string
+	DispatchSessionKey  *string
+	MaxConcurrentAgents *int
 }
 
 type ProjectApplicationService struct {
@@ -142,9 +138,6 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	}
 	if err := project.Update(cmd.Name, cmd.GitRepoURL, cmd.DefaultBranch, cmd.InitSteps); err != nil {
 		return nil, err
-	}
-	if cmd.HeartbeatEnabled != nil || cmd.HeartbeatIntervalMinutes != nil || cmd.HeartbeatMDContent != nil || cmd.AgentCode != nil {
-		project.UpdateHeartbeatConfig(cmd.HeartbeatEnabled, cmd.HeartbeatIntervalMinutes, cmd.HeartbeatMDContent, cmd.AgentCode)
 	}
 	// 仅在提供了非空值时才更新派发配置
 	// 防止前端发送空字符串覆盖现有有效配置

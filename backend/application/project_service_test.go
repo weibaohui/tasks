@@ -197,51 +197,6 @@ func TestProjectService_UpdateProject_NotFound(t *testing.T) {
 	}
 }
 
-func TestProjectService_UpdateProject_HeartbeatConfig(t *testing.T) {
-	svc := setupTestProjectSvc()
-	ctx := context.Background()
-
-	created, _ := svc.CreateProject(ctx, CreateProjectCommand{
-		Name:       "HeartbeatTestProject",
-		GitRepoURL: "https://github.com/a/b.git",
-	})
-
-	enabled := true
-	interval := 30
-	mdContent := "# Heartbeat"
-	agentCode := "agt_001"
-
-	updated, err := svc.UpdateProject(ctx, UpdateProjectCommand{
-		ID:                       created.ID(),
-		Name:                     "HeartbeatTestProject",
-		GitRepoURL:               "https://github.com/a/b.git",
-		HeartbeatEnabled:         &enabled,
-		HeartbeatIntervalMinutes: &interval,
-		HeartbeatMDContent:       &mdContent,
-		AgentCode:                &agentCode,
-	})
-
-	if err != nil {
-		t.Fatalf("期望无错误, 实际为 %v", err)
-	}
-
-	if !updated.HeartbeatEnabled() {
-		t.Error("期望 heartbeat_enabled 为 true")
-	}
-
-	if updated.HeartbeatIntervalMinutes() != 30 {
-		t.Errorf("期望 heartbeat_interval_minutes 为 30, 实际为 %d", updated.HeartbeatIntervalMinutes())
-	}
-
-	if updated.HeartbeatMDContent() != "# Heartbeat" {
-		t.Errorf("期望 heartbeat_md_content 为 '# Heartbeat', 实际为 '%s'", updated.HeartbeatMDContent())
-	}
-
-	if updated.AgentCode() != "agt_001" {
-		t.Errorf("期望 agent_code 为 'agt_001', 实际为 '%s'", updated.AgentCode())
-	}
-}
-
 func TestProjectService_UpdateProject_DispatchConfig(t *testing.T) {
 	svc := setupTestProjectSvc()
 	ctx := context.Background()

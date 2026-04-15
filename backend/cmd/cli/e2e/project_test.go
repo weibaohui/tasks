@@ -32,7 +32,7 @@ func TestCLI_ProjectHeartbeatHelp(t *testing.T) {
 		t.Fatalf("project heartbeat --help 失败: %v\n%s", err, output)
 	}
 
-	expected := []string{"status", "enable", "disable", "set-interval", "set-template", "set-agent"}
+	expected := []string{"list", "create", "update", "delete", "enable", "disable"}
 	for _, cmd := range expected {
 		if !strings.Contains(output, cmd) {
 			t.Errorf("project heartbeat 帮助输出不包含 '%s':\n%s", cmd, output)
@@ -97,20 +97,20 @@ func TestProjectCLI_Create(t *testing.T) {
 	t.Logf("project create: %s", output)
 }
 
-func TestProjectCLI_HeartbeatStatus(t *testing.T) {
+func TestProjectCLI_HeartbeatList(t *testing.T) {
 	ensureServerReady(t)
 	buildCLI(t)
 
-	output, err := runCLI("project", "heartbeat", "status")
+	output, err := runCLI("project", "heartbeat", "list", "test-project-id")
 	if err != nil {
-		t.Fatalf("project heartbeat status 失败: %v\n%s", err, output)
+		t.Fatalf("project heartbeat list 失败: %v\n%s", err, output)
 	}
 
-	if !strings.Contains(output, "心跳") && !strings.Contains(output, "项目ID") {
-		t.Errorf("project heartbeat status 输出格式不正确: %s", output)
+	if !strings.Contains(output, "项目心跳列表") && !strings.Contains(output, "心跳ID") {
+		t.Errorf("project heartbeat list 输出格式不正确: %s", output)
 	}
 
-	t.Logf("project heartbeat status: %s", output)
+	t.Logf("project heartbeat list: %s", output)
 }
 
 func TestProjectCLI_HeartbeatEnableDisable(t *testing.T) {
@@ -138,27 +138,50 @@ func TestProjectCLI_HeartbeatEnableDisable(t *testing.T) {
 		t.Skip("无法获取创建的项目ID，跳过心跳测试")
 	}
 
-	output, err = runCLI("project", "heartbeat", "enable", projectID, "--interval", "30")
+	// 先创建一个心跳
+	output, err = runCLI("project", "heartbeat", "create", projectID,
+		"--name", "测试心跳",
+		"--interval", "30",
+		"--agent-code", "scheduler")
 	if err != nil {
-		t.Logf("project heartbeat enable 失败 (可能项目不存在): %v\n%s", err, output)
+		t.Logf("project heartbeat create 失败: %v\n%s", err, output)
+		t.Skip("无法创建心跳，跳过测试")
+	}
+
+	lines = strings.Split(output, "\n")
+	var heartbeatID string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ID:") {
+			heartbeatID = strings.TrimSpace(strings.TrimPrefix(line, "ID:"))
+			break
+		}
+	}
+	if heartbeatID == "" {
+		t.Skip("无法获取创建的心跳ID，跳过测试")
+	}
+
+	output, err = runCLI("project", "heartbeat", "enable", heartbeatID)
+	if err != nil {
+		t.Logf("project heartbeat enable 失败: %v\n%s", err, output)
 	} else {
 		t.Logf("project heartbeat enable: %s", output)
 	}
 
-	output, err = runCLI("project", "heartbeat", "disable", projectID)
+	output, err = runCLI("project", "heartbeat", "disable", heartbeatID)
 	if err != nil {
-		t.Logf("project heartbeat disable 失败 (可能项目不存在): %v\n%s", err, output)
+		t.Logf("project heartbeat disable 失败: %v\n%s", err, output)
 	} else {
 		t.Logf("project heartbeat disable: %s", output)
 	}
 }
 
-func TestProjectCLI_HeartbeatSetInterval(t *testing.T) {
+func TestProjectCLI_HeartbeatUpdate(t *testing.T) {
 	requiresAPIToken(t)
 	buildCLI(t)
 
 	output, err := runCLI("project", "create",
-		"--name", "心跳间隔测试-E2E")
+		"--name", "心跳更新测试-E2E")
 	if err != nil {
 		t.Fatalf("创建测试项目失败: %v\n%s", err, output)
 	}
@@ -173,14 +196,37 @@ func TestProjectCLI_HeartbeatSetInterval(t *testing.T) {
 	}
 
 	if projectID == "" {
-		t.Skip("无法获取创建的项目ID，跳过心跳间隔测试")
+		t.Skip("无法获取创建的项目ID，跳过心跳更新测试")
 	}
 
-	output, err = runCLI("project", "heartbeat", "set-interval", projectID, "60")
+	output, err = runCLI("project", "heartbeat", "create", projectID,
+		"--name", "更新前心跳",
+		"--interval", "30",
+		"--agent-code", "scheduler")
 	if err != nil {
-		t.Logf("project heartbeat set-interval 失败 (可能项目不存在): %v\n%s", err, output)
+		t.Logf("project heartbeat create 失败: %v\n%s", err, output)
+		t.Skip("无法创建心跳，跳过测试")
+	}
+
+	lines = strings.Split(output, "\n")
+	var heartbeatID string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ID:") {
+			heartbeatID = strings.TrimSpace(strings.TrimPrefix(line, "ID:"))
+			break
+		}
+	}
+	if heartbeatID == "" {
+		t.Skip("无法获取创建的心跳ID，跳过测试")
+	}
+
+	output, err = runCLI("project", "heartbeat", "update", heartbeatID,
+		"--name", "更新后心跳",
+		"--interval", "60")
+	if err != nil {
+		t.Logf("project heartbeat update 失败: %v\n%s", err, output)
 	} else {
-		t.Logf("project heartbeat set-interval: %s", output)
+		t.Logf("project heartbeat update: %s", output)
 	}
 }
 

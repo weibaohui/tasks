@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, InputNumber, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, Switch, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
+import { Breadcrumb, Button, Card, Drawer, Dropdown, Form, Input, InputNumber, MenuProps, Modal, Popconfirm, Segmented, Select, Space, Table, Tabs, Tag, message, Alert, Tooltip, Row, Col, Progress, List } from 'antd';
 import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, getRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement, ProgressData, TodoItem } from '../types/projectRequirement';
-import { HeartbeatTemplateEditor } from '../components/HeartbeatTemplate';
+import { HeartbeatManagement } from '../components/HeartbeatManagement';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { RequirementKanban } from '../components/RequirementKanban';
@@ -116,10 +116,6 @@ export const ProjectRequirementPage: React.FC = () => {
   // 项目配置抽屉状态
   const [projectConfigDrawerOpen, setProjectConfigDrawerOpen] = useState(false);
   const [configProject, setConfigProject] = useState<Project | null>(null);
-
-  // 心跳配置相关状态
-  const [heartbeatForm] = Form.useForm();
-  const [savingHeartbeat, setSavingHeartbeat] = useState(false);
 
   // 需求详情抽屉状态
   const [requirementDetailDrawerOpen, setRequirementDetailDrawerOpen] = useState(false);
@@ -329,7 +325,6 @@ export const ProjectRequirementPage: React.FC = () => {
       git_repo_url: project.git_repo_url,
       default_branch: project.default_branch,
       init_steps_text: joinLines(project.init_steps || []),
-      agent_code: project.agent_code || '',
       dispatch_channel_code: project.dispatch_channel_code || '',
       dispatch_session_key: project.dispatch_session_key || '',
       max_concurrent_agents: project.max_concurrent_agents ?? 2,
@@ -337,7 +332,7 @@ export const ProjectRequirementPage: React.FC = () => {
     setProjectModalOpen(true);
   };
 
-  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string; agent_code?: string; dispatch_channel_code?: string; dispatch_session_key?: string; max_concurrent_agents?: number }) => {
+  const submitProject = async (values: { name: string; git_repo_url: string; default_branch: string; init_steps_text: string; dispatch_channel_code?: string; dispatch_session_key?: string; max_concurrent_agents?: number }) => {
     const payload: CreateProjectRequest = {
       name: values.name,
       git_repo_url: values.git_repo_url,
@@ -349,10 +344,6 @@ export const ProjectRequirementPage: React.FC = () => {
         await updateProject({
           ...payload,
           id: editingProject.id,
-          heartbeat_enabled: editingProject.heartbeat_enabled || false,
-          heartbeat_interval_minutes: editingProject.heartbeat_interval_minutes || 60,
-          heartbeat_md_content: editingProject.heartbeat_md_content || '',
-          agent_code: values.agent_code || '',
           dispatch_channel_code: values.dispatch_channel_code || '',
           dispatch_session_key: values.dispatch_session_key || '',
           max_concurrent_agents: values.max_concurrent_agents ?? 2,
@@ -454,13 +445,9 @@ export const ProjectRequirementPage: React.FC = () => {
 
     // 获取项目配置的派发渠道和 session_key
     const project = projects.find((p) => p.id === item.project_id);
-    const projectAgentCode = project?.agent_code;
     const projectChannelCode = project?.dispatch_channel_code;
     const projectSessionKey = project?.dispatch_session_key;
 
-    if (projectAgentCode) {
-      dispatchForm.setFieldsValue({ agent_code: projectAgentCode });
-    }
     if (projectChannelCode && projectSessionKey) {
       dispatchForm.setFieldsValue({ channel_code: projectChannelCode, session_key: projectSessionKey });
     } else if (channels.length > 0) {
@@ -540,48 +527,11 @@ export const ProjectRequirementPage: React.FC = () => {
   const openProjectConfig = async (project: Project) => {
     setConfigProject(project);
     setProjectConfigDrawerOpen(true);
-
-    // 设置心跳表单默认值
-    heartbeatForm.setFieldsValue({
-      heartbeat_enabled: project.heartbeat_enabled || false,
-      heartbeat_interval_minutes: project.heartbeat_interval_minutes || 60,
-      heartbeat_md_content: project.heartbeat_md_content || '',
-      agent_code: project.agent_code || '',
-    });
   };
 
   const closeProjectConfig = () => {
     setProjectConfigDrawerOpen(false);
     setConfigProject(null);
-  };
-
-  // 心跳配置保存
-  const handleSaveHeartbeat = async () => {
-    if (!configProject) return;
-
-    setSavingHeartbeat(true);
-    try {
-      const values = heartbeatForm.getFieldsValue(true);
-      await updateProject({
-        id: configProject.id,
-        name: configProject.name,
-        git_repo_url: configProject.git_repo_url,
-        default_branch: configProject.default_branch,
-        init_steps: configProject.init_steps || [],
-        heartbeat_enabled: values.heartbeat_enabled || false,
-        heartbeat_interval_minutes: values.heartbeat_interval_minutes || 60,
-        heartbeat_md_content: values.heartbeat_md_content || '',
-        agent_code: values.agent_code || '',
-        dispatch_channel_code: values.dispatch_channel_code || '',
-        dispatch_session_key: values.dispatch_session_key || '',
-      });
-      message.success('心跳配置已保存');
-      await fetchProjects();
-    } catch (_error) {
-      message.error('保存心跳配置失败');
-    } finally {
-      setSavingHeartbeat(false);
-    }
   };
 
   // 解析 progress_data（后端可能是 JSON 字符串或对象）
@@ -929,9 +879,6 @@ export const ProjectRequirementPage: React.FC = () => {
                       <div style={{ fontSize: 12, color: '#666' }}>
                         分支: {project.default_branch}
                       </div>
-                      {project.heartbeat_enabled && (
-                        <Tag color="green" style={{ marginTop: 4, fontSize: 11 }}>心跳</Tag>
-                      )}
                       <div style={{ marginTop: 8, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                         <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
                           需求总数: {total}
@@ -1086,16 +1033,6 @@ export const ProjectRequirementPage: React.FC = () => {
           <Form.Item label="初始化步骤（每行一个）" name="init_steps_text">
             <Input.TextArea rows={5} />
           </Form.Item>
-          <Form.Item label="默认执行 Agent" name="agent_code">
-            <Select
-              options={agents.filter((a) => ['CodingAgent', 'OpenCodeAgent'].includes(a.agent_type)).map((a) => ({
-                label: `${a.name} (${a.agent_code})`,
-                value: a.agent_code,
-              }))}
-              placeholder="选择默认执行 Agent"
-              allowClear
-            />
-          </Form.Item>
           <Form.Item label="默认派发渠道" name="dispatch_channel_code">
             <Select
               options={channels.map((c) => ({
@@ -1215,7 +1152,6 @@ export const ProjectRequirementPage: React.FC = () => {
                   <Form
                     layout="vertical"
                     initialValues={{
-                      agent_code: configProject?.agent_code || '',
                       dispatch_channel_code: configProject?.dispatch_channel_code || '',
                       dispatch_session_key: configProject?.dispatch_session_key || '',
                       max_concurrent_agents: configProject?.max_concurrent_agents ?? 2,
@@ -1229,10 +1165,6 @@ export const ProjectRequirementPage: React.FC = () => {
                           git_repo_url: configProject.git_repo_url,
                           default_branch: configProject.default_branch,
                           init_steps: configProject.init_steps,
-                          heartbeat_enabled: configProject.heartbeat_enabled || false,
-                          heartbeat_interval_minutes: configProject.heartbeat_interval_minutes || 60,
-                          heartbeat_md_content: configProject.heartbeat_md_content || '',
-                          agent_code: values.agent_code,
                           dispatch_channel_code: values.dispatch_channel_code,
                           dispatch_session_key: values.dispatch_session_key,
                           max_concurrent_agents: values.max_concurrent_agents ?? 2,
@@ -1244,18 +1176,6 @@ export const ProjectRequirementPage: React.FC = () => {
                       }
                     }}
                   >
-                    <Form.Item label="默认执行 Agent" name="agent_code">
-                      <Select
-                        options={agents.filter((a) => ['CodingAgent', 'OpenCodeAgent'].includes(a.agent_type)).map((a) => ({
-                          label: `${a.name} (${a.agent_code})`,
-                          value: a.agent_code,
-                        }))}
-                        placeholder="选择用于执行需求、心跳和 Hook 的默认 Agent"
-                        style={{ width: 300 }}
-                        allowClear
-                      />
-                    </Form.Item>
-
                     <Form.Item label="默认派发渠道" name="dispatch_channel_code">
                       <Select
                         options={channels.map((c) => ({
@@ -1285,7 +1205,7 @@ export const ProjectRequirementPage: React.FC = () => {
 
                   <Alert
                     message="提示"
-                    description="这些配置是项目的默认执行环境，用于需求派发、心跳任务和 Hook 触发。Hook 触发时将自动使用此处配置的 Agent、渠道和 SessionKey。"
+                    description="这些配置是项目的默认执行环境，用于需求派发和 Hook 触发。Hook 触发时将自动使用此处配置的渠道和 SessionKey。"
                     type="info"
                     showIcon
                     style={{ marginTop: 16 }}
@@ -1295,70 +1215,8 @@ export const ProjectRequirementPage: React.FC = () => {
             },
             {
               key: 'heartbeat',
-              label: '心跳配置',
-              children: (
-                <>
-                  <Form
-                    form={heartbeatForm}
-                    layout="vertical"
-                    initialValues={{
-                      heartbeat_enabled: configProject?.heartbeat_enabled || false,
-                      heartbeat_interval_minutes: configProject?.heartbeat_interval_minutes || 60,
-                      heartbeat_md_content: configProject?.heartbeat_md_content || '',
-                    }}
-                  >
-                    <Form.Item label="启用心跳" name="heartbeat_enabled" valuePropName="checked">
-                      <Switch />
-                    </Form.Item>
-
-                    <Form.Item label="心跳间隔（分钟）" name="heartbeat_interval_minutes">
-                      <Select
-                        options={[
-                          { label: '15分钟', value: 15 },
-                          { label: '30分钟', value: 30 },
-                          { label: '1小时', value: 60 },
-                          { label: '2小时', value: 120 },
-                          { label: '6小时', value: 360 },
-                          { label: '12小时', value: 720 },
-                          { label: '24小时', value: 1440 },
-                        ]}
-                        style={{ width: 200 }}
-                      />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="heartbeat_md_content"
-                      hidden
-                    >
-                      <Input />
-                    </Form.Item>
-                    <HeartbeatTemplateEditor
-                      value={heartbeatForm.getFieldValue('heartbeat_md_content')}
-                      onChange={(value) => heartbeatForm.setFieldValue('heartbeat_md_content', value)}
-                    />
-
-                    <Form.Item>
-                      <Space>
-                        <Button
-                          type="primary"
-                          onClick={handleSaveHeartbeat}
-                          loading={savingHeartbeat}
-                        >
-                          保存心跳配置
-                        </Button>
-                      </Space>
-                    </Form.Item>
-                  </Form>
-
-                  <Alert
-                    message="提示"
-                    description="心跳任务会使用选定的 Agent 定期执行，分析项目 PR 并根据评论内容决定是否创建新的需求。没问题的 PR 会评论 /lgtm，需要处理的会创建需求让其他 AI 执行修复。"
-                    type="info"
-                    showIcon
-                    style={{ marginTop: 16 }}
-                  />
-                </>
-              ),
+              label: '心跳管理',
+              children: configProject ? <HeartbeatManagement projectId={configProject.id} agents={agents} /> : null,
             },
             {
               key: 'stateMachine',

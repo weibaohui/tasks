@@ -368,7 +368,10 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 	}
 
 	// 5. 派发新需求
-	agentCode := project.AgentCode()
+	agentCode := originalReq.AssigneeAgentCode()
+	if agentCode == "" {
+		agentCode = originalReq.ReplicaAgentCode()
+	}
 	channelCode := project.DispatchChannelCode()
 	sessionKey := project.DispatchSessionKey()
 
@@ -378,9 +381,9 @@ func (s *RequirementApplicationService) CopyAndDispatchRequirement(ctx context.C
 
 	_, err = dispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 		RequirementID: newReq.ID(),
-		AgentCode:    agentCode,
-		ChannelCode:  channelCode,
-		SessionKey:   sessionKey,
+		AgentCode:     agentCode,
+		ChannelCode:   channelCode,
+		SessionKey:    sessionKey,
 	})
 	if err != nil {
 		// 派发失败，删除已保存的需求以保持一致性

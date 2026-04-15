@@ -40,7 +40,10 @@ var requirementDispatchCmd = &cobra.Command{
 			return
 		}
 
-		agentCode := project.AgentCode
+		agentCode := req.AssigneeAgentCode
+		if agentCode == "" {
+			agentCode = req.ReplicaAgentCode
+		}
 		channelCode := project.DispatchChannelCode
 		sessionKey := project.DispatchSessionKey
 

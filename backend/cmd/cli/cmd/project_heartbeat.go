@@ -13,253 +13,274 @@ import (
 
 var projectHeartbeatCmd = &cobra.Command{
 	Use:   "heartbeat",
-	Short: "心跳配置管理",
-	Long:  `管理项目的心跳配置，包括启用、关闭、设置间隔等`,
+	Short: "心跳管理",
+	Long:  `管理项目的心跳配置，支持一个项目配置多个心跳`,
 }
 
-var heartbeatStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "查看心跳状态",
-	Example: `  taskmanager project heartbeat status
-  taskmanager project heartbeat status <project_id>`,
+var heartbeatListCmd = &cobra.Command{
+	Use:   "list <project_id>",
+	Short: "列出项目心跳",
+	Example: `  taskmanager project heartbeat list <project_id>`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		projectID := args[0]
 		ctx := context.Background()
 		c := client.New()
 
-		var projects []client.Project
-		var err error
-
-		if len(args) >= 1 {
-			project, err := c.GetProject(ctx, args[0])
-			if err != nil {
-				fmt.Printf("查找项目失败: %v\n", err)
-				return
-			}
-			projects = []client.Project{*project}
-		} else {
-			projects, err = c.ListProjects(ctx)
-			if err != nil {
-				fmt.Printf("列出项目失败: %v\n", err)
-				return
-			}
+		heartbeats, err := c.ListHeartbeats(ctx, projectID)
+		if err != nil {
+			fmt.Printf("列出心跳失败: %v\n", err)
+			return
 		}
 
-		fmt.Println("\n项目心跳状态:")
+		fmt.Println("\n项目心跳列表:")
 		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf("%-20s %-10s %-10s %-15s %s\n", "项目ID", "心跳", "间隔(分钟)", "Agent编码", "项目名称")
+		fmt.Printf("%-20s %-10s %-10s %-15s %-15s %s\n", "心跳ID", "状态", "间隔(分钟)", "Agent编码", "需求类型", "名称")
 		fmt.Println("--------------------------------------------------------------------------------")
-		for _, project := range projects {
-			idStr := project.ID
-			if len(idStr) > 16 {
-				idStr = idStr[:16] + "..."
+		for _, hb := range heartbeats {
+			idStr := hb.ID
+			if len(idStr) > 18 {
+				idStr = idStr[:18] + "..."
 			}
 			status := "关闭"
-			if project.HeartbeatEnabled {
+			if hb.Enabled {
 				status = "开启"
 			}
-			agentCode := project.AgentCode
+			agentCode := hb.AgentCode
 			if agentCode == "" {
 				agentCode = "-"
 			}
-			fmt.Printf("%-20s %-10s %-10d %-15s %s\n",
+			reqType := hb.RequirementType
+			if reqType == "" {
+				reqType = "heartbeat"
+			}
+			fmt.Printf("%-20s %-10s %-10d %-15s %-15s %s\n",
 				idStr,
 				status,
-				project.HeartbeatIntervalMinutes,
+				hb.IntervalMinutes,
 				agentCode,
-				project.Name)
+				reqType,
+				hb.Name)
 		}
 		fmt.Println()
 	},
 }
 
-var heartbeatEnableCmd = &cobra.Command{
-	Use:   "enable",
-	Short: "开启心跳",
-	Example: `  taskmanager project heartbeat enable <project_id> [--interval <minutes>]`,
+var heartbeatCreateCmd = &cobra.Command{
+	Use:   "create <project_id>",
+	Short: "创建心跳",
+	Example: `  taskmanager project heartbeat create <project_id> --name <name> --interval <minutes> --agent-code <code> --type <type>`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			fmt.Println("错误: 缺少 project_id 参数")
+		projectID := args[0]
+		name, _ := cmd.Flags().GetString("name")
+		interval, _ := cmd.Flags().GetInt("interval")
+		agentCode, _ := cmd.Flags().GetString("agent-code")
+		reqType, _ := cmd.Flags().GetString("type")
+		content, _ := cmd.Flags().GetString("content")
+
+		if name == "" || agentCode == "" {
+			fmt.Println("错误: --name 和 --agent-code 参数必填")
 			cmd.Usage()
 			return
-		}
-		projectID := args[0]
-
-		interval, _ := cmd.Flags().GetInt("interval")
-		mdContent, _ := cmd.Flags().GetString("md-content")
-
-		ctx := context.Background()
-		c := client.New()
-
-		project, err := c.GetProject(ctx, projectID)
-		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
-			return
-		}
-
-		if interval < 1 {
-			interval = project.HeartbeatIntervalMinutes
 		}
 		if interval < 1 {
 			interval = 30
 		}
-		if mdContent == "" {
-			mdContent = project.HeartbeatMDContent
-		}
-		if mdContent == "" {
-			mdContent = "# 心跳报告\n\n## 任务状态\n\n## 需要关注的问题"
+		if reqType == "" {
+			reqType = "heartbeat"
 		}
 
-		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, true, interval, mdContent, project.AgentCode)
+		ctx := context.Background()
+		c := client.New()
+
+		hb, err := c.CreateHeartbeat(ctx, client.CreateHeartbeatRequest{
+			ProjectID:       projectID,
+			Name:            name,
+			IntervalMinutes: interval,
+			MDContent:       content,
+			AgentCode:       agentCode,
+			RequirementType: reqType,
+		})
 		if err != nil {
-			fmt.Printf("保存项目失败: %v\n", err)
+			fmt.Printf("创建心跳失败: %v\n", err)
 			return
 		}
 
-		fmt.Printf("心跳已开启!\n")
-		fmt.Printf("  项目: %s\n", updatedProject.Name)
-		fmt.Printf("  间隔: %d 分钟\n", updatedProject.HeartbeatIntervalMinutes)
+		fmt.Printf("心跳创建成功!\n")
+		fmt.Printf("  ID:   %s\n", hb.ID)
+		fmt.Printf("  名称: %s\n", hb.Name)
+		fmt.Printf("  间隔: %d 分钟\n", hb.IntervalMinutes)
+	},
+}
+
+var heartbeatUpdateCmd = &cobra.Command{
+	Use:   "update <heartbeat_id>",
+	Short: "更新心跳",
+	Example: `  taskmanager project heartbeat update <heartbeat_id> --name <name> --interval <minutes>`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		heartbeatID := args[0]
+		name, _ := cmd.Flags().GetString("name")
+		interval, _ := cmd.Flags().GetInt("interval")
+		agentCode, _ := cmd.Flags().GetString("agent-code")
+		reqType, _ := cmd.Flags().GetString("type")
+		content, _ := cmd.Flags().GetString("content")
+		enabledStr, _ := cmd.Flags().GetString("enabled")
+
+		ctx := context.Background()
+		c := client.New()
+
+		hb, err := c.GetHeartbeat(ctx, heartbeatID)
+		if err != nil {
+			fmt.Printf("查找心跳失败: %v\n", err)
+			return
+		}
+
+		req := client.UpdateHeartbeatRequest{
+			Name:            hb.Name,
+			IntervalMinutes: hb.IntervalMinutes,
+			MDContent:       hb.MDContent,
+			AgentCode:       hb.AgentCode,
+			RequirementType: hb.RequirementType,
+			Enabled:         hb.Enabled,
+		}
+		if cmd.Flags().Changed("name") {
+			req.Name = name
+		}
+		if cmd.Flags().Changed("interval") {
+			req.IntervalMinutes = interval
+		}
+		if cmd.Flags().Changed("agent-code") {
+			req.AgentCode = agentCode
+		}
+		if cmd.Flags().Changed("type") {
+			req.RequirementType = reqType
+		}
+		if cmd.Flags().Changed("content") {
+			req.MDContent = content
+		}
+		if enabledStr != "" {
+			req.Enabled = enabledStr == "true"
+		}
+
+		updated, err := c.UpdateHeartbeat(ctx, heartbeatID, req)
+		if err != nil {
+			fmt.Printf("更新心跳失败: %v\n", err)
+			return
+		}
+
+		fmt.Printf("心跳更新成功: %s\n", updated.Name)
+	},
+}
+
+var heartbeatDeleteCmd = &cobra.Command{
+	Use:   "delete <heartbeat_id>",
+	Short: "删除心跳",
+	Example: `  taskmanager project heartbeat delete <heartbeat_id>`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		heartbeatID := args[0]
+		ctx := context.Background()
+		c := client.New()
+
+		if err := c.DeleteHeartbeat(ctx, heartbeatID); err != nil {
+			fmt.Printf("删除心跳失败: %v\n", err)
+			return
+		}
+		fmt.Printf("心跳已删除: %s\n", heartbeatID)
+	},
+}
+
+var heartbeatEnableCmd = &cobra.Command{
+	Use:   "enable <heartbeat_id>",
+	Short: "开启心跳",
+	Example: `  taskmanager project heartbeat enable <heartbeat_id>`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		heartbeatID := args[0]
+		ctx := context.Background()
+		c := client.New()
+
+		hb, err := c.GetHeartbeat(ctx, heartbeatID)
+		if err != nil {
+			fmt.Printf("查找心跳失败: %v\n", err)
+			return
+		}
+
+		req := client.UpdateHeartbeatRequest{
+			Name:            hb.Name,
+			IntervalMinutes: hb.IntervalMinutes,
+			MDContent:       hb.MDContent,
+			AgentCode:       hb.AgentCode,
+			RequirementType: hb.RequirementType,
+			Enabled:         true,
+		}
+		_, err = c.UpdateHeartbeat(ctx, heartbeatID, req)
+		if err != nil {
+			fmt.Printf("开启心跳失败: %v\n", err)
+			return
+		}
+		fmt.Printf("心跳已开启: %s\n", heartbeatID)
 	},
 }
 
 var heartbeatDisableCmd = &cobra.Command{
-	Use:   "disable",
+	Use:   "disable <heartbeat_id>",
 	Short: "关闭心跳",
-	Example: `  taskmanager project heartbeat disable <project_id>`,
+	Example: `  taskmanager project heartbeat disable <heartbeat_id>`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			fmt.Println("错误: 缺少 project_id 参数")
-			cmd.Usage()
-			return
-		}
-		projectID := args[0]
-
+		heartbeatID := args[0]
 		ctx := context.Background()
 		c := client.New()
 
-		project, err := c.GetProject(ctx, projectID)
+		hb, err := c.GetHeartbeat(ctx, heartbeatID)
 		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
+			fmt.Printf("查找心跳失败: %v\n", err)
 			return
 		}
 
-		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, false, project.HeartbeatIntervalMinutes, project.HeartbeatMDContent, project.AgentCode)
+		req := client.UpdateHeartbeatRequest{
+			Name:            hb.Name,
+			IntervalMinutes: hb.IntervalMinutes,
+			MDContent:       hb.MDContent,
+			AgentCode:       hb.AgentCode,
+			RequirementType: hb.RequirementType,
+			Enabled:         false,
+		}
+		_, err = c.UpdateHeartbeat(ctx, heartbeatID, req)
 		if err != nil {
-			fmt.Printf("保存项目失败: %v\n", err)
+			fmt.Printf("关闭心跳失败: %v\n", err)
 			return
 		}
-
-		fmt.Printf("心跳已关闭，项目: %s\n", updatedProject.Name)
+		fmt.Printf("心跳已关闭: %s\n", heartbeatID)
 	},
 }
 
-var heartbeatSetIntervalCmd = &cobra.Command{
-	Use:   "set-interval",
-	Short: "设置心跳间隔",
-	Example: `  taskmanager project heartbeat set-interval <project_id> <minutes>`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 2 {
-			fmt.Println("错误: 缺少参数")
-			fmt.Println("用法: taskmanager project heartbeat set-interval <project_id> <minutes>")
-			return
-		}
-		projectID := args[0]
-		minutes, err := strconv.Atoi(args[1])
-		if err != nil || minutes < 1 {
-			fmt.Println("错误: minutes 必须是大于 0 的整数")
-			return
-		}
+func init() {
+	// create flags
+	heartbeatCreateCmd.Flags().String("name", "", "心跳名称")
+	heartbeatCreateCmd.Flags().Int("interval", 30, "心跳间隔（分钟）")
+	heartbeatCreateCmd.Flags().String("agent-code", "", "执行 Agent 编码")
+	heartbeatCreateCmd.Flags().String("type", "heartbeat", "生成的需求类型")
+	heartbeatCreateCmd.Flags().String("content", "", "心跳 Prompt 模板内容")
 
-		ctx := context.Background()
-		c := client.New()
+	// update flags
+	heartbeatUpdateCmd.Flags().String("name", "", "心跳名称")
+	heartbeatUpdateCmd.Flags().Int("interval", 30, "心跳间隔（分钟）")
+	heartbeatUpdateCmd.Flags().String("agent-code", "", "执行 Agent 编码")
+	heartbeatUpdateCmd.Flags().String("type", "heartbeat", "生成的需求类型")
+	heartbeatUpdateCmd.Flags().String("content", "", "心跳 Prompt 模板内容")
+	heartbeatUpdateCmd.Flags().String("enabled", "", "是否启用（true/false）")
 
-		project, err := c.GetProject(ctx, projectID)
-		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
-			return
-		}
+	projectHeartbeatCmd.AddCommand(heartbeatListCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatCreateCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatUpdateCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatDeleteCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatEnableCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatDisableCmd)
 
-		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, project.HeartbeatEnabled, minutes, project.HeartbeatMDContent, project.AgentCode)
-		if err != nil {
-			fmt.Printf("保存项目失败: %v\n", err)
-			return
-		}
-
-		fmt.Printf("心跳间隔已设置为 %d 分钟，项目: %s\n", minutes, updatedProject.Name)
-	},
-}
-
-var heartbeatSetMdCmd = &cobra.Command{
-	Use:   "set-template",
-	Short: "设置心跳模板内容",
-	Example: `  taskmanager project heartbeat set-template <project_id> --content "<markdown>"`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			fmt.Println("错误: 缺少 project_id 参数")
-			cmd.Usage()
-			return
-		}
-		projectID := args[0]
-
-		mdContent, _ := cmd.Flags().GetString("content")
-		if mdContent == "" {
-			fmt.Println("错误: --content 参数必填")
-			cmd.Usage()
-			return
-		}
-
-		ctx := context.Background()
-		c := client.New()
-
-		project, err := c.GetProject(ctx, projectID)
-		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
-			return
-		}
-
-		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, project.HeartbeatEnabled, project.HeartbeatIntervalMinutes, mdContent, project.AgentCode)
-		if err != nil {
-			fmt.Printf("保存项目失败: %v\n", err)
-			return
-		}
-
-		fmt.Printf("心跳模板已更新，项目: %s\n", updatedProject.Name)
-	},
-}
-
-var heartbeatSetAgentCmd = &cobra.Command{
-	Use:   "set-agent",
-	Short: "设置心跳使用的Agent",
-	Example: `  taskmanager project heartbeat set-agent <project_id> --agent-code <code>`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 {
-			fmt.Println("错误: 缺少 project_id 参数")
-			cmd.Usage()
-			return
-		}
-		projectID := args[0]
-
-		agentCode, _ := cmd.Flags().GetString("agent-code")
-		if agentCode == "" {
-			fmt.Println("错误: --agent-code 参数必填")
-			cmd.Usage()
-			return
-		}
-
-		ctx := context.Background()
-		c := client.New()
-
-		project, err := c.GetProject(ctx, projectID)
-		if err != nil {
-			fmt.Printf("查找项目失败: %v\n", err)
-			return
-		}
-
-		updatedProject, err := c.UpdateProjectHeartbeat(ctx, projectID, project.HeartbeatEnabled, project.HeartbeatIntervalMinutes, project.HeartbeatMDContent, agentCode)
-		if err != nil {
-			fmt.Printf("保存项目失败: %v\n", err)
-			return
-		}
-
-		fmt.Printf("心跳Agent已设置为: %s，项目: %s\n", agentCode, updatedProject.Name)
-	},
+	// 兼容旧命令别名（弃用提示）
+	_ = strconv.Atoi
 }

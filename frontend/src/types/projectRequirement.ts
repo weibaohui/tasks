@@ -4,10 +4,6 @@ export interface Project {
   git_repo_url: string;
   default_branch: string;
   init_steps: string[];
-  heartbeat_enabled: boolean;
-  heartbeat_interval_minutes: number;
-  heartbeat_md_content: string;
-  agent_code: string;
   dispatch_channel_code: string;
   dispatch_session_key: string;
   max_concurrent_agents: number;
@@ -83,10 +79,6 @@ export interface UpdateProjectRequest {
   git_repo_url?: string;
   default_branch?: string;
   init_steps?: string[];
-  heartbeat_enabled?: boolean;
-  heartbeat_interval_minutes?: number;
-  heartbeat_md_content?: string;
-  agent_code?: string;
   dispatch_channel_code?: string;
   dispatch_session_key?: string;
   max_concurrent_agents?: number;
