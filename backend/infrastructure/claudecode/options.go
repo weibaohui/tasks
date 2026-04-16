@@ -52,16 +52,14 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	// 注入 Provider 的 API Key 和 Base URL
 	// Agent 身上配置了什么就注入什么，不要自己判断
 	if provider != nil {
-		if provider.APIKey() != "" {
-			env["ANTHROPIC_API_KEY"] = provider.APIKey()
-		}
-		if provider.APIBase() != "" {
-			env["ANTHROPIC_BASE_URL"] = provider.APIBase()
-		}
+		env["ANTHROPIC_API_KEY"] = provider.APIKey()
+		env["ANTHROPIC_BASE_URL"] = provider.APIBase()
 	}
 
 	opts = append(opts, claudecode.WithEnv(env))
-	opts = append(opts, claudecode.WithModel(model))
+	if model != "" {
+		opts = append(opts, claudecode.WithModel(model))
+	}
 
 	// 设置系统提示词
 	if config.SystemPrompt != "" {

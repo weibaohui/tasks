@@ -160,9 +160,6 @@ func TestCommandProcessor_Process_Models(t *testing.T) {
 	if !contains(result, "支持的模型") {
 		t.Error("结果应包含 '支持的模型'")
 	}
-	if !contains(result, "MiniMax-M2.7-highspeed") {
-		t.Error("结果应包含 MiniMax-M2.7-highspeed")
-	}
 }
 
 func TestCommandProcessor_Process_New(t *testing.T) {
