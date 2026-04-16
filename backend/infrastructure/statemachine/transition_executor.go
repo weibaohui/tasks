@@ -16,8 +16,11 @@ import (
 
 // TransitionExecutor 转换钩子执行器
 type TransitionExecutor struct {
-	logger     *zap.Logger
-	httpClient *http.Client
+	logger           *zap.Logger
+	httpClient       *http.Client
+	heartbeatTrigger interface {
+		Trigger(ctx context.Context, heartbeatID string) error
+	}
 }
 
 // NewTransitionExecutor 创建执行器
@@ -28,6 +31,13 @@ func NewTransitionExecutor(logger *zap.Logger) *TransitionExecutor {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// SetHeartbeatTrigger 设置心跳触发器
+func (e *TransitionExecutor) SetHeartbeatTrigger(trigger interface {
+	Trigger(ctx context.Context, heartbeatID string) error
+}) {
+	e.heartbeatTrigger = trigger
 }
 
 // ExecuteHooks 异步执行 hooks
@@ -52,6 +62,7 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook statemachine.
 		"from_state":        hookCtx.FromState,
 		"to_state":          hookCtx.ToState,
 		"trigger":           hookCtx.Trigger,
+		"trigger_id":        hookCtx.TriggerID,
 		"hook_name":         hook.Name,
 		"hook_type":         hook.Type,
 	}
@@ -80,6 +91,8 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook statemachine.
 			err = e.executeWebhook(ctx, hook, execCtx)
 		case "command":
 			err = e.executeCommand(ctx, hook, execCtx)
+		case "trigger_heartbeat":
+			err = e.executeTriggerHeartbeat(ctx, hook, execCtx)
 		default:
 			logger.Warn("unknown hook type, treating as webhook", zap.String("type", hook.Type))
 			err = e.executeWebhook(ctx, hook, execCtx)
@@ -189,6 +202,25 @@ func (e *TransitionExecutor) executeCommand(ctx context.Context, hook statemachi
 		zap.String("command", cmdStr),
 		zap.String("output", string(output)))
 	return nil
+}
+
+func (e *TransitionExecutor) executeTriggerHeartbeat(ctx context.Context, hook statemachine.TransitionHook, hookCtx map[string]interface{}) error {
+	if e.heartbeatTrigger == nil {
+		return fmt.Errorf("heartbeat trigger not configured")
+	}
+
+	hbIDRaw, ok := hook.Config["heartbeat_id"]
+	if !ok {
+		return fmt.Errorf("heartbeat_id not found in hook config")
+	}
+
+	hbID, ok := hbIDRaw.(string)
+	if !ok {
+		return fmt.Errorf("heartbeat_id must be a string")
+	}
+
+	hbID = e.interpolate(hbID, hookCtx)
+	return e.heartbeatTrigger.Trigger(ctx, hbID)
 }
 
 // interpolate 替换模板变量

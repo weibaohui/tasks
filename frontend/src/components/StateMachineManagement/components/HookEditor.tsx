@@ -27,6 +27,7 @@ const TEMPLATE_VARIABLES = [
   { key: 'from_state', label: 'from_state', desc: '源状态' },
   { key: 'to_state', label: 'to_state', desc: '目标状态' },
   { key: 'trigger', label: 'trigger', desc: '触发器' },
+  { key: 'trigger_id', label: 'trigger_id', desc: '转换规则ID' },
   { key: 'hook_name', label: 'hook_name', desc: 'Hook名称' },
   { key: 'hook_type', label: 'hook_type', desc: 'Hook类型' },
 ];
@@ -57,13 +58,16 @@ export const HookEditor: React.FC<HookEditorProps> = ({
 }) => {
   const filteredExamples = hookExamples.filter((e) => e.type === hook.type);
 
-  const insertVariable = (field: 'url' | 'command', variable: string) => {
+  const insertVariable = (field: 'url' | 'command' | 'heartbeat_id', variable: string) => {
     if (field === 'url') {
       const url = (hook.config.url as string) || '';
       onChange({ ...hook, config: { ...hook.config, url: url + `{{${variable}}}` } });
-    } else {
+    } else if (field === 'command') {
       const cmd = (hook.config.command as string) || '';
       onChange({ ...hook, config: { ...hook.config, command: cmd + `{{${variable}}}` } });
+    } else {
+      const hbId = (hook.config.heartbeat_id as string) || '';
+      onChange({ ...hook, config: { ...hook.config, heartbeat_id: hbId + `{{${variable}}}` } });
     }
   };
 
@@ -87,7 +91,7 @@ export const HookEditor: React.FC<HookEditorProps> = ({
             </Space>
           </div>
           <Collapse
-            defaultActiveKey={['notification', 'deployment']}
+            defaultActiveKey={['notification', 'deployment', 'heartbeat']}
             ghost
             style={{ background: 'transparent' }}
           >
@@ -151,7 +155,12 @@ export const HookEditor: React.FC<HookEditorProps> = ({
                     onChange({
                       ...hook,
                       type: value,
-                      config: value === 'webhook' ? { url: '', method: 'POST' } : { command: '' },
+                      config:
+                        value === 'webhook'
+                          ? { url: '', method: 'POST' }
+                          : value === 'trigger_heartbeat'
+                          ? { heartbeat_id: '' }
+                          : { command: '' },
                     });
                   }}
                 >
@@ -160,6 +169,9 @@ export const HookEditor: React.FC<HookEditorProps> = ({
                   </Select.Option>
                   <Select.Option value="command">
                     <span>📦 命令执行</span>
+                  </Select.Option>
+                  <Select.Option value="trigger_heartbeat">
+                    <span>❤️ 触发心跳</span>
                   </Select.Option>
                 </Select>
               </Form.Item>
@@ -208,6 +220,21 @@ export const HookEditor: React.FC<HookEditorProps> = ({
               </div>
             )}
 
+            {hook.type === 'trigger_heartbeat' && (
+              <div>
+                <Form layout="vertical">
+                  <Form.Item label="心跳 ID" required>
+                    <Input
+                      value={(hook.config.heartbeat_id as string) || ''}
+                      onChange={(e) => onChange({ ...hook, config: { ...hook.config, heartbeat_id: e.target.value } })}
+                      placeholder="hb-001 或 {{trigger_id}}-{{requirement_id}}"
+                      addonAfter={<Tag color="blue" style={{ margin: 0 }}>可使用 {`{{variable}}`}</Tag>}
+                    />
+                  </Form.Item>
+                </Form>
+              </div>
+            )}
+
             <Form layout="horizontal" style={{ display: 'flex', gap: 16 }}>
               <Form.Item label="超时时间（秒）" style={{ flex: 1 }}>
                 <Input
@@ -245,7 +272,7 @@ export const HookEditor: React.FC<HookEditorProps> = ({
                           key={v.key}
                           color="cyan"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : hook.type === 'trigger_heartbeat' ? 'heartbeat_id' : 'command', v.key)}
                         >
                           {`{{${v.key}}}`}
                         </Tag>
@@ -260,7 +287,7 @@ export const HookEditor: React.FC<HookEditorProps> = ({
                           key={v.key}
                           color="blue"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : hook.type === 'trigger_heartbeat' ? 'heartbeat_id' : 'command', v.key)}
                         >
                           {`{{${v.key}}}`}
                         </Tag>
@@ -275,7 +302,7 @@ export const HookEditor: React.FC<HookEditorProps> = ({
                           key={v.key}
                           color="orange"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : 'command', v.key)}
+                          onClick={() => insertVariable(hook.type === 'webhook' ? 'url' : hook.type === 'trigger_heartbeat' ? 'heartbeat_id' : 'command', v.key)}
                         >
                           {`{{${v.key}}}`}
                         </Tag>

@@ -258,6 +258,24 @@ var heartbeatDisableCmd = &cobra.Command{
 	},
 }
 
+var heartbeatTriggerCmd = &cobra.Command{
+	Use:   "trigger <heartbeat_id>",
+	Short: "手动触发一次心跳",
+	Example: `  taskmanager project heartbeat trigger <heartbeat_id>`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		heartbeatID := args[0]
+		ctx := context.Background()
+		c := client.New()
+
+		if err := c.TriggerHeartbeat(ctx, heartbeatID); err != nil {
+			fmt.Printf("触发心跳失败: %v\n", err)
+			return
+		}
+		fmt.Printf("心跳已触发: %s\n", heartbeatID)
+	},
+}
+
 func init() {
 	// create flags
 	heartbeatCreateCmd.Flags().String("name", "", "心跳名称")
@@ -280,6 +298,7 @@ func init() {
 	projectHeartbeatCmd.AddCommand(heartbeatDeleteCmd)
 	projectHeartbeatCmd.AddCommand(heartbeatEnableCmd)
 	projectHeartbeatCmd.AddCommand(heartbeatDisableCmd)
+	projectHeartbeatCmd.AddCommand(heartbeatTriggerCmd)
 
 	// 兼容旧命令别名（弃用提示）
 	_ = strconv.Atoi

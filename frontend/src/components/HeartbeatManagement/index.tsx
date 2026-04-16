@@ -174,6 +174,15 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
 
   const columns = [
     {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 120,
+      render: (id: string) => (
+        <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#666' }}>{id}</span>
+      ),
+    },
+    {
       title: '名称',
       dataIndex: 'name',
       key: 'name',

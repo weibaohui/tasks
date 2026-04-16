@@ -9,6 +9,7 @@ type HookContext struct {
 	FromState      string
 	ToState        string
 	Trigger        string
+	TriggerID      string
 	HookName       string
 	HookType       string
 	Metadata       map[string]interface{}

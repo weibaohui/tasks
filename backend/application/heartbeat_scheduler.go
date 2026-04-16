@@ -9,7 +9,6 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/weibh/taskmanager/domain"
-	"github.com/weibh/taskmanager/domain/statemachine"
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
@@ -26,6 +25,7 @@ type HeartbeatScheduler struct {
 	}
 	requirementDispatchService *RequirementDispatchService
 	stateMachineService        *StateMachineService
+	triggerService             *HeartbeatTriggerService
 	rootCtx                    context.Context
 	entries                    map[string]cron.EntryID
 }
@@ -43,6 +43,16 @@ func NewHeartbeatScheduler(
 	requirementDispatchService *RequirementDispatchService,
 	stateMachineService *StateMachineService,
 ) *HeartbeatScheduler {
+	triggerService := NewHeartbeatTriggerService(
+		heartbeatRepo,
+		projectRepo,
+		agentRepo,
+		requirementRepo,
+		idGenerator,
+		inboundPublisher,
+		requirementDispatchService,
+		stateMachineService,
+	)
 	return &HeartbeatScheduler{
 		cron:                       cron.New(cron.WithSeconds()),
 		heartbeatRepo:              heartbeatRepo,
@@ -53,6 +63,36 @@ func NewHeartbeatScheduler(
 		inboundPublisher:           inboundPublisher,
 		requirementDispatchService: requirementDispatchService,
 		stateMachineService:        stateMachineService,
+		triggerService:             triggerService,
+		entries:                    make(map[string]cron.EntryID),
+	}
+}
+
+// NewHeartbeatSchedulerWithTriggerService 使用外部提供的触发服务创建调度器
+func NewHeartbeatSchedulerWithTriggerService(
+	heartbeatRepo domain.HeartbeatRepository,
+	projectRepo domain.ProjectRepository,
+	agentRepo domain.AgentRepository,
+	requirementRepo domain.RequirementRepository,
+	idGenerator domain.IDGenerator,
+	inboundPublisher interface {
+		PublishInbound(msg *channelBus.InboundMessage)
+	},
+	requirementDispatchService *RequirementDispatchService,
+	stateMachineService *StateMachineService,
+	triggerService *HeartbeatTriggerService,
+) *HeartbeatScheduler {
+	return &HeartbeatScheduler{
+		cron:                       cron.New(cron.WithSeconds()),
+		heartbeatRepo:              heartbeatRepo,
+		projectRepo:                projectRepo,
+		agentRepo:                  agentRepo,
+		requirementRepo:            requirementRepo,
+		idGenerator:                idGenerator,
+		inboundPublisher:           inboundPublisher,
+		requirementDispatchService: requirementDispatchService,
+		stateMachineService:        stateMachineService,
+		triggerService:             triggerService,
 		entries:                    make(map[string]cron.EntryID),
 	}
 }
@@ -194,92 +234,14 @@ func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context, heartbeatID st
 
 // executeHeartbeat 执行心跳
 func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, heartbeatID string) {
-	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
-	if err != nil || hb == nil {
-		log.Printf("heartbeat: failed to find heartbeat %s: %v", heartbeatID, err)
-		return
+	if err := s.triggerService.Trigger(ctx, heartbeatID); err != nil {
+		log.Printf("heartbeat: failed to execute heartbeat %s: %v", heartbeatID, err)
 	}
-	if !hb.Enabled() {
-		return
-	}
+}
 
-	project, err := s.projectRepo.FindByID(ctx, hb.ProjectID())
-	if err != nil || project == nil {
-		log.Printf("heartbeat: failed to find project for heartbeat %s: %v", heartbeatID, err)
-		return
-	}
-
-	log.Printf("[HEARTBEAT] executing heartbeat %s for project %s", hb.Name(), project.Name())
-
-	// 替换模板变量
-	prompt := hb.RenderPrompt(project)
-
-	// 确定需求类型
-	reqType := hb.RequirementType()
-	if reqType == "" {
-		reqType = string(domain.RequirementTypeHeartbeat)
-	}
-
-	// 创建心跳需求
-	requirement, err := domain.NewRequirement(
-		domain.NewRequirementID(s.idGenerator.Generate()),
-		project.ID(),
-		fmt.Sprintf("[心跳] %s - %s", hb.Name(), time.Now().Format("2006-01-02 15:04")),
-		prompt,
-		"心跳自动生成",
-		"",
-	)
-	if err != nil {
-		log.Printf("heartbeat: failed to create requirement: %v", err)
-		return
-	}
-
-	// 设置需求类型
-	requirement.SetRequirementType(domain.RequirementType(reqType))
-
-	// 保存需求
-	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
-		log.Printf("heartbeat: failed to save requirement: %v", err)
-		return
-	}
-
-	// 初始化状态机状态（如果项目绑定了状态机）
-	if s.stateMachineService != nil {
-		psm, err := s.stateMachineService.GetProjectStateMachine(ctx, project.ID().String(), statemachine.RequirementType(reqType))
-		if err == nil && psm != nil {
-			rs, err := s.stateMachineService.InitializeRequirementState(ctx, requirement.ID().String(), psm.StateMachineID())
-			if err != nil {
-				log.Printf("[HEARTBEAT] failed to initialize requirement state: %v", err)
-			} else {
-				log.Printf("[HEARTBEAT] initialized requirement state for %s (state: %s)", requirement.ID(), rs.CurrentState)
-			}
-		}
-	}
-
-	log.Printf("[HEARTBEAT] created requirement %s for heartbeat %s, dispatching...", requirement.ID(), hb.Name())
-
-	// 直接派发心跳需求
-	if s.requirementDispatchService != nil {
-		channelCode := project.DispatchChannelCode()
-		sessionKey := project.DispatchSessionKey()
-		if channelCode == "" || sessionKey == "" {
-			log.Printf("heartbeat: project %s has no dispatch channel or session key configured", project.Name())
-			return
-		}
-		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
-			RequirementID: requirement.ID(),
-			AgentCode:     hb.AgentCode(),
-			ChannelCode:   channelCode,
-			SessionKey:    sessionKey,
-		})
-		if err != nil {
-			log.Printf("heartbeat: failed to dispatch requirement %s: %v", requirement.ID(), err)
-			return
-		}
-		log.Printf("[HEARTBEAT] dispatched requirement %s, task_id: %s, workspace: %s", requirement.ID(), result.TaskID, result.WorkspacePath)
-	} else {
-		log.Printf("heartbeat: requirementDispatchService not available, requirement %s created but not dispatched", requirement.ID())
-	}
+// TriggerService 获取心跳触发服务，供外部调用
+func (s *HeartbeatScheduler) TriggerService() *HeartbeatTriggerService {
+	return s.triggerService
 }
 
 // renderTemplate 渲染模板变量（保留兼容）

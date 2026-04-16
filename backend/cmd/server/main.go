@@ -191,12 +191,14 @@ func main() {
 		gateway.messageBus,
 	)
 
-	// 初始化状态机执行器和服务（供心跳调度器使用）
+	// 初始化状态机执行器（先创建，后续注入 trigger service）
 	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
+
+	// 初始化状态机服务（供心跳调度器使用）
 	stateMachineService := application.NewStateMachineService(stateMachineRepo, requirementRepo, transitionExecutor, logger)
 
-	// 8. 初始化心跳调度器
-	heartbeatScheduler := application.NewHeartbeatScheduler(
+	// 8. 初始化心跳触发服务和调度器
+	heartbeatTriggerService := application.NewHeartbeatTriggerService(
 		heartbeatRepo,
 		projectRepo,
 		agentRepo,
@@ -206,6 +208,20 @@ func main() {
 		requirementDispatchService,
 		stateMachineService,
 	)
+	heartbeatScheduler := application.NewHeartbeatSchedulerWithTriggerService(
+		heartbeatRepo,
+		projectRepo,
+		agentRepo,
+		requirementRepo,
+		idGenerator,
+		gateway.messageBus,
+		requirementDispatchService,
+		stateMachineService,
+		heartbeatTriggerService,
+	)
+
+	// 将 trigger service 注入到状态机执行器
+	transitionExecutor.SetHeartbeatTrigger(heartbeatTriggerService)
 
 	// 启动心跳调度器
 	heartbeatCtx := context.Background()
@@ -235,7 +251,7 @@ func main() {
 	sessionHandler := httpHandler.NewSessionHandler(sessionService)
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
 	projectHandler := httpHandler.NewProjectHandler(projectService)
-	heartbeatHandler := httpHandler.NewHeartbeatHandler(heartbeatService, heartbeatScheduler)
+	heartbeatHandler := httpHandler.NewHeartbeatHandlerWithTrigger(heartbeatService, heartbeatScheduler, heartbeatScheduler.TriggerService())
 	heartbeatTemplateHandler := httpHandler.NewHeartbeatTemplateHandler(heartbeatTemplateService)
 	requirementService := application.NewRequirementApplicationService(
 		requirementRepo,

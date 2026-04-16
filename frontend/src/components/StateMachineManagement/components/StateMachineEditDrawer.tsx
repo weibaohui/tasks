@@ -38,6 +38,7 @@ transitions:
 `;
 
 interface TransitionWithHooks {
+  id?: string;
   from: string;
   to: string;
   trigger: string;
@@ -163,6 +164,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     }
     if (parsed.transitions && Array.isArray(parsed.transitions)) {
       setVisualTransitions(parsed.transitions.map((t: any) => ({
+        id: t.id || '',
         from: t.from,
         to: t.to,
         trigger: t.trigger,
@@ -190,13 +192,17 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
         if (s.triggers && s.triggers.length > 0) state.triggers = s.triggers;
         return state;
       }),
-      transitions: visualTransitions.map((t) => ({
-        from: t.from,
-        to: t.to,
-        trigger: t.trigger,
-        description: t.description,
-        hooks: t.hooks.length > 0 ? t.hooks : undefined,
-      })),
+      transitions: visualTransitions.map((t) => {
+        const transition: Record<string, unknown> = {
+          from: t.from,
+          to: t.to,
+          trigger: t.trigger,
+          description: t.description,
+        };
+        if (t.id) transition.id = t.id;
+        if (t.hooks.length > 0) transition.hooks = t.hooks;
+        return transition;
+      }),
     };
     form.setFieldsValue({ config: yaml.dump(config, { lineWidth: -1 }) });
   }, [visualStates, visualTransitions, activeTab, form]);
@@ -277,6 +283,7 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
     }
     if (parsed.transitions && Array.isArray(parsed.transitions)) {
       setVisualTransitions(parsed.transitions.map((t: any) => ({
+        id: t.id || '',
         from: t.from,
         to: t.to,
         trigger: t.trigger,
@@ -390,13 +397,17 @@ export const StateMachineEditDrawer: React.FC<StateMachineEditDrawerProps> = ({
         if (s.triggers && s.triggers.length > 0) state.triggers = s.triggers;
         return state;
       }),
-      transitions: visualTransitions.map((t) => ({
-        from: t.from,
-        to: t.to,
-        trigger: t.trigger,
-        description: t.description,
-        hooks: t.hooks.length > 0 ? t.hooks : undefined,
-      })),
+      transitions: visualTransitions.map((t) => {
+        const transition: Record<string, unknown> = {
+          from: t.from,
+          to: t.to,
+          trigger: t.trigger,
+          description: t.description,
+        };
+        if (t.id) transition.id = t.id;
+        if (t.hooks.length > 0) transition.hooks = t.hooks;
+        return transition;
+      }),
     };
     return yaml.dump(config, { lineWidth: -1 });
   };

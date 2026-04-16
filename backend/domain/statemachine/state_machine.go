@@ -45,6 +45,7 @@ type State struct {
 
 // Transition 转换规则
 type Transition struct {
+	ID            string            `json:"id,omitempty" yaml:"id,omitempty"`
 	FromState     string            `json:"from" yaml:"from"`
 	ToState       string            `json:"to" yaml:"to"`
 	Trigger       string            `json:"trigger" yaml:"trigger"`
@@ -53,7 +54,11 @@ type Transition struct {
 }
 
 // TransitionHook 转换钩子
-type TransitionHook struct {
+// Type 支持: webhook, command, trigger_heartbeat
+//   - webhook: 发送 HTTP 请求，Config 需包含 url
+//   - command: 执行本地命令，Config 需包含 command
+//   - trigger_heartbeat: 触发指定心跳，Config 需包含 heartbeat_id
+ type TransitionHook struct {
 	Name     string                 `json:"name" yaml:"name"`
 	Type     string                 `json:"type" yaml:"type"`
 	Config   map[string]interface{} `json:"config" yaml:"config"`

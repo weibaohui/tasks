@@ -19,6 +19,7 @@ interface StateWithAIGuide {
 }
 
 interface TransitionWithHooks {
+  id?: string;
   from: string;
   to: string;
   trigger: string;
@@ -71,7 +72,7 @@ export const StateMachineVisualEditor: React.FC<StateMachineVisualEditorProps> =
   const addTransition = () => {
     onTransitionsChange([
       ...visualTransitions,
-      { from: visualStates[0]?.id || '', to: visualStates[0]?.id || '', trigger: '', description: '', hooks: [] },
+      { id: '', from: visualStates[0]?.id || '', to: visualStates[0]?.id || '', trigger: '', description: '', hooks: [] },
     ]);
   };
 
@@ -166,6 +167,15 @@ export const StateMachineVisualEditor: React.FC<StateMachineVisualEditorProps> =
               ),
             },
             {
+              title: 'ID',
+              dataIndex: 'id',
+              key: 'id',
+              width: 100,
+              render: (id: string) => (
+                <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#666' }}>{id || '-'}</span>
+              ),
+            },
+            {
               title: '源状态',
               dataIndex: 'from',
               key: 'from',
@@ -203,9 +213,9 @@ export const StateMachineVisualEditor: React.FC<StateMachineVisualEditorProps> =
                       }}
                       icon={<EditOutlined style={{ cursor: 'pointer' }} />}
                       onClick={() => onOpenEditHook(transitionIndex, hookIndex)}
-                      color={hook.type === 'command' ? 'orange' : 'blue'}
+                      color={hook.type === 'command' ? 'orange' : hook.type === 'trigger_heartbeat' ? 'green' : 'blue'}
                     >
-                      {hook.type === 'command' ? '📦' : '🌐'} {hook.name}
+                      {hook.type === 'command' ? '📦' : hook.type === 'trigger_heartbeat' ? '❤️' : '🌐'} {hook.name}
                     </Tag>
                   ))}
                   <Button
