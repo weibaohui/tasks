@@ -26,6 +26,7 @@ type UpdateProjectCommand struct {
 	InitSteps           []string
 	DispatchChannelCode *string
 	DispatchSessionKey  *string
+	DefaultAgentCode    *string
 	MaxConcurrentAgents *int
 }
 
@@ -142,8 +143,9 @@ func (s *ProjectApplicationService) UpdateProject(ctx context.Context, cmd Updat
 	// 仅在提供了非空值时才更新派发配置
 	// 防止前端发送空字符串覆盖现有有效配置
 	if cmd.DispatchChannelCode != nil && *cmd.DispatchChannelCode != "" ||
-		cmd.DispatchSessionKey != nil && *cmd.DispatchSessionKey != "" {
-		project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey)
+		cmd.DispatchSessionKey != nil && *cmd.DispatchSessionKey != "" ||
+		cmd.DefaultAgentCode != nil && *cmd.DefaultAgentCode != "" {
+		project.UpdateDispatchConfig(cmd.DispatchChannelCode, cmd.DispatchSessionKey, cmd.DefaultAgentCode)
 	}
 	if cmd.MaxConcurrentAgents != nil {
 		if err := project.SetMaxConcurrentAgents(*cmd.MaxConcurrentAgents); err != nil {

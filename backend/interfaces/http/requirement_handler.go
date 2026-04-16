@@ -85,6 +85,9 @@ func (h *RequirementHandler) ListRequirements(c *gin.Context) {
 	status := c.Query("status")
 	limitStr := c.Query("limit")
 	offsetStr := c.Query("offset")
+	requirementType := c.Query("requirement_type")
+	sortBy := c.Query("sort_by")
+	order := c.Query("order")
 
 	var projectID *domain.ProjectID
 	if projectIDStr != "" {
@@ -106,10 +109,13 @@ func (h *RequirementHandler) ListRequirements(c *gin.Context) {
 		requirements, total, err := h.requirementService.ListRequirementsPaginated(
 			c.Request.Context(),
 			application.ListRequirementsQuery{
-				ProjectID: projectID,
-				Statuses:  statuses,
-				Limit:     limit,
-				Offset:    offset,
+				ProjectID:       projectID,
+				Statuses:        statuses,
+				RequirementType: requirementType,
+				SortBy:          sortBy,
+				Order:           order,
+				Limit:           limit,
+				Offset:          offset,
 			},
 		)
 		if err != nil {

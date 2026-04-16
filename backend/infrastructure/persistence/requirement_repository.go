@@ -159,7 +159,8 @@ const requirementColumns = `id, project_id, title, COALESCE(description, ''), CO
 
 func (r *SQLiteRequirementRepository) List(ctx context.Context, filter domain.RequirementListFilter) ([]*domain.Requirement, error) {
 	where, args := r.buildWhereClause(filter)
-	query := fmt.Sprintf(`SELECT %s FROM requirements %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, requirementColumns, where)
+	orderBy := r.buildOrderByClause(filter)
+	query := fmt.Sprintf(`SELECT %s FROM requirements %s %s LIMIT ? OFFSET ?`, requirementColumns, where, orderBy)
 	args = append(args, filter.Limit, filter.Offset)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -198,11 +199,41 @@ func (r *SQLiteRequirementRepository) buildWhereClause(filter domain.Requirement
 		}
 		conditions = append(conditions, "status IN ("+strings.Join(placeholders, ", ")+")")
 	}
+	if filter.RequirementType != "" {
+		conditions = append(conditions, "requirement_type = ?")
+		args = append(args, filter.RequirementType)
+	}
 
 	if len(conditions) > 0 {
 		return "WHERE " + strings.Join(conditions, " AND "), args
 	}
 	return "", args
+}
+
+func (r *SQLiteRequirementRepository) buildOrderByClause(filter domain.RequirementListFilter) string {
+	sortBy := filter.SortBy
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	order := filter.Order
+	if order == "" {
+		order = "DESC"
+	}
+	// 防止 SQL 注入，只允许安全的列名
+	allowedColumns := map[string]bool{
+		"created_at": true,
+		"updated_at": true,
+		"started_at": true,
+		"completed_at": true,
+		"status": true,
+	}
+	if !allowedColumns[sortBy] {
+		sortBy = "created_at"
+	}
+	if order != "ASC" && order != "DESC" {
+		order = "DESC"
+	}
+	return fmt.Sprintf("ORDER BY %s %s", sortBy, order)
 }
 
 func (r *SQLiteRequirementRepository) Delete(ctx context.Context, id domain.RequirementID) error {

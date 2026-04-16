@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 type Requirement struct {
@@ -36,6 +37,35 @@ func (c *Client) ListRequirements(ctx context.Context, projectID string) (*ListR
 	path := "/requirements"
 	if projectID != "" {
 		path += "?project_id=" + projectID
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.handleError(resp)
+	}
+
+	var result ListRequirementsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListRequirementsWithParams 获取需求列表（支持更多过滤参数）
+func (c *Client) ListRequirementsWithParams(ctx context.Context, params map[string]string) (*ListRequirementsResponse, error) {
+	path := "/requirements"
+	if len(params) > 0 {
+		values := url.Values{}
+		for k, v := range params {
+			values.Set(k, v)
+		}
+		path += "?" + values.Encode()
 	}
 
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)

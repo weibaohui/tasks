@@ -15,6 +15,7 @@ type Project struct {
 	InitSteps           []string `json:"init_steps"`
 	DispatchChannelCode string   `json:"dispatch_channel_code"`
 	DispatchSessionKey  string   `json:"dispatch_session_key"`
+	DefaultAgentCode    string   `json:"default_agent_code"`
 	CreatedAt           int64    `json:"created_at"`
 	UpdatedAt           int64    `json:"updated_at"`
 }
