@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 type Requirement struct {
@@ -60,14 +61,11 @@ func (c *Client) ListRequirements(ctx context.Context, projectID string) (*ListR
 func (c *Client) ListRequirementsWithParams(ctx context.Context, params map[string]string) (*ListRequirementsResponse, error) {
 	path := "/requirements"
 	if len(params) > 0 {
-		query := ""
+		values := url.Values{}
 		for k, v := range params {
-			if query != "" {
-				query += "&"
-			}
-			query += k + "=" + v
+			values.Set(k, v)
 		}
-		path += "?" + query
+		path += "?" + values.Encode()
 	}
 
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)

@@ -37,7 +37,10 @@ var requirementListCmd = &cobra.Command{
 		if projectID != "" {
 			params["project_id"] = projectID
 		}
-		if statusFilter != "" {
+		// --todo 优先于 --status，如果设置了 --todo，则使用 todo 作为状态过滤
+		if todoOnly {
+			params["status"] = "todo"
+		} else if statusFilter != "" {
 			params["status"] = statusFilter
 		}
 		if requirementType != "" {
@@ -119,7 +122,11 @@ var requirementListCmd = &cobra.Command{
 		}
 
 		// 紧凑 JSON 输出
-		jsonBytes, _ := json.Marshal(items)
+		jsonBytes, err := json.Marshal(items)
+		if err != nil {
+			printJSONError("序列化失败: %v", err)
+			return
+		}
 		fmt.Print(string(jsonBytes))
 	},
 }
@@ -129,7 +136,7 @@ func registerRequirementListCommands() {
 	requirementListCmd.Flags().BoolP("all", "a", false, "显示所有需求（包括心跳需求）")
 	requirementListCmd.Flags().BoolP("todo", "t", false, "只显示待处理的需求 (status=todo)")
 	requirementListCmd.Flags().StringP("status", "s", "", "按状态过滤 (todo/preparing/coding/pr_opened/failed/completed/done)")
-	requirementListCmd.Flags().StringP("requirement-type", "", "", "按需求类型过滤 (normal/heartbeat)")
-	requirementListCmd.Flags().StringP("sort-by", "", "created_at", "排序字段 (created_at/updated_at/started_at)")
-	requirementListCmd.Flags().StringP("order", "", "desc", "排序方向 (asc/desc)")
+	requirementListCmd.Flags().String("requirement-type", "", "按需求类型过滤 (normal/heartbeat)")
+	requirementListCmd.Flags().String("sort-by", "created_at", "排序字段 (created_at/updated_at/started_at)")
+	requirementListCmd.Flags().String("order", "desc", "排序方向 (asc/desc)")
 }
