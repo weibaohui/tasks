@@ -77,6 +77,7 @@ var projectGetCmd = &cobra.Command{
 		fmt.Printf("%-20s %s\n", "默认分支", project.DefaultBranch)
 		fmt.Printf("%-20s %s\n", "派发渠道", project.DispatchChannelCode)
 		fmt.Printf("%-20s %s\n", "派发SessionKey", project.DispatchSessionKey)
+		fmt.Printf("%-20s %s\n", "默认Agent", project.DefaultAgentCode)
 
 		if len(project.InitSteps) > 0 {
 			fmt.Println("--------------------------------------------------------------------------------")

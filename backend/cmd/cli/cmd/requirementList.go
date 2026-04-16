@@ -17,17 +17,40 @@ var requirementListCmd = &cobra.Command{
   taskmanager requirement list --project-id <id>
   taskmanager requirement list --all
   taskmanager requirement list --todo
-  taskmanager requirement list --status coding`,
+  taskmanager requirement list --status coding
+  taskmanager requirement list --requirement-type normal
+  taskmanager requirement list --sort-by created_at --order desc`,
 	Run: func(cmd *cobra.Command, args []string) {
 		projectID, _ := cmd.Flags().GetString("project-id")
 		showAll, _ := cmd.Flags().GetBool("all")
 		todoOnly, _ := cmd.Flags().GetBool("todo")
 		statusFilter, _ := cmd.Flags().GetString("status")
+		requirementType, _ := cmd.Flags().GetString("requirement-type")
+		sortBy, _ := cmd.Flags().GetString("sort-by")
+		order, _ := cmd.Flags().GetString("order")
 
 		ctx := context.Background()
 		c := client.New()
 
-		requirements, err := c.ListRequirements(ctx, projectID)
+		// 构建查询参数
+		params := make(map[string]string)
+		if projectID != "" {
+			params["project_id"] = projectID
+		}
+		if statusFilter != "" {
+			params["status"] = statusFilter
+		}
+		if requirementType != "" {
+			params["requirement_type"] = requirementType
+		}
+		if sortBy != "" {
+			params["sort_by"] = sortBy
+		}
+		if order != "" {
+			params["order"] = order
+		}
+
+		requirements, err := c.ListRequirementsWithParams(ctx, params)
 		if err != nil {
 			printJSONError("列出需求失败: %v", err)
 			return
@@ -50,10 +73,6 @@ var requirementListCmd = &cobra.Command{
 			// 过滤状态：--todo 优先于 --status
 			if todoOnly {
 				if req.Status != "todo" {
-					continue
-				}
-			} else if statusFilter != "" {
-				if req.Status != statusFilter {
 					continue
 				}
 			}
@@ -110,4 +129,7 @@ func registerRequirementListCommands() {
 	requirementListCmd.Flags().BoolP("all", "a", false, "显示所有需求（包括心跳需求）")
 	requirementListCmd.Flags().BoolP("todo", "t", false, "只显示待处理的需求 (status=todo)")
 	requirementListCmd.Flags().StringP("status", "s", "", "按状态过滤 (todo/preparing/coding/pr_opened/failed/completed/done)")
+	requirementListCmd.Flags().StringP("requirement-type", "", "", "按需求类型过滤 (normal/heartbeat)")
+	requirementListCmd.Flags().StringP("sort-by", "", "created_at", "排序字段 (created_at/updated_at/started_at)")
+	requirementListCmd.Flags().StringP("order", "", "desc", "排序方向 (asc/desc)")
 }

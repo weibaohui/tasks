@@ -91,6 +91,10 @@ func main() {
 	if err := _persistence.MigrateMaxConcurrentAgentsColumn(db); err != nil {
 		logger.Fatal("Failed to migrate projects max_concurrent_agents column", zap.Error(err))
 	}
+	// 兼容旧数据库：添加 projects.default_agent_code 列
+	if err := _persistence.MigrateDefaultAgentCodeColumn(db); err != nil {
+		logger.Fatal("Failed to migrate projects default_agent_code column", zap.Error(err))
+	}
 	// 兼容旧数据库：将单心跳配置迁移到 heartbeats 表
 	if err := _persistence.MigrateHeartbeatToTable(db); err != nil {
 		logger.Fatal("Failed to migrate heartbeat to table", zap.Error(err))

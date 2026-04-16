@@ -95,6 +95,22 @@ func MigrateMaxConcurrentAgentsColumn(db *sql.DB) error {
 	return nil
 }
 
+// MigrateDefaultAgentCodeColumn 兼容旧数据库：在 projects 表中添加 default_agent_code 列
+func MigrateDefaultAgentCodeColumn(db *sql.DB) error {
+	columns, err := getTableColumns(db, "projects")
+	if err != nil {
+		return fmt.Errorf("获取 projects 表列信息失败: %w", err)
+	}
+
+	if _, exists := columns["default_agent_code"]; !exists {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN default_agent_code TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("添加 default_agent_code 列失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // MigrateRequirementAgentInfoColumns 兼容旧数据库：在 requirements 表中添加 agent 名称和分身来源列
 func MigrateRequirementAgentInfoColumns(db *sql.DB) error {
 	columns, err := getTableColumns(db, "requirements")

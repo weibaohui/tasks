@@ -44,6 +44,10 @@ var requirementDispatchCmd = &cobra.Command{
 		if agentCode == "" {
 			agentCode = req.ReplicaAgentCode
 		}
+		// 如果需求没有指定 agent，使用项目的默认 agent
+		if agentCode == "" {
+			agentCode = project.DefaultAgentCode
+		}
 		channelCode := project.DispatchChannelCode
 		sessionKey := project.DispatchSessionKey
 

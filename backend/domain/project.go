@@ -33,6 +33,7 @@ type Project struct {
 	initSteps           []string
 	dispatchChannelCode string
 	dispatchSessionKey  string
+	defaultAgentCode    string // 项目默认 Agent，用于派发需求
 	maxConcurrentAgents int
 	createdAt           time.Time
 	updatedAt           time.Time
@@ -60,6 +61,7 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 		initSteps:           append([]string(nil), initSteps...),
 		dispatchChannelCode: "",
 		dispatchSessionKey:  "",
+		defaultAgentCode:     "",
 		maxConcurrentAgents: 2,
 		createdAt:           now,
 		updatedAt:           now,
@@ -73,6 +75,7 @@ func (p *Project) DefaultBranch() string         { return p.defaultBranch }
 func (p *Project) InitSteps() []string           { return append([]string(nil), p.initSteps...) }
 func (p *Project) DispatchChannelCode() string   { return p.dispatchChannelCode }
 func (p *Project) DispatchSessionKey() string    { return p.dispatchSessionKey }
+func (p *Project) DefaultAgentCode() string      { return p.defaultAgentCode }
 func (p *Project) MaxConcurrentAgents() int      { return p.maxConcurrentAgents }
 func (p *Project) CreatedAt() time.Time          { return p.createdAt }
 func (p *Project) UpdatedAt() time.Time          { return p.updatedAt }
@@ -96,12 +99,15 @@ func (p *Project) Update(name, gitRepoURL, defaultBranch string, initSteps []str
 }
 
 // UpdateDispatchConfig 更新派发配置（仅更新非 nil 且非空字符串的字段）
-func (p *Project) UpdateDispatchConfig(channelCode, sessionKey *string) {
+func (p *Project) UpdateDispatchConfig(channelCode, sessionKey, agentCode *string) {
 	if channelCode != nil && *channelCode != "" {
 		p.dispatchChannelCode = *channelCode
 	}
 	if sessionKey != nil && *sessionKey != "" {
 		p.dispatchSessionKey = *sessionKey
+	}
+	if agentCode != nil && *agentCode != "" {
+		p.defaultAgentCode = *agentCode
 	}
 	p.updatedAt = time.Now()
 }
@@ -124,6 +130,7 @@ type ProjectSnapshot struct {
 	InitSteps           []string
 	DispatchChannelCode string
 	DispatchSessionKey  string
+	DefaultAgentCode    string
 	MaxConcurrentAgents int
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
@@ -138,6 +145,7 @@ func (p *Project) ToSnapshot() ProjectSnapshot {
 		InitSteps:           append([]string(nil), p.initSteps...),
 		DispatchChannelCode: p.dispatchChannelCode,
 		DispatchSessionKey:  p.dispatchSessionKey,
+		DefaultAgentCode:    p.defaultAgentCode,
 		MaxConcurrentAgents: p.maxConcurrentAgents,
 		CreatedAt:           p.createdAt,
 		UpdatedAt:           p.updatedAt,
@@ -152,6 +160,7 @@ func (p *Project) FromSnapshot(s ProjectSnapshot) {
 	p.initSteps = append([]string(nil), s.InitSteps...)
 	p.dispatchChannelCode = s.DispatchChannelCode
 	p.dispatchSessionKey = s.DispatchSessionKey
+	p.defaultAgentCode = s.DefaultAgentCode
 	p.maxConcurrentAgents = s.MaxConcurrentAgents
 	p.createdAt = s.CreatedAt
 	p.updatedAt = s.UpdatedAt

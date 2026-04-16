@@ -56,6 +56,38 @@ func (c *Client) ListRequirements(ctx context.Context, projectID string) (*ListR
 	return &result, nil
 }
 
+// ListRequirementsWithParams 获取需求列表（支持更多过滤参数）
+func (c *Client) ListRequirementsWithParams(ctx context.Context, params map[string]string) (*ListRequirementsResponse, error) {
+	path := "/requirements"
+	if len(params) > 0 {
+		query := ""
+		for k, v := range params {
+			if query != "" {
+				query += "&"
+			}
+			query += k + "=" + v
+		}
+		path += "?" + query
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.handleError(resp)
+	}
+
+	var result ListRequirementsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+
+	return &result, nil
+}
+
 // CreateRequirementRequest 创建需求请求
 type CreateRequirementRequest struct {
 	ProjectID          string `json:"project_id"`

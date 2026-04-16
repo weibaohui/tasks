@@ -31,6 +31,7 @@ type UpdateProjectRequest struct {
 	InitSteps           []string `json:"init_steps"`
 	DispatchChannelCode *string  `json:"dispatch_channel_code,omitempty"`
 	DispatchSessionKey  *string  `json:"dispatch_session_key,omitempty"`
+	DefaultAgentCode    *string  `json:"default_agent_code,omitempty"`
 	MaxConcurrentAgents *int     `json:"max_concurrent_agents,omitempty"`
 }
 
@@ -94,6 +95,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		InitSteps:           req.InitSteps,
 		DispatchChannelCode: req.DispatchChannelCode,
 		DispatchSessionKey:  req.DispatchSessionKey,
+		DefaultAgentCode:    req.DefaultAgentCode,
 		MaxConcurrentAgents: req.MaxConcurrentAgents,
 	})
 	if err != nil {
@@ -127,15 +129,16 @@ func (h *ProjectHandler) handleGetProjects(c *gin.Context) {
 
 func projectToMap(project *domain.Project) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                  project.ID().String(),
-		"name":                project.Name(),
-		"git_repo_url":        project.GitRepoURL(),
-		"default_branch":      project.DefaultBranch(),
-		"init_steps":          project.InitSteps(),
-		"dispatch_channel_code": project.DispatchChannelCode(),
-		"dispatch_session_key":  project.DispatchSessionKey(),
-		"max_concurrent_agents": project.MaxConcurrentAgents(),
-		"created_at":          project.CreatedAt().UnixMilli(),
-		"updated_at":          project.UpdatedAt().UnixMilli(),
+		"id":                     project.ID().String(),
+		"name":                   project.Name(),
+		"git_repo_url":           project.GitRepoURL(),
+		"default_branch":         project.DefaultBranch(),
+		"init_steps":             project.InitSteps(),
+		"dispatch_channel_code":  project.DispatchChannelCode(),
+		"dispatch_session_key":   project.DispatchSessionKey(),
+		"default_agent_code":     project.DefaultAgentCode(),
+		"max_concurrent_agents":  project.MaxConcurrentAgents(),
+		"created_at":             project.CreatedAt().UnixMilli(),
+		"updated_at":             project.UpdatedAt().UnixMilli(),
 	}
 }

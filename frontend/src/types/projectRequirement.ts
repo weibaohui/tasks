@@ -6,6 +6,7 @@ export interface Project {
   init_steps: string[];
   dispatch_channel_code: string;
   dispatch_session_key: string;
+  default_agent_code: string;
   max_concurrent_agents: number;
   created_at: number;
   updated_at: number;
@@ -81,6 +82,7 @@ export interface UpdateProjectRequest {
   init_steps?: string[];
   dispatch_channel_code?: string;
   dispatch_session_key?: string;
+  default_agent_code?: string;
   max_concurrent_agents?: number;
 }
 

@@ -159,10 +159,13 @@ type RequirementRepository interface {
 
 // RequirementListFilter 需求列表过滤条件（支持分页+状态过滤）
 type RequirementListFilter struct {
-	ProjectID *ProjectID
-	Statuses  []string
-	Limit     int
-	Offset    int
+	ProjectID      *ProjectID
+	Statuses       []string
+	RequirementType string // 可选，按需求类型过滤
+	SortBy         string // 排序字段，默认 created_at
+	Order          string // 排序方向，asc 或 desc，默认 desc
+	Limit          int
+	Offset         int
 }
 
 // StatusStat 状态统计数据

@@ -140,19 +140,25 @@ func (s *RequirementApplicationService) ListRequirements(ctx context.Context, pr
 
 // ListRequirementsQuery 分页查询需求参数
 type ListRequirementsQuery struct {
-	ProjectID *domain.ProjectID
-	Statuses  []string
-	Limit     int
-	Offset    int
+	ProjectID       *domain.ProjectID
+	Statuses        []string
+	RequirementType string
+	SortBy          string
+	Order           string
+	Limit           int
+	Offset          int
 }
 
 // ListRequirementsPaginated 分页查询需求列表
 func (s *RequirementApplicationService) ListRequirementsPaginated(ctx context.Context, query ListRequirementsQuery) ([]*domain.Requirement, int, error) {
 	filter := domain.RequirementListFilter{
-		ProjectID: query.ProjectID,
-		Statuses:  query.Statuses,
-		Limit:     query.Limit,
-		Offset:    query.Offset,
+		ProjectID:       query.ProjectID,
+		Statuses:        query.Statuses,
+		RequirementType: query.RequirementType,
+		SortBy:          query.SortBy,
+		Order:           query.Order,
+		Limit:           query.Limit,
+		Offset:          query.Offset,
 	}
 	items, err := s.requirementRepo.List(ctx, filter)
 	if err != nil {
