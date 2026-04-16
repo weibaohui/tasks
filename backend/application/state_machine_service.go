@@ -170,8 +170,8 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 	if s.requirementRepo != nil {
 		requirement, err := s.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 		if err == nil && requirement != nil {
-			// 状态转换前，无条件清理可能存在的旧分身（幂等）
-			if s.replicaCleanupSvc != nil {
+			// 只有在状态转换到终态时，才清理分身和工作目录
+			if toState.IsFinal && s.replicaCleanupSvc != nil {
 				if errCleanup := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); errCleanup != nil {
 					log.Printf("failed to cleanup replica for requirement %s before state transition: %v", requirementID, errCleanup)
 				}
