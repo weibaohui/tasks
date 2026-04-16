@@ -95,6 +95,10 @@ func main() {
 	if err := _persistence.MigrateHeartbeatToTable(db); err != nil {
 		logger.Fatal("Failed to migrate heartbeat to table", zap.Error(err))
 	}
+	// 兼容旧数据库：添加 requirements 表 agent 信息列
+	if err := _persistence.MigrateRequirementAgentInfoColumns(db); err != nil {
+		logger.Fatal("Failed to migrate requirement agent info columns", zap.Error(err))
+	}
 	// 预置默认心跳模板
 	if err := _persistence.SeedHeartbeatTemplates(db); err != nil {
 		logger.Fatal("Failed to seed heartbeat templates", zap.Error(err))

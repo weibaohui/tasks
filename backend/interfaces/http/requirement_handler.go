@@ -204,23 +204,23 @@ func (h *RequirementHandler) requirementToMap(requirement *domain.Requirement) m
 		"requirement_type":     requirement.RequirementType(),
 	}
 	resp["agent_runtime"] = h.getAgentRuntimeByRequirement(requirement)
-	resp["assignee_agent"] = h.agentBriefByCode(requirement.AssigneeAgentCode())
-	resp["replica_agent"] = h.agentBriefByCode(requirement.ReplicaAgentCode())
+	resp["assignee_agent"] = h.agentBriefByCode(requirement.AssigneeAgentCode(), requirement.AssigneeAgentName(), "")
+	resp["replica_agent"] = h.agentBriefByCode(requirement.ReplicaAgentCode(), requirement.ReplicaAgentName(), requirement.ReplicaAgentShadowFrom())
 	resp["progress_data"] = requirement.ProgressData()
 	return resp
 }
 
-func (h *RequirementHandler) agentBriefByCode(code string) map[string]interface{} {
+func (h *RequirementHandler) agentBriefByCode(code, fallbackName, fallbackShadowFrom string) map[string]interface{} {
 	if code == "" || h.agentRepo == nil {
 		return nil
 	}
 	agent, err := h.agentRepo.FindByAgentCode(context.Background(), domain.NewAgentCode(code))
 	if err != nil || agent == nil {
 		return map[string]interface{}{
-			"id":         "",
-			"agent_code": code,
-			"name":       "",
-			"shadow_from": "",
+			"id":          "",
+			"agent_code":  code,
+			"name":        fallbackName,
+			"shadow_from": fallbackShadowFrom,
 		}
 	}
 	return map[string]interface{}{
