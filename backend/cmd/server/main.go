@@ -195,7 +195,7 @@ func main() {
 	transitionExecutor := infra_sm.NewTransitionExecutor(logger)
 
 	// 初始化状态机服务（供心跳调度器使用）
-	stateMachineService := application.NewStateMachineService(stateMachineRepo, requirementRepo, transitionExecutor, logger)
+	stateMachineService := application.NewStateMachineService(stateMachineRepo, requirementRepo, transitionExecutor, replicaCleanupSvc, logger)
 
 	// 8. 初始化心跳触发服务和调度器
 	heartbeatTriggerService := application.NewHeartbeatTriggerService(

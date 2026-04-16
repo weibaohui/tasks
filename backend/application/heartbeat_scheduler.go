@@ -142,21 +142,32 @@ func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
 	now := time.Now()
 	staleCount := 0
 	for _, req := range requirements {
-		// 检查分身是否存在（用于 IsStaleWithReplicaCheck）
-		replicaExists := true
-		if req.ReplicaAgentCode() != "" && s.agentRepo != nil {
-			agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(req.ReplicaAgentCode()))
+		replicaAgentCode := req.ReplicaAgentCode()
+		if replicaAgentCode == "" {
+			continue
+		}
+
+		// 检查分身是否存在
+		replicaExists := false
+		if s.agentRepo != nil {
+			agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
 			if err != nil {
-				// 查询出错时保守视为不存在，避免漏清理
-				log.Printf("[HEARTBEAT] cleanup: failed to find replica agent %s: %v", req.ReplicaAgentCode(), err)
-				replicaExists = false
-			} else if agent == nil {
-				replicaExists = false
+				log.Printf("[HEARTBEAT] cleanup: failed to find replica agent %s: %v", replicaAgentCode, err)
+			} else if agent != nil {
+				replicaExists = true
 			}
 		}
 
-		// 使用领域方法判断是否过期
-		shouldCleanup, reason := req.IsStaleWithReplicaCheck(now, replicaExists)
+		// 分身已不存在，或者超过 30 分钟未更新，直接清理
+		shouldCleanup := false
+		reason := ""
+		if !replicaExists {
+			shouldCleanup = true
+			reason = "replica agent missing"
+		} else if now.Sub(req.UpdatedAt()) > domain.StaleThreshold {
+			shouldCleanup = true
+			reason = "timeout - no update for 30+ minutes"
+		}
 		if !shouldCleanup {
 			continue
 		}
@@ -166,15 +177,13 @@ func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
 			req.ID(), req.Title(), reason, now.Sub(req.UpdatedAt()).Round(time.Minute))
 
 		// 清理分身（如果还存在）
-		if replicaAgentCode := req.ReplicaAgentCode(); replicaAgentCode != "" {
-			if s.agentRepo != nil {
-				agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
-				if err == nil && agent != nil {
-					if err := s.agentRepo.Delete(ctx, agent.ID()); err != nil {
-						log.Printf("[HEARTBEAT] cleanup: failed to delete replica agent %s: %v", replicaAgentCode, err)
-					} else {
-						log.Printf("[HEARTBEAT] cleanup: deleted replica agent %s", replicaAgentCode)
-					}
+		if replicaExists && s.agentRepo != nil {
+			agent, _ := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(replicaAgentCode))
+			if agent != nil {
+				if err := s.agentRepo.Delete(ctx, agent.ID()); err != nil {
+					log.Printf("[HEARTBEAT] cleanup: failed to delete replica agent %s: %v", replicaAgentCode, err)
+				} else {
+					log.Printf("[HEARTBEAT] cleanup: deleted replica agent %s", replicaAgentCode)
 				}
 			}
 		}

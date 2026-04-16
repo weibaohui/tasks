@@ -237,7 +237,7 @@ func TestHeartbeatTriggerService_Trigger_WithStateMachine(t *testing.T) {
 		},
 	}
 
-	stateMachineService := NewStateMachineService(mockSMRepo, reqRepo, nil, nil)
+	stateMachineService := NewStateMachineService(mockSMRepo, reqRepo, nil, nil, nil)
 
 	service := NewHeartbeatTriggerService(
 		hbRepo,
