@@ -128,3 +128,17 @@ func (c *Client) DeleteHeartbeat(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// TriggerHeartbeat 手动触发心跳
+func (c *Client) TriggerHeartbeat(ctx context.Context, id string) error {
+	resp, err := c.doRequest(ctx, http.MethodPost, "/heartbeats/"+id+"/trigger", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.handleError(resp)
+	}
+	return nil
+}

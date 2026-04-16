@@ -9,12 +9,17 @@ import (
 )
 
 type HeartbeatHandler struct {
-	service   *application.HeartbeatApplicationService
-	scheduler *application.HeartbeatScheduler
+	service        *application.HeartbeatApplicationService
+	scheduler      *application.HeartbeatScheduler
+	triggerService *application.HeartbeatTriggerService
 }
 
 func NewHeartbeatHandler(service *application.HeartbeatApplicationService, scheduler *application.HeartbeatScheduler) *HeartbeatHandler {
 	return &HeartbeatHandler{service: service, scheduler: scheduler}
+}
+
+func NewHeartbeatHandlerWithTrigger(service *application.HeartbeatApplicationService, scheduler *application.HeartbeatScheduler, triggerService *application.HeartbeatTriggerService) *HeartbeatHandler {
+	return &HeartbeatHandler{service: service, scheduler: scheduler, triggerService: triggerService}
 }
 
 type CreateHeartbeatRequest struct {
@@ -118,6 +123,19 @@ func (h *HeartbeatHandler) DeleteHeartbeat(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+func (h *HeartbeatHandler) TriggerHeartbeat(c *gin.Context) {
+	id := c.Param("id")
+	if h.triggerService == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
+		return
+	}
+	if err := h.triggerService.Trigger(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, map[string]string{"message": "triggered"})
 }
 
 func heartbeatToMap(hb *domain.Heartbeat) map[string]interface{} {

@@ -158,6 +158,7 @@ func SetupRoutesWithManagement(
 		heartbeats.GET("/:id", heartbeatHandler.GetHeartbeat)
 		heartbeats.PUT("/:id", heartbeatHandler.UpdateHeartbeat)
 		heartbeats.DELETE("/:id", heartbeatHandler.DeleteHeartbeat)
+		heartbeats.POST("/:id/trigger", heartbeatHandler.TriggerHeartbeat)
 	}
 
 	if heartbeatTemplateHandler != nil {
