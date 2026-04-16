@@ -16,6 +16,10 @@ func NewProjectHandler(projectService *application.ProjectApplicationService) *P
 	return &ProjectHandler{projectService: projectService}
 }
 
+func (h *ProjectHandler) ProjectService() *application.ProjectApplicationService {
+	return h.projectService
+}
+
 type CreateProjectRequest struct {
 	Name          string   `json:"name"`
 	GitRepoURL    string   `json:"git_repo_url"`
@@ -129,16 +133,17 @@ func (h *ProjectHandler) handleGetProjects(c *gin.Context) {
 
 func projectToMap(project *domain.Project) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                     project.ID().String(),
-		"name":                   project.Name(),
-		"git_repo_url":           project.GitRepoURL(),
-		"default_branch":         project.DefaultBranch(),
-		"init_steps":             project.InitSteps(),
-		"dispatch_channel_code":  project.DispatchChannelCode(),
-		"dispatch_session_key":   project.DispatchSessionKey(),
-		"default_agent_code":     project.DefaultAgentCode(),
-		"max_concurrent_agents":  project.MaxConcurrentAgents(),
-		"created_at":             project.CreatedAt().UnixMilli(),
-		"updated_at":             project.UpdatedAt().UnixMilli(),
+		"id":                       project.ID().String(),
+		"name":                     project.Name(),
+		"git_repo_url":             project.GitRepoURL(),
+		"default_branch":           project.DefaultBranch(),
+		"init_steps":               project.InitSteps(),
+		"dispatch_channel_code":    project.DispatchChannelCode(),
+		"dispatch_session_key":     project.DispatchSessionKey(),
+		"default_agent_code":       project.DefaultAgentCode(),
+		"max_concurrent_agents":    project.MaxConcurrentAgents(),
+		"heartbeat_scenario_code":  project.HeartbeatScenarioCode(),
+		"created_at":               project.CreatedAt().UnixMilli(),
+		"updated_at":               project.UpdatedAt().UnixMilli(),
 	}
 }

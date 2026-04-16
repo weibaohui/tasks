@@ -45,7 +45,7 @@ func TestStateMachineE2E(t *testing.T) {
 	executor := infra_sm.NewTransitionExecutor(logger)
 
 	// 创建服务
-	svc := application.NewStateMachineService(repo, nil, executor, logger)
+	svc := application.NewStateMachineService(repo, nil, executor, nil, logger)
 	ctx := context.Background()
 
 	// 测试完整的流程
@@ -218,7 +218,7 @@ transitions:
 	executor := infra_sm.NewTransitionExecutor(logger)
 
 	// 创建服务
-	svc := application.NewStateMachineService(repo, nil, executor, logger)
+	svc := application.NewStateMachineService(repo, nil, executor, nil, logger)
 	ctx := context.Background()
 
 	// 创建状态机
@@ -294,7 +294,7 @@ func TestHeartbeatStateMachineE2E(t *testing.T) {
 	executor := infra_sm.NewTransitionExecutor(logger)
 
 	// 创建服务
-	svc := application.NewStateMachineService(repo, nil, executor, logger)
+	svc := application.NewStateMachineService(repo, nil, executor, nil, logger)
 	ctx := context.Background()
 
 	// 心跳状态机 YAML

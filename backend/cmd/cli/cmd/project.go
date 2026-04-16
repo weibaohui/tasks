@@ -11,6 +11,9 @@ func registerProjectCommands() {
 	// 心跳子命令（在 project_heartbeat.go 中注册具体子命令）
 	projectCmd.AddCommand(projectHeartbeatCmd)
 
+	// 场景子命令（在 project_scenario.go 中注册具体子命令）
+	projectCmd.AddCommand(projectScenarioCmd)
+
 	// 派发子命令
 	projectCmd.AddCommand(projectDispatchCmd)
 	projectDispatchCmd.AddCommand(dispatchGetCmd)

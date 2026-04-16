@@ -26,17 +26,18 @@ func (id ProjectID) String() string {
 }
 
 type Project struct {
-	id                  ProjectID
-	name                string
-	gitRepoURL          string
-	defaultBranch       string
-	initSteps           []string
-	dispatchChannelCode string
-	dispatchSessionKey  string
-	defaultAgentCode    string // 项目默认 Agent，用于派发需求
-	maxConcurrentAgents int
-	createdAt           time.Time
-	updatedAt           time.Time
+	id                    ProjectID
+	name                  string
+	gitRepoURL            string
+	defaultBranch         string
+	initSteps             []string
+	dispatchChannelCode   string
+	dispatchSessionKey    string
+	defaultAgentCode      string // 项目默认 Agent，用于派发需求
+	maxConcurrentAgents   int
+	heartbeatScenarioCode string
+	createdAt             time.Time
+	updatedAt             time.Time
 }
 
 func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps []string) (*Project, error) {
@@ -77,8 +78,14 @@ func (p *Project) DispatchChannelCode() string   { return p.dispatchChannelCode 
 func (p *Project) DispatchSessionKey() string    { return p.dispatchSessionKey }
 func (p *Project) DefaultAgentCode() string      { return p.defaultAgentCode }
 func (p *Project) MaxConcurrentAgents() int      { return p.maxConcurrentAgents }
+func (p *Project) HeartbeatScenarioCode() string { return p.heartbeatScenarioCode }
 func (p *Project) CreatedAt() time.Time          { return p.createdAt }
 func (p *Project) UpdatedAt() time.Time          { return p.updatedAt }
+
+func (p *Project) SetHeartbeatScenarioCode(code string) {
+	p.heartbeatScenarioCode = strings.TrimSpace(code)
+	p.updatedAt = time.Now()
+}
 
 func (p *Project) Update(name, gitRepoURL, defaultBranch string, initSteps []string) error {
 	if strings.TrimSpace(name) == "" {
@@ -123,32 +130,34 @@ func (p *Project) SetMaxConcurrentAgents(value int) error {
 }
 
 type ProjectSnapshot struct {
-	ID                  ProjectID
-	Name                string
-	GitRepoURL          string
-	DefaultBranch       string
-	InitSteps           []string
-	DispatchChannelCode string
-	DispatchSessionKey  string
-	DefaultAgentCode    string
-	MaxConcurrentAgents int
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                    ProjectID
+	Name                  string
+	GitRepoURL            string
+	DefaultBranch         string
+	InitSteps             []string
+	DispatchChannelCode   string
+	DispatchSessionKey    string
+	DefaultAgentCode      string
+	MaxConcurrentAgents   int
+	HeartbeatScenarioCode string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 func (p *Project) ToSnapshot() ProjectSnapshot {
 	return ProjectSnapshot{
-		ID:                  p.id,
-		Name:                p.name,
-		GitRepoURL:          p.gitRepoURL,
-		DefaultBranch:       p.defaultBranch,
-		InitSteps:           append([]string(nil), p.initSteps...),
-		DispatchChannelCode: p.dispatchChannelCode,
-		DispatchSessionKey:  p.dispatchSessionKey,
-		DefaultAgentCode:    p.defaultAgentCode,
-		MaxConcurrentAgents: p.maxConcurrentAgents,
-		CreatedAt:           p.createdAt,
-		UpdatedAt:           p.updatedAt,
+		ID:                    p.id,
+		Name:                  p.name,
+		GitRepoURL:            p.gitRepoURL,
+		DefaultBranch:         p.defaultBranch,
+		InitSteps:             append([]string(nil), p.initSteps...),
+		DispatchChannelCode:   p.dispatchChannelCode,
+		DispatchSessionKey:    p.dispatchSessionKey,
+		DefaultAgentCode:      p.defaultAgentCode,
+		MaxConcurrentAgents:   p.maxConcurrentAgents,
+		HeartbeatScenarioCode: p.heartbeatScenarioCode,
+		CreatedAt:             p.createdAt,
+		UpdatedAt:             p.updatedAt,
 	}
 }
 
@@ -162,6 +171,7 @@ func (p *Project) FromSnapshot(s ProjectSnapshot) {
 	p.dispatchSessionKey = s.DispatchSessionKey
 	p.defaultAgentCode = s.DefaultAgentCode
 	p.maxConcurrentAgents = s.MaxConcurrentAgents
+	p.heartbeatScenarioCode = s.HeartbeatScenarioCode
 	p.createdAt = s.CreatedAt
 	p.updatedAt = s.UpdatedAt
 }

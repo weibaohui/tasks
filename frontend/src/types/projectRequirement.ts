@@ -8,6 +8,7 @@ export interface Project {
   dispatch_session_key: string;
   default_agent_code: string;
   max_concurrent_agents: number;
+  heartbeat_scenario_code?: string;
   created_at: number;
   updated_at: number;
 }

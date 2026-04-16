@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS projects (
     dispatch_session_key TEXT NOT NULL DEFAULT '',
     default_agent_code TEXT NOT NULL DEFAULT '',
     max_concurrent_agents INTEGER NOT NULL DEFAULT 2,
+    heartbeat_scenario_code TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -373,4 +374,18 @@ CREATE TABLE IF NOT EXISTS heartbeat_templates (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS heartbeat_scenarios (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    items TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    is_built_in INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeat_scenarios_code ON heartbeat_scenarios(code);
 `
