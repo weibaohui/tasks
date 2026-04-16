@@ -92,7 +92,7 @@ func New(ctx context.Context, opts ...Option) (*SDK, error) {
 	// 创建内部服务
 	repo := persistence.NewSQLiteStateMachineRepository(s.db)
 	executor := infra_sm.NewTransitionExecutor(zap.NewNop())
-	s.svc = application.NewStateMachineService(repo, nil, executor, zap.NewNop())
+	s.svc = application.NewStateMachineService(repo, nil, executor, nil, zap.NewNop())
 
 	return s, nil
 }

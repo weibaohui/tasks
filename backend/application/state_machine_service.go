@@ -11,19 +11,21 @@ import (
 
 // StateMachineService 应用服务
 type StateMachineService struct {
-	repo            statemachine.Repository
-	requirementRepo domain.RequirementRepository
-	executor        statemachine.HookExecutor
-	logger          *zap.Logger
+	repo              statemachine.Repository
+	requirementRepo   domain.RequirementRepository
+	executor          statemachine.HookExecutor
+	replicaCleanupSvc domain.ReplicaCleanupService
+	logger            *zap.Logger
 }
 
 // NewStateMachineService 创建服务
-func NewStateMachineService(repo statemachine.Repository, requirementRepo domain.RequirementRepository, executor statemachine.HookExecutor, logger *zap.Logger) *StateMachineService {
+func NewStateMachineService(repo statemachine.Repository, requirementRepo domain.RequirementRepository, executor statemachine.HookExecutor, replicaCleanupSvc domain.ReplicaCleanupService, logger *zap.Logger) *StateMachineService {
 	return &StateMachineService{
-		repo:            repo,
-		requirementRepo: requirementRepo,
-		executor:        executor,
-		logger:          logger,
+		repo:              repo,
+		requirementRepo:   requirementRepo,
+		executor:          executor,
+		replicaCleanupSvc: replicaCleanupSvc,
+		logger:            logger,
 	}
 }
 
@@ -168,6 +170,12 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 	if s.requirementRepo != nil {
 		requirement, err := s.requirementRepo.FindByID(ctx, domain.NewRequirementID(requirementID))
 		if err == nil && requirement != nil {
+			// 状态转换前，无条件清理可能存在的旧分身（幂等）
+			if s.replicaCleanupSvc != nil {
+				if errCleanup := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); errCleanup != nil {
+					log.Printf("failed to cleanup replica for requirement %s before state transition: %v", requirementID, errCleanup)
+				}
+			}
 			requirement.SyncStatusFromStateMachine(toState.ID)
 			if errSave := s.requirementRepo.Save(ctx, requirement); errSave != nil {
 				log.Printf("requirementRepo.Save failed: %v", errSave)

@@ -241,6 +241,13 @@ func (s *RequirementApplicationService) UpdateRequirementStatus(ctx context.Cont
 		}
 	}
 
+	// 手动修改状态前，无条件清理可能存在的旧分身（幂等）
+	if s.replicaCleanupSvc != nil {
+		if err := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); err != nil {
+			log.Printf("failed to cleanup replica for requirement %s before manual status update: %v", requirement.ID().String(), err)
+		}
+	}
+
 	// 使用 SyncStatusFromStateMachine 直接设置状态
 	requirement.SyncStatusFromStateMachine(toStatus)
 

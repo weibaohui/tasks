@@ -224,7 +224,7 @@ func main() {
 	logger, _ := zap.NewDevelopment()
 	repo := NewMockStateMachineRepository()
 	executor := infra_sm.NewTransitionExecutor(logger)
-	svc := application.NewStateMachineService(repo, nil, executor, logger)
+	svc := application.NewStateMachineService(repo, nil, executor, nil, logger)
 	ctx := context.Background()
 
 	fmt.Println("=== 状态机 E2E 测试 ===")

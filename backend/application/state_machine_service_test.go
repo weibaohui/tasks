@@ -165,7 +165,7 @@ transitions:
 func TestStateMachineService_CreateStateMachine(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, err := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -181,7 +181,7 @@ func TestStateMachineService_CreateStateMachine(t *testing.T) {
 func TestStateMachineService_CreateStateMachine_InvalidYAML(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	_, err := svc.CreateStateMachine(ctx, "test", "测试", "invalid: yaml")
@@ -193,7 +193,7 @@ func TestStateMachineService_CreateStateMachine_InvalidYAML(t *testing.T) {
 func TestStateMachineService_CreateStateMachine_InvalidConfig(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	_, err := svc.CreateStateMachine(ctx, "test", "测试", `
@@ -212,7 +212,7 @@ states:
 func TestStateMachineService_GetStateMachine(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -230,7 +230,7 @@ func TestStateMachineService_GetStateMachine(t *testing.T) {
 func TestStateMachineService_GetStateMachine_NotFound(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	_, err := svc.GetStateMachine(ctx, "not-exist")
@@ -242,7 +242,7 @@ func TestStateMachineService_GetStateMachine_NotFound(t *testing.T) {
 func TestStateMachineService_InitializeRequirementState(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -264,7 +264,7 @@ func TestStateMachineService_InitializeRequirementState(t *testing.T) {
 func TestStateMachineService_TriggerTransition(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -285,7 +285,7 @@ func TestStateMachineService_TriggerTransition(t *testing.T) {
 func TestStateMachineService_TriggerTransition_InvalidTrigger(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -302,7 +302,7 @@ func TestStateMachineService_TriggerTransition_InvalidTrigger(t *testing.T) {
 func TestStateMachineService_TriggerTransition_StateNotFound(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -321,7 +321,7 @@ func TestStateMachineService_TriggerTransition_StateNotFound(t *testing.T) {
 func TestStateMachineService_GetRequirementState(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -340,7 +340,7 @@ func TestStateMachineService_GetRequirementState(t *testing.T) {
 func TestStateMachineService_GetRequirementState_NotFound(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	_, err := svc.GetRequirementState(ctx, "not-exist")
@@ -352,7 +352,7 @@ func TestStateMachineService_GetRequirementState_NotFound(t *testing.T) {
 func TestStateMachineService_GetTransitionHistory(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
@@ -375,7 +375,7 @@ func TestStateMachineService_GetTransitionHistory(t *testing.T) {
 func TestStateMachineService_DeleteStateMachine(t *testing.T) {
 	repo := NewMockStateMachineRepository()
 	logger, _ := zap.NewDevelopment()
-	svc := NewStateMachineService(repo, nil, nil, logger)
+	svc := NewStateMachineService(repo, nil, nil, nil, logger)
 
 	ctx := context.Background()
 	sm, _ := svc.CreateStateMachine(ctx, "test", "测试", testYAML)
