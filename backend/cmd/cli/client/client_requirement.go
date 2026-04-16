@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -78,8 +79,24 @@ func (c *Client) ListRequirementsWithParams(ctx context.Context, params map[stri
 		return nil, c.handleError(resp)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response failed: %w", err)
+	}
+
+	// 先尝试解析分页格式 {"items": [...], "total": N}
+	var paginated struct {
+		Items []Requirement `json:"items"`
+		Total int           `json:"total"`
+	}
+	if err := json.Unmarshal(body, &paginated); err == nil && paginated.Items != nil {
+		result := ListRequirementsResponse(paginated.Items)
+		return &result, nil
+	}
+
+	// 再尝试解析数组格式
 	var result ListRequirementsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
 

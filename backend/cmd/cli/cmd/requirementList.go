@@ -19,7 +19,8 @@ var requirementListCmd = &cobra.Command{
   taskmanager requirement list --todo
   taskmanager requirement list --status coding
   taskmanager requirement list --requirement-type normal
-  taskmanager requirement list --sort-by created_at --order desc`,
+  taskmanager requirement list --sort-by created_at --order desc
+  taskmanager requirement list --project-id <id> --limit 20`,
 	Run: func(cmd *cobra.Command, args []string) {
 		projectID, _ := cmd.Flags().GetString("project-id")
 		showAll, _ := cmd.Flags().GetBool("all")
@@ -28,6 +29,7 @@ var requirementListCmd = &cobra.Command{
 		requirementType, _ := cmd.Flags().GetString("requirement-type")
 		sortBy, _ := cmd.Flags().GetString("sort-by")
 		order, _ := cmd.Flags().GetString("order")
+		limit, _ := cmd.Flags().GetInt("limit")
 
 		ctx := context.Background()
 		c := client.New()
@@ -51,6 +53,9 @@ var requirementListCmd = &cobra.Command{
 		}
 		if order != "" {
 			params["order"] = order
+		}
+		if limit > 0 {
+			params["limit"] = fmt.Sprintf("%d", limit)
 		}
 
 		requirements, err := c.ListRequirementsWithParams(ctx, params)
@@ -139,4 +144,5 @@ func registerRequirementListCommands() {
 	requirementListCmd.Flags().String("requirement-type", "", "按需求类型过滤 (normal/heartbeat)")
 	requirementListCmd.Flags().String("sort-by", "created_at", "排序字段 (created_at/updated_at/started_at)")
 	requirementListCmd.Flags().String("order", "desc", "排序方向 (asc/desc)")
+	requirementListCmd.Flags().Int("limit", 0, "限制返回数量（启用分页模式）")
 }
