@@ -146,7 +146,11 @@ func (s *HeartbeatScheduler) cleanupStaleRequirements(ctx context.Context) {
 		replicaExists := true
 		if req.ReplicaAgentCode() != "" && s.agentRepo != nil {
 			agent, err := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(req.ReplicaAgentCode()))
-			if err == nil && agent == nil {
+			if err != nil {
+				// 查询出错时保守视为不存在，避免漏清理
+				log.Printf("[HEARTBEAT] cleanup: failed to find replica agent %s: %v", req.ReplicaAgentCode(), err)
+				replicaExists = false
+			} else if agent == nil {
 				replicaExists = false
 			}
 		}
