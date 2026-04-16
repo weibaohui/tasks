@@ -1,8 +1,10 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,24 +81,33 @@ func (c *Client) ListRequirementsWithParams(ctx context.Context, params map[stri
 		return nil, c.handleError(resp)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// 限制响应体大小，防止 OOM
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("read response failed: %w", err)
 	}
 
-	// 先尝试解析分页格式 {"items": [...], "total": N}
-	var paginated struct {
-		Items []Requirement `json:"items"`
-		Total int           `json:"total"`
-	}
-	if err := json.Unmarshal(body, &paginated); err == nil && paginated.Items != nil {
-		result := ListRequirementsResponse(paginated.Items)
-		return &result, nil
+	// 使用 json.RawMessage 探测响应类型，避免 "items": null 导致误判
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err == nil {
+		if rawItems, ok := probe["items"]; ok {
+			var paginated struct {
+				Items []Requirement `json:"items"`
+			}
+			if err := json.Unmarshal(rawItems, &paginated.Items); err == nil {
+				result := ListRequirementsResponse(paginated.Items)
+				return &result, nil
+			}
+			return nil, fmt.Errorf("decode paginated items failed: %w", err)
+		}
 	}
 
 	// 再尝试解析数组格式
 	var result ListRequirementsResponse
 	if err := json.Unmarshal(body, &result); err != nil {
+		if errors.Is(err, bytes.ErrTooLarge) {
+			return nil, fmt.Errorf("response body too large")
+		}
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
 

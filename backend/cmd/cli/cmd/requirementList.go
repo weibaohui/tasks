@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -54,8 +55,12 @@ var requirementListCmd = &cobra.Command{
 		if order != "" {
 			params["order"] = order
 		}
-		if limit > 0 {
-			params["limit"] = fmt.Sprintf("%d", limit)
+		if limit != 0 {
+			if limit < 0 {
+				printJSONError("limit 不能为负数")
+				return
+			}
+			params["limit"] = strconv.Itoa(limit)
 		}
 
 		requirements, err := c.ListRequirementsWithParams(ctx, params)
