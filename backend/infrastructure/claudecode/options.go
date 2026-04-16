@@ -1,6 +1,8 @@
 package claudecode
 
 import (
+	"strings"
+
 	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
 	"go.uber.org/zap"
@@ -30,6 +32,19 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 		env = make(map[string]string)
 	}
 
+	// 设置 stderr callback 以捕获 Claude CLI 的调试输出
+	opts = append(opts, claudecode.WithStderrCallback(func(line string) {
+		p.logger.Info("Claude Code CLI stderr",
+			zap.String("session_key", func() string {
+				if cliSessionID != "" {
+					return cliSessionID
+				}
+				return "unknown"
+			}()),
+			zap.String("line", line),
+		)
+	}))
+
 	// 设置模型
 	model := config.Model
 	if model == "" && agent != nil {
@@ -43,13 +58,25 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 		// 若 provider 存在，模型保持为空，让 Claude Code 使用默认模型
 	}
 
-	// 注入 Provider 的 API Key 和 Base URL（只要 provider 存在就注入，不受 model 是否为空影响）
+	// 注入 Provider 的 API Key 和 Base URL
+	// Claude CLI 是 Anthropic 官方工具，对非官方端点的兼容性不可靠。
+	// 对于第三方兼容端点（如 Kimi），注入其 key/base_url 可能导致 authentication_failed。
+	// 因此仅当 provider 指向 Anthropic 官方端点（或空 base URL）时才注入环境变量，
+	// 否则让 Claude CLI 使用本地 `claude login` 保存的凭据。
 	if provider != nil {
-		if provider.APIKey() != "" {
+		apiBase := provider.APIBase()
+		isAnthropicEndpoint := apiBase == "" || strings.Contains(apiBase, "anthropic.com")
+		if isAnthropicEndpoint && provider.APIKey() != "" {
 			env["ANTHROPIC_API_KEY"] = provider.APIKey()
 		}
-		if provider.APIBase() != "" {
-			env["ANTHROPIC_BASE_URL"] = provider.APIBase()
+		if isAnthropicEndpoint && apiBase != "" {
+			env["ANTHROPIC_BASE_URL"] = apiBase
+		}
+		if !isAnthropicEndpoint {
+			p.logger.Warn("Claude Code 使用的 Provider 不是 Anthropic 官方端点，跳过注入 ANTHROPIC_API_KEY/BASE_URL，依赖本地 claude login 凭据",
+				zap.String("provider_key", provider.ProviderKey()),
+				zap.String("api_base", apiBase),
+			)
 		}
 	}
 
