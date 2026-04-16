@@ -16,6 +16,7 @@ const defaultTokenAggregationLimit = 1000 // Token 聚合查询默认限制
 
 // StreamingCallback 回调接口用于流式输出
 type StreamingCallback interface {
+	OnStart()
 	OnThinking(thinking string)
 	OnToolCall(toolName string, input map[string]any)
 	OnToolResult(toolName string, result string)

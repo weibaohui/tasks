@@ -12,11 +12,11 @@ import (
 
 // SetupRoutes 设置路由
 func SetupRoutes() *gin.Engine {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *gin.Engine {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -35,6 +35,7 @@ func SetupRoutesWithManagement(
 	projectStateMachineHandler *ProjectStateMachineHandler,
 	requirementTypeHandler *RequirementTypeHandler,
 	heartbeatHandler *HeartbeatHandler,
+	heartbeatTemplateHandler *HeartbeatTemplateHandler,
 ) *gin.Engine {
 	engine := gin.Default()
 
@@ -157,6 +158,13 @@ func SetupRoutesWithManagement(
 		heartbeats.GET("/:id", heartbeatHandler.GetHeartbeat)
 		heartbeats.PUT("/:id", heartbeatHandler.UpdateHeartbeat)
 		heartbeats.DELETE("/:id", heartbeatHandler.DeleteHeartbeat)
+	}
+
+	if heartbeatTemplateHandler != nil {
+		templates := v1.Group("/heartbeat-templates", requireAuth)
+		templates.GET("", heartbeatTemplateHandler.ListTemplates)
+		templates.POST("", heartbeatTemplateHandler.CreateTemplate)
+		templates.DELETE("/:id", heartbeatTemplateHandler.DeleteTemplate)
 	}
 
 	if requirementHandler != nil {

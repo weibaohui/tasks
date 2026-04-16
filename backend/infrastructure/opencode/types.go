@@ -2,6 +2,7 @@ package opencode
 
 // StreamingCallback 回调接口用于流式输出（与 ClaudeCodeProcessor 接口兼容）
 type StreamingCallback interface {
+	OnStart()
 	OnThinking(thinking string)
 	OnToolCall(toolName string, input map[string]any)
 	OnToolResult(toolName string, result string)

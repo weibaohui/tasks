@@ -95,6 +95,10 @@ func main() {
 	if err := _persistence.MigrateHeartbeatToTable(db); err != nil {
 		logger.Fatal("Failed to migrate heartbeat to table", zap.Error(err))
 	}
+	// 预置默认心跳模板
+	if err := _persistence.SeedHeartbeatTemplates(db); err != nil {
+		logger.Fatal("Failed to seed heartbeat templates", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
@@ -110,6 +114,7 @@ func main() {
 	conversationRecordRepo := _persistence.NewSQLiteConversationRecordRepository(db)
 	projectRepo := _persistence.NewSQLiteProjectRepository(db)
 	heartbeatRepo := _persistence.NewSQLiteHeartbeatRepository(db)
+	heartbeatTemplateRepo := _persistence.NewSQLiteHeartbeatTemplateRepository(db)
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
 	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
@@ -213,6 +218,7 @@ func main() {
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator)
 	heartbeatService := application.NewHeartbeatApplicationService(heartbeatRepo, idGenerator, heartbeatScheduler)
+	heartbeatTemplateService := application.NewHeartbeatTemplateApplicationService(heartbeatTemplateRepo, idGenerator)
 
 	userHandler := httpHandler.NewUserHandler(userService)
 	agentHandler := httpHandler.NewAgentHandler(agentService)
@@ -222,6 +228,7 @@ func main() {
 	conversationRecordHandler := httpHandler.NewConversationRecordHandler(conversationRecordService)
 	projectHandler := httpHandler.NewProjectHandler(projectService)
 	heartbeatHandler := httpHandler.NewHeartbeatHandler(heartbeatService, heartbeatScheduler)
+	heartbeatTemplateHandler := httpHandler.NewHeartbeatTemplateHandler(heartbeatTemplateService)
 	requirementService := application.NewRequirementApplicationService(
 		requirementRepo,
 		projectRepo,
@@ -254,7 +261,7 @@ func main() {
 		channelHandler, sessionHandler, conversationRecordHandler,
 		authHandler, mcpHandler, skillHandler, projectHandler,
 		requirementHandler, stateMachineHandler, projectStateMachineHandler,
-		requirementTypeHandler, heartbeatHandler,
+		requirementTypeHandler, heartbeatHandler, heartbeatTemplateHandler,
 	)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）

@@ -140,6 +140,16 @@ func (c *feishuStreamingCallback) buildMetadata() map[string]any {
 	return m
 }
 
+func (c *feishuStreamingCallback) OnStart() {
+	elements := []map[string]interface{}{
+		{"tag": "markdown", "content": "任务已开始执行，请稍候..."},
+	}
+	c.sendCard(fmt.Sprintf("🚀 %s 开始执行", c.displayName()), elements)
+	c.logger.Info(fmt.Sprintf("%s 开始执行", c.displayName()),
+		zap.String("trace_id", c.traceID),
+	)
+}
+
 func (c *feishuStreamingCallback) OnThinking(thinking string) {
 	// 发送思考过程卡片
 	c.mu.Lock()

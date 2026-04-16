@@ -184,6 +184,10 @@ func (p *ClaudeCodeProcessor) ProcessWithStreaming(ctx context.Context, msg *bus
 		cliSessionID = session.CliSessionID
 	}
 
+	if callback != nil {
+		callback.OnStart()
+	}
+
 	// 流式调用 Claude Code
 	newCliSessionID, capturedUsage, err := p.queryClaudeCodeStreaming(queryCtx, msg, msg.Content, cliSessionID, traceID, provider, agent, callback)
 	if err != nil {

@@ -15,6 +15,12 @@ type InboundMessage struct {
 
 // SessionKey returns a unique identifier for the session
 func (m *InboundMessage) SessionKey() string {
+	// 需求派发的消息按 requirement_id 隔离 session，使不同需求可以并发处理
+	if m.Metadata != nil {
+		if reqID, ok := m.Metadata["requirement_id"].(string); ok && reqID != "" {
+			return m.Channel + ":" + m.ChatID + ":req:" + reqID
+		}
+	}
 	return m.Channel + ":" + m.ChatID
 }
 
