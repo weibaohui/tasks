@@ -161,6 +161,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
 			log.Printf("RemoveWorkspace failed: %v", errCleanup)
 		}
+		if errCleanup := s.agentRepo.Delete(ctx, replicaAgent.ID()); errCleanup != nil {
+			log.Printf("Delete replica agent failed: %v", errCleanup)
+		}
 		return nil, err
 	}
 	if s.inboundPublisher == nil {
@@ -171,6 +174,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
 			log.Printf("RemoveWorkspace failed: %v", errCleanup)
 		}
+		if errCleanup := s.agentRepo.Delete(ctx, replicaAgent.ID()); errCleanup != nil {
+			log.Printf("Delete replica agent failed: %v", errCleanup)
+		}
 		return nil, ErrInboundPublisherNotConfigured
 	}
 	if err := s.ensureDispatchSession(ctx, cmd, replicaAgent, requirement, project); err != nil {
@@ -180,6 +186,9 @@ func (s *RequirementDispatchService) DispatchRequirement(ctx context.Context, cm
 		}
 		if errCleanup := s.workspaceManager.RemoveWorkspace(workspacePath); errCleanup != nil {
 			log.Printf("RemoveWorkspace failed: %v", errCleanup)
+		}
+		if errCleanup := s.agentRepo.Delete(ctx, replicaAgent.ID()); errCleanup != nil {
+			log.Printf("Delete replica agent failed: %v", errCleanup)
 		}
 		return nil, err
 	}

@@ -385,10 +385,11 @@ const StaleThreshold = 30 * time.Minute
 // StaleReplicaMissingThreshold 分身缺失时的较短超时阈值
 const StaleReplicaMissingThreshold = 5 * time.Minute
 
-// IsStale 判断处于 coding 状态的需求是否过期
+// IsStale 判断处于运行中状态的需求是否过期
+// 覆盖 preparing、coding、pr_opened 以及状态机定义的自定义运行状态
 // 返回 (shouldCleanup, reason)
 func (r *Requirement) IsStale(now time.Time) (bool, string) {
-	if r.status != RequirementStatusCoding {
+	if !r.IsRunningStatus() {
 		return false, ""
 	}
 
@@ -397,6 +398,22 @@ func (r *Requirement) IsStale(now time.Time) (bool, string) {
 		return true, "timeout - no update for 30+ minutes"
 	}
 	return false, ""
+}
+
+// IsRunningStatus 判断需求是否处于可能持有分身的运行中状态
+func (r *Requirement) IsRunningStatus() bool {
+	switch r.status {
+	case RequirementStatusPreparing, RequirementStatusCoding, RequirementStatusPROpened:
+		return true
+	default:
+		// 状态机可能使用自定义状态（如 doing, in_progress）
+		// 只要不是终态（failed/completed/done/todo），都视为可能运行中
+		status := string(r.status)
+		if status == "failed" || status == "completed" || status == "done" || status == "todo" || status == "" {
+			return false
+		}
+		return true
+	}
 }
 
 // IsStaleWithReplicaCheck 在分身缺失时使用较短的阈值判定过期

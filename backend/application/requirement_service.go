@@ -297,6 +297,13 @@ func (s *RequirementApplicationService) RedispatchRequirement(ctx context.Contex
 		return nil, ErrRequirementNotFound
 	}
 
+	// 先清理旧分身和工作区（应用层职责）
+	if s.replicaCleanupSvc != nil {
+		if err := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); err != nil {
+			log.Printf("failed to cleanup replica for requirement %s before redispatch: %v", requirement.ID().String(), err)
+		}
+	}
+
 	// 记录状态转换日志
 	if s.stateMachineRepo != nil {
 		fromStatus := string(requirement.Status())
@@ -418,6 +425,14 @@ func (s *RequirementApplicationService) DeleteRequirement(ctx context.Context, c
 	if requirement == nil {
 		return ErrRequirementNotFound
 	}
+
+	// 先清理分身和工作区（应用层职责）
+	if s.replicaCleanupSvc != nil {
+		if err := s.replicaCleanupSvc.CleanupReplica(ctx, requirement.ReplicaAgentCode(), requirement.WorkspacePath()); err != nil {
+			log.Printf("failed to cleanup replica for requirement %s before delete: %v", requirement.ID().String(), err)
+		}
+	}
+
 	return s.requirementRepo.Delete(ctx, cmd.ID)
 }
 
