@@ -16,6 +16,26 @@ func NewHeartbeatScenarioHandler(scenarioService *application.HeartbeatScenarioS
 	return &HeartbeatScenarioHandler{scenarioService: scenarioService}
 }
 
+func (h *HeartbeatScenarioHandler) CreateScenario(c *gin.Context) {
+	var req struct {
+		Code        string                         `json:"code" binding:"required"`
+		Name        string                         `json:"name" binding:"required"`
+		Description string                         `json:"description"`
+		Items       []domain.HeartbeatScenarioItem `json:"items"`
+		Enabled     bool                           `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+	scenario, err := h.scenarioService.CreateScenario(c.Request.Context(), req.Code, req.Name, req.Description, req.Items, req.Enabled)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, heartbeatScenarioToMap(scenario))
+}
+
 func (h *HeartbeatScenarioHandler) ListScenarios(c *gin.Context) {
 	scenarios, err := h.scenarioService.ListScenarios(c.Request.Context())
 	if err != nil {
@@ -45,6 +65,43 @@ func (h *HeartbeatScenarioHandler) GetScenario(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, heartbeatScenarioToMap(scenario))
+}
+
+func (h *HeartbeatScenarioHandler) UpdateScenario(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "code is required"})
+		return
+	}
+	var req struct {
+		Name        string                         `json:"name" binding:"required"`
+		Description string                         `json:"description"`
+		Items       []domain.HeartbeatScenarioItem `json:"items"`
+		Enabled     bool                           `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+	scenario, err := h.scenarioService.UpdateScenario(c.Request.Context(), code, req.Name, req.Description, req.Items, req.Enabled)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, heartbeatScenarioToMap(scenario))
+}
+
+func (h *HeartbeatScenarioHandler) DeleteScenario(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+	if err := h.scenarioService.DeleteScenario(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
 }
 
 func (h *HeartbeatScenarioHandler) ApplyScenarioToProject(c *gin.Context) {

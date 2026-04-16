@@ -172,7 +172,10 @@ func SetupRoutesWithManagement(
 	if heartbeatScenarioHandler != nil {
 		scenarios := v1.Group("/heartbeat-scenarios", requireAuth)
 		scenarios.GET("", heartbeatScenarioHandler.ListScenarios)
+		scenarios.POST("", heartbeatScenarioHandler.CreateScenario)
 		scenarios.GET("/:code", heartbeatScenarioHandler.GetScenario)
+		scenarios.PUT("/:code", heartbeatScenarioHandler.UpdateScenario)
+		scenarios.DELETE("/:id", heartbeatScenarioHandler.DeleteScenario)
 	}
 
 	if projectHandler != nil && heartbeatScenarioHandler != nil {

@@ -109,7 +109,7 @@ func TestHeartbeatScenarioService_CreateScenario(t *testing.T) {
 
 	scenario, err := svc.CreateScenario(ctx, "test_code", "测试场景", "描述", []domain.HeartbeatScenarioItem{
 		{Name: "心跳1", IntervalMinutes: 30, MDContent: "md", AgentCode: "agent", RequirementType: "normal"},
-	})
+	}, true)
 	if err != nil {
 		t.Fatalf("创建场景失败: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestHeartbeatScenarioService_GetScenarioByCode(t *testing.T) {
 	svc, _, _, _, _ := setupTestScenarioSvc()
 	ctx := context.Background()
 
-	_, err := svc.CreateScenario(ctx, "test_code", "测试场景", "描述", []domain.HeartbeatScenarioItem{})
+	_, err := svc.CreateScenario(ctx, "test_code", "测试场景", "描述", []domain.HeartbeatScenarioItem{}, true)
 	if err != nil {
 		t.Fatalf("创建场景失败: %v", err)
 	}
@@ -154,8 +154,8 @@ func TestHeartbeatScenarioService_ListScenarios(t *testing.T) {
 	svc, _, _, _, _ := setupTestScenarioSvc()
 	ctx := context.Background()
 
-	svc.CreateScenario(ctx, "code1", "场景1", "", []domain.HeartbeatScenarioItem{})
-	svc.CreateScenario(ctx, "code2", "场景2", "", []domain.HeartbeatScenarioItem{})
+	svc.CreateScenario(ctx, "code1", "场景1", "", []domain.HeartbeatScenarioItem{}, true)
+	svc.CreateScenario(ctx, "code2", "场景2", "", []domain.HeartbeatScenarioItem{}, true)
 
 	scenarios, err := svc.ListScenarios(ctx)
 	if err != nil {
@@ -170,7 +170,7 @@ func TestHeartbeatScenarioService_DeleteScenario(t *testing.T) {
 	svc, _, _, _, _ := setupTestScenarioSvc()
 	ctx := context.Background()
 
-	scenario, _ := svc.CreateScenario(ctx, "del_code", "待删除", "", []domain.HeartbeatScenarioItem{})
+	scenario, _ := svc.CreateScenario(ctx, "del_code", "待删除", "", []domain.HeartbeatScenarioItem{}, true)
 
 	err := svc.DeleteScenario(ctx, scenario.ID().String())
 	if err != nil {

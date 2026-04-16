@@ -21,9 +21,43 @@ export interface HeartbeatScenario {
   updated_at: number;
 }
 
+export interface CreateScenarioRequest {
+  code: string;
+  name: string;
+  description: string;
+  items: HeartbeatScenarioItem[];
+  enabled: boolean;
+}
+
+export interface UpdateScenarioRequest {
+  name: string;
+  description: string;
+  items: HeartbeatScenarioItem[];
+  enabled: boolean;
+}
+
 export async function listHeartbeatScenarios(): Promise<HeartbeatScenario[]> {
   const response = await apiClient.get<HeartbeatScenario[]>('/heartbeat-scenarios');
   return response.data;
+}
+
+export async function getHeartbeatScenario(code: string): Promise<HeartbeatScenario> {
+  const response = await apiClient.get<HeartbeatScenario>(`/heartbeat-scenarios/${code}`);
+  return response.data;
+}
+
+export async function createHeartbeatScenario(request: CreateScenarioRequest): Promise<HeartbeatScenario> {
+  const response = await apiClient.post<HeartbeatScenario>('/heartbeat-scenarios', request);
+  return response.data;
+}
+
+export async function updateHeartbeatScenario(code: string, request: UpdateScenarioRequest): Promise<HeartbeatScenario> {
+  const response = await apiClient.put<HeartbeatScenario>(`/heartbeat-scenarios/${code}`, request);
+  return response.data;
+}
+
+export async function deleteHeartbeatScenario(id: string): Promise<void> {
+  await apiClient.delete(`/heartbeat-scenarios/${id}`);
 }
 
 export async function applyHeartbeatScenario(projectId: string, scenarioCode: string): Promise<void> {

@@ -68,6 +68,19 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 
 	log.Printf("[HEARTBEAT] executing heartbeat %s for project %s", hb.Name(), project.Name())
 
+	// 解析 Agent：优先使用心跳指定的 agent，若不存在则回退到项目默认 agent
+	agentCode := hb.AgentCode()
+	if agentCode != "" && s.agentRepo != nil {
+		baseAgent, _ := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
+		if baseAgent == nil {
+			fallback := project.DefaultAgentCode()
+			if fallback != "" {
+				log.Printf("[HEARTBEAT] agent %s not found for heartbeat %s, falling back to project default %s", agentCode, hb.Name(), fallback)
+				agentCode = fallback
+			}
+		}
+	}
+
 	// 替换模板变量
 	prompt := hb.RenderPrompt(project)
 
@@ -123,7 +136,7 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
-			AgentCode:     hb.AgentCode(),
+			AgentCode:     agentCode,
 			ChannelCode:   channelCode,
 			SessionKey:    sessionKey,
 		})
