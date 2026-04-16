@@ -163,7 +163,6 @@ func (cp *CommandProcessor) handleModels(ctx context.Context, msg *bus.InboundMe
 - Claude 3.5 Sonnet (默认)
 - Claude 3 Opus
 - Claude 3 Haiku
-- MiniMax-M2.7-highspeed
 
 模型配置在 Agent 设置中管理。
 `
