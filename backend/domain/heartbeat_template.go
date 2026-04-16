@@ -36,7 +36,7 @@ func NewHeartbeatTemplate(
 	id HeartbeatTemplateID,
 	name, mdContent, requirementType string,
 ) (*HeartbeatTemplate, error) {
-	if id.String() == "" {
+	if strings.TrimSpace(id.String()) == "" {
 		return nil, ErrHeartbeatTemplateIDRequired
 	}
 	if strings.TrimSpace(name) == "" {
@@ -97,11 +97,22 @@ func (t *HeartbeatTemplate) ToSnapshot() HeartbeatTemplateSnapshot {
 	}
 }
 
-func (t *HeartbeatTemplate) FromSnapshot(s HeartbeatTemplateSnapshot) {
+func (t *HeartbeatTemplate) FromSnapshot(s HeartbeatTemplateSnapshot) error {
+	if strings.TrimSpace(s.ID.String()) == "" {
+		return ErrHeartbeatTemplateIDRequired
+	}
+	if strings.TrimSpace(s.Name) == "" {
+		return ErrHeartbeatTemplateNameRequired
+	}
+	requirementType := strings.TrimSpace(s.RequirementType)
+	if requirementType == "" {
+		requirementType = "heartbeat"
+	}
 	t.id = s.ID
-	t.name = s.Name
+	t.name = strings.TrimSpace(s.Name)
 	t.mdContent = s.MDContent
-	t.requirementType = s.RequirementType
+	t.requirementType = requirementType
 	t.createdAt = s.CreatedAt
 	t.updatedAt = s.UpdatedAt
+	return nil
 }

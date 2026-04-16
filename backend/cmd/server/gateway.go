@@ -123,7 +123,13 @@ func (g *Gateway) processMessage(ctx context.Context, msg *channelBus.InboundMes
 	muVal, _ := g.sessionLocks.LoadOrStore(sessionKey, &sync.Mutex{})
 	mu := muVal.(*sync.Mutex)
 	mu.Lock()
-	defer mu.Unlock()
+	defer func() {
+		mu.Unlock()
+		// session 不存在时清理锁条目，防止内存泄漏
+		if g.sessionManager.Get(sessionKey) == nil {
+			g.sessionLocks.Delete(sessionKey)
+		}
+	}()
 
 	if err := g.processor.Process(ctx, msg); err != nil {
 		g.logger.Error("处理消息失败", zap.Error(err))

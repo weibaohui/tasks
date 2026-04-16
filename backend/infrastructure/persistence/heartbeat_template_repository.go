@@ -94,13 +94,15 @@ func scanHeartbeatTemplate(scanner rowScanner) (*domain.HeartbeatTemplate, error
 		return nil, err
 	}
 	t := &domain.HeartbeatTemplate{}
-	t.FromSnapshot(domain.HeartbeatTemplateSnapshot{
+	if err := t.FromSnapshot(domain.HeartbeatTemplateSnapshot{
 		ID:              domain.NewHeartbeatTemplateID(idStr),
 		Name:            name,
 		MDContent:       mdContent,
 		RequirementType: requirementType,
 		CreatedAt:       time.Unix(createdAtUnix, 0),
 		UpdatedAt:       time.Unix(updatedAtUnix, 0),
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return t, nil
 }

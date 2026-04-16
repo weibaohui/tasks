@@ -191,9 +191,9 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 	p.sem <- struct{}{}
 	defer func() { <-p.sem }()
 
-	// 执行流式处理（使用独立 context，避免受父 context 取消影响）
+	// 执行流式处理（复用 caller context 并叠加内部超时）
 	result, tokenUsage, err := p.queryOpenCodeStreaming(
-		context.Background(), msg, userInput, cliSessionID, traceID, provider, agent, callback,
+		ctx, msg, userInput, cliSessionID, traceID, provider, agent, callback,
 	)
 
 	if err != nil {

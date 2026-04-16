@@ -282,7 +282,7 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
                 style={{ width: 240 }}
                 allowClear
                 options={templates.map((t) => ({ label: t.name, value: t.id }))}
-                onChange={(value) => handleApplyTemplate(value as string)}
+                onChange={(value) => value && handleApplyTemplate(value as string)}
                 dropdownRender={(menu) => (
                   <div>
                     {menu}

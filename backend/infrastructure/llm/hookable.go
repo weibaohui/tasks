@@ -198,8 +198,8 @@ func (p *HookableProvider) GenerateWithTools(ctx context.Context, prompt string,
 
 // parseSessionKey 解析 session_key，提取渠道类型与会话 ID
 func parseSessionKey(sessionKey string) (string, string) {
-	parts := strings.SplitN(strings.TrimSpace(sessionKey), ":", 2)
-	if len(parts) != 2 {
+	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
+	if len(parts) < 2 {
 		return "", ""
 	}
 	channelType := strings.TrimSpace(parts[0])

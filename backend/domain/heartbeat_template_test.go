@@ -103,7 +103,9 @@ func TestHeartbeatTemplateSnapshotRoundTrip(t *testing.T) {
 
 	snap := original.ToSnapshot()
 	restored := &HeartbeatTemplate{}
-	restored.FromSnapshot(snap)
+	if err := restored.FromSnapshot(snap); err != nil {
+		t.Fatalf("FromSnapshot failed: %v", err)
+	}
 
 	if restored.ID().String() != original.ID().String() {
 		t.Errorf("ID mismatch")
