@@ -95,6 +95,30 @@ func MigrateMaxConcurrentAgentsColumn(db *sql.DB) error {
 	return nil
 }
 
+// MigrateRequirementAgentInfoColumns 兼容旧数据库：在 requirements 表中添加 agent 名称和分身来源列
+func MigrateRequirementAgentInfoColumns(db *sql.DB) error {
+	columns, err := getTableColumns(db, "requirements")
+	if err != nil {
+		return fmt.Errorf("获取 requirements 表列信息失败: %w", err)
+	}
+
+	columnMigrations := map[string]string{
+		"assignee_agent_name":       "ALTER TABLE requirements ADD COLUMN assignee_agent_name TEXT",
+		"replica_agent_name":        "ALTER TABLE requirements ADD COLUMN replica_agent_name TEXT",
+		"replica_agent_shadow_from": "ALTER TABLE requirements ADD COLUMN replica_agent_shadow_from TEXT",
+	}
+
+	for columnName, sqlStmt := range columnMigrations {
+		if _, exists := columns[columnName]; !exists {
+			if _, err := db.Exec(sqlStmt); err != nil {
+				return fmt.Errorf("添加 %s 列失败: %w", columnName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // MigrateHeartbeatToTable 将旧项目的心跳配置迁移到独立的 heartbeats 表
 func MigrateHeartbeatToTable(db *sql.DB) error {
 	// 1. 创建 heartbeats 表（若不存在）

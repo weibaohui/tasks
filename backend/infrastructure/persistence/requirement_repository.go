@@ -23,12 +23,12 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 	query := `
 		INSERT INTO requirements (
 			id, project_id, title, description, acceptance_criteria, status,
-			temp_workspace_root, assignee_agent_code, replica_agent_code, dispatch_session_key, workspace_path, last_error,
+			temp_workspace_root, assignee_agent_code, assignee_agent_name, replica_agent_code, replica_agent_name, replica_agent_shadow_from, dispatch_session_key, workspace_path, last_error,
 			started_at, completed_at, created_at, updated_at,
 			requirement_type, agent_runtime_status, agent_runtime_started_at, agent_runtime_ended_at, agent_runtime_error, agent_runtime_result, agent_runtime_prompt, agent_runtime_agent_type, trace_id,
 			prompt_tokens, completion_tokens, total_tokens, progress_data
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title,
 			description=excluded.description,
@@ -36,7 +36,10 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 			status=excluded.status,
 			temp_workspace_root=excluded.temp_workspace_root,
 			assignee_agent_code=excluded.assignee_agent_code,
+			assignee_agent_name=excluded.assignee_agent_name,
 			replica_agent_code=excluded.replica_agent_code,
+			replica_agent_name=excluded.replica_agent_name,
+			replica_agent_shadow_from=excluded.replica_agent_shadow_from,
 			dispatch_session_key=excluded.dispatch_session_key,
 			workspace_path=excluded.workspace_path,
 			last_error=excluded.last_error,
@@ -68,7 +71,10 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 		string(snap.Status),
 		snap.TempWorkspaceRoot,
 		snap.AssigneeAgentCode,
+		snap.AssigneeAgentName,
 		snap.ReplicaAgentCode,
+		snap.ReplicaAgentName,
+		snap.ReplicaAgentShadowFrom,
 		snap.DispatchSessionKey,
 		snap.WorkspacePath,
 		snap.LastError,
@@ -96,7 +102,7 @@ func (r *SQLiteRequirementRepository) Save(ctx context.Context, requirement *dom
 func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.RequirementID) (*domain.Requirement, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(assignee_agent_name, ''), COALESCE(replica_agent_code, ''), COALESCE(replica_agent_name, ''), COALESCE(replica_agent_shadow_from, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens, COALESCE(progress_data, '')
@@ -107,7 +113,7 @@ func (r *SQLiteRequirementRepository) FindByID(ctx context.Context, id domain.Re
 func (r *SQLiteRequirementRepository) FindByTraceID(ctx context.Context, traceID string) (*domain.Requirement, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(assignee_agent_name, ''), COALESCE(replica_agent_code, ''), COALESCE(replica_agent_name, ''), COALESCE(replica_agent_shadow_from, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens, COALESCE(progress_data, '')
@@ -118,7 +124,7 @@ func (r *SQLiteRequirementRepository) FindByTraceID(ctx context.Context, traceID
 func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID) ([]*domain.Requirement, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(assignee_agent_name, ''), COALESCE(replica_agent_code, ''), COALESCE(replica_agent_name, ''), COALESCE(replica_agent_shadow_from, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens, COALESCE(progress_data, '')
@@ -133,7 +139,7 @@ func (r *SQLiteRequirementRepository) FindByProjectID(ctx context.Context, proje
 func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Requirement, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+		       status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(assignee_agent_name, ''), COALESCE(replica_agent_code, ''), COALESCE(replica_agent_name, ''), COALESCE(replica_agent_shadow_from, ''),
 		       COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 		       COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 		       COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens, COALESCE(progress_data, '')
@@ -146,7 +152,7 @@ func (r *SQLiteRequirementRepository) FindAll(ctx context.Context) ([]*domain.Re
 }
 
 const requirementColumns = `id, project_id, title, COALESCE(description, ''), COALESCE(acceptance_criteria, ''),
-	status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(replica_agent_code, ''),
+	status, COALESCE(temp_workspace_root, ''), COALESCE(assignee_agent_code, ''), COALESCE(assignee_agent_name, ''), COALESCE(replica_agent_code, ''), COALESCE(replica_agent_name, ''), COALESCE(replica_agent_shadow_from, ''),
 	COALESCE(dispatch_session_key, ''), COALESCE(workspace_path, ''),
 	COALESCE(last_error, ''), started_at, completed_at, created_at, updated_at,
 	COALESCE(requirement_type, 'normal'), COALESCE(agent_runtime_status, ''), agent_runtime_started_at, agent_runtime_ended_at, COALESCE(agent_runtime_error, ''), COALESCE(agent_runtime_result, ''), COALESCE(agent_runtime_prompt, ''), COALESCE(agent_runtime_agent_type, ''), COALESCE(trace_id, ''), prompt_tokens, completion_tokens, total_tokens, COALESCE(progress_data, '')`
@@ -257,7 +263,10 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		statusStr                string
 		tempWorkspaceRoot        string
 		assigneeAgentCode        string
+		assigneeAgentName        string
 		replicaAgentCode         string
+		replicaAgentName         string
+		replicaAgentShadowFrom   string
 		dispatchSessionKey       string
 		workspacePath            string
 		lastError                string
@@ -288,7 +297,10 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		&statusStr,
 		&tempWorkspaceRoot,
 		&assigneeAgentCode,
+		&assigneeAgentName,
 		&replicaAgentCode,
+		&replicaAgentName,
+		&replicaAgentShadowFrom,
 		&dispatchSessionKey,
 		&workspacePath,
 		&lastError,
@@ -326,7 +338,10 @@ func scanRequirement(scanner rowScanner) (*domain.Requirement, error) {
 		Status:                  domain.RequirementStatus(statusStr),
 		TempWorkspaceRoot:       tempWorkspaceRoot,
 		AssigneeAgentCode:       assigneeAgentCode,
+		AssigneeAgentName:       assigneeAgentName,
 		ReplicaAgentCode:        replicaAgentCode,
+		ReplicaAgentName:        replicaAgentName,
+		ReplicaAgentShadowFrom:  replicaAgentShadowFrom,
 		DispatchSessionKey:      dispatchSessionKey,
 		WorkspacePath:           workspacePath,
 		LastError:               lastError,

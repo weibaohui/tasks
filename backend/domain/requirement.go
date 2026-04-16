@@ -79,7 +79,10 @@ type Requirement struct {
 	status             RequirementStatus
 	previousStatus     RequirementStatus // 前一个状态，用于追踪状态转换历史
 	assigneeAgentCode  string
+	assigneeAgentName  string
 	replicaAgentCode   string
+	replicaAgentName   string
+	replicaAgentShadowFrom string
 	dispatchSessionKey string
 	workspacePath      string
 	lastError          string
@@ -158,7 +161,10 @@ func (r *Requirement) Status() RequirementStatus        { return r.status }
 // PreviousStatus 返回前一个状态（用于追踪状态转换历史）
 func (r *Requirement) PreviousStatus() RequirementStatus { return r.previousStatus }
 func (r *Requirement) AssigneeAgentCode() string        { return r.assigneeAgentCode }
+func (r *Requirement) AssigneeAgentName() string        { return r.assigneeAgentName }
 func (r *Requirement) ReplicaAgentCode() string         { return r.replicaAgentCode }
+func (r *Requirement) ReplicaAgentName() string         { return r.replicaAgentName }
+func (r *Requirement) ReplicaAgentShadowFrom() string   { return r.replicaAgentShadowFrom }
 func (r *Requirement) DispatchSessionKey() string       { return r.dispatchSessionKey }
 func (r *Requirement) WorkspacePath() string            { return r.workspacePath }
 func (r *Requirement) LastError() string                { return r.lastError }
@@ -452,6 +458,21 @@ func (r *Requirement) SetReplicaAgentCode(code string) {
 	r.updatedAt = time.Now()
 }
 
+func (r *Requirement) SetAssigneeAgentName(name string) {
+	r.assigneeAgentName = name
+	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) SetReplicaAgentName(name string) {
+	r.replicaAgentName = name
+	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) SetReplicaAgentShadowFrom(shadowFrom string) {
+	r.replicaAgentShadowFrom = shadowFrom
+	r.updatedAt = time.Now()
+}
+
 func (r *Requirement) SetWorkspacePath(path string) {
 	r.workspacePath = path
 	r.updatedAt = time.Now()
@@ -466,7 +487,10 @@ type RequirementSnapshot struct {
 	TempWorkspaceRoot      string
 	Status                 RequirementStatus
 	AssigneeAgentCode      string
+	AssigneeAgentName      string
 	ReplicaAgentCode       string
+	ReplicaAgentName       string
+	ReplicaAgentShadowFrom string
 	DispatchSessionKey     string
 	WorkspacePath          string
 	LastError              string
@@ -499,7 +523,10 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		TempWorkspaceRoot:      r.tempWorkspaceRoot,
 		Status:                 r.status,
 		AssigneeAgentCode:      r.assigneeAgentCode,
+		AssigneeAgentName:      r.assigneeAgentName,
 		ReplicaAgentCode:       r.replicaAgentCode,
+		ReplicaAgentName:       r.replicaAgentName,
+		ReplicaAgentShadowFrom: r.replicaAgentShadowFrom,
 		DispatchSessionKey:     r.dispatchSessionKey,
 		WorkspacePath:          r.workspacePath,
 		LastError:              r.lastError,
@@ -532,7 +559,10 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.tempWorkspaceRoot = strings.TrimSpace(s.TempWorkspaceRoot)
 	r.status = s.Status.Normalize() // 规范化状态值，兼容旧数据（空字符串 -> todo）
 	r.assigneeAgentCode = s.AssigneeAgentCode
+	r.assigneeAgentName = s.AssigneeAgentName
 	r.replicaAgentCode = s.ReplicaAgentCode
+	r.replicaAgentName = s.ReplicaAgentName
+	r.replicaAgentShadowFrom = s.ReplicaAgentShadowFrom
 	r.dispatchSessionKey = strings.TrimSpace(s.DispatchSessionKey)
 	r.workspacePath = s.WorkspacePath
 	r.lastError = s.LastError

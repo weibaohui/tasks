@@ -95,6 +95,10 @@ func main() {
 	if err := _persistence.MigrateHeartbeatToTable(db); err != nil {
 		logger.Fatal("Failed to migrate heartbeat to table", zap.Error(err))
 	}
+	// 兼容旧数据库：添加 requirements 表 agent 信息列
+	if err := _persistence.MigrateRequirementAgentInfoColumns(db); err != nil {
+		logger.Fatal("Failed to migrate requirement agent info columns", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
