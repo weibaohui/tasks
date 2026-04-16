@@ -62,6 +62,7 @@ func (e *TransitionExecutor) executeHook(ctx context.Context, hook statemachine.
 		"from_state":        hookCtx.FromState,
 		"to_state":          hookCtx.ToState,
 		"trigger":           hookCtx.Trigger,
+		"trigger_id":        hookCtx.TriggerID,
 		"hook_name":         hook.Name,
 		"hook_type":         hook.Type,
 	}

@@ -83,6 +83,38 @@ func TestTransitionExecutor_ExecuteHook_TriggerHeartbeat_WithInterpolation(t *te
 	}
 }
 
+func TestTransitionExecutor_ExecuteHook_TriggerHeartbeat_WithTriggerIDInterpolation(t *testing.T) {
+	logger := zap.NewNop()
+	executor := NewTransitionExecutor(logger)
+
+	fakeTrigger := &fakeHeartbeatTrigger{}
+	executor.SetHeartbeatTrigger(fakeTrigger)
+
+	hook := statemachine.TransitionHook{
+		Name: "trigger-heartbeat-hook",
+		Type: "trigger_heartbeat",
+		Config: map[string]interface{}{
+			"heartbeat_id": "hb-{{trigger_id}}-{{requirement_id}}",
+		},
+		Retry: 0,
+	}
+
+	hookCtx := statemachine.HookContext{
+		RequirementID:  "req-456",
+		StateMachineID: "sm-001",
+		FromState:      "todo",
+		ToState:        "doing",
+		Trigger:        "start",
+		TriggerID:      "tr-789",
+	}
+
+	executor.executeHook(context.Background(), hook, hookCtx)
+
+	if fakeTrigger.triggeredID != "hb-tr-789-req-456" {
+		t.Fatalf("期望触发心跳 hb-tr-789-req-456，实际触发: %s", fakeTrigger.triggeredID)
+	}
+}
+
 func TestTransitionExecutor_ExecuteHook_TriggerHeartbeat_NotConfigured(t *testing.T) {
 	logger := zap.NewNop()
 	executor := NewTransitionExecutor(logger)

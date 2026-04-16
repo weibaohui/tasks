@@ -33,6 +33,7 @@ export interface TransitionHook {
 
 // Transition 转换规则
 export interface Transition {
+  id?: string;
   from: string;
   to: string;
   trigger: string;

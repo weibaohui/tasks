@@ -187,6 +187,7 @@ func (s *StateMachineService) TriggerTransition(ctx context.Context, requirement
 			FromState:      rs.CurrentState,
 			ToState:        toState.ID,
 			Trigger:        trigger,
+			TriggerID:      transition.ID,
 			HookName:       "",
 			HookType:       "",
 			Metadata:       metadata,

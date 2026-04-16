@@ -6,12 +6,13 @@ export interface HookExample {
   id: string;
   name: string;
   description: string;
-  category: 'notification' | 'deployment' | 'approval' | 'custom';
-  type: 'webhook' | 'command';
+  category: 'notification' | 'deployment' | 'approval' | 'custom' | 'heartbeat';
+  type: 'webhook' | 'command' | 'trigger_heartbeat';
   config: {
     url?: string;
     method?: string;
     command?: string;
+    heartbeat_id?: string;
   };
   timeout?: number;
   retry?: number;
@@ -178,6 +179,20 @@ export const hookExamples: HookExample[] = [
     timeout: 60,
     retry: 0,
   },
+
+  // 心跳触发类
+  {
+    id: 'trigger-heartbeat',
+    name: '触发心跳',
+    description: '状态转换时触发指定心跳',
+    category: 'heartbeat',
+    type: 'trigger_heartbeat',
+    config: {
+      heartbeat_id: '{{trigger_id}}',
+    },
+    timeout: 30,
+    retry: 1,
+  },
 ];
 
 // 按分类分组的示例
@@ -186,6 +201,7 @@ export const examplesByCategory = {
   deployment: hookExamples.filter((e) => e.category === 'deployment'),
   approval: hookExamples.filter((e) => e.category === 'approval'),
   custom: hookExamples.filter((e) => e.category === 'custom'),
+  heartbeat: hookExamples.filter((e) => e.category === 'heartbeat'),
 };
 
 // 分类名称映射
@@ -194,4 +210,5 @@ export const categoryNames = {
   deployment: '部署',
   approval: '审批',
   custom: '自定义',
+  heartbeat: '心跳触发',
 };

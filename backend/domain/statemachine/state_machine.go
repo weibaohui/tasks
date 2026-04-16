@@ -45,6 +45,7 @@ type State struct {
 
 // Transition 转换规则
 type Transition struct {
+	ID            string            `json:"id,omitempty" yaml:"id,omitempty"`
 	FromState     string            `json:"from" yaml:"from"`
 	ToState       string            `json:"to" yaml:"to"`
 	Trigger       string            `json:"trigger" yaml:"trigger"`
