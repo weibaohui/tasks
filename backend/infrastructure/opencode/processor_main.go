@@ -32,6 +32,7 @@ type OpenCodeProcessor struct {
 	requirementRepo   domain.RequirementRepository
 	conversationRepo  domain.ConversationRecordRepository
 	replicaCleanupSvc domain.ReplicaCleanupService
+	sem               chan struct{} // 全局信号量，限制并发 opencode 进程数
 }
 
 // OpenCodeProcessorInterface 定义 OpenCode 处理器的接口
@@ -53,9 +54,10 @@ func NewOpenCodeProcessor(
 		logger:            logger,
 		hookManager:       hookManager,
 		providerRepo:      providerRepo,
-		requirementRepo:  requirementRepo,
-		conversationRepo: conversationRepo,
+		requirementRepo:   requirementRepo,
+		conversationRepo:  conversationRepo,
 		replicaCleanupSvc: replicaCleanupSvc,
+		sem:               make(chan struct{}, 2), // 最多同时运行 2 个 opencode 进程，避免 API 拥塞
 	}
 }
 
@@ -110,6 +112,7 @@ type syncCallback struct {
 	onComplete func(finalResult string)
 }
 
+func (c *syncCallback) OnStart() {}
 func (c *syncCallback) OnThinking(thinking string) {}
 func (c *syncCallback) OnToolCall(toolName string, input map[string]any) {}
 func (c *syncCallback) OnToolResult(toolName string, result string) {}
@@ -180,7 +183,15 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 		cliSessionID = session.CliSessionID
 	}
 
-	// 执行流式处理
+	if callback != nil {
+		callback.OnStart()
+	}
+
+	// 获取信号量，限制并发 opencode 进程数，避免免费 API 拥塞导致全部卡住
+	p.sem <- struct{}{}
+	defer func() { <-p.sem }()
+
+	// 执行流式处理（复用 caller context 并叠加内部超时）
 	result, tokenUsage, err := p.queryOpenCodeStreaming(
 		ctx, msg, userInput, cliSessionID, traceID, provider, agent, callback,
 	)
@@ -380,7 +391,7 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	}()
 
 	// 设置超时
-	timeout := 600 // 10 分钟默认超时
+	timeout := 3600 // 1 小时默认超时
 	if config != nil && config.Timeout > 0 {
 		timeout = config.Timeout
 	}
@@ -466,8 +477,9 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 	}
 
 	// 使用 goroutine 解析输出
-	errChan := make(chan error, 1)
+	scannerDone := make(chan struct{})
 	go func() {
+		defer close(scannerDone)
 		scanner := bufio.NewScanner(stdout)
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024)
@@ -517,28 +529,32 @@ func (p *OpenCodeProcessor) queryOpenCodeStreaming(
 
 		if err := scanner.Err(); err != nil {
 			if queryCtx.Err() == nil {
-				errChan <- fmt.Errorf("读取 stdout 失败: %w", err)
+				sc.mu.Lock()
+				sc.err = fmt.Errorf("读取 stdout 失败: %w", err)
+				sc.mu.Unlock()
 			}
 		}
+	}()
 
-		close(errChan)
+	// 在后台等待进程结束
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
 	}()
 
 	// 等待完成或超时
 	select {
 	case <-queryCtx.Done():
 		cmd.Process.Kill()
+		go func() { <-waitDone }() // 异步回收进程，避免僵尸
 		return sc.result, sc.tokenUsage, queryCtx.Err()
-	case err := <-errChan:
-		waitErr := cmd.Wait()
+	case waitErr := <-waitDone:
+		<-scannerDone
 		stderrStr := strings.TrimSpace(stderrBuilder.String())
 		if stderrStr != "" {
 			p.logger.Warn("OpenCode stderr",
 				zap.String("session_key", sessionKey),
 				zap.String("stderr", stderrStr))
-		}
-		if err != nil {
-			return sc.result, sc.tokenUsage, err
 		}
 		if waitErr != nil {
 			if stderrStr != "" {

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, message, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, MinusCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { Heartbeat } from '../../types/heartbeat';
+import type { HeartbeatTemplate } from '../../types/heartbeat_template';
 import type { Agent } from '../../types/agent';
 import { listHeartbeats, createHeartbeat, updateHeartbeat, deleteHeartbeat } from '../../api/heartbeatApi';
-import { HeartbeatTemplateEditor } from '../HeartbeatTemplate';
+import { listHeartbeatTemplates, createHeartbeatTemplate, deleteHeartbeatTemplate } from '../../api/heartbeatTemplateApi';
 
 interface HeartbeatManagementProps {
   projectId: string;
@@ -32,6 +33,11 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
   const [editingHeartbeat, setEditingHeartbeat] = useState<Heartbeat | null>(null);
   const [form] = Form.useForm();
 
+  const [templates, setTemplates] = useState<HeartbeatTemplate[]>([]);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [templateForm] = Form.useForm();
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
   const fetchHeartbeats = async () => {
     setLoading(true);
     try {
@@ -41,6 +47,15 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       message.error('加载心跳列表失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const data = await listHeartbeatTemplates();
+      setTemplates(data);
+    } catch {
+      // 静默失败，不阻塞主流程
     }
   };
 
@@ -57,6 +72,7 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       requirement_type: 'heartbeat',
       md_content: '',
     });
+    fetchTemplates();
     setModalOpen(true);
   };
 
@@ -70,6 +86,7 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       requirement_type: hb.requirement_type || 'heartbeat',
       md_content: hb.md_content,
     });
+    fetchTemplates();
     setModalOpen(true);
   };
 
@@ -114,6 +131,47 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
     }
   };
 
+  const handleApplyTemplate = (templateId: string) => {
+    const t = templates.find((item) => item.id === templateId);
+    if (!t) return;
+    form.setFieldValue('md_content', t.md_content);
+    form.setFieldValue('requirement_type', t.requirement_type);
+    message.success(`已应用模板：${t.name}`);
+  };
+
+  const handleSaveTemplate = async () => {
+    try {
+      const values = await templateForm.validateFields();
+      const mdContent = form.getFieldValue('md_content') || '';
+      const requirementType = form.getFieldValue('requirement_type') || 'heartbeat';
+      setSavingTemplate(true);
+      await createHeartbeatTemplate({
+        name: values.name,
+        md_content: mdContent,
+        requirement_type: requirementType,
+      });
+      message.success('保存模板成功');
+      setTemplateModalOpen(false);
+      templateForm.resetFields();
+      fetchTemplates();
+    } catch {
+      // validation or request error
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (e: React.MouseEvent, templateId: string) => {
+    e.stopPropagation();
+    try {
+      await deleteHeartbeatTemplate(templateId);
+      message.success('删除模板成功');
+      fetchTemplates();
+    } catch {
+      message.error('删除模板失败');
+    }
+  };
+
   const columns = [
     {
       title: '名称',
@@ -131,6 +189,10 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       dataIndex: 'agent_code',
       key: 'agent_code',
       width: 140,
+      render: (code: string) => {
+        const agent = agents.find((a) => a.agent_code === code);
+        return agent?.name || code;
+      },
     },
     {
       title: '需求类型',
@@ -212,13 +274,72 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
               <Switch />
             </Form.Item>
           </Space>
-          <Form.Item name="md_content" hidden>
-            <Input />
+
+          <Form.Item label="模板">
+            <Space>
+              <Select
+                placeholder="选择模板..."
+                style={{ width: 240 }}
+                allowClear
+                options={templates.map((t) => ({ label: t.name, value: t.id }))}
+                onChange={(value) => value && handleApplyTemplate(value as string)}
+                dropdownRender={(menu) => (
+                  <div>
+                    {menu}
+                  </div>
+                )}
+                optionRender={(option) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{option.label}</span>
+                    <Tooltip title="删除模板">
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<MinusCircleOutlined />}
+                        onClick={(e) => handleDeleteTemplate(e, option.value as string)}
+                      />
+                    </Tooltip>
+                  </div>
+                )}
+              />
+              <Button icon={<SaveOutlined />} onClick={() => setTemplateModalOpen(true)}>
+                保存为模板
+              </Button>
+            </Space>
           </Form.Item>
-          <HeartbeatTemplateEditor
-            value={form.getFieldValue('md_content')}
-            onChange={(value) => form.setFieldValue('md_content', value)}
-          />
+
+          <Form.Item
+            name="md_content"
+            label={
+              <Space>
+                <FileTextOutlined />
+                <span>心跳模板</span>
+              </Space>
+            }
+            extra="使用模板变量：\${project.id}, \${project.name}, \${project.git_repo_url}, \${project.default_branch}, \${timestamp}"
+          >
+            <Input.TextArea
+              rows={20}
+              style={{ fontFamily: 'monospace' }}
+              placeholder="输入心跳模板内容..."
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="保存为心跳模板"
+        open={templateModalOpen}
+        onOk={handleSaveTemplate}
+        onCancel={() => { setTemplateModalOpen(false); templateForm.resetFields(); }}
+        confirmLoading={savingTemplate}
+        destroyOnClose
+      >
+        <Form form={templateForm} layout="vertical">
+          <Form.Item label="模板名称" name="name" rules={[{ required: true, message: '请输入模板名称' }]}>
+            <Input placeholder="例如：PR检查模板" />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

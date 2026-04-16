@@ -143,22 +143,47 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 		)
 		return "", nil, fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
 	}
+	p.logger.Info("Claude Code QueryWithSession 成功",
+		zap.String("session_key", sessionKey),
+		zap.Duration("duration", time.Since(startTime)),
+	)
 
 	// 流式接收消息
 	var cliSessionIDResult string
 	var mu sync.Mutex
+	var msgCount int
 
 	msgChan := client.ReceiveMessages(ctx)
 	for msg := range msgChan {
+		msgCount++
 		if msg == nil {
+			p.logger.Debug("Claude Code 收到 nil message",
+				zap.String("session_key", sessionKey),
+				zap.Int("msg_count", msgCount),
+			)
 			continue
 		}
 
+		p.logger.Info("Claude Code 收到消息",
+			zap.String("session_key", sessionKey),
+			zap.Int("msg_count", msgCount),
+			zap.String("msg_type", fmt.Sprintf("%T", msg)),
+		)
+
 		switch m := msg.(type) {
 		case *claudecode.AssistantMessage:
-			for _, block := range m.Content {
+			p.logger.Info("Claude Code AssistantMessage",
+				zap.String("session_key", sessionKey),
+				zap.Int("content_blocks", len(m.Content)),
+			)
+			for i, block := range m.Content {
 				switch b := block.(type) {
 				case *claudecode.TextBlock:
+					p.logger.Info("Claude Code TextBlock",
+						zap.String("session_key", sessionKey),
+						zap.Int("block_index", i),
+						zap.Int("text_len", len(b.Text)),
+					)
 					mu.Lock()
 					result += b.Text
 					mu.Unlock()
@@ -184,11 +209,25 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 					mu.Unlock()
 					callback.OnToolResult("", content)
 				case *claudecode.ThinkingBlock:
+					p.logger.Info("Claude Code ThinkingBlock",
+						zap.String("session_key", sessionKey),
+						zap.Int("thinking_len", len(b.Thinking)),
+					)
 					// 只发送思考卡片，不累积到 result
 					callback.OnThinking(b.Thinking)
+				default:
+					p.logger.Info("Claude Code 未知内容块",
+						zap.String("session_key", sessionKey),
+						zap.Int("block_index", i),
+						zap.String("block_type", fmt.Sprintf("%T", block)),
+					)
 				}
 			}
 		case *claudecode.ResultMessage:
+			p.logger.Info("Claude Code ResultMessage",
+				zap.String("session_key", sessionKey),
+				zap.Bool("is_error", m.IsError),
+			)
 			if m.SessionID != "" {
 				cliSessionIDResult = m.SessionID
 			}
@@ -219,7 +258,18 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			}
 			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
 			callback.OnComplete(result)
+			p.logger.Info("Claude Code 正常结束（收到 ResultMessage）",
+				zap.String("session_key", sessionKey),
+				zap.Int("total_messages", msgCount),
+				zap.Int("result_len", len(result)),
+			)
 			return cliSessionIDResult, llmUsage, nil
+		case *claudecode.SystemMessage:
+			p.logger.Info("Claude Code SystemMessage",
+				zap.String("session_key", sessionKey),
+				zap.String("subtype", m.Subtype),
+				zap.Any("data", m.Data),
+			)
 		case *claudecode.UserMessage:
 			// 用户消息，不处理
 		}
@@ -228,6 +278,10 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 	p.logger.Info("Claude Code 流式接收完成",
 		zap.String("session_key", sessionKey),
 		zap.Duration("duration", time.Since(startTime)),
+		zap.Int("total_messages", msgCount),
+		zap.Int("result_len", len(result)),
+		zap.Any("stream_issues", client.GetStreamIssues()),
+		zap.Any("stream_stats", client.GetStreamStats()),
 	)
 
 	// 如果循环正常结束（channel 关闭）但没有收到 ResultMessage，也调用 OnComplete

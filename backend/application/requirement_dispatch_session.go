@@ -51,8 +51,8 @@ func (s *RequirementDispatchService) ensureDispatchSession(
 
 func parseSessionKey(sessionKey string) (string, string, error) {
 	trimmed := strings.TrimSpace(sessionKey)
-	parts := strings.SplitN(trimmed, ":", 2)
-	if len(parts) != 2 {
+	parts := strings.Split(trimmed, ":")
+	if len(parts) < 2 {
 		return "", "", ErrInvalidSessionKey
 	}
 	channelType := strings.TrimSpace(parts[0])

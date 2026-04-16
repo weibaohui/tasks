@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
@@ -23,6 +24,7 @@ type Gateway struct {
 	sessionManager *channel.SessionManager
 	processor      *channel.MessageProcessor
 	channelManager *channel.Manager
+	sessionLocks   sync.Map // 按 session_key 隔离，保证同会话串行、不同会话并发
 }
 
 func initGateway(
@@ -110,20 +112,38 @@ func (g *Gateway) runMessageLoop(ctx context.Context, channelService *applicatio
 			continue
 		}
 
-		if err := g.processor.Process(ctx, msg); err != nil {
-			g.logger.Error("处理消息失败", zap.Error(err))
-			metadata := make(map[string]any)
-			for k, v := range msg.Metadata {
-				metadata[k] = v
-			}
-			outMsg := &channelBus.OutboundMessage{
-				Channel:  msg.Channel,
-				ChatID:   msg.ChatID,
-				Content:  fmt.Sprintf("处理消息时出错: %v", err),
-				Metadata: metadata,
-			}
-			g.messageBus.PublishOutbound(outMsg)
+		// 按 session 并发处理：同 session 串行保证消息顺序和上下文安全，不同 session 并行
+		go g.processMessage(ctx, msg)
+	}
+}
+
+func (g *Gateway) processMessage(ctx context.Context, msg *channelBus.InboundMessage) {
+	sessionKey := msg.SessionKey()
+
+	muVal, _ := g.sessionLocks.LoadOrStore(sessionKey, &sync.Mutex{})
+	mu := muVal.(*sync.Mutex)
+	mu.Lock()
+	defer func() {
+		mu.Unlock()
+		// session 不存在时清理锁条目，防止内存泄漏
+		if g.sessionManager.Get(sessionKey) == nil {
+			g.sessionLocks.Delete(sessionKey)
 		}
+	}()
+
+	if err := g.processor.Process(ctx, msg); err != nil {
+		g.logger.Error("处理消息失败", zap.Error(err))
+		metadata := make(map[string]any)
+		for k, v := range msg.Metadata {
+			metadata[k] = v
+		}
+		outMsg := &channelBus.OutboundMessage{
+			Channel:  msg.Channel,
+			ChatID:   msg.ChatID,
+			Content:  fmt.Sprintf("处理消息时出错: %v", err),
+			Metadata: metadata,
+		}
+		g.messageBus.PublishOutbound(outMsg)
 	}
 }
 
