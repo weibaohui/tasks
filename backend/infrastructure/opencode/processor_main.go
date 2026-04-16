@@ -32,6 +32,7 @@ type OpenCodeProcessor struct {
 	requirementRepo   domain.RequirementRepository
 	conversationRepo  domain.ConversationRecordRepository
 	replicaCleanupSvc domain.ReplicaCleanupService
+	sem               chan struct{} // 全局信号量，限制并发 opencode 进程数
 }
 
 // OpenCodeProcessorInterface 定义 OpenCode 处理器的接口
@@ -53,9 +54,10 @@ func NewOpenCodeProcessor(
 		logger:            logger,
 		hookManager:       hookManager,
 		providerRepo:      providerRepo,
-		requirementRepo:  requirementRepo,
-		conversationRepo: conversationRepo,
+		requirementRepo:   requirementRepo,
+		conversationRepo:  conversationRepo,
 		replicaCleanupSvc: replicaCleanupSvc,
+		sem:               make(chan struct{}, 2), // 最多同时运行 2 个 opencode 进程，避免 API 拥塞
 	}
 }
 
@@ -110,6 +112,7 @@ type syncCallback struct {
 	onComplete func(finalResult string)
 }
 
+func (c *syncCallback) OnStart() {}
 func (c *syncCallback) OnThinking(thinking string) {}
 func (c *syncCallback) OnToolCall(toolName string, input map[string]any) {}
 func (c *syncCallback) OnToolResult(toolName string, result string) {}
@@ -179,6 +182,14 @@ func (p *OpenCodeProcessor) ProcessWithStreaming(
 	if session != nil {
 		cliSessionID = session.CliSessionID
 	}
+
+	if callback != nil {
+		callback.OnStart()
+	}
+
+	// 获取信号量，限制并发 opencode 进程数，避免免费 API 拥塞导致全部卡住
+	p.sem <- struct{}{}
+	defer func() { <-p.sem }()
 
 	// 执行流式处理（使用独立 context，避免受父 context 取消影响）
 	result, tokenUsage, err := p.queryOpenCodeStreaming(
