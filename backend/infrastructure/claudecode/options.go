@@ -48,13 +48,6 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	if model == "" && agent != nil {
 		model = agent.Model()
 	}
-	if model == "" {
-		if provider == nil {
-			// 没有 provider 时，使用默认模型
-			model = "MiniMax-M2.7-highspeed"
-		}
-		// 若 provider 存在，模型保持为空，让 Claude Code 使用默认模型
-	}
 
 	// 注入 Provider 的 API Key 和 Base URL
 	// Agent 身上配置了什么就注入什么，不要自己判断
