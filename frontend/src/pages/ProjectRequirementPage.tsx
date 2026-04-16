@@ -1049,7 +1049,14 @@ export const ProjectRequirementPage: React.FC = () => {
             <Input placeholder="例如：feishu:ou_xxx" />
           </Form.Item>
           <Form.Item label="默认 Agent" name="default_agent_code">
-            <Input placeholder="例如：build" />
+            <Select
+              options={agents.map((agent) => ({
+                label: `${agent.name} (${agent.agent_code})`,
+                value: agent.agent_code,
+              }))}
+              placeholder="选择默认 Agent"
+              allowClear
+            />
           </Form.Item>
           <Form.Item label="最大并发 Agent 数" name="max_concurrent_agents" rules={[{ required: true, message: '请输入最大并发 Agent 数' }]}>
             <InputNumber min={1} max={10} style={{ width: '100%' }} />
@@ -1200,7 +1207,15 @@ export const ProjectRequirementPage: React.FC = () => {
                     </Form.Item>
 
                     <Form.Item label="默认 Agent" name="default_agent_code">
-                      <Input placeholder="例如：build" style={{ width: 200 }} />
+                      <Select
+                        options={agents.map((agent) => ({
+                          label: `${agent.name} (${agent.agent_code})`,
+                          value: agent.agent_code,
+                        }))}
+                        placeholder="选择默认 Agent"
+                        style={{ width: 300 }}
+                        allowClear
+                      />
                     </Form.Item>
 
                     <Form.Item label="最大并发 Agent 数" name="max_concurrent_agents" rules={[{ required: true, message: '请输入最大并发 Agent 数' }]}>
