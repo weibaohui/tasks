@@ -220,6 +220,19 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 			}
 			return ""
 		}()),
+		zap.String("api_key", func() string {
+			key := ""
+			if provider != nil {
+				key = provider.APIKey()
+			}
+			if key == "" {
+				return "(empty)"
+			}
+			if len(key) > 12 {
+				return key[:4] + "..." + key[len(key)-4:]
+			}
+			return "..."
+		}()),
 		zap.String("cli_session_id", cliSessionID),
 		zap.String("model", model),
 		zap.Int("options_count", len(opts)),
