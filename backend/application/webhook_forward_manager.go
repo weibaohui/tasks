@@ -44,7 +44,7 @@ func (m *WebhookGitHubManager) CreateWebhook(ctx context.Context, configID, proj
 	webhookURL := m.BuildWebhookURL(repo)
 
 	// 先检查是否已有同名 webhook
-	existingID, err := m.findExistingWebhook(repoPath)
+	existingID, err := m.FindExistingWebhook(repoPath)
 	if err != nil {
 		log.Printf("[WEBHOOK] failed to check existing webhooks: %v", err)
 	}
@@ -74,7 +74,7 @@ func (m *WebhookGitHubManager) DeleteWebhook(ctx context.Context, configID, proj
 	repoPath := normalizeRepo(repo)
 
 	// 查找现有的 webhook
-	webhookID, err := m.findExistingWebhook(repoPath)
+	webhookID, err := m.FindExistingWebhook(repoPath)
 	if err != nil {
 		return err
 	}
@@ -96,15 +96,15 @@ func (m *WebhookGitHubManager) DeleteWebhook(ctx context.Context, configID, proj
 // CheckWebhookExists 检查 webhook 是否存在
 func (m *WebhookGitHubManager) CheckWebhookExists(ctx context.Context, repo string) (bool, error) {
 	repoPath := normalizeRepo(repo)
-	webhookID, err := m.findExistingWebhook(repoPath)
+	webhookID, err := m.FindExistingWebhook(repoPath)
 	if err != nil {
 		return false, err
 	}
 	return webhookID > 0, nil
 }
 
-// findExistingWebhook 查找是否已存在 webhook
-func (m *WebhookGitHubManager) findExistingWebhook(repo string) (int64, error) {
+// FindExistingWebhook 查找是否已存在 webhook
+func (m *WebhookGitHubManager) FindExistingWebhook(repo string) (int64, error) {
 	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/hooks", repo), "--jq", "[.[] | select(.name == \"web\")] | .[0].id")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -198,4 +198,54 @@ func (m *WebhookGitHubManager) deleteWebhook(repo string, webhookID int64) error
 	}
 
 	return nil
+}
+
+// CheckAndUpdateWebhook 检查 webhook URL 是否需要更新，如果需要则更新
+// 返回：(需要更新, 当前URL, 错误)
+func (m *WebhookGitHubManager) CheckAndUpdateWebhook(ctx context.Context, repo string) (bool, string, error) {
+	repoPath := normalizeRepo(repo)
+	expectedURL := m.BuildWebhookURL(repo)
+
+	webhookID, err := m.FindExistingWebhook(repoPath)
+	if err != nil {
+		return false, "", err
+	}
+	if webhookID == 0 {
+		// 没有 webhook，需要创建
+		return true, "", nil
+	}
+
+	// 获取当前 webhook URL
+	currentURL, err := m.getWebhookURL(repoPath, webhookID)
+	if err != nil {
+		return false, "", err
+	}
+
+	// 比较 URL 是否一致
+	if currentURL != expectedURL {
+		log.Printf("[WEBHOOK] webhook URL mismatch for %s: current=%s, expected=%s, will update",
+			repoPath, currentURL, expectedURL)
+		return true, currentURL, nil
+	}
+
+	return false, currentURL, nil
+}
+
+// UpdateWebhookURL 更新 webhook URL
+func (m *WebhookGitHubManager) UpdateWebhookURL(repo string, webhookID int64, newURL string) error {
+	return m.updateWebhookURL(repo, webhookID, newURL)
+}
+
+// getWebhookURL 获取 webhook 的当前 URL
+func (m *WebhookGitHubManager) getWebhookURL(repo string, webhookID int64) (string, error) {
+	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/hooks/%d", repo, webhookID), "--jq", ".config.url")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to get webhook URL: %w", err)
+	}
+
+	return strings.TrimSpace(out.String()), nil
 }

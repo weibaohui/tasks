@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -179,6 +180,95 @@ func (h *GitHubWebhookHandler) GetWebhookStatus(c *gin.Context) {
 		"enabled":     config.Enabled(),
 		"webhook_url": config.WebhookURL(),
 		"exists":      exists,
+	})
+}
+
+// CheckWebhookURL 检查 webhook URL 是否需要更新
+func (h *GitHubWebhookHandler) CheckWebhookURL(c *gin.Context) {
+	id := c.Param("id")
+	config, err := h.webhookService.GetConfig(c.Request.Context(), id)
+	if err != nil || config == nil {
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "config not found"})
+		return
+	}
+
+	if !config.Enabled() {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "webhook is not enabled"})
+		return
+	}
+
+	needsUpdate, currentURL, err := h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to check webhook: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"needs_update": needsUpdate,
+		"current_url":  currentURL,
+		"expected_url": config.WebhookURL(),
+	})
+}
+
+// UpdateWebhookURL 更新 webhook URL（如果需要）
+func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
+	id := c.Param("id")
+	config, err := h.webhookService.GetConfig(c.Request.Context(), id)
+	if err != nil || config == nil {
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "config not found"})
+		return
+	}
+
+	if !config.Enabled() {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "webhook is not enabled"})
+		return
+	}
+
+	// 检查是否需要更新
+	needsUpdate, currentURL, err := h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to check webhook: " + err.Error()})
+		return
+	}
+
+	if !needsUpdate {
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "webhook URL is up to date",
+			"webhook_url": config.WebhookURL(),
+		})
+		return
+	}
+
+	// 需要更新，先获取 webhook ID
+	repoPath := config.Repo()
+	if strings.HasPrefix(repoPath, "https://github.com/") {
+		repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
+	}
+	repoPath = strings.TrimSuffix(repoPath, ".git")
+
+	webhookID, err := h.webhookGitHub.FindExistingWebhook(repoPath)
+	if err != nil || webhookID == 0 {
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "webhook not found, please enable again"})
+		return
+	}
+
+	// 更新 webhook URL
+	newURL := config.WebhookURL()
+	if err := h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID, newURL); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to update webhook: " + err.Error()})
+		return
+	}
+
+	// 更新数据库中的 webhook_url
+	config.SetWebhookURL(newURL)
+	if err := h.webhookService.SaveConfig(c.Request.Context(), config); err != nil {
+		log.Printf("[WEBHOOK] failed to save config: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "webhook URL updated",
+		"old_url":    currentURL,
+		"webhook_url": newURL,
 	})
 }
 

@@ -28,6 +28,8 @@ import {
   deleteBinding,
   listHeartbeatsForBinding,
   retriggerHeartbeat,
+  checkWebhookURL,
+  updateWebhookURL,
   type GitHubWebhookConfig,
   type WebhookEventLog,
   type WebhookHeartbeatBinding,
@@ -212,6 +214,37 @@ export const ProjectWebhookPage: React.FC = () => {
     }
   };
 
+  const handleCheckWebhookURL = async (configId: string) => {
+    try {
+      const result = await checkWebhookURL(configId);
+      if (result.needs_update) {
+        Modal.confirm({
+          title: 'Webhook URL 已过期',
+          content: (
+            <div>
+              <p>检测到 GitHub 上的 Webhook URL 与本地记录不一致，需要更新。</p>
+              <p>当前 URL: <code>{result.current_url}</code></p>
+              <p>预期 URL: <code>{result.expected_url}</code></p>
+            </div>
+          ),
+          onOk: async () => {
+            try {
+              await updateWebhookURL(configId);
+              message.success('Webhook URL 已更新');
+              fetchConfigs();
+            } catch {
+              message.error('更新失败');
+            }
+          },
+        });
+      } else {
+        message.success('Webhook URL 已是最新');
+      }
+    } catch {
+      message.error('检测失败');
+    }
+  };
+
   const columns: ColumnsType<GitHubWebhookConfig> = [
     {
       title: '操作',
@@ -253,10 +286,15 @@ export const ProjectWebhookPage: React.FC = () => {
       key: 'webhook_url',
       width: 350,
       render: (webhookURL: string, record: GitHubWebhookConfig) => (
-        record.running && webhookURL ? (
-          <Tag color="green" title={webhookURL} style={{ maxWidth: 330, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {webhookURL}
-          </Tag>
+        record.enabled && webhookURL ? (
+          <Space>
+            <Tag color="green" title={webhookURL} style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {webhookURL}
+            </Tag>
+            <Button type="link" size="small" onClick={() => handleCheckWebhookURL(record.id)}>
+              检测
+            </Button>
+          </Space>
         ) : (
           <Tag color="default">未运行</Tag>
         )

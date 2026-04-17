@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,6 +42,55 @@ const (
 	DefaultAdminUsername = "admin"
 	DefaultAdminPassword = "admin123"
 )
+
+// checkAndUpdateWebhookURLs 检查所有启用的 webhook，更新过期的 webhook URL
+func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, webhookConfigRepo *_persistence.SQLiteGitHubWebhookConfigRepository, logger *zap.Logger) {
+	ctx := context.Background()
+	configs, err := webhookConfigRepo.FindAllEnabled(ctx)
+	if err != nil {
+		logger.Warn("failed to load enabled webhook configs", zap.Error(err))
+		return
+	}
+
+	for _, config := range configs {
+		needsUpdate, currentURL, err := webhookGitHub.CheckAndUpdateWebhook(ctx, config.Repo())
+		if err != nil {
+			logger.Warn("failed to check webhook",
+				zap.String("repo", config.Repo()),
+				zap.Error(err))
+			continue
+		}
+
+		if needsUpdate {
+			logger.Info("webhook URL mismatch, updating",
+				zap.String("repo", config.Repo()),
+				zap.String("current_url", currentURL),
+				zap.String("expected_url", config.WebhookURL()))
+
+			repoPath := config.Repo()
+			if strings.HasPrefix(repoPath, "https://github.com/") {
+				repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
+			}
+			repoPath = strings.TrimSuffix(repoPath, ".git")
+
+			webhookID, err := webhookGitHub.FindExistingWebhook(repoPath)
+			if err != nil || webhookID == 0 {
+				logger.Warn("webhook not found, skipping update",
+					zap.String("repo", config.Repo()))
+				continue
+			}
+
+			if err := webhookGitHub.UpdateWebhookURL(repoPath, webhookID, config.WebhookURL()); err != nil {
+				logger.Warn("failed to update webhook URL",
+					zap.String("repo", config.Repo()),
+					zap.Error(err))
+				continue
+			}
+			logger.Info("webhook URL updated successfully",
+				zap.String("repo", config.Repo()))
+		}
+	}
+}
 
 func main() {
 	// 1. 加载配置（先加载配置以获取日志级别）
@@ -317,7 +367,8 @@ func main() {
 	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService)
 	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookGitHub, authHandler)
 
-	// 注意：不再需要 RestoreForwarders，因为 GitHub 会持久化 webhook 配置
+	// 检查所有启用的 webhook 配置，更新过期的 webhook URL
+	go checkAndUpdateWebhookURLs(webhookGitHub, webhookConfigRepo, logger)
 
 	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,

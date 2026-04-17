@@ -81,6 +81,18 @@ export async function getForwarderStatus(id: string): Promise<{ running: boolean
   return res.data;
 }
 
+// 检查 webhook URL 是否需要更新
+export async function checkWebhookURL(id: string): Promise<{ needs_update: boolean; current_url: string; expected_url: string }> {
+  const res = await apiClient.get(`/github-webhooks/configs/${id}/check-url`);
+  return res.data;
+}
+
+// 更新 webhook URL
+export async function updateWebhookURL(id: string): Promise<{ message: string; old_url?: string; webhook_url: string }> {
+  const res = await apiClient.post(`/github-webhooks/configs/${id}/update-url`);
+  return res.data;
+}
+
 // 列出事件日志
 export async function listEventLogs(configId: string): Promise<WebhookEventLog[]> {
   const res = await apiClient.get(`/github-webhooks/configs/${configId}/event-logs`);
