@@ -162,7 +162,10 @@ func (s *GitHubWebhookService) ListEventLogs(ctx context.Context, projectID stri
 func (s *GitHubWebhookService) CreateBinding(ctx context.Context, projectID, configID, eventType, heartbeatID string) (*domain.WebhookHeartbeatBinding, error) {
 	// 验证心跳是否存在
 	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
-	if err != nil || hb == nil {
+	if err != nil {
+		return nil, fmt.Errorf("failed to find heartbeat: %w", err)
+	}
+	if hb == nil {
 		return nil, fmt.Errorf("heartbeat %s not found", heartbeatID)
 	}
 
