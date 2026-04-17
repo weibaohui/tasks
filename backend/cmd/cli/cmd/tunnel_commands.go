@@ -15,7 +15,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/weibh/taskmanager/infrastructure/config"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -23,31 +22,44 @@ const (
 	tunnelLogFileName = "tunnel.log"
 )
 
-// TunnelConfig 保存 tunnel 配置到 YAML 文件
-type TunnelConfig struct {
-	PublicURL string `yaml:"public_url"`
-	Port      int    `yaml:"port"`
-	StartedAt string `yaml:"started_at"`
-}
-
-// getTunnelConfigPath 获取 tunnel 配置文件路径
+// getTunnelConfigPath 获取 tunnel 配置文件路径（与 config.Load 保持一致）
 func getTunnelConfigPath() string {
-	return filepath.Join(getConfigDir(), "config.yaml")
+	// 环境变量指定
+	if path := os.Getenv("TASKMANAGER_CONFIG"); path != "" {
+		return path
+	}
+
+	// 当前目录
+	cwd, _ := os.Getwd()
+	localPath := filepath.Join(cwd, "taskmanager.yaml")
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath
+	}
+
+	// ~/.taskmanager/config.yaml
+	home, _ := os.UserHomeDir()
+	homePath := filepath.Join(home, ".taskmanager", "config.yaml")
+	if _, err := os.Stat(homePath); err == nil {
+		return homePath
+	}
+
+	// 默认返回 ~/.taskmanager/config.yaml
+	return filepath.Join(home, ".taskmanager", "config.yaml")
 }
 
 // saveTunnelConfig 保存 tunnel URL 到配置文件（更新 api.public_url）
 func saveTunnelConfig(publicURL string, port int) error {
-	// 加载现有配置
+	// 加载现有配置（使用与 config.Load 相同的路径逻辑）
 	cfg, err := config.Load()
 	if err != nil {
-		// 如果加载失败，创建默认配置
-		cfg = &config.Config{}
+		// 加载失败时不要用空配置覆盖，返回错误
+		return fmt.Errorf("加载配置文件失败: %w", err)
 	}
 
 	// 更新 public_url
 	cfg.API.PublicURL = publicURL
 
-	// 保存配置
+	// 保存到同一路径
 	configPath := getTunnelConfigPath()
 	dir := filepath.Dir(configPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -58,16 +70,11 @@ func saveTunnelConfig(publicURL string, port int) error {
 
 // getStoredPublicURL 从配置文件读取 public URL
 func getStoredPublicURL() string {
-	path := getTunnelConfigPath()
-	data, err := os.ReadFile(path)
-	if err != nil {
+	cfg, err := config.Load()
+	if err != nil || cfg == nil {
 		return ""
 	}
-	var cfg TunnelConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return ""
-	}
-	return cfg.PublicURL
+	return cfg.API.PublicURL
 }
 
 var tunnelURLRegex = regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
