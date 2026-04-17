@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/weibh/taskmanager/domain"
@@ -159,6 +160,12 @@ func (s *GitHubWebhookService) ListEventLogs(ctx context.Context, projectID stri
 
 // CreateBinding 创建心跳绑定
 func (s *GitHubWebhookService) CreateBinding(ctx context.Context, projectID, configID, eventType, heartbeatID string) (*domain.WebhookHeartbeatBinding, error) {
+	// 验证心跳是否存在
+	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
+	if err != nil || hb == nil {
+		return nil, fmt.Errorf("heartbeat %s not found", heartbeatID)
+	}
+
 	binding, err := domain.NewWebhookHeartbeatBinding(
 		domain.NewWebhookHeartbeatBindingID(s.idGenerator.Generate()),
 		domain.NewProjectID(projectID),
