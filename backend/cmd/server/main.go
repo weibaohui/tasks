@@ -290,6 +290,35 @@ func main() {
 	// 初始化需求类型 handler
 	requirementTypeHandler := httpHandler.NewRequirementTypeHandler(requirementTypeRepo)
 
+	// 初始化 Webhook 相关组件
+	webhookConfigRepo := _persistence.NewSQLiteGitHubWebhookConfigRepository(db)
+	webhookEventLogRepo := _persistence.NewSQLiteWebhookEventLogRepository(db)
+	webhookBindingRepo := _persistence.NewSQLiteWebhookHeartbeatBindingRepository(db)
+	// 使用 PublicURL（公网地址）作为 webhook 的回调地址
+	// 优先从 ~/.taskmanager/config.json 读取（tunnel 创建时保存），否则使用配置文件中的 PublicURL
+	webhookURL := config.GetPublicURL()
+	if webhookURL == "" {
+		webhookURL = cfg.API.BaseURL
+		logger.Warn("Public URL not configured, using BaseURL for webhooks. GitHub webhooks require a public URL to work properly.")
+	}
+	webhookForwardManager := application.NewWebhookForwardManager(webhookURL)
+	githubWebhookService := application.NewGitHubWebhookService(
+		webhookConfigRepo,
+		webhookEventLogRepo,
+		webhookBindingRepo,
+		heartbeatRepo,
+		heartbeatTriggerService,
+		idGenerator,
+	)
+	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService, webhookForwardManager)
+	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookForwardManager, authHandler)
+
+	// 恢复所有启用的 webhook forwarder
+	enabledConfigs, err := webhookConfigRepo.FindAllEnabled(context.Background())
+	if err == nil && len(enabledConfigs) > 0 {
+		webhookForwardManager.RestoreForwarders(context.Background(), enabledConfigs)
+	}
+
 	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
@@ -298,6 +327,9 @@ func main() {
 		requirementTypeHandler, heartbeatHandler, heartbeatTemplateHandler,
 		heartbeatScenarioHandler,
 	)
+
+	// 注册 Webhook 路由
+	httpHandler.RegisterWebhookRoutes(ginEngine, webhookHandler, githubWebhookHandler, authHandler)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）
 	wsHandler := ws.NewWebSocketHandler(eventBus)

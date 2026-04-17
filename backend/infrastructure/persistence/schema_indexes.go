@@ -99,4 +99,18 @@ CREATE INDEX IF NOT EXISTS idx_project_state_machines_machine ON project_state_m
 -- requirement_types 表索引
 CREATE INDEX IF NOT EXISTS idx_requirement_types_project ON requirement_types(project_id);
 CREATE INDEX IF NOT EXISTS idx_requirement_types_code ON requirement_types(code);
+
+-- github_webhook_configs 表索引
+CREATE INDEX IF NOT EXISTS idx_webhook_configs_project_id ON github_webhook_configs(project_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_configs_enabled ON github_webhook_configs(enabled);
+
+-- webhook_event_logs 表索引
+CREATE INDEX IF NOT EXISTS idx_webhook_event_logs_project_id ON webhook_event_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_event_logs_received_at ON webhook_event_logs(received_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_event_logs_event_type ON webhook_event_logs(event_type);
+
+-- webhook_heartbeat_bindings 表索引
+CREATE INDEX IF NOT EXISTS idx_webhook_bindings_config_id ON webhook_heartbeat_bindings(github_webhook_config_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_bindings_event_type ON webhook_heartbeat_bindings(github_event_type);
+CREATE INDEX IF NOT EXISTS idx_webhook_bindings_heartbeat_id ON webhook_heartbeat_bindings(heartbeat_id);
 `

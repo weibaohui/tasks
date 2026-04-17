@@ -7,11 +7,10 @@ import (
 )
 
 var (
-	ErrHeartbeatIDRequired       = errors.New("heartbeat id is required")
+	ErrHeartbeatIDRequired        = errors.New("heartbeat id is required")
 	ErrHeartbeatProjectIDRequired = errors.New("heartbeat project id is required")
-	ErrHeartbeatNameRequired     = errors.New("heartbeat name is required")
-	ErrHeartbeatIntervalInvalid  = errors.New("heartbeat interval minutes must be >= 1")
-	ErrHeartbeatAgentCodeRequired = errors.New("heartbeat agent code is required")
+	ErrHeartbeatNameRequired      = errors.New("heartbeat name is required")
+	ErrHeartbeatIntervalInvalid   = errors.New("heartbeat interval minutes must be >= 1")
 )
 
 type HeartbeatID struct {
@@ -59,12 +58,6 @@ func NewHeartbeat(
 	if intervalMinutes < 1 {
 		return nil, ErrHeartbeatIntervalInvalid
 	}
-	if strings.TrimSpace(agentCode) == "" {
-		return nil, ErrHeartbeatAgentCodeRequired
-	}
-	if strings.TrimSpace(requirementType) == "" {
-		requirementType = "heartbeat"
-	}
 	now := time.Now()
 	return &Heartbeat{
 		id:              id,
@@ -100,17 +93,14 @@ func (h *Heartbeat) Update(name string, intervalMinutes int, mdContent, agentCod
 	if intervalMinutes < 1 {
 		return ErrHeartbeatIntervalInvalid
 	}
-	if strings.TrimSpace(agentCode) == "" {
-		return ErrHeartbeatAgentCodeRequired
-	}
-	if strings.TrimSpace(requirementType) == "" {
-		requirementType = "heartbeat"
-	}
 	h.name = strings.TrimSpace(name)
 	h.intervalMinutes = intervalMinutes
 	h.mdContent = mdContent
 	h.agentCode = strings.TrimSpace(agentCode)
 	h.requirementType = strings.TrimSpace(requirementType)
+	if h.requirementType == "" {
+		h.requirementType = "heartbeat"
+	}
 	h.updatedAt = time.Now()
 	return nil
 }
