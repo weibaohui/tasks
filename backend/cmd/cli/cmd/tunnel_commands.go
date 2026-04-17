@@ -35,18 +35,25 @@ func getTunnelConfigPath() string {
 	return filepath.Join(getConfigDir(), "config.yaml")
 }
 
-// saveTunnelConfig 保存 tunnel 配置到 YAML 文件
+// saveTunnelConfig 保存 tunnel URL 到配置文件（更新 api.public_url）
 func saveTunnelConfig(publicURL string, port int) error {
-	cfg := TunnelConfig{
-		PublicURL: publicURL,
-		Port:      port,
-		StartedAt: time.Now().Format(time.RFC3339),
-	}
-	data, err := yaml.Marshal(cfg)
+	// 加载现有配置
+	cfg, err := config.Load()
 	if err != nil {
+		// 如果加载失败，创建默认配置
+		cfg = &config.Config{}
+	}
+
+	// 更新 public_url
+	cfg.API.PublicURL = publicURL
+
+	// 保存配置
+	configPath := getTunnelConfigPath()
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(getTunnelConfigPath(), data, 0644)
+	return config.SaveConfig(configPath, cfg)
 }
 
 // getStoredPublicURL 从配置文件读取 public URL
