@@ -111,6 +111,10 @@ func main() {
 	if err := _persistence.MigrateHeartbeatScenarioCodeColumn(db); err != nil {
 		logger.Fatal("Failed to migrate projects heartbeat_scenario_code column", zap.Error(err))
 	}
+	// 兼容旧数据库：将 github_webhook_configs 表的 forwarder_pid 列改为 webhook_url 列
+	if err := _persistence.MigrateGitHubWebhookConfigColumns(db); err != nil {
+		logger.Fatal("Failed to migrate github_webhook_configs columns", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
