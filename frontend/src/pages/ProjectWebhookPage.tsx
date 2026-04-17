@@ -27,6 +27,7 @@ import {
   createBinding,
   deleteBinding,
   listHeartbeatsForBinding,
+  retriggerHeartbeat,
   type GitHubWebhookConfig,
   type WebhookEventLog,
   type WebhookHeartbeatBinding,
@@ -187,6 +188,30 @@ export const ProjectWebhookPage: React.FC = () => {
     }
   };
 
+  const handleRetrigger = async (heartbeatId: string) => {
+    try {
+      await retriggerHeartbeat(heartbeatId);
+      message.success('已重新触发心跳');
+    } catch {
+      message.error('触发失败');
+    }
+  };
+
+  const handleRetriggerByEventType = async (eventType: string) => {
+    // 根据事件类型查找绑定的心跳并触发
+    try {
+      const bindingsData = await listBindings(selectedConfig?.id || '');
+      const binding = bindingsData.find((b) => b.github_event_type === eventType);
+      if (binding) {
+        await handleRetrigger(binding.heartbeat_id);
+      } else {
+        message.error('未找到该事件类型的绑定');
+      }
+    } catch {
+      message.error('触发失败');
+    }
+  };
+
   const columns: ColumnsType<GitHubWebhookConfig> = [
     {
       title: '操作',
@@ -304,6 +329,30 @@ export const ProjectWebhookPage: React.FC = () => {
       key: 'error_message',
       ellipsis: true,
       render: (msg: string) => msg || '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_, record) => (
+        record.trigger_heartbeat_id ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
+          >
+            重新触发
+          </Button>
+        ) : (
+          <Button
+            type="link"
+            size="small"
+            onClick={() => handleRetriggerByEventType(record.event_type)}
+          >
+            手动触发
+          </Button>
+        )
+      ),
     },
   ];
 

@@ -119,3 +119,8 @@ export async function listHeartbeatsForBinding(projectId: string): Promise<Heart
   const res = await apiClient.get('/github-webhooks/heartbeats', { params: { project_id: projectId } });
   return res.data;
 }
+
+// 重新触发事件日志关联的心跳
+export async function retriggerHeartbeat(heartbeatId: string): Promise<void> {
+  await apiClient.post(`/heartbeats/${heartbeatId}/trigger`);
+}
