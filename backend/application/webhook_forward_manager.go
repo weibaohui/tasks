@@ -46,8 +46,8 @@ func normalizeRepo(repo string) string {
 // StartForwarder 创建 GitHub webhook 并返回 webhook ID
 func (m *WebhookForwardManager) StartForwarder(ctx context.Context, configID, projectID, repo string) error {
 	repoPath := normalizeRepo(repo)
-	// 使用语义化 URL: /webhook/repos/{repo_name}
-	webhookURL := fmt.Sprintf("%s/webhook/repos/%s", m.serverURL, repoPath)
+	// 使用语义化 URL: /api/v1/webhook/repos/{owner}/{repo}
+	webhookURL := fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

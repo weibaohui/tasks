@@ -115,11 +115,13 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 
 // HandleWebhookByRepo 处理指定 repo 的 webhook（使用语义化 URL）
 func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
-	repoName := c.Param("repo")
-	if repoName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "repo name is required"})
+	owner := c.Param("owner")
+	repo := c.Param("repo")
+	if owner == "" || repo == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "owner and repo are required"})
 		return
 	}
+	repoName := owner + "/" + repo
 
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
@@ -154,8 +156,8 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	var matchedConfig *domain.GitHubWebhookConfig
 	for _, config := range configs {
 		configRepo := config.Repo()
-		// 支持 owner/repo 或纯 repo 名称匹配
-		if strings.HasSuffix(configRepo, "/"+repoName) || configRepo == repoName {
+		// 精确匹配 owner/repo 格式
+		if configRepo == repoName {
 			matchedConfig = config
 			break
 		}

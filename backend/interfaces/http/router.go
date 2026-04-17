@@ -262,14 +262,16 @@ func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, g
 		return
 	}
 
-	// Webhook 接收端点（无需认证）
-	// 语义化 URL：/webhook/repos/{repo} 使用 repo 名称（如 weibaohui/tasks）
-	engine.POST("/webhook/repos/:repo", webhookHandler.HandleWebhookByRepo)
+	// API v1 前缀组
+	v1 := engine.Group("/api/v1")
+
+	// Webhook 接收端点（无需认证，统一 /api/v1 前缀）
+	// 语义化 URL：/api/v1/webhook/repos/{owner}/{repo}
+	v1.POST("/webhook/repos/:owner/:repo", webhookHandler.HandleWebhookByRepo)
 	// 通用端点，通过 payload 中的 repo 匹配项目
-	engine.POST("/webhook", webhookHandler.HandleWebhook)
+	v1.POST("/webhook", webhookHandler.HandleWebhook)
 
 	// GitHub Webhook 管理 API（需认证）
-	v1 := engine.Group("/api/v1")
 	requireAuth := func(c *gin.Context) {
 		if authHandler == nil {
 			c.Next()
