@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -202,6 +203,15 @@ var tunnelStartCmd = &cobra.Command{
 			fmt.Println("Tunnel 已创建成功!")
 			fmt.Printf("公共 URL: %s\n", tunnelURL)
 			fmt.Println()
+
+			// 通知服务器更新所有 webhook URL
+			if err := notifyServerToUpdateWebhooks(); err != nil {
+				fmt.Printf("Warning: 通知服务器更新 webhook 失败: %v\n", err)
+			} else {
+				fmt.Println("已通知服务器更新 Webhook 地址")
+			}
+
+			fmt.Println()
 			fmt.Println("使用 'taskmanager tunnel stop' 停止 Tunnel")
 			fmt.Println("=" + strings.Repeat("=", 50))
 			fmt.Println()
@@ -392,6 +402,37 @@ func extractTunnelURLFromLog(logFile string) string {
 		}
 	}
 	return lastURL
+}
+
+// notifyServerToUpdateWebhooks 通知服务器更新所有 webhook URL
+func notifyServerToUpdateWebhooks() error {
+	// 读取服务器端口
+	port := getServerHTTPPort()
+	if port == 0 {
+		port = 13618
+	}
+
+	url := fmt.Sprintf("http://localhost:%d/api/v1/internal/webhooks/update-all", port)
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("failed to notify server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// getServerHTTPPort 获取服务器的 HTTP 端口
+func getServerHTTPPort() int {
+	// 尝试从配置文件读取
+	cfg, err := config.Load()
+	if err != nil {
+		return 0
+	}
+	return cfg.Server.Port
 }
 
 // registerTunnelCommands 注册 tunnel 子命令

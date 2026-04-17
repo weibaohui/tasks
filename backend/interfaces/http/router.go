@@ -270,6 +270,11 @@ func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, g
 	v1.POST("/webhook/repos/:owner/:repo", webhookHandler.HandleWebhookByRepo)
 	// 通用端点，通过 payload 中的 repo 匹配项目
 	v1.POST("/webhook", webhookHandler.HandleWebhook)
+	// 内部接口：更新所有启用的 webhook URL（供 tunnel start 调用）
+	v1.POST("/internal/webhooks/update-all", func(c *gin.Context) {
+		githubWebhookHandler.UpdateAllWebhooksIfNeeded()
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
 
 	// GitHub Webhook 管理 API（需认证）
 	requireAuth := func(c *gin.Context) {

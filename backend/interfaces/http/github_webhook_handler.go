@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -270,6 +271,53 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 		"old_url":    currentURL,
 		"webhook_url": newURL,
 	})
+}
+
+// UpdateAllWebhooksIfNeeded 检查并更新所有启用的 webhook URL（供 tunnel start 调用）
+func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
+	configs, err := h.webhookService.ListConfigs(context.Background())
+	if err != nil {
+		log.Printf("[WEBHOOK] failed to list configs for URL update: %v", err)
+		return
+	}
+
+	for _, config := range configs {
+		if !config.Enabled() {
+			continue
+		}
+
+		repoPath := config.Repo()
+		if strings.HasPrefix(repoPath, "https://github.com/") {
+			repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
+		}
+		repoPath = strings.TrimSuffix(repoPath, ".git")
+
+		needsUpdate, _, err := h.webhookGitHub.CheckAndUpdateWebhook(context.Background(), repoPath)
+		if err != nil || !needsUpdate {
+			continue
+		}
+
+		webhookID, err := h.webhookGitHub.FindExistingWebhook(repoPath)
+		if err != nil || webhookID == 0 {
+			log.Printf("[WEBHOOK] webhook not found for repo %s, skipping update", repoPath)
+			continue
+		}
+
+		newURL := config.WebhookURL()
+		if err := h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID, newURL); err != nil {
+			log.Printf("[WEBHOOK] failed to update webhook for repo %s: %v", repoPath, err)
+			continue
+		}
+
+		// 更新数据库中的 webhook_url
+		config.SetWebhookURL(newURL)
+		if err := h.webhookService.SaveConfig(context.Background(), config); err != nil {
+			log.Printf("[WEBHOOK] failed to save config for repo %s: %v", repoPath, err)
+			continue
+		}
+
+		log.Printf("[WEBHOOK] webhook URL updated for repo %s: %s", repoPath, newURL)
+	}
 }
 
 // ListEventLogs 列出事件日志
