@@ -388,4 +388,39 @@ CREATE TABLE IF NOT EXISTS heartbeat_scenarios (
 );
 
 CREATE INDEX IF NOT EXISTS idx_heartbeat_scenarios_code ON heartbeat_scenarios(code);
+CREATE TABLE IF NOT EXISTS github_webhook_configs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL UNIQUE,
+    repo TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    webhook_url TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_event_logs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    forwarder_status TEXT NOT NULL DEFAULT 'received',
+    trigger_heartbeat_id TEXT,
+    error_message TEXT,
+    received_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_heartbeat_bindings (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    github_webhook_config_id TEXT NOT NULL,
+    github_event_type TEXT NOT NULL,
+    heartbeat_id TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (github_webhook_config_id) REFERENCES github_webhook_configs(id) ON DELETE CASCADE,
+    FOREIGN KEY (heartbeat_id) REFERENCES heartbeats(id) ON DELETE CASCADE
+);
 `

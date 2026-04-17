@@ -251,3 +251,30 @@ type UserTokenRepository interface {
 	FindByUserID(ctx context.Context, userID UserID) ([]*UserToken, error)
 	Delete(ctx context.Context, id UserTokenID) error
 }
+
+// GitHubWebhookConfigRepository GitHub Webhook 配置仓储
+type GitHubWebhookConfigRepository interface {
+	Save(ctx context.Context, config *GitHubWebhookConfig) error
+	FindByID(ctx context.Context, id GitHubWebhookConfigID) (*GitHubWebhookConfig, error)
+	FindByProjectID(ctx context.Context, projectID ProjectID) (*GitHubWebhookConfig, error)
+	FindAll(ctx context.Context) ([]*GitHubWebhookConfig, error)
+	FindAllEnabled(ctx context.Context) ([]*GitHubWebhookConfig, error)
+	Delete(ctx context.Context, id GitHubWebhookConfigID) error
+}
+
+// WebhookEventLogRepository Webhook 事件日志仓储
+type WebhookEventLogRepository interface {
+	Save(ctx context.Context, log *WebhookEventLog) error
+	FindByID(ctx context.Context, id WebhookEventLogID) (*WebhookEventLog, error)
+	FindByProjectID(ctx context.Context, projectID ProjectID, limit int) ([]*WebhookEventLog, error)
+	Delete(ctx context.Context, id WebhookEventLogID) error
+}
+
+// WebhookHeartbeatBindingRepository Webhook 心跳绑定仓储
+type WebhookHeartbeatBindingRepository interface {
+	Save(ctx context.Context, binding *WebhookHeartbeatBinding) error
+	FindByID(ctx context.Context, id WebhookHeartbeatBindingID) (*WebhookHeartbeatBinding, error)
+	FindByConfigID(ctx context.Context, configID GitHubWebhookConfigID) ([]*WebhookHeartbeatBinding, error)
+	FindByConfigIDAndEventType(ctx context.Context, configID GitHubWebhookConfigID, eventType string) ([]*WebhookHeartbeatBinding, error)
+	Delete(ctx context.Context, id WebhookHeartbeatBindingID) error
+}

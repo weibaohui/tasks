@@ -199,7 +199,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "Issue 分析",
 			IntervalMinutes: 180,
 			RequirementType: "github_issue",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       1,
 			MDContent: "你是项目的自动化协作助手。当前任务是：分析项目中的 open issues。\n\n" +
 				"项目仓库：${project.git_repo_url}\n" +
@@ -219,7 +219,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "LGTM 代码编写",
 			IntervalMinutes: 120,
 			RequirementType: "github_coding",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       2,
 			MDContent: "你是项目的自动化协作助手。当前任务是：为已评审通过的 issue 编写代码并创建 PR。\n\n" +
 				"项目仓库：${project.git_repo_url}\n" +
@@ -240,7 +240,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 需求评审",
 			IntervalMinutes: 120,
 			RequirementType: "github_pr_review",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       3,
 			MDContent: "你是项目的自动化协作助手。当前任务是：检查 open PR 是否已完成需求评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
@@ -261,7 +261,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 代码质量评审",
 			IntervalMinutes: 180,
 			RequirementType: "github_pr_review",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       4,
 			MDContent: "你是项目的自动化协作助手。当前任务是：对已通过需求评审的 open PR 进行代码质量和安全评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
@@ -281,7 +281,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 修改修复",
 			IntervalMinutes: 240,
 			RequirementType: "github_coding",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       5,
 			MDContent: "你是项目的自动化协作助手。当前任务是：修复 PR 中的修改建议。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
@@ -302,7 +302,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 合并检查",
 			IntervalMinutes: 120,
 			RequirementType: "github_pr_review",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       6,
 			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
@@ -321,7 +321,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 文档补充",
 			IntervalMinutes: 480,
 			RequirementType: "github_doc",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       7,
 			MDContent: "你是项目的自动化协作助手。当前任务是：根据 PR 代码变更补充或更新文档。\n\n" +
 				"项目仓库：${project.git_repo_url}\n" +
@@ -341,7 +341,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			Name:            "PR 测试补充",
 			IntervalMinutes: 480,
 			RequirementType: "github_test",
-			AgentCode:       "op",
+			AgentCode:       "",
 			SortOrder:       8,
 			MDContent: "你是项目的自动化协作助手。当前任务是：根据 PR 代码变更补充测试用例。\n\n" +
 				"项目仓库：${project.git_repo_url}\n" +

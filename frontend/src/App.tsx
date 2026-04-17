@@ -13,6 +13,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   DownOutlined,
+  GithubOutlined,
   HeartOutlined,
   LogoutOutlined,
   MessageOutlined,
@@ -36,6 +37,7 @@ import { SkillsManagementPage } from './pages/SkillsManagementPage';
 import StateMachineManagementPage from './pages/StateMachineManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HeartbeatScenarioManagementPage } from './pages/HeartbeatScenarioManagementPage';
+import { ProjectWebhookPage } from './pages/ProjectWebhookPage';
 import { useAuthStore } from './stores/authStore';
 
 const { Header, Sider, Content } = Layout;
@@ -109,6 +111,7 @@ const MainLayout: React.FC = () => {
     { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent 工坊' },
     { key: '/heartbeat-scenarios', icon: <HeartOutlined />, label: '心跳场景' },
+    { key: '/webhooks', icon: <GithubOutlined />, label: 'GitHub Webhook' },
     { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
     { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
     { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
@@ -237,6 +240,7 @@ const App: React.FC = () => {
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />
             <Route path="heartbeat-scenarios" element={<HeartbeatScenarioManagementPage />} />
+            <Route path="webhooks" element={<ProjectWebhookPage />} />
             <Route path="state-machines" element={<StateMachineManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />

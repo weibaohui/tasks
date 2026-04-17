@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,6 +42,55 @@ const (
 	DefaultAdminUsername = "admin"
 	DefaultAdminPassword = "admin123"
 )
+
+// checkAndUpdateWebhookURLs 检查所有启用的 webhook，更新过期的 webhook URL
+func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, webhookConfigRepo *_persistence.SQLiteGitHubWebhookConfigRepository, logger *zap.Logger) {
+	ctx := context.Background()
+	configs, err := webhookConfigRepo.FindAllEnabled(ctx)
+	if err != nil {
+		logger.Warn("failed to load enabled webhook configs", zap.Error(err))
+		return
+	}
+
+	for _, config := range configs {
+		needsUpdate, currentURL, err := webhookGitHub.CheckAndUpdateWebhook(ctx, config.Repo())
+		if err != nil {
+			logger.Warn("failed to check webhook",
+				zap.String("repo", config.Repo()),
+				zap.Error(err))
+			continue
+		}
+
+		if needsUpdate {
+			logger.Info("webhook URL mismatch, updating",
+				zap.String("repo", config.Repo()),
+				zap.String("current_url", currentURL),
+				zap.String("expected_url", config.WebhookURL()))
+
+			repoPath := config.Repo()
+			if strings.HasPrefix(repoPath, "https://github.com/") {
+				repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
+			}
+			repoPath = strings.TrimSuffix(repoPath, ".git")
+
+			webhookID, err := webhookGitHub.FindExistingWebhook(repoPath)
+			if err != nil || webhookID == 0 {
+				logger.Warn("webhook not found, skipping update",
+					zap.String("repo", config.Repo()))
+				continue
+			}
+
+			if err := webhookGitHub.UpdateWebhookURL(repoPath, webhookID, config.WebhookURL()); err != nil {
+				logger.Warn("failed to update webhook URL",
+					zap.String("repo", config.Repo()),
+					zap.Error(err))
+				continue
+			}
+			logger.Info("webhook URL updated successfully",
+				zap.String("repo", config.Repo()))
+		}
+	}
+}
 
 func main() {
 	// 1. 加载配置（先加载配置以获取日志级别）
@@ -110,6 +160,10 @@ func main() {
 	// 兼容旧数据库：添加 projects.heartbeat_scenario_code 列
 	if err := _persistence.MigrateHeartbeatScenarioCodeColumn(db); err != nil {
 		logger.Fatal("Failed to migrate projects heartbeat_scenario_code column", zap.Error(err))
+	}
+	// 兼容旧数据库：将 github_webhook_configs 表的 forwarder_pid 列改为 webhook_url 列
+	if err := _persistence.MigrateGitHubWebhookConfigColumns(db); err != nil {
+		logger.Fatal("Failed to migrate github_webhook_configs columns", zap.Error(err))
 	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
@@ -290,6 +344,32 @@ func main() {
 	// 初始化需求类型 handler
 	requirementTypeHandler := httpHandler.NewRequirementTypeHandler(requirementTypeRepo)
 
+	// 初始化 Webhook 相关组件
+	webhookConfigRepo := _persistence.NewSQLiteGitHubWebhookConfigRepository(db)
+	webhookEventLogRepo := _persistence.NewSQLiteWebhookEventLogRepository(db)
+	webhookBindingRepo := _persistence.NewSQLiteWebhookHeartbeatBindingRepository(db)
+	// 使用 PublicURL（公网地址）作为 webhook 的回调地址
+	// 优先从 ~/.taskmanager/config.json 读取（tunnel 创建时保存），否则使用配置文件中的 PublicURL
+	webhookURL := config.GetPublicURL()
+	if webhookURL == "" {
+		webhookURL = cfg.API.BaseURL
+		logger.Warn("Public URL not configured, using BaseURL for webhooks. GitHub webhooks require a public URL to work properly.")
+	}
+	webhookGitHub := application.NewWebhookGitHubManager(webhookURL)
+	githubWebhookService := application.NewGitHubWebhookService(
+		webhookConfigRepo,
+		webhookEventLogRepo,
+		webhookBindingRepo,
+		heartbeatRepo,
+		heartbeatTriggerService,
+		idGenerator,
+	)
+	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService)
+	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookGitHub, authHandler)
+
+	// 检查所有启用的 webhook 配置，更新过期的 webhook URL
+	go checkAndUpdateWebhookURLs(webhookGitHub, webhookConfigRepo, logger)
+
 	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
 		channelHandler, sessionHandler, conversationRecordHandler,
@@ -298,6 +378,9 @@ func main() {
 		requirementTypeHandler, heartbeatHandler, heartbeatTemplateHandler,
 		heartbeatScenarioHandler,
 	)
+
+	// 注册 Webhook 路由
+	httpHandler.RegisterWebhookRoutes(ginEngine, webhookHandler, githubWebhookHandler, authHandler)
 
 	// 10. 初始化 WebSocket（用于前端实时通知）
 	wsHandler := ws.NewWebSocketHandler(eventBus)

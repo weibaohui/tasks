@@ -273,6 +273,28 @@ func getTableColumns(db *sql.DB, tableName string) (map[string]bool, error) {
 	return columns, rows.Err()
 }
 
+// MigrateGitHubWebhookConfigColumns 兼容旧数据库：将 github_webhook_configs 表的 forwarder_pid 列改为 webhook_url 列
+func MigrateGitHubWebhookConfigColumns(db *sql.DB) error {
+	columns, err := getTableColumns(db, "github_webhook_configs")
+	if err != nil {
+		return fmt.Errorf("获取 github_webhook_configs 表列信息失败: %w", err)
+	}
+
+	// 如果存在旧的 forwarder_pid 列，需要迁移
+	if _, exists := columns["forwarder_pid"]; exists {
+		// 添加 webhook_url 列（如果不存在）
+		if _, exists := columns["webhook_url"]; !exists {
+			if _, err := db.Exec("ALTER TABLE github_webhook_configs ADD COLUMN webhook_url TEXT"); err != nil {
+				return fmt.Errorf("添加 webhook_url 列失败: %w", err)
+			}
+		}
+		// 注意：SQLite 不支持直接删除列，需要重建表才能移除 forwarder_pid
+		// 为了保持向后兼容，保留 forwarder_pid 列，只是应用程序不再使用它
+	}
+
+	return nil
+}
+
 // SeedHeartbeatTemplates 预置默认心跳模板（如果表为空）
 func SeedHeartbeatTemplates(db *sql.DB) error {
 	var count int

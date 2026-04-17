@@ -70,13 +70,25 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 
 	// 解析 Agent：优先使用心跳指定的 agent，若不存在则回退到项目默认 agent
 	agentCode := hb.AgentCode()
-	if agentCode != "" && s.agentRepo != nil {
+	if agentCode == "" {
+		// 心跳未指定 agentCode，使用项目默认
+		agentCode = project.DefaultAgentCode()
+		if agentCode == "" {
+			log.Printf("[HEARTBEAT] heartbeat %s has no agent code and project %s has no default agent, cannot dispatch", hb.Name(), project.Name())
+			return fmt.Errorf("heartbeat has no agent code and project has no default agent")
+		}
+		log.Printf("[HEARTBEAT] heartbeat %s using project default agent %s", hb.Name(), agentCode)
+	} else if s.agentRepo != nil {
+		// 心跳指定了 agentCode，验证是否存在
 		baseAgent, _ := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
 		if baseAgent == nil {
 			fallback := project.DefaultAgentCode()
 			if fallback != "" {
 				log.Printf("[HEARTBEAT] agent %s not found for heartbeat %s, falling back to project default %s", agentCode, hb.Name(), fallback)
 				agentCode = fallback
+			} else {
+				log.Printf("[HEARTBEAT] agent %s not found for heartbeat %s and project has no default agent", agentCode, hb.Name())
+				return fmt.Errorf("heartbeat agent %s not found and project has no default agent", agentCode)
 			}
 		}
 	}

@@ -255,3 +255,54 @@ func SetupRoutesWithManagement(
 
 	return engine
 }
+
+// RegisterWebhookRoutes 注册 Webhook 相关路由
+func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, githubWebhookHandler *GitHubWebhookHandler, authHandler *AuthHandler) {
+	if webhookHandler == nil || githubWebhookHandler == nil {
+		return
+	}
+
+	// API v1 前缀组
+	v1 := engine.Group("/api/v1")
+
+	// Webhook 接收端点（无需认证，统一 /api/v1 前缀）
+	// 语义化 URL：/api/v1/webhook/repos/{owner}/{repo}
+	v1.POST("/webhook/repos/:owner/:repo", webhookHandler.HandleWebhookByRepo)
+	// 通用端点，通过 payload 中的 repo 匹配项目
+	v1.POST("/webhook", webhookHandler.HandleWebhook)
+	// 内部接口：更新所有启用的 webhook URL（供 tunnel start 调用）
+	v1.POST("/internal/webhooks/update-all", func(c *gin.Context) {
+		githubWebhookHandler.UpdateAllWebhooksIfNeeded()
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// GitHub Webhook 管理 API（需认证）
+	requireAuth := func(c *gin.Context) {
+		if authHandler == nil {
+			c.Next()
+			return
+		}
+		if _, err := authHandler.Authorize(c.Request); err != nil {
+			c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+
+	webhooks := v1.Group("/github-webhooks", requireAuth)
+	webhooks.GET("/configs", githubWebhookHandler.ListConfigs)
+	webhooks.POST("/configs", githubWebhookHandler.CreateConfig)
+	webhooks.PUT("/configs/:id", githubWebhookHandler.UpdateConfig)
+	webhooks.DELETE("/configs/:id", githubWebhookHandler.DeleteConfig)
+	webhooks.POST("/configs/:id/enable", githubWebhookHandler.EnableWebhook)
+	webhooks.POST("/configs/:id/disable", githubWebhookHandler.DisableWebhook)
+	webhooks.GET("/configs/:id/status", githubWebhookHandler.GetWebhookStatus)
+	webhooks.GET("/configs/:id/check-url", githubWebhookHandler.CheckWebhookURL)
+	webhooks.POST("/configs/:id/update-url", githubWebhookHandler.UpdateWebhookURL)
+	webhooks.GET("/configs/:id/event-logs", githubWebhookHandler.ListEventLogs)
+	webhooks.GET("/configs/:id/bindings", githubWebhookHandler.ListBindings)
+	webhooks.POST("/bindings", githubWebhookHandler.CreateBinding)
+	webhooks.DELETE("/bindings/:id", githubWebhookHandler.DeleteBinding)
+	webhooks.GET("/heartbeats", githubWebhookHandler.ListHeartbeats)
+}

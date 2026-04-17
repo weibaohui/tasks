@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,12 +15,53 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/weibh/taskmanager/infrastructure/config"
+	"gopkg.in/yaml.v3"
 )
 
 const (
 	tunnelPIDFileName = "tunnel.pid"
 	tunnelLogFileName = "tunnel.log"
 )
+
+// TunnelConfig 保存 tunnel 配置到 YAML 文件
+type TunnelConfig struct {
+	PublicURL string `yaml:"public_url"`
+	Port      int    `yaml:"port"`
+	StartedAt string `yaml:"started_at"`
+}
+
+// getTunnelConfigPath 获取 tunnel 配置文件路径
+func getTunnelConfigPath() string {
+	return filepath.Join(getConfigDir(), "config.yaml")
+}
+
+// saveTunnelConfig 保存 tunnel 配置到 YAML 文件
+func saveTunnelConfig(publicURL string, port int) error {
+	cfg := TunnelConfig{
+		PublicURL: publicURL,
+		Port:      port,
+		StartedAt: time.Now().Format(time.RFC3339),
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(getTunnelConfigPath(), data, 0644)
+}
+
+// getStoredPublicURL 从配置文件读取 public URL
+func getStoredPublicURL() string {
+	path := getTunnelConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var cfg TunnelConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	return cfg.PublicURL
+}
 
 var tunnelURLRegex = regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
 
@@ -153,9 +195,22 @@ var tunnelStartCmd = &cobra.Command{
 		}
 
 		if tunnelURL != "" {
+			// 保存 tunnel URL 到配置文件
+			if err := saveTunnelConfig(tunnelURL, port); err != nil {
+				fmt.Printf("Warning: 保存 tunnel 配置失败: %v\n", err)
+			}
 			fmt.Println("=" + strings.Repeat("=", 50))
 			fmt.Println("Tunnel 已创建成功!")
 			fmt.Printf("公共 URL: %s\n", tunnelURL)
+			fmt.Println()
+
+			// 通知服务器更新所有 webhook URL
+			if err := notifyServerToUpdateWebhooks(); err != nil {
+				fmt.Printf("Warning: 通知服务器更新 webhook 失败: %v\n", err)
+			} else {
+				fmt.Println("已通知服务器更新 Webhook 地址")
+			}
+
 			fmt.Println()
 			fmt.Println("使用 'taskmanager tunnel stop' 停止 Tunnel")
 			fmt.Println("=" + strings.Repeat("=", 50))
@@ -298,8 +353,17 @@ func getTunnelLogFile() string {
 
 // printTunnelStatus 打印 tunnel 状态
 func printTunnelStatus() {
+	logFile := getTunnelLogFile()
+
 	if !isTunnelRunning() {
-		fmt.Println("Tunnel 状态: 未运行")
+		// 即使 tunnel 未运行，也尝试显示已存储的 URL
+		if storedURL := getStoredPublicURL(); storedURL != "" {
+			fmt.Println("Tunnel 状态: 未运行（但有已存储的 URL）")
+			fmt.Printf("公共 URL: %s\n", storedURL)
+		} else {
+			fmt.Println("Tunnel 状态: 未运行")
+		}
+		fmt.Printf("日志文件: %s\n", logFile)
 		return
 	}
 
@@ -307,10 +371,15 @@ func printTunnelStatus() {
 	fmt.Println("Tunnel 状态: 运行中")
 	fmt.Printf("PID: %d\n", pid)
 
-	// 尝试从日志中提取 URL
-	logFile := getTunnelLogFile()
-	if url := extractTunnelURLFromLog(logFile); url != "" {
-		fmt.Printf("公共 URL: %s\n", url)
+	// 优先使用已存储的 URL（更可靠）
+	storedURL := getStoredPublicURL()
+	if storedURL != "" {
+		fmt.Printf("公共 URL: %s\n", storedURL)
+	} else {
+		// 回退：从日志中提取
+		if url := extractTunnelURLFromLog(logFile); url != "" {
+			fmt.Printf("公共 URL: %s\n", url)
+		}
 	}
 	fmt.Printf("日志文件: %s\n", logFile)
 }
@@ -333,6 +402,37 @@ func extractTunnelURLFromLog(logFile string) string {
 		}
 	}
 	return lastURL
+}
+
+// notifyServerToUpdateWebhooks 通知服务器更新所有 webhook URL
+func notifyServerToUpdateWebhooks() error {
+	// 读取服务器端口
+	port := getServerHTTPPort()
+	if port == 0 {
+		port = 13618
+	}
+
+	url := fmt.Sprintf("http://localhost:%d/api/v1/internal/webhooks/update-all", port)
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("failed to notify server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// getServerHTTPPort 获取服务器的 HTTP 端口
+func getServerHTTPPort() int {
+	// 尝试从配置文件读取
+	cfg, err := config.Load()
+	if err != nil {
+		return 0
+	}
+	return cfg.Server.Port
 }
 
 // registerTunnelCommands 注册 tunnel 子命令

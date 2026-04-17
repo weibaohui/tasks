@@ -31,8 +31,9 @@ type DatabaseConfig struct {
 
 // APIConfig API 配置
 type APIConfig struct {
-	BaseURL string `yaml:"base_url"`
-	Token   string `yaml:"token"`
+	BaseURL   string `yaml:"base_url"`    // API base URL (内部使用)
+	PublicURL string `yaml:"public_url"`  // Public URL (用于 GitHub webhook回调)
+	Token     string `yaml:"token"`
 }
 
 // LoggingConfig 日志配置
@@ -77,7 +78,8 @@ func defaultConfig() *Config {
 			Path: defaultDBPath,
 		},
 		API: APIConfig{
-			BaseURL: "http://localhost:13618/api/v1",
+			BaseURL:   "http://localhost:13618/api/v1",
+			PublicURL: "", // 需要通过 tunnel 或手动配置获取公网地址
 		},
 		Logging: LoggingConfig{
 			Level: "info",
@@ -294,4 +296,37 @@ func SaveConfig(path string, cfg *Config) error {
 	}
 	// 使用 0600 权限保护 API Token
 	return os.WriteFile(path, data, 0600)
+}
+
+// GetPublicURL 获取公共 URL（用于 webhook 回调）
+// 优先从 ~/.taskmanager/config.yaml 读取（tunnel 创建时保存）
+// 如果没有则使用配置文件中的 PublicURL
+func GetPublicURL() string {
+	// 先尝试从 config.yaml 读取（tunnel 存储的）
+	if publicURL := getPublicURLFromYAML(); publicURL != "" {
+		return publicURL
+	}
+	// 回退到配置文件
+	cfg, err := Load()
+	if err != nil {
+		return ""
+	}
+	return cfg.API.PublicURL
+}
+
+// getPublicURLFromYAML 从 config.yaml 读取 public URL
+func getPublicURLFromYAML() string {
+	home, _ := os.UserHomeDir()
+	yamlPath := filepath.Join(home, ".taskmanager", "config.yaml")
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		PublicURL string `yaml:"public_url"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	return cfg.PublicURL
 }

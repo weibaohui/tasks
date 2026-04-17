@@ -36,8 +36,10 @@ func SetupFrontendRoutes(engine *gin.Engine) {
 	engine.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// API 路由和 WebSocket 路由不走前端
-		if path == "/api" || strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
+		// API 路由、WebSocket 路由和 Webhook 路由不走前端
+		if path == "/api" || strings.HasPrefix(path, "/api/") ||
+			strings.HasPrefix(path, "/ws") ||
+			strings.HasPrefix(path, "/webhook") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
