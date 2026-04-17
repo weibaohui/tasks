@@ -13,6 +13,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   DownOutlined,
+  HeartOutlined,
   LogoutOutlined,
   MessageOutlined,
   RobotOutlined,
@@ -34,6 +35,7 @@ import { MCPManagementPage } from './pages/MCPManagementPage';
 import { SkillsManagementPage } from './pages/SkillsManagementPage';
 import StateMachineManagementPage from './pages/StateMachineManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { HeartbeatScenarioManagementPage } from './pages/HeartbeatScenarioManagementPage';
 import { useAuthStore } from './stores/authStore';
 
 const { Header, Sider, Content } = Layout;
@@ -85,9 +87,11 @@ const MainLayout: React.FC = () => {
             ? '/projects'
             : location.pathname.startsWith('/skills')
             ? '/skills'
-            : location.pathname.startsWith('/state-machines')
-              ? '/state-machines'
-              : location.pathname.startsWith('/channels')
+            : location.pathname.startsWith('/heartbeat-scenarios')
+              ? '/heartbeat-scenarios'
+              : location.pathname.startsWith('/state-machines')
+                ? '/state-machines'
+                : location.pathname.startsWith('/channels')
                   ? '/channels'
                   : location.pathname.startsWith('/sessions')
                     ? '/sessions'
@@ -104,6 +108,7 @@ const MainLayout: React.FC = () => {
     { key: '/projects', icon: <BranchesOutlined />, label: '项目需求' },
     { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent 工坊' },
+    { key: '/heartbeat-scenarios', icon: <HeartOutlined />, label: '心跳场景' },
     { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
     { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
     { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
@@ -231,6 +236,7 @@ const App: React.FC = () => {
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />
+            <Route path="heartbeat-scenarios" element={<HeartbeatScenarioManagementPage />} />
             <Route path="state-machines" element={<StateMachineManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />

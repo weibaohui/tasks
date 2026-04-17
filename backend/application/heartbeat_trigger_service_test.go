@@ -19,7 +19,7 @@ func TestHeartbeatTriggerService_Trigger_Success(t *testing.T) {
 	)
 	channelCode := "channel-001"
 	sessionKey := "session-001"
-	project.UpdateDispatchConfig(&channelCode, &sessionKey)
+	project.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	hb, _ := domain.NewHeartbeat(
 		domain.NewHeartbeatID("hb-001"),
@@ -196,7 +196,7 @@ func TestHeartbeatTriggerService_Trigger_WithStateMachine(t *testing.T) {
 	)
 	channelCode := "channel-001"
 	sessionKey := "session-001"
-	project.UpdateDispatchConfig(&channelCode, &sessionKey)
+	project.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	hb, _ := domain.NewHeartbeat(
 		domain.NewHeartbeatID("hb-001"),

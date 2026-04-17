@@ -215,7 +215,7 @@ func (s *HeartbeatScheduler) scheduleHeartbeat(hb *domain.Heartbeat) error {
 	if interval < 1 {
 		interval = 60
 	}
-	cronExpr := fmt.Sprintf("0 */%d * * * *", interval)
+	cronExpr := fmt.Sprintf("@every %dm", interval)
 
 	heartbeatID := hb.ID().String()
 	entryID, err := s.cron.AddFunc(cronExpr, func() {

@@ -281,7 +281,7 @@ func TestProjectUpdateDispatchConfig(t *testing.T) {
 	channelCode := "feishu"
 	sessionKey := "session-001"
 
-	project.UpdateDispatchConfig(&channelCode, &sessionKey)
+	project.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	if project.DispatchChannelCode() != "feishu" {
 		t.Errorf("期望派发通道代码正确, 实际 %s", project.DispatchChannelCode())
@@ -309,10 +309,10 @@ func TestProjectUpdateDispatchConfigNilAndEmpty(t *testing.T) {
 	// 先设置值
 	channelCode := "feishu"
 	sessionKey := "session-001"
-	project.UpdateDispatchConfig(&channelCode, &sessionKey)
+	project.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	// 测试 nil 值不更新
-	project.UpdateDispatchConfig(nil, nil)
+	project.UpdateDispatchConfig(nil, nil, nil)
 
 	if project.DispatchChannelCode() != "feishu" {
 		t.Errorf("nil channelCode 不应改变值, 实际 %s", project.DispatchChannelCode())
@@ -323,7 +323,7 @@ func TestProjectUpdateDispatchConfigNilAndEmpty(t *testing.T) {
 
 	// 测试空字符串不更新
 	emptyString := ""
-	project.UpdateDispatchConfig(&emptyString, &emptyString)
+	project.UpdateDispatchConfig(&emptyString, &emptyString, nil)
 
 	if project.DispatchChannelCode() != "feishu" {
 		t.Errorf("空字符串 channelCode 不应改变值, 实际 %s", project.DispatchChannelCode())
@@ -348,7 +348,7 @@ func TestProjectToSnapshot(t *testing.T) {
 	// 设置额外字段
 	channelCode := "feishu"
 	sessionKey := "session-001"
-	project.UpdateDispatchConfig(&channelCode, &sessionKey)
+	project.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	snap := project.ToSnapshot()
 
@@ -443,7 +443,7 @@ func TestProjectSnapshotRoundTrip(t *testing.T) {
 	// 设置所有配置
 	channelCode := "original-channel"
 	sessionKey := "original-session"
-	original.UpdateDispatchConfig(&channelCode, &sessionKey)
+	original.UpdateDispatchConfig(&channelCode, &sessionKey, nil)
 
 	// 转换为快照
 	snap := original.ToSnapshot()
@@ -613,6 +613,62 @@ func TestProjectNewProjectStepsCopy(t *testing.T) {
 	retrievedSteps := project.InitSteps()
 	if retrievedSteps[0] != "step1" {
 		t.Errorf("NewProject 应复制 steps: 期望 step1, 实际 %s", retrievedSteps[0])
+	}
+}
+
+func TestProjectSetHeartbeatScenarioCode(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	oldUpdatedAt := project.UpdatedAt()
+	time.Sleep(10 * time.Millisecond)
+
+	project.SetHeartbeatScenarioCode("github_dev_workflow")
+	if project.HeartbeatScenarioCode() != "github_dev_workflow" {
+		t.Errorf("期望 HeartbeatScenarioCode 为 github_dev_workflow, 实际 %s", project.HeartbeatScenarioCode())
+	}
+	if !project.UpdatedAt().After(oldUpdatedAt) {
+		t.Error("期望 UpdatedAt 被更新")
+	}
+
+	// 测试空格trim
+	project.SetHeartbeatScenarioCode("  spaced_code  ")
+	if project.HeartbeatScenarioCode() != "spaced_code" {
+		t.Errorf("期望空格被trim, 实际 %s", project.HeartbeatScenarioCode())
+	}
+}
+
+func TestProjectHeartbeatScenarioCodeSnapshotRoundTrip(t *testing.T) {
+	project, err := NewProject(
+		NewProjectID("proj-001"),
+		"测试项目",
+		"https://github.com/test/project.git",
+		"main",
+		[]string{},
+	)
+	if err != nil {
+		t.Fatalf("创建项目失败: %v", err)
+	}
+
+	project.SetHeartbeatScenarioCode("github_dev_workflow")
+
+	snap := project.ToSnapshot()
+	if snap.HeartbeatScenarioCode != "github_dev_workflow" {
+		t.Errorf("快照 HeartbeatScenarioCode 期望 github_dev_workflow, 实际 %s", snap.HeartbeatScenarioCode)
+	}
+
+	restored := &Project{}
+	restored.FromSnapshot(snap)
+	if restored.HeartbeatScenarioCode() != "github_dev_workflow" {
+		t.Errorf("恢复后 HeartbeatScenarioCode 期望 github_dev_workflow, 实际 %s", restored.HeartbeatScenarioCode())
 	}
 }
 

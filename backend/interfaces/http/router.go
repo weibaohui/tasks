@@ -12,11 +12,11 @@ import (
 
 // SetupRoutes 设置路由
 func SetupRoutes() *gin.Engine {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *gin.Engine {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -36,6 +36,7 @@ func SetupRoutesWithManagement(
 	requirementTypeHandler *RequirementTypeHandler,
 	heartbeatHandler *HeartbeatHandler,
 	heartbeatTemplateHandler *HeartbeatTemplateHandler,
+	heartbeatScenarioHandler *HeartbeatScenarioHandler,
 ) *gin.Engine {
 	engine := gin.Default()
 
@@ -166,6 +167,22 @@ func SetupRoutesWithManagement(
 		templates.GET("", heartbeatTemplateHandler.ListTemplates)
 		templates.POST("", heartbeatTemplateHandler.CreateTemplate)
 		templates.DELETE("/:id", heartbeatTemplateHandler.DeleteTemplate)
+	}
+
+	if heartbeatScenarioHandler != nil {
+		scenarios := v1.Group("/heartbeat-scenarios", requireAuth)
+		scenarios.GET("", heartbeatScenarioHandler.ListScenarios)
+		scenarios.POST("", heartbeatScenarioHandler.CreateScenario)
+		scenarios.GET("/:code", heartbeatScenarioHandler.GetScenario)
+		scenarios.PUT("/:code", heartbeatScenarioHandler.UpdateScenario)
+		scenarios.DELETE("/:id", heartbeatScenarioHandler.DeleteScenario)
+	}
+
+	if projectHandler != nil && heartbeatScenarioHandler != nil {
+		v1.POST("/projects/:project_id/apply-scenario", requireAuth, func(c *gin.Context) {
+			c.Set("projectService", projectHandler.ProjectService())
+			heartbeatScenarioHandler.ApplyScenarioToProject(c)
+		})
 	}
 
 	if requirementHandler != nil {

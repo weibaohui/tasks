@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -34,14 +35,23 @@ type ProjectApplicationService struct {
 	projectRepo           domain.ProjectRepository
 	requirementTypeRepo  domain.RequirementTypeEntityRepository
 	idGenerator          domain.IDGenerator
+	heartbeatScenarioSvc *HeartbeatScenarioService
 }
 
-func NewProjectApplicationService(projectRepo domain.ProjectRepository, requirementTypeRepo domain.RequirementTypeEntityRepository, idGenerator domain.IDGenerator) *ProjectApplicationService {
+func NewProjectApplicationService(projectRepo domain.ProjectRepository, requirementTypeRepo domain.RequirementTypeEntityRepository, idGenerator domain.IDGenerator, heartbeatScenarioSvc *HeartbeatScenarioService) *ProjectApplicationService {
 	return &ProjectApplicationService{
 		projectRepo:          projectRepo,
 		requirementTypeRepo:  requirementTypeRepo,
 		idGenerator:          idGenerator,
+		heartbeatScenarioSvc: heartbeatScenarioSvc,
 	}
+}
+
+func (s *ProjectApplicationService) ApplyScenarioToProject(ctx context.Context, projectID, scenarioCode string) error {
+	if s.heartbeatScenarioSvc == nil {
+		return fmt.Errorf("heartbeat scenario service not available")
+	}
+	return s.heartbeatScenarioSvc.ApplyScenarioToProject(ctx, projectID, scenarioCode)
 }
 
 func (s *ProjectApplicationService) CreateProject(ctx context.Context, cmd CreateProjectCommand) (*domain.Project, error) {
