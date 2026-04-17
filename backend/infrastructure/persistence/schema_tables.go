@@ -388,7 +388,6 @@ CREATE TABLE IF NOT EXISTS heartbeat_scenarios (
 );
 
 CREATE INDEX IF NOT EXISTS idx_heartbeat_scenarios_code ON heartbeat_scenarios(code);
-
 CREATE TABLE IF NOT EXISTS github_webhook_configs (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL UNIQUE,
