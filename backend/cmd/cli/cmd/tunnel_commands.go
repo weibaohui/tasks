@@ -48,7 +48,7 @@ func getTunnelConfigPath() string {
 }
 
 // saveTunnelConfig 保存 tunnel URL 到配置文件（更新 api.public_url）
-func saveTunnelConfig(publicURL string, port int) error {
+func saveTunnelConfig(publicURL string) error {
 	// 加载现有配置（使用与 config.Load 相同的路径逻辑）
 	cfg, err := config.Load()
 	if err != nil {
@@ -65,11 +65,7 @@ func saveTunnelConfig(publicURL string, port int) error {
 
 // getStoredPublicURL 从配置文件读取 public URL
 func getStoredPublicURL() string {
-	cfg, err := config.Load()
-	if err != nil || cfg == nil {
-		return ""
-	}
-	return cfg.API.PublicURL
+	return config.GetPublicURL()
 }
 
 var tunnelURLRegex = regexp.MustCompile(`https://[a-zA-Z0-9-]+\.trycloudflare\.com`)
@@ -205,7 +201,7 @@ var tunnelStartCmd = &cobra.Command{
 
 		if tunnelURL != "" {
 			// 保存 tunnel URL 到配置文件
-			if err := saveTunnelConfig(tunnelURL, port); err != nil {
+			if err := saveTunnelConfig(tunnelURL); err != nil {
 				fmt.Printf("Warning: 保存 tunnel 配置失败: %v\n", err)
 			}
 			fmt.Println("=" + strings.Repeat("=", 50))

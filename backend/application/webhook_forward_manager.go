@@ -28,7 +28,19 @@ func NewWebhookGitHubManager(serverURL string) *WebhookGitHubManager {
 func (m *WebhookGitHubManager) UpdateServerURL(serverURL string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.serverURL = strings.TrimSuffix(serverURL, "/api/v1")
+	newURL := strings.TrimSuffix(serverURL, "/api/v1")
+	if newURL == m.serverURL {
+		return
+	}
+	log.Printf("[WEBHOOK] server URL updated: %s -> %s", m.serverURL, newURL)
+	m.serverURL = newURL
+}
+
+// SnapshotServerURL 快照当前 server URL（批量更新时使用）
+func (m *WebhookGitHubManager) SnapshotServerURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.serverURL
 }
 
 // normalizeRepo converts full URL to short format (owner/repo)
