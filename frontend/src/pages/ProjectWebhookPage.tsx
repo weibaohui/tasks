@@ -458,9 +458,9 @@ export const ProjectWebhookPage: React.FC = () => {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => {
+                onClick={async () => {
                   if (selectedConfig) {
-                    fetchHeartbeats(selectedConfig.project_id);
+                    await fetchHeartbeats(selectedConfig.project_id);
                   }
                   setBindingModalOpen(true);
                 }}

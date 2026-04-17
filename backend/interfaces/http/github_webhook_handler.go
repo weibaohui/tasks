@@ -14,16 +14,16 @@ import (
 )
 
 type GitHubWebhookHandler struct {
-	webhookService   *application.GitHubWebhookService
-	webhookGitHub   *application.WebhookGitHubManager
-	authHandler     *AuthHandler
+	webhookService *application.GitHubWebhookService
+	webhookGitHub  *application.WebhookGitHubManager
+	authHandler    *AuthHandler
 }
 
 func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, webhookGitHub *application.WebhookGitHubManager, authHandler *AuthHandler) *GitHubWebhookHandler {
 	return &GitHubWebhookHandler{
-		webhookService:   webhookService,
-		webhookGitHub:   webhookGitHub,
-		authHandler:     authHandler,
+		webhookService: webhookService,
+		webhookGitHub:  webhookGitHub,
+		authHandler:    authHandler,
 	}
 }
 
@@ -235,7 +235,7 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 
 	if !needsUpdate {
 		c.JSON(http.StatusOK, gin.H{
-			"message":   "webhook URL is up to date",
+			"message":     "webhook URL is up to date",
 			"webhook_url": config.WebhookURL(),
 		})
 		return
@@ -269,7 +269,7 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "webhook URL updated",
-		"old_url":    currentURL,
+		"old_url":     currentURL,
 		"webhook_url": newURL,
 	})
 }
@@ -283,7 +283,10 @@ func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
 		return
 	}
 
-	// 更新 webhookGitHub manager 的 serverURL
+	// 记录新的 public URL 用于排查问题
+	log.Printf("[WEBHOOK] updating webhook URLs with new public URL: %s", newPublicURL)
+
+	// 确认加载成功后再更新 manager 中的 serverURL
 	h.webhookGitHub.UpdateServerURL(newPublicURL)
 
 	configs, err := h.webhookService.ListConfigs(context.Background())
@@ -433,24 +436,24 @@ func configToMap(config *domain.GitHubWebhookConfig) map[string]interface{} {
 
 func eventLogToMap(log *domain.WebhookEventLog) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                  log.ID().String(),
-		"project_id":         log.ProjectID().String(),
-		"event_type":         log.EventType(),
-		"status":             string(log.Status()),
+		"id":                   log.ID().String(),
+		"project_id":           log.ProjectID().String(),
+		"event_type":           log.EventType(),
+		"status":               string(log.Status()),
 		"trigger_heartbeat_id": log.TriggerHeartbeatID(),
-		"error_message":      log.ErrorMessage(),
-		"received_at":        log.ReceivedAt().UnixMilli(),
+		"error_message":        log.ErrorMessage(),
+		"received_at":          log.ReceivedAt().UnixMilli(),
 	}
 }
 
 func webhookBindingToMap(binding *domain.WebhookHeartbeatBinding) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                   binding.ID().String(),
-		"project_id":          binding.ProjectID().String(),
+		"id":                       binding.ID().String(),
+		"project_id":               binding.ProjectID().String(),
 		"github_webhook_config_id": binding.ConfigID().String(),
-		"github_event_type":    binding.GitHubEventType(),
-		"heartbeat_id":        binding.HeartbeatID().String(),
-		"enabled":             binding.Enabled(),
-		"created_at":          binding.CreatedAt().UnixMilli(),
+		"github_event_type":        binding.GitHubEventType(),
+		"heartbeat_id":             binding.HeartbeatID().String(),
+		"enabled":                  binding.Enabled(),
+		"created_at":               binding.CreatedAt().UnixMilli(),
 	}
 }

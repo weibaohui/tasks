@@ -59,13 +59,8 @@ func saveTunnelConfig(publicURL string, port int) error {
 	// 更新 public_url
 	cfg.API.PublicURL = publicURL
 
-	// 保存到同一路径
-	configPath := getTunnelConfigPath()
-	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-	return config.SaveConfig(configPath, cfg)
+	// 保存到同一路径（config.SaveConfig 已处理目录创建）
+	return config.SaveConfig(getTunnelConfigPath(), cfg)
 }
 
 // getStoredPublicURL 从配置文件读取 public URL

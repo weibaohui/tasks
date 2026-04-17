@@ -41,6 +41,8 @@ func normalizeRepo(repo string) string {
 
 // BuildWebhookURL 构建 webhook URL
 func (m *WebhookGitHubManager) BuildWebhookURL(repo string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	repoPath := normalizeRepo(repo)
 	return fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
 }
