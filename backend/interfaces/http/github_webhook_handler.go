@@ -11,16 +11,16 @@ import (
 )
 
 type GitHubWebhookHandler struct {
-	webhookService *application.GitHubWebhookService
-	forwardManager *application.WebhookForwardManager
-	authHandler    *AuthHandler
+	webhookService   *application.GitHubWebhookService
+	webhookGitHub   *application.WebhookGitHubManager
+	authHandler     *AuthHandler
 }
 
-func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, forwardManager *application.WebhookForwardManager, authHandler *AuthHandler) *GitHubWebhookHandler {
+func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, webhookGitHub *application.WebhookGitHubManager, authHandler *AuthHandler) *GitHubWebhookHandler {
 	return &GitHubWebhookHandler{
-		webhookService: webhookService,
-		forwardManager: forwardManager,
-		authHandler:    authHandler,
+		webhookService:   webhookService,
+		webhookGitHub:   webhookGitHub,
+		authHandler:     authHandler,
 	}
 }
 
@@ -60,8 +60,7 @@ func (h *GitHubWebhookHandler) ListConfigs(c *gin.Context) {
 	}
 	resp := make([]map[string]interface{}, 0, len(configs))
 	for _, config := range configs {
-		running, webhookURL, _ := h.forwardManager.GetStatus(config.ID().String(), config.ProjectID().String(), config.Repo())
-		resp = append(resp, configToMap(config, running, webhookURL))
+		resp = append(resp, configToMap(config))
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -78,7 +77,7 @@ func (h *GitHubWebhookHandler) CreateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, configToMap(config, false, ""))
+	c.JSON(http.StatusCreated, configToMap(config))
 }
 
 // UpdateConfig 更新 webhook 配置
@@ -105,7 +104,9 @@ func (h *GitHubWebhookHandler) DeleteConfig(c *gin.Context) {
 		return
 	}
 	// 先删除 GitHub webhook
-	h.forwardManager.StopForwarder(config.ID().String(), config.ProjectID().String(), config.Repo())
+	if config.Enabled() {
+		h.webhookGitHub.DeleteWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo())
+	}
 	if err := h.webhookService.DeleteConfig(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
@@ -122,20 +123,21 @@ func (h *GitHubWebhookHandler) EnableWebhook(c *gin.Context) {
 		return
 	}
 
-	// 创建 GitHub webhook（使用 config_id 路径区分项目）
-	if err := h.forwardManager.StartForwarder(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
-		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to start webhook: " + err.Error()})
+	// 创建 GitHub webhook 并获取 URL
+	webhookURL, err := h.webhookGitHub.CreateWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to create webhook: " + err.Error()})
 		return
 	}
 
-	// 更新配置状态
+	// 更新配置状态和 webhook URL
 	config.SetEnabled(true)
-	if err := h.webhookService.SetConfigEnabled(c.Request.Context(), id, true); err != nil {
-		log.Printf("[WEBHOOK] failed to update config enabled status: %v", err)
+	config.SetWebhookURL(webhookURL)
+	if err := h.webhookService.SaveConfig(c.Request.Context(), config); err != nil {
+		log.Printf("[WEBHOOK] failed to save config: %v", err)
 	}
 
-	running, webhookURL, _ := h.forwardManager.GetStatus(config.ID().String(), config.ProjectID().String(), config.Repo())
-	c.JSON(http.StatusOK, configToMap(config, running, webhookURL))
+	c.JSON(http.StatusOK, configToMap(config))
 }
 
 // DisableWebhook 停用 webhook（删除 GitHub webhook）
@@ -148,32 +150,35 @@ func (h *GitHubWebhookHandler) DisableWebhook(c *gin.Context) {
 	}
 
 	// 删除 GitHub webhook
-	if err := h.forwardManager.StopForwarder(config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
-		log.Printf("[WEBHOOK] failed to stop webhook: %v", err)
+	if err := h.webhookGitHub.DeleteWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
+		log.Printf("[WEBHOOK] failed to delete webhook: %v", err)
 	}
 
-	// 更新配置状态
+	// 更新配置状态，清除 webhook URL
 	config.SetEnabled(false)
-	if err := h.webhookService.SetConfigEnabled(c.Request.Context(), id, false); err != nil {
-		log.Printf("[WEBHOOK] failed to update config enabled status: %v", err)
+	config.SetWebhookURL("")
+	if err := h.webhookService.SaveConfig(c.Request.Context(), config); err != nil {
+		log.Printf("[WEBHOOK] failed to save config: %v", err)
 	}
 
-	running, webhookURL, _ := h.forwardManager.GetStatus(config.ID().String(), config.ProjectID().String(), config.Repo())
-	c.JSON(http.StatusOK, configToMap(config, running, webhookURL))
+	c.JSON(http.StatusOK, configToMap(config))
 }
 
-// GetForwarderStatus 获取 forwarder 运行状态
-func (h *GitHubWebhookHandler) GetForwarderStatus(c *gin.Context) {
+// GetWebhookStatus 获取 webhook 状态
+func (h *GitHubWebhookHandler) GetWebhookStatus(c *gin.Context) {
 	id := c.Param("id")
 	config, err := h.webhookService.GetConfig(c.Request.Context(), id)
 	if err != nil || config == nil {
 		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "config not found"})
 		return
 	}
-	running, webhookURL, _ := h.forwardManager.GetStatus(config.ID().String(), config.ProjectID().String(), config.Repo())
+
+	// 检查 GitHub 上 webhook 是否存在
+	exists, _ := h.webhookGitHub.CheckWebhookExists(c.Request.Context(), config.Repo())
 	c.JSON(http.StatusOK, gin.H{
-		"running":     running,
-		"webhook_url": webhookURL,
+		"enabled":     config.Enabled(),
+		"webhook_url": config.WebhookURL(),
+		"exists":      exists,
 	})
 }
 
@@ -264,16 +269,15 @@ func (h *GitHubWebhookHandler) ListHeartbeats(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func configToMap(config *domain.GitHubWebhookConfig, running bool, webhookURL string) map[string]interface{} {
+func configToMap(config *domain.GitHubWebhookConfig) map[string]interface{} {
 	return map[string]interface{}{
-		"id":            config.ID().String(),
-		"project_id":    config.ProjectID().String(),
-		"repo":          config.Repo(),
-		"enabled":       config.Enabled(),
-		"webhook_url":   webhookURL,
-		"running":       running,
-		"created_at":    config.CreatedAt().UnixMilli(),
-		"updated_at":    config.UpdatedAt().UnixMilli(),
+		"id":          config.ID().String(),
+		"project_id":  config.ProjectID().String(),
+		"repo":        config.Repo(),
+		"enabled":     config.Enabled(),
+		"webhook_url": config.WebhookURL(),
+		"created_at":  config.CreatedAt().UnixMilli(),
+		"updated_at":  config.UpdatedAt().UnixMilli(),
 	}
 }
 

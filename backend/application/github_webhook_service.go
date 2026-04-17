@@ -137,13 +137,8 @@ func (s *GitHubWebhookService) SetConfigEnabled(ctx context.Context, configID st
 	return s.configRepo.Save(ctx, config)
 }
 
-// UpdateForwarderPID 更新 forwarder PID
-func (s *GitHubWebhookService) UpdateForwarderPID(ctx context.Context, configID string, pid int) error {
-	config, err := s.configRepo.FindByID(ctx, domain.NewGitHubWebhookConfigID(configID))
-	if err != nil || config == nil {
-		return err
-	}
-	config.SetForwarderPID(pid)
+// SaveConfig 保存 webhook 配置
+func (s *GitHubWebhookService) SaveConfig(ctx context.Context, config *domain.GitHubWebhookConfig) error {
 	return s.configRepo.Save(ctx, config)
 }
 

@@ -14,13 +14,11 @@ import (
 
 type WebhookHandler struct {
 	webhookService *application.GitHubWebhookService
-	forwardManager *application.WebhookForwardManager
 }
 
-func NewWebhookHandler(webhookService *application.GitHubWebhookService, forwardManager *application.WebhookForwardManager) *WebhookHandler {
+func NewWebhookHandler(webhookService *application.GitHubWebhookService) *WebhookHandler {
 	return &WebhookHandler{
 		webhookService: webhookService,
-		forwardManager: forwardManager,
 	}
 }
 

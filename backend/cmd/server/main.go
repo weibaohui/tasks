@@ -301,7 +301,7 @@ func main() {
 		webhookURL = cfg.API.BaseURL
 		logger.Warn("Public URL not configured, using BaseURL for webhooks. GitHub webhooks require a public URL to work properly.")
 	}
-	webhookForwardManager := application.NewWebhookForwardManager(webhookURL)
+	webhookGitHub := application.NewWebhookGitHubManager(webhookURL)
 	githubWebhookService := application.NewGitHubWebhookService(
 		webhookConfigRepo,
 		webhookEventLogRepo,
@@ -310,14 +310,10 @@ func main() {
 		heartbeatTriggerService,
 		idGenerator,
 	)
-	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService, webhookForwardManager)
-	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookForwardManager, authHandler)
+	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService)
+	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookGitHub, authHandler)
 
-	// 恢复所有启用的 webhook forwarder
-	enabledConfigs, err := webhookConfigRepo.FindAllEnabled(context.Background())
-	if err == nil && len(enabledConfigs) > 0 {
-		webhookForwardManager.RestoreForwarders(context.Background(), enabledConfigs)
-	}
+	// 注意：不再需要 RestoreForwarders，因为 GitHub 会持久化 webhook 配置
 
 	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,

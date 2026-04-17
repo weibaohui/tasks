@@ -9,29 +9,18 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"time"
-
-	"github.com/weibh/taskmanager/domain"
 )
 
-// WebhookForwardManager 管理 GitHub webhook 的创建和删除
-// 使用 gh api 直接操作 GitHub webhook
-type WebhookForwardManager struct {
-	forwarders map[string]*forwardInfo // key is configID
-	mu         sync.RWMutex
-	serverURL  string // public URL for webhook
+// WebhookGitHubManager 管理 GitHub webhook 的创建和删除
+type WebhookGitHubManager struct {
+	mu        sync.RWMutex
+	serverURL string // public URL for webhook
 }
 
-type forwardInfo struct {
-	webhookID  int64
-	webhookURL string
-	started    time.Time
-}
-
-func NewWebhookForwardManager(serverURL string) *WebhookForwardManager {
-	return &WebhookForwardManager{
-		forwarders: make(map[string]*forwardInfo),
-		serverURL:  strings.TrimSuffix(serverURL, "/api/v1"),
+// NewWebhookGitHubManager 创建 WebhookGitHubManager
+func NewWebhookGitHubManager(serverURL string) *WebhookGitHubManager {
+	return &WebhookGitHubManager{
+		serverURL: strings.TrimSuffix(serverURL, "/api/v1"),
 	}
 }
 
@@ -43,122 +32,79 @@ func normalizeRepo(repo string) string {
 	return strings.TrimSuffix(repo, ".git")
 }
 
-// StartForwarder 创建 GitHub webhook 并返回 webhook ID
-func (m *WebhookForwardManager) StartForwarder(ctx context.Context, configID, projectID, repo string) error {
+// BuildWebhookURL 构建 webhook URL
+func (m *WebhookGitHubManager) BuildWebhookURL(repo string) string {
 	repoPath := normalizeRepo(repo)
-	// 使用语义化 URL: /api/v1/webhook/repos/{owner}/{repo}
-	webhookURL := fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
+	return fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
+}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// 检查是否已经存在
-	if existing, ok := m.forwarders[configID]; ok && existing.webhookID > 0 {
-		log.Printf("[WEBHOOK-FORWARD] webhook already exists for config %s (webhookID=%d)", configID, existing.webhookID)
-		return nil
-	}
+// CreateWebhook 创建 GitHub webhook
+func (m *WebhookGitHubManager) CreateWebhook(ctx context.Context, configID, projectID, repo string) (string, error) {
+	repoPath := normalizeRepo(repo)
+	webhookURL := m.BuildWebhookURL(repo)
 
 	// 先检查是否已有同名 webhook
 	existingID, err := m.findExistingWebhook(repoPath)
 	if err != nil {
-		log.Printf("[WEBHOOK-FORWARD] failed to check existing webhooks: %v", err)
+		log.Printf("[WEBHOOK] failed to check existing webhooks: %v", err)
 	}
 
 	if existingID > 0 {
 		// 更新现有 webhook 的 URL
 		if err := m.updateWebhookURL(repoPath, existingID, webhookURL); err != nil {
-			log.Printf("[WEBHOOK-FORWARD] failed to update webhook: %v", err)
-		} else {
-			log.Printf("[WEBHOOK-FORWARD] updated existing webhook %d for repo %s", existingID, repoPath)
+			log.Printf("[WEBHOOK] failed to update webhook: %v", err)
+			return "", err
 		}
-		m.forwarders[configID] = &forwardInfo{
-			webhookID:  existingID,
-			webhookURL: webhookURL,
-			started:    time.Now(),
-		}
-		return nil
+		log.Printf("[WEBHOOK] updated existing webhook %d for repo %s", existingID, repoPath)
+		return webhookURL, nil
 	}
 
 	// 创建新 webhook
 	webhookID, err := m.createWebhook(repoPath, webhookURL)
 	if err != nil {
-		return fmt.Errorf("failed to create webhook: %w", err)
+		return "", fmt.Errorf("failed to create webhook: %w", err)
 	}
 
-	m.forwarders[configID] = &forwardInfo{
-		webhookID:  webhookID,
-		webhookURL: webhookURL,
-		started:    time.Now(),
-	}
-
-	log.Printf("[WEBHOOK-FORWARD] created webhook %d for config %s (repo=%s, url=%s)", webhookID, configID, repoPath, webhookURL)
-	return nil
+	log.Printf("[WEBHOOK] created webhook %d for config %s (repo=%s, url=%s)", webhookID, configID, repoPath, webhookURL)
+	return webhookURL, nil
 }
 
-// StopForwarder 删除 GitHub webhook
-func (m *WebhookForwardManager) StopForwarder(configID, projectID, repo string) error {
+// DeleteWebhook 删除 GitHub webhook
+func (m *WebhookGitHubManager) DeleteWebhook(ctx context.Context, configID, projectID, repo string) error {
 	repoPath := normalizeRepo(repo)
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	info, ok := m.forwarders[configID]
-	if !ok || info.webhookID == 0 {
-		log.Printf("[WEBHOOK-FORWARD] no webhook found for config %s", configID)
+	// 查找现有的 webhook
+	webhookID, err := m.findExistingWebhook(repoPath)
+	if err != nil {
+		return err
+	}
+	if webhookID == 0 {
+		log.Printf("[WEBHOOK] no webhook found for repo %s", repoPath)
 		return nil
 	}
 
 	// 删除 webhook
-	if err := m.deleteWebhook(repoPath, info.webhookID); err != nil {
-		log.Printf("[WEBHOOK-FORWARD] failed to delete webhook %d: %v", info.webhookID, err)
+	if err := m.deleteWebhook(repoPath, webhookID); err != nil {
+		log.Printf("[WEBHOOK] failed to delete webhook %d: %v", webhookID, err)
 		return err
 	}
 
-	log.Printf("[WEBHOOK-FORWARD] deleted webhook %d for config %s", info.webhookID, configID)
-	delete(m.forwarders, configID)
+	log.Printf("[WEBHOOK] deleted webhook %d for config %s", webhookID, configID)
 	return nil
 }
 
-// GetStatus 返回 forwarder 状态
-func (m *WebhookForwardManager) GetStatus(configID, projectID, repo string) (running bool, webhookURL string, err error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	info, ok := m.forwarders[configID]
-	if !ok || info.webhookID == 0 {
-		return false, "", nil
+// CheckWebhookExists 检查 webhook 是否存在
+func (m *WebhookGitHubManager) CheckWebhookExists(ctx context.Context, repo string) (bool, error) {
+	repoPath := normalizeRepo(repo)
+	webhookID, err := m.findExistingWebhook(repoPath)
+	if err != nil {
+		return false, err
 	}
-	return true, info.webhookURL, nil
-}
-
-// IsRunning 检查是否在运行
-func (m *WebhookForwardManager) IsRunning(configID, projectID, repo string) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	info, ok := m.forwarders[configID]
-	return ok && info.webhookID > 0
-}
-
-// RestoreForwarders 恢复所有启用的 webhook
-func (m *WebhookForwardManager) RestoreForwarders(ctx context.Context, configs []*domain.GitHubWebhookConfig) {
-	for _, config := range configs {
-		if !config.Enabled() {
-			continue
-		}
-		configID := config.ID().String()
-		projectID := config.ProjectID().String()
-		repo := config.Repo()
-
-		log.Printf("[WEBHOOK-FORWARD] restoring webhook for config %s (repo=%s)", configID, repo)
-		if err := m.StartForwarder(ctx, configID, projectID, repo); err != nil {
-			log.Printf("[WEBHOOK-FORWARD] failed to restore webhook for config %s: %v", configID, err)
-		}
-	}
+	return webhookID > 0, nil
 }
 
 // findExistingWebhook 查找是否已存在 webhook
-func (m *WebhookForwardManager) findExistingWebhook(repo string) (int64, error) {
+func (m *WebhookGitHubManager) findExistingWebhook(repo string) (int64, error) {
 	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/hooks", repo), "--jq", "[.[] | select(.name == \"web\")] | .[0].id")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -179,14 +125,13 @@ func (m *WebhookForwardManager) findExistingWebhook(repo string) (int64, error) 
 }
 
 // createWebhook 创建 GitHub webhook
-func (m *WebhookForwardManager) createWebhook(repo, url string) (int64, error) {
-	// 构建 JSON payload
+func (m *WebhookGitHubManager) createWebhook(repo, url string) (int64, error) {
 	payload := map[string]interface{}{
 		"name":   "web",
 		"active": true,
 		"events": []string{"*"},
 		"config": map[string]interface{}{
-			"url":         url,
+			"url":          url,
 			"content_type": "json",
 		},
 	}
@@ -220,7 +165,7 @@ func (m *WebhookForwardManager) createWebhook(repo, url string) (int64, error) {
 }
 
 // updateWebhookURL 更新 webhook 的 URL
-func (m *WebhookForwardManager) updateWebhookURL(repo string, webhookID int64, newURL string) error {
+func (m *WebhookGitHubManager) updateWebhookURL(repo string, webhookID int64, newURL string) error {
 	payload := map[string]interface{}{
 		"config": map[string]interface{}{
 			"url": newURL,
@@ -244,7 +189,7 @@ func (m *WebhookForwardManager) updateWebhookURL(repo string, webhookID int64, n
 }
 
 // deleteWebhook 删除 GitHub webhook
-func (m *WebhookForwardManager) deleteWebhook(repo string, webhookID int64) error {
+func (m *WebhookGitHubManager) deleteWebhook(repo string, webhookID int64) error {
 	cmd := exec.Command("gh", "api", fmt.Sprintf("repos/%s/hooks/%d", repo, webhookID), "-X", "DELETE")
 
 	err := cmd.Run()

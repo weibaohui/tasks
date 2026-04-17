@@ -394,7 +394,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_configs (
     project_id TEXT NOT NULL UNIQUE,
     repo TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 0,
-    forwarder_pid INTEGER,
+    webhook_url TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE

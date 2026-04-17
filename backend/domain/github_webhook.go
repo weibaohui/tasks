@@ -30,13 +30,13 @@ func (id GitHubWebhookConfigID) String() string {
 }
 
 type GitHubWebhookConfig struct {
-	id           GitHubWebhookConfigID
-	projectID    ProjectID
-	repo         string
-	enabled      bool
-	forwarderPID int
-	createdAt    time.Time
-	updatedAt    time.Time
+	id        GitHubWebhookConfigID
+	projectID ProjectID
+	repo      string
+	enabled   bool
+	webhookURL string
+	createdAt time.Time
+	updatedAt time.Time
 }
 
 func NewGitHubWebhookConfig(
@@ -55,31 +55,30 @@ func NewGitHubWebhookConfig(
 	}
 	now := time.Now()
 	return &GitHubWebhookConfig{
-		id:           id,
-		projectID:    projectID,
-		repo:         strings.TrimSpace(repo),
-		enabled:      false,
-		forwarderPID: 0,
-		createdAt:    now,
-		updatedAt:    now,
+		id:        id,
+		projectID: projectID,
+		repo:     strings.TrimSpace(repo),
+		enabled:  false,
+		createdAt: now,
+		updatedAt: now,
 	}, nil
 }
 
-func (c *GitHubWebhookConfig) ID() GitHubWebhookConfigID    { return c.id }
-func (c *GitHubWebhookConfig) ProjectID() ProjectID         { return c.projectID }
-func (c *GitHubWebhookConfig) Repo() string                 { return c.repo }
-func (c *GitHubWebhookConfig) Enabled() bool               { return c.enabled }
-func (c *GitHubWebhookConfig) ForwarderPID() int           { return c.forwarderPID }
-func (c *GitHubWebhookConfig) CreatedAt() time.Time         { return c.createdAt }
-func (c *GitHubWebhookConfig) UpdatedAt() time.Time         { return c.updatedAt }
+func (c *GitHubWebhookConfig) ID() GitHubWebhookConfigID { return c.id }
+func (c *GitHubWebhookConfig) ProjectID() ProjectID     { return c.projectID }
+func (c *GitHubWebhookConfig) Repo() string             { return c.repo }
+func (c *GitHubWebhookConfig) Enabled() bool            { return c.enabled }
+func (c *GitHubWebhookConfig) WebhookURL() string       { return c.webhookURL }
+func (c *GitHubWebhookConfig) CreatedAt() time.Time   { return c.createdAt }
+func (c *GitHubWebhookConfig) UpdatedAt() time.Time   { return c.updatedAt }
 
 func (c *GitHubWebhookConfig) SetEnabled(v bool) {
 	c.enabled = v
 	c.updatedAt = time.Now()
 }
 
-func (c *GitHubWebhookConfig) SetForwarderPID(pid int) {
-	c.forwarderPID = pid
+func (c *GitHubWebhookConfig) SetWebhookURL(url string) {
+	c.webhookURL = url
 	c.updatedAt = time.Now()
 }
 
@@ -93,24 +92,24 @@ func (c *GitHubWebhookConfig) UpdateRepo(repo string) error {
 }
 
 type GitHubWebhookConfigSnapshot struct {
-	ID           GitHubWebhookConfigID
-	ProjectID    ProjectID
-	Repo         string
-	Enabled      bool
-	ForwarderPID int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID        GitHubWebhookConfigID
+	ProjectID ProjectID
+	Repo     string
+	Enabled  bool
+	WebhookURL string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (c *GitHubWebhookConfig) ToSnapshot() GitHubWebhookConfigSnapshot {
 	return GitHubWebhookConfigSnapshot{
-		ID:           c.id,
-		ProjectID:    c.projectID,
-		Repo:         c.repo,
-		Enabled:      c.enabled,
-		ForwarderPID: c.forwarderPID,
-		CreatedAt:    c.createdAt,
-		UpdatedAt:    c.updatedAt,
+		ID:        c.id,
+		ProjectID: c.projectID,
+		Repo:     c.repo,
+		Enabled:  c.enabled,
+		WebhookURL: c.webhookURL,
+		CreatedAt: c.createdAt,
+		UpdatedAt: c.updatedAt,
 	}
 }
 
@@ -119,7 +118,7 @@ func (c *GitHubWebhookConfig) FromSnapshot(s GitHubWebhookConfigSnapshot) {
 	c.projectID = s.ProjectID
 	c.repo = s.Repo
 	c.enabled = s.Enabled
-	c.forwarderPID = s.ForwarderPID
+	c.webhookURL = s.WebhookURL
 	c.createdAt = s.CreatedAt
 	c.updatedAt = s.UpdatedAt
 }

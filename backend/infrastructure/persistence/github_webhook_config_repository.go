@@ -19,13 +19,13 @@ func NewSQLiteGitHubWebhookConfigRepository(db *sql.DB) *SQLiteGitHubWebhookConf
 func (r *SQLiteGitHubWebhookConfigRepository) Save(ctx context.Context, config *domain.GitHubWebhookConfig) error {
 	snap := config.ToSnapshot()
 	query := `
-		INSERT INTO github_webhook_configs (id, project_id, repo, enabled, forwarder_pid, created_at, updated_at)
+		INSERT INTO github_webhook_configs (id, project_id, repo, enabled, webhook_url, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			project_id=excluded.project_id,
 			repo=excluded.repo,
 			enabled=excluded.enabled,
-			forwarder_pid=excluded.forwarder_pid,
+			webhook_url=excluded.webhook_url,
 			updated_at=excluded.updated_at
 	`
 	_, err := r.db.ExecContext(
@@ -35,7 +35,7 @@ func (r *SQLiteGitHubWebhookConfigRepository) Save(ctx context.Context, config *
 		snap.ProjectID.String(),
 		snap.Repo,
 		boolToInt(snap.Enabled),
-		snap.ForwarderPID,
+		snap.WebhookURL,
 		snap.CreatedAt.Unix(),
 		snap.UpdatedAt.Unix(),
 	)
@@ -44,21 +44,21 @@ func (r *SQLiteGitHubWebhookConfigRepository) Save(ctx context.Context, config *
 
 func (r *SQLiteGitHubWebhookConfigRepository) FindByID(ctx context.Context, id domain.GitHubWebhookConfigID) (*domain.GitHubWebhookConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, repo, enabled, forwarder_pid, created_at, updated_at
+		SELECT id, project_id, repo, enabled, webhook_url, created_at, updated_at
 		FROM github_webhook_configs WHERE id = ?`, id.String())
 	return scanGitHubWebhookConfig(row)
 }
 
 func (r *SQLiteGitHubWebhookConfigRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID) (*domain.GitHubWebhookConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, repo, enabled, forwarder_pid, created_at, updated_at
+		SELECT id, project_id, repo, enabled, webhook_url, created_at, updated_at
 		FROM github_webhook_configs WHERE project_id = ?`, projectID.String())
 	return scanGitHubWebhookConfig(row)
 }
 
 func (r *SQLiteGitHubWebhookConfigRepository) FindAll(ctx context.Context) ([]*domain.GitHubWebhookConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, repo, enabled, forwarder_pid, created_at, updated_at
+		SELECT id, project_id, repo, enabled, webhook_url, created_at, updated_at
 		FROM github_webhook_configs ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (r *SQLiteGitHubWebhookConfigRepository) FindAll(ctx context.Context) ([]*d
 
 func (r *SQLiteGitHubWebhookConfigRepository) FindAllEnabled(ctx context.Context) ([]*domain.GitHubWebhookConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, repo, enabled, forwarder_pid, created_at, updated_at
+		SELECT id, project_id, repo, enabled, webhook_url, created_at, updated_at
 		FROM github_webhook_configs WHERE enabled = 1 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -99,15 +99,15 @@ func scanGitHubWebhookConfigs(rows *sql.Rows) ([]*domain.GitHubWebhookConfig, er
 
 func scanGitHubWebhookConfig(scanner rowScanner) (*domain.GitHubWebhookConfig, error) {
 	var (
-		idStr          string
-		projectIDStr   string
-		repo           string
-		enabled        int
-		forwarderPID   sql.NullInt64
-		createdAtUnix  int64
-		updatedAtUnix  int64
+		idStr         string
+		projectIDStr  string
+		repo          string
+		enabled       int
+		webhookURL    sql.NullString
+		createdAtUnix int64
+		updatedAtUnix int64
 	)
-	err := scanner.Scan(&idStr, &projectIDStr, &repo, &enabled, &forwarderPID, &createdAtUnix, &updatedAtUnix)
+	err := scanner.Scan(&idStr, &projectIDStr, &repo, &enabled, &webhookURL, &createdAtUnix, &updatedAtUnix)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -115,18 +115,18 @@ func scanGitHubWebhookConfig(scanner rowScanner) (*domain.GitHubWebhookConfig, e
 		return nil, err
 	}
 	config := &domain.GitHubWebhookConfig{}
-	var pid int
-	if forwarderPID.Valid {
-		pid = int(forwarderPID.Int64)
+	var url string
+	if webhookURL.Valid {
+		url = webhookURL.String
 	}
 	config.FromSnapshot(domain.GitHubWebhookConfigSnapshot{
-		ID:           domain.NewGitHubWebhookConfigID(idStr),
-		ProjectID:    domain.NewProjectID(projectIDStr),
-		Repo:         repo,
-		Enabled:      enabled == 1,
-		ForwarderPID: pid,
-		CreatedAt:    time.Unix(createdAtUnix, 0),
-		UpdatedAt:    time.Unix(updatedAtUnix, 0),
+		ID:        domain.NewGitHubWebhookConfigID(idStr),
+		ProjectID: domain.NewProjectID(projectIDStr),
+		Repo:     repo,
+		Enabled:  enabled == 1,
+		WebhookURL: url,
+		CreatedAt: time.Unix(createdAtUnix, 0),
+		UpdatedAt: time.Unix(updatedAtUnix, 0),
 	})
 	return config, nil
 }
