@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Project } from '../types/projectRequirement';
 import type { Agent } from '../types/agent';
 import { HeartbeatManagement } from '../components/HeartbeatManagement';
-import { OverviewStats, ProjectRunsPanel, ProjectSelectorCard, ScenarioApplyPanel } from '../components/AutomationCenter';
+import { OverviewStats, ProjectRunsPanel, ProjectSelectorCard, ProjectStateMachinePanel, ScenarioApplyPanel } from '../components/AutomationCenter';
 import { HeartbeatScenarioManagementPage } from './HeartbeatScenarioManagementPage';
 import { ProjectWebhookPage } from './ProjectWebhookPage';
 
@@ -110,7 +110,7 @@ export const AutomationCenterPage: React.FC = () => {
         title="自动化中心"
         extra={
           <Space>
-            <Text type="secondary">统一管理心跳实例、场景模板与 Webhook 事件触发</Text>
+            <Text type="secondary">统一管理心跳实例、场景模板、Webhook 事件与状态机配置</Text>
           </Space>
         }
       >
@@ -149,6 +149,11 @@ export const AutomationCenterPage: React.FC = () => {
               key: 'webhooks',
               label: 'Webhook 事件',
               children: <ProjectWebhookPage selectedProject={selectedProject} />,
+            },
+            {
+              key: 'stateMachine',
+              label: '状态机配置',
+              children: <ProjectStateMachinePanel project={selectedProject} />,
             },
           ]}
         />
