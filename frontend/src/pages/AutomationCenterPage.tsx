@@ -154,7 +154,7 @@ export const AutomationCenterPage: React.FC = () => {
             {
               key: 'webhooks',
               label: 'Webhook 事件',
-              children: <ProjectWebhookPage />,
+              children: <ProjectWebhookPage selectedProject={selectedProject} />,
             },
           ]}
         />
