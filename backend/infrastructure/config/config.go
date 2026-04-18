@@ -52,7 +52,7 @@ func Load() (*Config, error) {
 	cfg := defaultConfig()
 
 	// 1. 尝试从配置文件加载
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 	if configPath != "" {
 		if err := loadFromFile(configPath, cfg); err != nil {
 			return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
@@ -90,8 +90,9 @@ func defaultConfig() *Config {
 	}
 }
 
-// getConfigPath 获取配置文件路径
-func getConfigPath() string {
+// GetConfigPath 获取配置文件路径（导出版本，供其他包使用）
+// 优先级：环境变量 > 当前目录 taskmanager.yaml > ~/.taskmanager/config.yaml
+func GetConfigPath() string {
 	// 环境变量指定
 	if path := os.Getenv("TASKMANAGER_CONFIG"); path != "" {
 		return path
@@ -299,34 +300,28 @@ func SaveConfig(path string, cfg *Config) error {
 }
 
 // GetPublicURL 获取公共 URL（用于 webhook 回调）
-// 优先从 ~/.taskmanager/config.yaml 读取（tunnel 创建时保存）
-// 如果没有则使用配置文件中的 PublicURL
 func GetPublicURL() string {
-	// 先尝试从 config.yaml 读取（tunnel 存储的）
-	if publicURL := getPublicURLFromYAML(); publicURL != "" {
-		return publicURL
-	}
-	// 回退到配置文件
 	cfg, err := Load()
-	if err != nil {
+	if err != nil || cfg == nil {
 		return ""
 	}
 	return cfg.API.PublicURL
 }
 
-// getPublicURLFromYAML 从 config.yaml 读取 public URL
-func getPublicURLFromYAML() string {
-	home, _ := os.UserHomeDir()
-	yamlPath := filepath.Join(home, ".taskmanager", "config.yaml")
-	data, err := os.ReadFile(yamlPath)
+// UpdatePublicURL 更新配置文件中的 public_url
+// 统一的配置更新方法，确保读取和写入使用相同的路径
+func UpdatePublicURL(url string) error {
+	cfg, err := Load()
 	if err != nil {
-		return ""
+		return fmt.Errorf("加载配置文件失败: %w", err)
 	}
-	var cfg struct {
-		PublicURL string `yaml:"public_url"`
+
+	cfg.API.PublicURL = url
+
+	configPath := GetConfigPath()
+	if configPath == "" {
+		return fmt.Errorf("未找到配置文件")
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return ""
-	}
-	return cfg.PublicURL
+
+	return SaveConfig(configPath, cfg)
 }
