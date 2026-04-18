@@ -4,12 +4,10 @@ import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircl
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, getRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
-import { listHeartbeatScenarios, applyHeartbeatScenario, previewApplyHeartbeatScenario, type HeartbeatScenario } from '../api/heartbeatScenarioApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement, ProgressData, TodoItem } from '../types/projectRequirement';
-import { HeartbeatManagement } from '../components/HeartbeatManagement';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { RequirementKanban } from '../components/RequirementKanban';
@@ -151,10 +149,6 @@ export const ProjectRequirementPage: React.FC = () => {
 
   // 需求类型列表（用于创建需求时选择）
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
-
-  // 心跳场景列表
-  const [heartbeatScenarios, setHeartbeatScenarios] = useState<HeartbeatScenario[]>([]);
-  const [applyingScenario, setApplyingScenario] = useState(false);
 
   // 可选状态列表（按需求类型存储）
   const [statesByType, setStatesByType] = useState<Record<string, State[]>>({});
@@ -530,20 +524,10 @@ export const ProjectRequirementPage: React.FC = () => {
     }
   };
 
-  const fetchHeartbeatScenarios = useCallback(async () => {
-    try {
-      const data = await listHeartbeatScenarios();
-      setHeartbeatScenarios(data);
-    } catch (_error) {
-      // 忽略错误
-    }
-  }, []);
-
   // 项目配置相关处理
   const openProjectConfig = async (project: Project) => {
     setConfigProject(project);
     setProjectConfigDrawerOpen(true);
-    await fetchHeartbeatScenarios();
   };
 
   const closeProjectConfig = () => {
@@ -1253,117 +1237,6 @@ export const ProjectRequirementPage: React.FC = () => {
                   />
                 </>
               ),
-            },
-            {
-              key: 'heartbeat',
-              label: '心跳管理',
-              children: configProject ? (
-                <div>
-                  <Card
-                    size="small"
-                    title="心跳场景"
-                    style={{ marginBottom: 16 }}
-                  >
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                        <Select
-                          style={{ minWidth: 280 }}
-                          placeholder="选择心跳场景"
-                          options={heartbeatScenarios.map((s) => ({ label: s.name, value: s.code }))}
-                          value={configProject.heartbeat_scenario_code || undefined}
-                          onChange={async (code) => {
-                            if (!configProject) return;
-                            if (!code) {
-                              message.warning('请选择有效的心跳场景');
-                              return;
-                            }
-                            try {
-                              setApplyingScenario(true);
-                              const preview = await previewApplyHeartbeatScenario(configProject.id, code);
-                              setApplyingScenario(false);
-                              Modal.confirm({
-                                title: '确认应用心跳场景',
-                                width: 760,
-                                okText: '确认应用',
-                                cancelText: '取消',
-                                content: (
-                                  <Space direction="vertical" style={{ width: '100%' }}>
-                                    <Alert
-                                      type="warning"
-                                      showIcon
-                                      message={`将应用场景：${preview.scenario_name}`}
-                                      description={`预计删除 ${preview.delete_count} 条旧心跳，新增 ${preview.create_count} 条场景心跳。`}
-                                    />
-                                    <div>
-                                      <div style={{ fontWeight: 600, marginBottom: 6 }}>将删除（最多展示5条）</div>
-                                      {preview.to_delete.length === 0 ? (
-                                        <div style={{ color: '#999' }}>无</div>
-                                      ) : (
-                                        <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                          {preview.to_delete.slice(0, 5).map((item) => (
-                                            <li key={`delete-${item.id}`}>
-                                              {item.name}（{item.interval_minutes} 分钟）
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <div style={{ fontWeight: 600, marginBottom: 6 }}>将新增（最多展示5条）</div>
-                                      {preview.to_create.length === 0 ? (
-                                        <div style={{ color: '#999' }}>无</div>
-                                      ) : (
-                                        <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                          {preview.to_create.slice(0, 5).map((item) => (
-                                            <li key={`create-${item.id}`}>
-                                              {item.name}（{item.interval_minutes} 分钟）
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </div>
-                                  </Space>
-                                ),
-                                onOk: async () => {
-                                  setApplyingScenario(true);
-                                  try {
-                                    await applyHeartbeatScenario(configProject.id, code);
-                                    message.success('场景应用成功');
-                                    const updatedProject = { ...configProject, heartbeat_scenario_code: code };
-                                    setConfigProject(updatedProject);
-                                    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
-                                  } catch (_error) {
-                                    message.error('场景应用失败');
-                                  } finally {
-                                    setApplyingScenario(false);
-                                  }
-                                },
-                              });
-                            } catch (_error) {
-                              message.error('预览场景应用影响失败');
-                            } finally {
-                              setApplyingScenario(false);
-                            }
-                          }}
-                          disabled={applyingScenario}
-                          allowClear
-                        />
-                        {configProject.heartbeat_scenario_code && (
-                          <Tag color="blue">
-                            当前场景: {heartbeatScenarios.find((s) => s.code === configProject.heartbeat_scenario_code)?.name || configProject.heartbeat_scenario_code}
-                          </Tag>
-                        )}
-                      </div>
-                      <Alert
-                        message="应用场景后，系统将自动为项目创建该场景定义的所有心跳。应用场景会替换项目现有的所有心跳。"
-                        type="info"
-                        showIcon
-                      />
-                    </Space>
-                  </Card>
-                  <HeartbeatManagement projectId={configProject.id} agents={agents} requirementTypes={requirementTypes} />
-                </div>
-              ) : null,
             },
             {
               key: 'stateMachine',
