@@ -458,7 +458,12 @@ export const ProjectWebhookPage: React.FC = () => {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => setBindingModalOpen(true)}
+                onClick={async () => {
+                  if (selectedConfig) {
+                    await fetchHeartbeats(selectedConfig.project_id);
+                  }
+                  setBindingModalOpen(true);
+                }}
               >
                 添加绑定
               </Button>

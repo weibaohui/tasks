@@ -265,18 +265,7 @@ func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, g
 	// API v1 前缀组
 	v1 := engine.Group("/api/v1")
 
-	// Webhook 接收端点（无需认证，统一 /api/v1 前缀）
-	// 语义化 URL：/api/v1/webhook/repos/{owner}/{repo}
-	v1.POST("/webhook/repos/:owner/:repo", webhookHandler.HandleWebhookByRepo)
-	// 通用端点，通过 payload 中的 repo 匹配项目
-	v1.POST("/webhook", webhookHandler.HandleWebhook)
-	// 内部接口：更新所有启用的 webhook URL（供 tunnel start 调用）
-	v1.POST("/internal/webhooks/update-all", func(c *gin.Context) {
-		githubWebhookHandler.UpdateAllWebhooksIfNeeded()
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	// GitHub Webhook 管理 API（需认证）
+	// 认证中间件
 	requireAuth := func(c *gin.Context) {
 		if authHandler == nil {
 			c.Next()
@@ -290,6 +279,18 @@ func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, g
 		c.Next()
 	}
 
+	// Webhook 接收端点（无需认证，统一 /api/v1 前缀）
+	// 语义化 URL：/api/v1/webhook/repos/{owner}/{repo}
+	v1.POST("/webhook/repos/:owner/:repo", webhookHandler.HandleWebhookByRepo)
+	// 通用端点，通过 payload 中的 repo 匹配项目
+	v1.POST("/webhook", webhookHandler.HandleWebhook)
+	// 内部接口：更新所有启用的 webhook URL（供 tunnel start 调用，需认证）
+	v1.POST("/internal/webhooks/update-all", requireAuth, func(c *gin.Context) {
+		githubWebhookHandler.UpdateAllWebhooksIfNeeded()
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// GitHub Webhook 管理 API（需认证）
 	webhooks := v1.Group("/github-webhooks", requireAuth)
 	webhooks.GET("/configs", githubWebhookHandler.ListConfigs)
 	webhooks.POST("/configs", githubWebhookHandler.CreateConfig)

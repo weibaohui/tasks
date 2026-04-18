@@ -10,19 +10,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
 type GitHubWebhookHandler struct {
-	webhookService   *application.GitHubWebhookService
-	webhookGitHub   *application.WebhookGitHubManager
-	authHandler     *AuthHandler
+	webhookService *application.GitHubWebhookService
+	webhookGitHub  *application.WebhookGitHubManager
+	authHandler    *AuthHandler
 }
 
 func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, webhookGitHub *application.WebhookGitHubManager, authHandler *AuthHandler) *GitHubWebhookHandler {
 	return &GitHubWebhookHandler{
-		webhookService:   webhookService,
-		webhookGitHub:   webhookGitHub,
-		authHandler:     authHandler,
+		webhookService: webhookService,
+		webhookGitHub:  webhookGitHub,
+		authHandler:    authHandler,
 	}
 }
 
@@ -234,7 +235,7 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 
 	if !needsUpdate {
 		c.JSON(http.StatusOK, gin.H{
-			"message":   "webhook URL is up to date",
+			"message":     "webhook URL is up to date",
 			"webhook_url": config.WebhookURL(),
 		})
 		return
@@ -268,13 +269,26 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "webhook URL updated",
-		"old_url":    currentURL,
+		"old_url":     currentURL,
 		"webhook_url": newURL,
 	})
 }
 
 // UpdateAllWebhooksIfNeeded 检查并更新所有启用的 webhook URL（供 tunnel start 调用）
 func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
+	// 获取最新的 public URL
+	newPublicURL := config.GetPublicURL()
+	if newPublicURL == "" {
+		log.Printf("[WEBHOOK] no public URL available, skipping webhook update")
+		return
+	}
+
+	// 记录新的 public URL 用于排查问题
+	log.Printf("[WEBHOOK] updating webhook URLs with new public URL: %s", newPublicURL)
+
+	// 确认加载成功后再更新 manager 中的 serverURL
+	h.webhookGitHub.UpdateServerURL(newPublicURL)
+
 	configs, err := h.webhookService.ListConfigs(context.Background())
 	if err != nil {
 		log.Printf("[WEBHOOK] failed to list configs for URL update: %v", err)
@@ -303,20 +317,21 @@ func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
 			continue
 		}
 
-		newURL := config.WebhookURL()
-		if err := h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID, newURL); err != nil {
+		// 使用新的 public URL 构建的 webhook URL
+		newWebhookURL := h.webhookGitHub.BuildWebhookURL(repoPath)
+		if err := h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID, newWebhookURL); err != nil {
 			log.Printf("[WEBHOOK] failed to update webhook for repo %s: %v", repoPath, err)
 			continue
 		}
 
 		// 更新数据库中的 webhook_url
-		config.SetWebhookURL(newURL)
+		config.SetWebhookURL(newWebhookURL)
 		if err := h.webhookService.SaveConfig(context.Background(), config); err != nil {
 			log.Printf("[WEBHOOK] failed to save config for repo %s: %v", repoPath, err)
 			continue
 		}
 
-		log.Printf("[WEBHOOK] webhook URL updated for repo %s: %s", repoPath, newURL)
+		log.Printf("[WEBHOOK] webhook URL updated for repo %s: %s", repoPath, newWebhookURL)
 	}
 }
 
@@ -421,24 +436,24 @@ func configToMap(config *domain.GitHubWebhookConfig) map[string]interface{} {
 
 func eventLogToMap(log *domain.WebhookEventLog) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                  log.ID().String(),
-		"project_id":         log.ProjectID().String(),
-		"event_type":         log.EventType(),
-		"status":             string(log.Status()),
+		"id":                   log.ID().String(),
+		"project_id":           log.ProjectID().String(),
+		"event_type":           log.EventType(),
+		"status":               string(log.Status()),
 		"trigger_heartbeat_id": log.TriggerHeartbeatID(),
-		"error_message":      log.ErrorMessage(),
-		"received_at":        log.ReceivedAt().UnixMilli(),
+		"error_message":        log.ErrorMessage(),
+		"received_at":          log.ReceivedAt().UnixMilli(),
 	}
 }
 
 func webhookBindingToMap(binding *domain.WebhookHeartbeatBinding) map[string]interface{} {
 	return map[string]interface{}{
-		"id":                   binding.ID().String(),
-		"project_id":          binding.ProjectID().String(),
+		"id":                       binding.ID().String(),
+		"project_id":               binding.ProjectID().String(),
 		"github_webhook_config_id": binding.ConfigID().String(),
-		"github_event_type":    binding.GitHubEventType(),
-		"heartbeat_id":        binding.HeartbeatID().String(),
-		"enabled":             binding.Enabled(),
-		"created_at":          binding.CreatedAt().UnixMilli(),
+		"github_event_type":        binding.GitHubEventType(),
+		"heartbeat_id":             binding.HeartbeatID().String(),
+		"enabled":                  binding.Enabled(),
+		"created_at":               binding.CreatedAt().UnixMilli(),
 	}
 }

@@ -24,6 +24,25 @@ func NewWebhookGitHubManager(serverURL string) *WebhookGitHubManager {
 	}
 }
 
+// UpdateServerURL 更新 server URL（tunnel 地址变更时调用）
+func (m *WebhookGitHubManager) UpdateServerURL(serverURL string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	newURL := strings.TrimSuffix(serverURL, "/api/v1")
+	if newURL == m.serverURL {
+		return
+	}
+	log.Printf("[WEBHOOK] server URL updated: %s -> %s", m.serverURL, newURL)
+	m.serverURL = newURL
+}
+
+// SnapshotServerURL 快照当前 server URL（批量更新时使用）
+func (m *WebhookGitHubManager) SnapshotServerURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.serverURL
+}
+
 // normalizeRepo converts full URL to short format (owner/repo)
 func normalizeRepo(repo string) string {
 	if strings.HasPrefix(repo, "https://github.com/") {
@@ -34,6 +53,8 @@ func normalizeRepo(repo string) string {
 
 // BuildWebhookURL 构建 webhook URL
 func (m *WebhookGitHubManager) BuildWebhookURL(repo string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	repoPath := normalizeRepo(repo)
 	return fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
 }
