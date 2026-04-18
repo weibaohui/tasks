@@ -302,6 +302,7 @@ func RegisterWebhookRoutes(engine *gin.Engine, webhookHandler *WebhookHandler, g
 	webhooks.GET("/configs/:id/check-url", githubWebhookHandler.CheckWebhookURL)
 	webhooks.POST("/configs/:id/update-url", githubWebhookHandler.UpdateWebhookURL)
 	webhooks.GET("/configs/:id/event-logs", githubWebhookHandler.ListEventLogs)
+	webhooks.DELETE("/configs/:id/event-logs", githubWebhookHandler.ClearEventLogs)
 	webhooks.GET("/configs/:id/bindings", githubWebhookHandler.ListBindings)
 	webhooks.POST("/bindings", githubWebhookHandler.CreateBinding)
 	webhooks.DELETE("/bindings/:id", githubWebhookHandler.DeleteBinding)

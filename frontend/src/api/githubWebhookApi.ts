@@ -93,9 +93,24 @@ export async function updateWebhookURL(id: string): Promise<{ message: string; o
   return res.data;
 }
 
-// 列出事件日志
-export async function listEventLogs(configId: string): Promise<WebhookEventLog[]> {
-  const res = await apiClient.get(`/github-webhooks/configs/${configId}/event-logs`);
+// 列出事件日志（分页）
+export interface EventLogsResponse {
+  data: WebhookEventLog[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function listEventLogs(configId: string, limit = 20, offset = 0): Promise<EventLogsResponse> {
+  const res = await apiClient.get(`/github-webhooks/configs/${configId}/event-logs`, {
+    params: { limit, offset },
+  });
+  return res.data;
+}
+
+// 清空事件日志
+export async function clearEventLogs(configId: string): Promise<{ message: string }> {
+  const res = await apiClient.delete(`/github-webhooks/configs/${configId}/event-logs`);
   return res.data;
 }
 

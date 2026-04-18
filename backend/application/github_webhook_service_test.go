@@ -101,8 +101,17 @@ func (m *testMockWebhookEventLogRepo) FindByID(ctx context.Context, id domain.We
 	return nil, nil
 }
 
-func (m *testMockWebhookEventLogRepo) FindByProjectID(ctx context.Context, projectID domain.ProjectID, limit int) ([]*domain.WebhookEventLog, error) {
+func (m *testMockWebhookEventLogRepo) FindByProjectID(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.WebhookEventLog, error) {
 	return m.logs, nil
+}
+
+func (m *testMockWebhookEventLogRepo) CountByProjectID(ctx context.Context, projectID domain.ProjectID) (int, error) {
+	return len(m.logs), nil
+}
+
+func (m *testMockWebhookEventLogRepo) DeleteByProjectID(ctx context.Context, projectID domain.ProjectID) error {
+	m.logs = nil
+	return nil
 }
 
 func (m *testMockWebhookEventLogRepo) Delete(ctx context.Context, id domain.WebhookEventLogID) error {

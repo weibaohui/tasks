@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -335,7 +336,7 @@ func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
 	}
 }
 
-// ListEventLogs 列出事件日志
+// ListEventLogs 列出事件日志（分页）
 func (h *GitHubWebhookHandler) ListEventLogs(c *gin.Context) {
 	configID := c.Param("id")
 	config, err := h.webhookService.GetConfig(c.Request.Context(), configID)
@@ -343,7 +344,9 @@ func (h *GitHubWebhookHandler) ListEventLogs(c *gin.Context) {
 		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "config not found"})
 		return
 	}
-	logs, err := h.webhookService.ListEventLogs(c.Request.Context(), config.ProjectID().String(), 100)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	logs, total, err := h.webhookService.ListEventLogs(c.Request.Context(), config.ProjectID().String(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
@@ -352,7 +355,27 @@ func (h *GitHubWebhookHandler) ListEventLogs(c *gin.Context) {
 	for _, log := range logs {
 		resp = append(resp, eventLogToMap(log))
 	}
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{
+		"data":   resp,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// ClearEventLogs 清空事件日志
+func (h *GitHubWebhookHandler) ClearEventLogs(c *gin.Context) {
+	configID := c.Param("id")
+	config, err := h.webhookService.GetConfig(c.Request.Context(), configID)
+	if err != nil || config == nil {
+		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "config not found"})
+		return
+	}
+	if err := h.webhookService.ClearEventLogs(c.Request.Context(), config.ProjectID().String()); err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
 // ListBindings 列出心跳绑定

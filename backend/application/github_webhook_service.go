@@ -153,9 +153,22 @@ func (s *GitHubWebhookService) DeleteConfig(ctx context.Context, configID string
 	return s.configRepo.Delete(ctx, domain.NewGitHubWebhookConfigID(configID))
 }
 
-// ListEventLogs 列出项目的事件日志
-func (s *GitHubWebhookService) ListEventLogs(ctx context.Context, projectID string, limit int) ([]*domain.WebhookEventLog, error) {
-	return s.eventLogRepo.FindByProjectID(ctx, domain.NewProjectID(projectID), limit)
+// ListEventLogs 列出项目的事件日志（分页）
+func (s *GitHubWebhookService) ListEventLogs(ctx context.Context, projectID string, limit, offset int) ([]*domain.WebhookEventLog, int, error) {
+	logs, err := s.eventLogRepo.FindByProjectID(ctx, domain.NewProjectID(projectID), limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	count, err := s.eventLogRepo.CountByProjectID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		return nil, 0, err
+	}
+	return logs, count, nil
+}
+
+// ClearEventLogs 清空项目的事件日志
+func (s *GitHubWebhookService) ClearEventLogs(ctx context.Context, projectID string) error {
+	return s.eventLogRepo.DeleteByProjectID(ctx, domain.NewProjectID(projectID))
 }
 
 // CreateBinding 创建心跳绑定
