@@ -20,17 +20,17 @@ import (
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/bus"
+	"github.com/weibh/taskmanager/infrastructure/cleanup"
 	"github.com/weibh/taskmanager/infrastructure/config"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
-	"github.com/weibh/taskmanager/infrastructure/cleanup"
 	"github.com/weibh/taskmanager/infrastructure/llm"
+	infraMcp "github.com/weibh/taskmanager/infrastructure/mcp"
 	_persistence "github.com/weibh/taskmanager/infrastructure/persistence"
-	"github.com/weibh/taskmanager/infrastructure/workspace"
 	"github.com/weibh/taskmanager/infrastructure/skill"
 	infra_sm "github.com/weibh/taskmanager/infrastructure/statemachine"
-	infraMcp "github.com/weibh/taskmanager/infrastructure/mcp"
 	"github.com/weibh/taskmanager/infrastructure/utils"
+	"github.com/weibh/taskmanager/infrastructure/workspace"
 	httpHandler "github.com/weibh/taskmanager/interfaces/http"
 	ws "github.com/weibh/taskmanager/interfaces/ws"
 	"github.com/weibh/taskmanager/internal/embed"
@@ -343,6 +343,7 @@ func main() {
 
 	// 初始化需求类型 handler
 	requirementTypeHandler := httpHandler.NewRequirementTypeHandler(requirementTypeRepo)
+	systemLogHandler := httpHandler.NewSystemLogHandler()
 
 	// 初始化 Webhook 相关组件
 	webhookConfigRepo := _persistence.NewSQLiteGitHubWebhookConfigRepository(db)
@@ -376,7 +377,7 @@ func main() {
 		authHandler, mcpHandler, skillHandler, projectHandler,
 		requirementHandler, stateMachineHandler, projectStateMachineHandler,
 		requirementTypeHandler, heartbeatHandler, heartbeatTemplateHandler,
-		heartbeatScenarioHandler,
+		heartbeatScenarioHandler, systemLogHandler,
 	)
 
 	// 注册 Webhook 路由

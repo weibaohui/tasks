@@ -31,14 +31,15 @@ type DatabaseConfig struct {
 
 // APIConfig API 配置
 type APIConfig struct {
-	BaseURL   string `yaml:"base_url"`    // API base URL (内部使用)
-	PublicURL string `yaml:"public_url"`  // Public URL (用于 GitHub webhook回调)
+	BaseURL   string `yaml:"base_url"`   // API base URL (内部使用)
+	PublicURL string `yaml:"public_url"` // Public URL (用于 GitHub webhook回调)
 	Token     string `yaml:"token"`
 }
 
 // LoggingConfig 日志配置
 type LoggingConfig struct {
-	Level string `yaml:"level"`
+	Level         string `yaml:"level"`
+	ServerLogPath string `yaml:"server_log_path"`
 }
 
 // AgentConfig Agent 配置
@@ -53,9 +54,19 @@ func Load() (*Config, error) {
 
 	// 1. 尝试从配置文件加载
 	configPath := GetConfigPath()
+	if configPath == "" {
+		home, _ := os.UserHomeDir()
+		configPath = filepath.Join(home, ".taskmanager", "config.yaml")
+		if err := WriteDefaultConfig(configPath); err != nil {
+			return nil, fmt.Errorf("failed to init config at %s: %w", configPath, err)
+		}
+	}
 	if configPath != "" {
 		if err := loadFromFile(configPath, cfg); err != nil {
 			return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
+		}
+		if err := ensureConfigDefaultsPersisted(configPath, cfg); err != nil {
+			return nil, fmt.Errorf("failed to persist config defaults: %w", err)
 		}
 	}
 
@@ -65,10 +76,30 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// ensureConfigDefaultsPersisted 确保关键配置项存在于配置文件中并回写。
+func ensureConfigDefaultsPersisted(configPath string, cfg *Config) error {
+	changed := false
+
+	if strings.TrimSpace(cfg.Logging.Level) == "" {
+		cfg.Logging.Level = "info"
+		changed = true
+	}
+	if strings.TrimSpace(cfg.Logging.ServerLogPath) == "" {
+		cfg.Logging.ServerLogPath = filepath.Join("~", ".taskmanager", "server.log")
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+	return SaveConfig(configPath, cfg)
+}
+
 // defaultConfig 返回默认配置
 func defaultConfig() *Config {
 	home, _ := os.UserHomeDir()
 	defaultDBPath := filepath.Join(home, ".taskmanager", "data.db")
+	defaultServerLogPath := filepath.Join(home, ".taskmanager", "server.log")
 
 	return &Config{
 		Server: ServerConfig{
@@ -82,7 +113,8 @@ func defaultConfig() *Config {
 			PublicURL: "", // 需要通过 tunnel 或手动配置获取公网地址
 		},
 		Logging: LoggingConfig{
-			Level: "info",
+			Level:         "info",
+			ServerLogPath: defaultServerLogPath,
 		},
 		Agent: AgentConfig{
 			AIWorkSpaceRoot: "/tmp/ai-devops",
@@ -119,6 +151,9 @@ func GetConfigPath() string {
 func LoadFromPath(path string) (*Config, error) {
 	cfg := defaultConfig()
 	if err := loadFromFile(path, cfg); err != nil {
+		return nil, err
+	}
+	if err := ensureConfigDefaultsPersisted(path, cfg); err != nil {
 		return nil, err
 	}
 	applyEnvOverrides(cfg)
@@ -232,7 +267,8 @@ func WriteDefaultConfig(path string) error {
 			BaseURL: "http://localhost:13618/api/v1",
 		},
 		Logging: LoggingConfig{
-			Level: "info",
+			Level:         "info",
+			ServerLogPath: filepath.Join("~", ".taskmanager", "server.log"),
 		},
 	}
 
@@ -284,6 +320,7 @@ func ExpandPath(path string) string {
 	}
 	return os.ExpandEnv(path)
 }
+
 // SaveConfig 保存配置到文件
 func SaveConfig(path string, cfg *Config) error {
 	data, err := yaml.Marshal(cfg)
@@ -306,6 +343,16 @@ func GetPublicURL() string {
 		return ""
 	}
 	return cfg.API.PublicURL
+}
+
+// GetServerLogPath 获取服务器日志路径
+func GetServerLogPath() string {
+	cfg, err := Load()
+	if err != nil || cfg == nil {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".taskmanager", "server.log")
+	}
+	return ExpandPath(cfg.Logging.ServerLogPath)
 }
 
 // UpdatePublicURL 更新配置文件中的 public_url

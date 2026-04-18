@@ -16,8 +16,8 @@ var configCmd = &cobra.Command{
 }
 
 var configInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "初始化配置文件",
+	Use:     "init",
+	Short:   "初始化配置文件",
 	Example: `  taskmanager config init`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 优先使用环境变量指定的配置路径
@@ -65,8 +65,8 @@ var configInitCmd = &cobra.Command{
 }
 
 var configShowCmd = &cobra.Command{
-	Use:   "show",
-	Short: "显示当前配置",
+	Use:     "show",
+	Short:   "显示当前配置",
 	Example: `  taskmanager config show`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := config.Load()
@@ -85,6 +85,7 @@ var configShowCmd = &cobra.Command{
 			fmt.Println("API Token: (未配置)")
 		}
 		fmt.Printf("Log Level: %s\n", cfg.Logging.Level)
+		fmt.Printf("Server Log Path: %s\n", cfg.Logging.ServerLogPath)
 		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Println("")
 		fmt.Println("配置加载来源:")
