@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, message, Select, Space, Table, Tag, Tooltip } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Form, message, Popconfirm, Select, Space, Table, Tag, Tooltip } from 'antd';
 import { LinkOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Project } from '../../types/projectRequirement';
@@ -24,6 +24,7 @@ export const ProjectStateMachinePanel: React.FC<ProjectStateMachinePanelProps> =
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const requestIdRef = useRef(0);
 
   const fetchStateMachines = async () => {
     try {
@@ -36,24 +37,36 @@ export const ProjectStateMachinePanel: React.FC<ProjectStateMachinePanelProps> =
 
   const fetchMappings = async () => {
     if (!project?.id) return;
+    const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await listProjectStateMachines(project.id);
-      setMappings(data);
+      if (currentRequestId === requestIdRef.current) {
+        setMappings(data);
+      }
     } catch {
-      message.error('获取项目状态机配置失败');
+      if (currentRequestId === requestIdRef.current) {
+        message.error('获取项目状态机配置失败');
+      }
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const fetchRequirementTypes = async () => {
     if (!project?.id) return;
+    const currentRequestId = requestIdRef.current;
     try {
       const data = await requirementTypeApi.list(project.id);
-      setRequirementTypes(data);
+      if (currentRequestId === requestIdRef.current) {
+        setRequirementTypes(data);
+      }
     } catch {
-      setRequirementTypes([]);
+      if (currentRequestId === requestIdRef.current) {
+        setRequirementTypes([]);
+      }
     }
   };
 
@@ -71,6 +84,12 @@ export const ProjectStateMachinePanel: React.FC<ProjectStateMachinePanelProps> =
 
   useEffect(() => {
     if (project?.id) {
+      // Increment request ID to invalidate any pending requests
+      ++requestIdRef.current;
+      // Clear old data immediately
+      setMappings([]);
+      setRequirementTypes([]);
+      form.resetFields();
       void fetchStateMachines();
       void fetchMappings();
       void fetchRequirementTypes();
@@ -110,9 +129,17 @@ export const ProjectStateMachinePanel: React.FC<ProjectStateMachinePanelProps> =
       title: '操作',
       key: 'action',
       render: (_: unknown, record: ProjectStateMachineMapping) => (
-        <Button danger onClick={() => handleDelete(record.id)} type="link" size="small" style={{ padding: 0 }}>
-          删除
-        </Button>
+        <Popconfirm
+          title="确认删除该状态机关联？"
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          onConfirm={() => handleDelete(record.id)}
+        >
+          <Button danger type="link" size="small" style={{ padding: 0 }}>
+            删除
+          </Button>
+        </Popconfirm>
       ),
       width: 100,
       fixed: 'left' as const,
