@@ -23,6 +23,7 @@ import {
   enableWebhook,
   disableWebhook,
   listEventLogs,
+  clearEventLogs,
   listBindings,
   createBinding,
   deleteBinding,
@@ -52,6 +53,9 @@ export const ProjectWebhookPage: React.FC = () => {
   // Event logs state
   const [eventLogs, setEventLogs] = useState<WebhookEventLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsOffset, setLogsOffset] = useState(0);
+  const logsLimit = 20;
 
   // Bindings state
   const [bindings, setBindings] = useState<WebhookHeartbeatBinding[]>([]);
@@ -80,15 +84,27 @@ export const ProjectWebhookPage: React.FC = () => {
     }
   };
 
-  const fetchEventLogs = async (configId: string) => {
+  const fetchEventLogs = async (configId: string, offset = 0) => {
     setLogsLoading(true);
     try {
-      const data = await listEventLogs(configId);
-      setEventLogs(data);
+      const data = await listEventLogs(configId, logsLimit, offset);
+      setEventLogs(data.data);
+      setLogsTotal(data.total);
+      setLogsOffset(offset);
     } catch {
       message.error('加载事件日志失败');
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const clearLogs = async (configId: string) => {
+    try {
+      await clearEventLogs(configId);
+      message.success('日志已清空');
+      fetchEventLogs(configId, 0);
+    } catch {
+      message.error('清空日志失败');
     }
   };
 
@@ -481,20 +497,35 @@ export const ProjectWebhookPage: React.FC = () => {
       },
       {
         key: 'logs',
-        label: `事件日志 (${eventLogs.length})`,
+        label: `事件日志 (${logsTotal})`,
         children: (
-          <Table
-            rowKey="id"
-            loading={logsLoading}
-            dataSource={eventLogs}
-            columns={eventLogColumns}
-            pagination={{ pageSize: 20 }}
-            size="small"
-          />
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <Popconfirm
+                title="确定清空所有事件日志吗？"
+                onConfirm={() => selectedConfig && clearLogs(selectedConfig.id)}
+              >
+                <Button danger>清空日志</Button>
+              </Popconfirm>
+            </div>
+            <Table
+              rowKey="id"
+              loading={logsLoading}
+              dataSource={eventLogs}
+              columns={eventLogColumns}
+              pagination={{
+                pageSize: logsLimit,
+                total: logsTotal,
+                current: Math.floor(logsOffset / logsLimit) + 1,
+                onChange: (page) => fetchEventLogs(selectedConfig!.id, (page - 1) * logsLimit),
+              }}
+              size="small"
+            />
+          </div>
         ),
       },
     ];
-  }, [selectedConfig, bindings, eventLogs, logsLoading]);
+  }, [selectedConfig, bindings, eventLogs, logsLoading, logsTotal, logsOffset, logsLimit]);
 
   return (
     <div style={{ padding: 0 }}>

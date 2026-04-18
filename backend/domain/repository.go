@@ -87,17 +87,17 @@ type DailyTokenTrend struct {
 }
 
 type ConversationStats struct {
-	TotalPromptTokens       int
-	TotalCompletionTokens   int
-	TotalTokens             int
-	DailyTrends             []DailyTokenTrend
-	AgentDistribution      []AgentStats
-	ChannelDistribution    []ChannelStats
-	RoleDistribution       []RoleStats
-	ProjectDistribution    []ProjectStats
-	AgentTypeDistribution  []AgentTypeStats
-	TotalSessions          int
-	TotalRecords           int
+	TotalPromptTokens     int
+	TotalCompletionTokens int
+	TotalTokens           int
+	DailyTrends           []DailyTokenTrend
+	AgentDistribution     []AgentStats
+	ChannelDistribution   []ChannelStats
+	RoleDistribution      []RoleStats
+	ProjectDistribution   []ProjectStats
+	AgentTypeDistribution []AgentTypeStats
+	TotalSessions         int
+	TotalRecords          int
 }
 
 type AgentStats struct {
@@ -159,13 +159,13 @@ type RequirementRepository interface {
 
 // RequirementListFilter 需求列表过滤条件（支持分页+状态过滤）
 type RequirementListFilter struct {
-	ProjectID      *ProjectID
-	Statuses       []string
+	ProjectID       *ProjectID
+	Statuses        []string
 	RequirementType string // 可选，按需求类型过滤
-	SortBy         string // 排序字段，默认 created_at
-	Order          string // 排序方向，asc 或 desc，默认 desc
-	Limit          int
-	Offset         int
+	SortBy          string // 排序字段，默认 created_at
+	Order           string // 排序方向，asc 或 desc，默认 desc
+	Limit           int
+	Offset          int
 }
 
 // StatusStat 状态统计数据
@@ -266,7 +266,9 @@ type GitHubWebhookConfigRepository interface {
 type WebhookEventLogRepository interface {
 	Save(ctx context.Context, log *WebhookEventLog) error
 	FindByID(ctx context.Context, id WebhookEventLogID) (*WebhookEventLog, error)
-	FindByProjectID(ctx context.Context, projectID ProjectID, limit int) ([]*WebhookEventLog, error)
+	FindByProjectID(ctx context.Context, projectID ProjectID, limit, offset int) ([]*WebhookEventLog, error)
+	CountByProjectID(ctx context.Context, projectID ProjectID) (int, error)
+	DeleteByProjectID(ctx context.Context, projectID ProjectID) error
 	Delete(ctx context.Context, id WebhookEventLogID) error
 }
 

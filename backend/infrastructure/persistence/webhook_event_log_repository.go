@@ -48,18 +48,29 @@ func (r *SQLiteWebhookEventLogRepository) FindByID(ctx context.Context, id domai
 	return scanWebhookEventLog(row)
 }
 
-func (r *SQLiteWebhookEventLogRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID, limit int) ([]*domain.WebhookEventLog, error) {
+func (r *SQLiteWebhookEventLogRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.WebhookEventLog, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, error_message, received_at
-		FROM webhook_event_logs WHERE project_id = ? ORDER BY received_at DESC LIMIT ?`, projectID.String(), limit)
+		FROM webhook_event_logs WHERE project_id = ? ORDER BY received_at DESC LIMIT ? OFFSET ?`, projectID.String(), limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	return scanWebhookEventLogs(rows)
+}
+
+func (r *SQLiteWebhookEventLogRepository) CountByProjectID(ctx context.Context, projectID domain.ProjectID) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM webhook_event_logs WHERE project_id = ?`, projectID.String()).Scan(&count)
+	return count, err
+}
+
+func (r *SQLiteWebhookEventLogRepository) DeleteByProjectID(ctx context.Context, projectID domain.ProjectID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM webhook_event_logs WHERE project_id = ?`, projectID.String())
+	return err
 }
 
 func (r *SQLiteWebhookEventLogRepository) Delete(ctx context.Context, id domain.WebhookEventLogID) error {
@@ -83,8 +94,8 @@ func scanWebhookEventLogs(rows *sql.Rows) ([]*domain.WebhookEventLog, error) {
 
 func scanWebhookEventLog(scanner rowScanner) (*domain.WebhookEventLog, error) {
 	var (
-		idStr               string
-		projectIDStr        string
+		idStr              string
+		projectIDStr       string
 		eventType          string
 		payload            string
 		status             string
