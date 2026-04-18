@@ -72,6 +72,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [selectedConfig, setSelectedConfig] = useState<GitHubWebhookConfig | null>(null);
+  const [bindingsLoading, setBindingsLoading] = useState(false);
 
   // Event logs state
   const [eventLogs, setEventLogs] = useState<WebhookEventLog[]>([]);
@@ -138,11 +139,14 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   };
 
   const fetchBindings = async (configId: string) => {
+    setBindingsLoading(true);
     try {
       const data = await listBindings(configId);
       setBindings(data);
     } catch {
       message.error('加载心跳绑定失败');
+    } finally {
+      setBindingsLoading(false);
     }
   };
 
@@ -165,6 +169,22 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     setBindings([]);
     setEventLogs([]);
   }, [selectedProject?.id]);
+
+  /**
+   * 当配置列表变化时自动选中可用配置，并加载下方双 Tab 数据。
+   */
+  useEffect(() => {
+    if (configs.length === 0) {
+      setSelectedConfig(null);
+      setBindings([]);
+      setEventLogs([]);
+      return;
+    }
+    const matched = selectedConfig ? configs.find((item) => item.id === selectedConfig.id) : null;
+    const target = matched || configs[0];
+    void handleOpenBindings(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configs]);
 
   const handleOpenCreate = () => {
     if (isProjectScoped) {
@@ -225,6 +245,9 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     }
   };
 
+  /**
+   * handleOpenBindings 选择当前配置并加载其绑定、日志与可绑定心跳。
+   */
   const handleOpenBindings = async (config: GitHubWebhookConfig) => {
     setSelectedConfig(config);
     await Promise.all([
@@ -318,12 +341,9 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 120,
       render: (_, record) => (
         <Space>
-          <Button type="link" onClick={() => handleOpenBindings(record)}>
-            事件与绑定
-          </Button>
           <Popconfirm
             title="确认删除该配置？"
             onConfirm={() => handleDelete(record.id)}
@@ -524,22 +544,30 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         children: (
           <div>
             <div style={{ marginBottom: 16 }}>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={async () => {
-                  if (selectedConfig) {
-                    await fetchHeartbeats(selectedConfig.project_id);
-                  }
-                  setBindingModalOpen(true);
-                }}
-              >
-                添加绑定
-              </Button>
+              <Space>
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => selectedConfig && fetchBindings(selectedConfig.id)}
+                >
+                  刷新
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={async () => {
+                    if (selectedConfig) {
+                      await fetchHeartbeats(selectedConfig.project_id);
+                    }
+                    setBindingModalOpen(true);
+                  }}
+                >
+                  添加绑定
+                </Button>
+              </Space>
             </div>
             <Table
               rowKey="id"
-              loading={logsLoading}
+              loading={bindingsLoading}
               dataSource={bindings}
               columns={bindingColumns}
               pagination={false}
@@ -554,12 +582,20 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         children: (
           <div>
             <div style={{ marginBottom: 16 }}>
-              <Popconfirm
-                title="确定清空所有事件日志吗？"
-                onConfirm={() => selectedConfig && clearLogs(selectedConfig.id)}
-              >
-                <Button danger>清空日志</Button>
-              </Popconfirm>
+              <Space>
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => selectedConfig && fetchEventLogs(selectedConfig.id, 0)}
+                >
+                  刷新
+                </Button>
+                <Popconfirm
+                  title="确定清空所有事件日志吗？"
+                  onConfirm={() => selectedConfig && clearLogs(selectedConfig.id)}
+                >
+                  <Button danger>清空日志</Button>
+                </Popconfirm>
+              </Space>
             </div>
             <Table
               rowKey="id"
@@ -578,7 +614,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         ),
       },
     ];
-  }, [selectedConfig, bindings, eventLogs, logsLoading, logsTotal, logsOffset, logsLimit]);
+  }, [selectedConfig, bindings, eventLogs, bindingsLoading, logsLoading, logsTotal, logsOffset, logsLimit]);
 
   return (
     <div style={{ padding: 0 }}>
@@ -602,7 +638,33 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
           columns={columns}
           pagination={false}
           scroll={{ x: 'max-content' }}
+          onRow={(record) => ({
+            onClick: () => {
+              void handleOpenBindings(record);
+            },
+          })}
+          rowClassName={(record) => (selectedConfig?.id === record.id ? 'ant-table-row-selected' : '')}
         />
+      </Card>
+
+      <Card
+        style={{ marginTop: 16 }}
+        title={
+          selectedConfig
+            ? `配置详情：${projects.find((p) => p.id === selectedConfig.project_id)?.name || selectedConfig.project_id} / ${selectedConfig.repo}`
+            : '配置详情'
+        }
+      >
+        {selectedConfig ? (
+          <Tabs items={tabItems} />
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            message="暂无可管理的配置"
+            description="请先创建 Webhook 配置，创建后会自动在下方显示绑定事件列表和事件日志。"
+          />
+        )}
       </Card>
 
       <Modal
@@ -674,7 +736,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
             ? `Webhook 配置 - ${projects.find((p) => p.id === selectedConfig.project_id)?.name || selectedConfig.project_id} / ${selectedConfig.repo}`
             : 'Webhook 配置'
         }
-        open={!!selectedConfig}
+        open={false}
         onCancel={() => {
           setSelectedConfig(null);
           setBindings([]);
