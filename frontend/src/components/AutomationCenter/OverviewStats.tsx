@@ -1,18 +1,20 @@
 import React from 'react';
 import { Card, Col, Row, Statistic } from 'antd';
-import { BranchesOutlined, ClockCircleOutlined, HeartOutlined, LinkOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BranchesOutlined, ClockCircleOutlined, HeartOutlined } from '@ant-design/icons';
 import type { Project } from '../../types/projectRequirement';
 import type { Agent } from '../../types/agent';
 
 interface OverviewStatsProps {
   projects: Project[];
   agents: Agent[];
+  scenarioTemplateCount: number;
+  onOpenScenarioTemplates: () => void;
 }
 
 /**
  * OverviewStats 渲染自动化中心总览统计卡片。
  */
-export const OverviewStats: React.FC<OverviewStatsProps> = ({ projects, agents }) => {
+export const OverviewStats: React.FC<OverviewStatsProps> = ({ projects, agents, scenarioTemplateCount, onOpenScenarioTemplates }) => {
   return (
     <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
       <Col xs={24} sm={12} md={6}>
@@ -35,8 +37,13 @@ export const OverviewStats: React.FC<OverviewStatsProps> = ({ projects, agents }
         </Card>
       </Col>
       <Col xs={24} sm={12} md={6}>
-        <Card size="small">
-          <Statistic title="Webhook 入口" value="已统一" prefix={<LinkOutlined />} />
+        <Card
+          size="small"
+          hoverable
+          onClick={onOpenScenarioTemplates}
+          style={{ cursor: 'pointer' }}
+        >
+          <Statistic title="场景模板数" value={scenarioTemplateCount} prefix={<AppstoreOutlined />} />
         </Card>
       </Col>
     </Row>

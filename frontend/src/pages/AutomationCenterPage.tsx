@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Card, Empty, Space, Tabs, Typography } from 'antd';
+import { Alert, Card, Drawer, Empty, Space, Tabs, Typography } from 'antd';
 import { listProjects } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
+import { listHeartbeatScenarios } from '../api/heartbeatScenarioApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Project } from '../types/projectRequirement';
 import type { Agent } from '../types/agent';
@@ -22,6 +23,9 @@ export const AutomationCenterPage: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [scenarioTemplateCount, setScenarioTemplateCount] = useState<number>(0);
+  const [scenarioDrawerOpen, setScenarioDrawerOpen] = useState(false);
 
   /**
    * fetchBaseData 加载自动化中心基础依赖数据。
@@ -63,6 +67,22 @@ export const AutomationCenterPage: React.FC = () => {
     void fetchRequirementTypes(selectedProjectId);
   }, [selectedProjectId]);
 
+  /**
+   * fetchScenarioTemplateCount 拉取全局场景模板数量。
+   */
+  const fetchScenarioTemplateCount = async () => {
+    try {
+      const scenarios = await listHeartbeatScenarios();
+      setScenarioTemplateCount(scenarios.length);
+    } catch {
+      setScenarioTemplateCount(0);
+    }
+  };
+
+  useEffect(() => {
+    void fetchScenarioTemplateCount();
+  }, []);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || null,
     [projects, selectedProjectId],
@@ -94,10 +114,17 @@ export const AutomationCenterPage: React.FC = () => {
           </Space>
         }
       >
-        <OverviewStats projects={projects} agents={agents} />
+        <OverviewStats
+          projects={projects}
+          agents={agents}
+          scenarioTemplateCount={scenarioTemplateCount}
+          onOpenScenarioTemplates={() => setScenarioDrawerOpen(true)}
+        />
         <ProjectSelectorCard projects={projects} selectedProjectId={selectedProjectId} onChange={setSelectedProjectId} />
 
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: 'overview',
@@ -125,17 +152,31 @@ export const AutomationCenterPage: React.FC = () => {
               ),
             },
             {
-              key: 'scenarios',
-              label: '场景模板',
-              children: <HeartbeatScenarioManagementPage />,
-            },
-            {
               key: 'webhooks',
               label: 'Webhook 事件',
               children: <ProjectWebhookPage />,
             },
           ]}
         />
+        <Drawer
+          title="全局场景模板管理"
+          width="86vw"
+          destroyOnClose
+          open={scenarioDrawerOpen}
+          onClose={() => {
+            setScenarioDrawerOpen(false);
+            void fetchScenarioTemplateCount();
+          }}
+        >
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="场景模板是全局资产"
+            description="模板与项目解耦。模板维护在这里完成，项目绑定请在“总览”页的“项目场景应用”中操作。"
+          />
+          <HeartbeatScenarioManagementPage />
+        </Drawer>
       </Card>
     </div>
   );

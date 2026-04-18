@@ -13,7 +13,6 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   DownOutlined,
-  GithubOutlined,
   HeartOutlined,
   KeyOutlined,
   LogoutOutlined,
@@ -39,7 +38,6 @@ import StateMachineManagementPage from './pages/StateMachineManagementPage';
 import { ApiTokensPage } from './pages/ApiTokensPage';
 import { SystemLogsPage } from './pages/SystemLogsPage';
 import { HeartbeatScenarioManagementPage } from './pages/HeartbeatScenarioManagementPage';
-import { ProjectWebhookPage } from './pages/ProjectWebhookPage';
 import { AutomationCenterPage } from './pages/AutomationCenterPage';
 import { useAuthStore } from './stores/authStore';
 
@@ -120,7 +118,6 @@ const MainLayout: React.FC = () => {
     { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent 工坊' },
     { key: '/automation-center', icon: <HeartOutlined />, label: '自动化中心' },
-    { key: '/webhooks', icon: <GithubOutlined />, label: 'GitHub Webhook' },
     { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
     { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
     { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
@@ -251,7 +248,6 @@ const App: React.FC = () => {
             <Route path="skills" element={<SkillsManagementPage />} />
             <Route path="automation-center" element={<AutomationCenterPage />} />
             <Route path="heartbeat-scenarios" element={<HeartbeatScenarioManagementPage />} />
-            <Route path="webhooks" element={<ProjectWebhookPage />} />
             <Route path="state-machines" element={<StateMachineManagementPage />} />
             <Route path="channels" element={<ChannelManagementPage />} />
             <Route path="sessions" element={<SessionManagementPage />} />
