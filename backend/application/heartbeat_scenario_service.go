@@ -8,12 +8,23 @@ import (
 )
 
 type HeartbeatScenarioService struct {
-	scenarioRepo    domain.HeartbeatScenarioRepository
-	projectRepo     domain.ProjectRepository
-	heartbeatRepo   domain.HeartbeatRepository
-	bindingRepo     domain.WebhookHeartbeatBindingRepository
-	idGenerator     domain.IDGenerator
-	scheduler       *HeartbeatScheduler
+	scenarioRepo  domain.HeartbeatScenarioRepository
+	projectRepo   domain.ProjectRepository
+	heartbeatRepo domain.HeartbeatRepository
+	bindingRepo   domain.WebhookHeartbeatBindingRepository
+	idGenerator   domain.IDGenerator
+	scheduler     *HeartbeatScheduler
+}
+
+// HeartbeatApplyPreview 表示将场景应用到项目前的影响预览结果。
+type HeartbeatApplyPreview struct {
+	ProjectID       string
+	ProjectName     string
+	ScenarioCode    string
+	ScenarioName    string
+	CurrentScenario string
+	ToDelete        []*domain.Heartbeat
+	ToCreate        []*domain.Heartbeat
 }
 
 func NewHeartbeatScenarioService(
@@ -90,6 +101,45 @@ func (s *HeartbeatScenarioService) DeleteScenario(ctx context.Context, id string
 		return fmt.Errorf("cannot delete built-in scenario")
 	}
 	return s.scenarioRepo.Delete(ctx, domain.NewHeartbeatScenarioID(id))
+}
+
+// PreviewApplyScenarioToProject 预览项目应用场景后的心跳增删影响，不会写入数据库。
+func (s *HeartbeatScenarioService) PreviewApplyScenarioToProject(ctx context.Context, projectID, scenarioCode string) (*HeartbeatApplyPreview, error) {
+	project, err := s.projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project: %w", err)
+	}
+	if project == nil {
+		return nil, fmt.Errorf("project not found")
+	}
+
+	scenario, err := s.scenarioRepo.FindByCode(ctx, scenarioCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find scenario: %w", err)
+	}
+	if scenario == nil {
+		return nil, fmt.Errorf("scenario not found")
+	}
+
+	existingHeartbeats, err := s.heartbeatRepo.FindByProjectID(ctx, domain.NewProjectID(projectID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list existing heartbeats: %w", err)
+	}
+
+	toCreate, err := scenario.ApplyToProject(project.ID(), s.idGenerator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply scenario: %w", err)
+	}
+
+	return &HeartbeatApplyPreview{
+		ProjectID:       project.ID().String(),
+		ProjectName:     project.Name(),
+		ScenarioCode:    scenario.Code(),
+		ScenarioName:    scenario.Name(),
+		CurrentScenario: project.HeartbeatScenarioCode(),
+		ToDelete:        existingHeartbeats,
+		ToCreate:        toCreate,
+	}, nil
 }
 
 // ApplyScenarioToProject 为项目应用场景，创建该场景下的所有心跳
