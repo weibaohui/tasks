@@ -375,14 +375,28 @@ func extractTunnelURLFromLog(logFile string) string {
 
 // notifyServerToUpdateWebhooks 通知服务器更新所有 webhook URL
 func notifyServerToUpdateWebhooks() error {
-	// 读取服务器端口
+	// 读取服务器端口和 token
 	port := getServerHTTPPort()
 	if port == 0 {
 		port = 13618
 	}
 
+	token := config.GetAPIToken()
+	if token == "" {
+		return fmt.Errorf("API token is empty, cannot authenticate")
+	}
+
 	url := fmt.Sprintf("http://localhost:%d/api/v1/internal/webhooks/update-all", port)
-	resp, err := http.Post(url, "application/json", nil)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to notify server: %w", err)
 	}
