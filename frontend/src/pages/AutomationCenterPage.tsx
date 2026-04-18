@@ -131,12 +131,6 @@ export const AutomationCenterPage: React.FC = () => {
               label: '总览',
               children: (
                 <Space direction="vertical" style={{ width: '100%' }}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="重构进行中"
-                    description="当前版本已完成统一入口与场景影响预览。后续将继续补齐执行时序、运行结果追踪和模块化组件体系。"
-                  />
                   <ScenarioApplyPanel project={selectedProject} onProjectScenarioChanged={handleProjectScenarioChanged} />
                   <ProjectRunsPanel project={selectedProject} />
                 </Space>

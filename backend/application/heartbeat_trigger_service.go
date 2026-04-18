@@ -35,6 +35,14 @@ type HeartbeatRunRecord struct {
 	CreatedAt     int64  `json:"created_at"`
 }
 
+// HeartbeatRunPage 描述分页返回的心跳运行记录。
+type HeartbeatRunPage struct {
+	Data   []HeartbeatRunRecord `json:"data"`
+	Total  int                  `json:"total"`
+	Limit  int                  `json:"limit"`
+	Offset int                  `json:"offset"`
+}
+
 // HeartbeatTriggerService 心跳触发服务
 // 负责执行单次心跳的完整流程：创建需求、初始化状态机、派发需求
 type HeartbeatTriggerService struct {
@@ -255,6 +263,65 @@ func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heart
 	return records, nil
 }
 
+// ListRunsByProject 分页查询项目级心跳执行记录，避免逐心跳查询带来的 N+1 问题。
+func (s *HeartbeatTriggerService) ListRunsByProject(ctx context.Context, projectID string, limit, offset int, statuses []string) (*HeartbeatRunPage, error) {
+	pid := domain.NewProjectID(projectID)
+	project, err := s.projectRepo.FindByID(ctx, pid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project %s: %w", projectID, err)
+	}
+	if project == nil {
+		return nil, fmt.Errorf("project %s not found", projectID)
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	filter := domain.RequirementListFilter{
+		ProjectID:       &pid,
+		RequirementType: string(domain.RequirementTypeHeartbeat),
+		Statuses:        statuses,
+		SortBy:          "created_at",
+		Order:           "DESC",
+		Limit:           limit,
+		Offset:          offset,
+	}
+	total, err := s.requirementRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count project heartbeat runs: %w", err)
+	}
+	reqs, err := s.requirementRepo.List(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project heartbeat runs: %w", err)
+	}
+	records := make([]HeartbeatRunRecord, 0, len(reqs))
+	for _, req := range reqs {
+		heartbeatID := parseHeartbeatID(req)
+		heartbeatName := parseHeartbeatName(req)
+		records = append(records, HeartbeatRunRecord{
+			RequirementID: req.ID().String(),
+			HeartbeatID:   heartbeatID,
+			HeartbeatName: heartbeatName,
+			ProjectID:     projectID,
+			TriggerSource: parseTriggerSource(req),
+			Status:        string(req.Status()),
+			Title:         req.Title(),
+			LastError:     req.LastError(),
+			ErrorCategory: classifyHeartbeatRunError(req.LastError()),
+			CreatedAt:     req.CreatedAt().UnixMilli(),
+		})
+	}
+	return &HeartbeatRunPage{
+		Data:   records,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
+}
+
 // markRequirementDispatchFailed 在派发失败时把需求标记为 failed，避免形成“无状态需求”。
 func (s *HeartbeatTriggerService) markRequirementDispatchFailed(ctx context.Context, requirement *domain.Requirement, reason string) {
 	if requirement == nil {
@@ -302,6 +369,41 @@ func parseTriggerSource(req *domain.Requirement) string {
 		}
 	}
 	return "unknown"
+}
+
+// parseHeartbeatID 从需求文本中提取 heartbeat_id。
+func parseHeartbeatID(req *domain.Requirement) string {
+	lines := strings.Split(req.AcceptanceCriteria(), "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "heartbeat_id:") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "heartbeat_id:"))
+		}
+	}
+	return ""
+}
+
+// parseHeartbeatName 从需求标题中提取心跳名称。
+func parseHeartbeatName(req *domain.Requirement) string {
+	title := strings.TrimSpace(req.Title())
+	if strings.HasPrefix(title, "[心跳] ") {
+		rest := strings.TrimPrefix(title, "[心跳] ")
+		if idx := strings.LastIndex(rest, " - "); idx > 0 {
+			return strings.TrimSpace(rest[:idx])
+		}
+		return strings.TrimSpace(rest)
+	}
+	if strings.HasPrefix(title, "[心跳][") {
+		rest := title
+		if closeIdx := strings.Index(rest, "] "); closeIdx > 0 {
+			rest = strings.TrimSpace(rest[closeIdx+2:])
+		}
+		if idx := strings.LastIndex(rest, " - "); idx > 0 {
+			return strings.TrimSpace(rest[:idx])
+		}
+		return strings.TrimSpace(rest)
+	}
+	return title
 }
 
 // classifyHeartbeatRunError 对执行错误进行粗分类，方便前端快速过滤排障。

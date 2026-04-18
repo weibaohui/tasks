@@ -2,8 +2,8 @@ package http
 
 import (
 	"net/http"
-	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -167,31 +167,24 @@ func (h *HeartbeatHandler) ListProjectHeartbeatRuns(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
 		return
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	perHeartbeatLimit, _ := strconv.Atoi(c.DefaultQuery("per_heartbeat_limit", "10"))
-	if perHeartbeatLimit <= 0 {
-		perHeartbeatLimit = 10
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	statusQuery := strings.TrimSpace(c.Query("statuses"))
+	statuses := make([]string, 0)
+	if statusQuery != "" {
+		for _, item := range strings.Split(statusQuery, ",") {
+			status := strings.TrimSpace(item)
+			if status != "" {
+				statuses = append(statuses, status)
+			}
+		}
 	}
-	heartbeats, err := h.service.ListHeartbeatsByProject(c.Request.Context(), projectID)
+	page, err := h.triggerService.ListRunsByProject(c.Request.Context(), projectID, limit, offset, statuses)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	records := make([]application.HeartbeatRunRecord, 0, limit)
-	for _, hb := range heartbeats {
-		runs, err := h.triggerService.ListRunsByHeartbeat(c.Request.Context(), hb.ID().String(), perHeartbeatLimit)
-		if err != nil {
-			continue
-		}
-		records = append(records, runs...)
-	}
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].CreatedAt > records[j].CreatedAt
-	})
-	if limit > 0 && len(records) > limit {
-		records = records[:limit]
-	}
-	c.JSON(http.StatusOK, records)
+	c.JSON(http.StatusOK, page)
 }
 
 func heartbeatToMap(hb *domain.Heartbeat) map[string]interface{} {

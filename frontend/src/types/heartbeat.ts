@@ -42,3 +42,10 @@ export interface HeartbeatRunRecord {
   error_category: string;
   created_at: number;
 }
+
+export interface HeartbeatRunPage {
+  data: HeartbeatRunRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
