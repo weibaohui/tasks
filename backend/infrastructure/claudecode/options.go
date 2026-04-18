@@ -52,7 +52,7 @@ func (p *ClaudeCodeProcessor) buildOptions(provider *domain.LLMProvider, cliSess
 	// 注入 Provider 的 API Key 和 Base URL
 	// Agent 身上配置了什么就注入什么，不要自己判断
 	if provider != nil {
-		env["ANTHROPIC_API_KEY"] = provider.APIKey()
+		env["ANTHROPIC_AUTH_TOKEN"] = provider.APIKey()
 		env["ANTHROPIC_BASE_URL"] = provider.APIBase()
 	}
 

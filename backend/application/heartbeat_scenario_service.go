@@ -11,6 +11,7 @@ type HeartbeatScenarioService struct {
 	scenarioRepo    domain.HeartbeatScenarioRepository
 	projectRepo     domain.ProjectRepository
 	heartbeatRepo   domain.HeartbeatRepository
+	bindingRepo     domain.WebhookHeartbeatBindingRepository
 	idGenerator     domain.IDGenerator
 	scheduler       *HeartbeatScheduler
 }
@@ -19,6 +20,7 @@ func NewHeartbeatScenarioService(
 	scenarioRepo domain.HeartbeatScenarioRepository,
 	projectRepo domain.ProjectRepository,
 	heartbeatRepo domain.HeartbeatRepository,
+	bindingRepo domain.WebhookHeartbeatBindingRepository,
 	idGenerator domain.IDGenerator,
 	scheduler *HeartbeatScheduler,
 ) *HeartbeatScenarioService {
@@ -26,6 +28,7 @@ func NewHeartbeatScenarioService(
 		scenarioRepo:  scenarioRepo,
 		projectRepo:   projectRepo,
 		heartbeatRepo: heartbeatRepo,
+		bindingRepo:   bindingRepo,
 		idGenerator:   idGenerator,
 		scheduler:     scheduler,
 	}
@@ -114,6 +117,12 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		return fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
 	for _, hb := range existingHeartbeats {
+		// 删除引用该心跳的所有绑定（避免无效绑定）
+		if s.bindingRepo != nil {
+			if err := s.bindingRepo.DeleteByHeartbeatID(ctx, hb.ID()); err != nil {
+				return fmt.Errorf("failed to delete bindings for heartbeat: %w", err)
+			}
+		}
 		if err := s.heartbeatRepo.Delete(ctx, hb.ID()); err != nil {
 			return fmt.Errorf("failed to delete existing heartbeat: %w", err)
 		}
