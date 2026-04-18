@@ -20,6 +20,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/weibh/taskmanager/application"
 	"github.com/weibh/taskmanager/infrastructure/cleanup"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/infrastructure/hook/hooks"
 	"github.com/weibh/taskmanager/infrastructure/llm"
@@ -36,7 +37,7 @@ import (
 
 // resolveGatewayWorkspace 解析工作区目录路径
 func resolveGatewayWorkspace() string {
-	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
+	if p := config.GetWorkspace(); p != "" {
 		return p
 	}
 	// 如果当前目录存在 backend 目录，使用 backend（适配从仓库根目录执行）
@@ -134,10 +135,7 @@ func main() {
 	}
 
 	// 14. 初始化 HTTP Handler (仅管理API)
-	authSecret := os.Getenv("AUTH_SECRET")
-	if authSecret == "" {
-		authSecret = "taskmanager-dev-secret"
-	}
+	authSecret := config.GetAuthSecret()
 
 	// 创建 Gin Engine 用于管理 API
 	userService := application.NewUserApplicationService(nil, idGenerator)
@@ -286,10 +284,10 @@ func runMessageLoop(
 
 // resolveDBPath 解析数据库文件路径，支持通过环境变量配置，默认在后端目录下
 func resolveDBPath() string {
-	if p := os.Getenv("TASKMANAGER_DB_PATH"); p != "" {
+	if p := config.GetEnv("TASKMANAGER_DB_PATH"); p != "" {
 		return p
 	}
-	if p := os.Getenv("DB_PATH"); p != "" {
+	if p := config.GetEnv("DB_PATH"); p != "" {
 		return p
 	}
 	// 如果当前目录存在 backend 目录，优先写入 backend/tasks.db（适配从仓库根目录执行）

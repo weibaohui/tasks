@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,7 +69,7 @@ func detectDefaultSearchPaths(workspace string) []string {
 	}
 
 	// 3. 用户目录下的 Skills
-	if homeDir := os.Getenv("HOME"); homeDir != "" {
+	if homeDir := config.GetHomeDir(); homeDir != "" {
 		userPath := filepath.Join(homeDir, ".taskmanager", "skills")
 		if isDir(userPath) {
 			paths = append(paths, userPath)
@@ -267,7 +268,7 @@ func (s *SkillsLoader) CheckRequirements(name string) bool {
 	if envs, ok := meta["requires_env"]; ok {
 		for _, env := range strings.Split(envs, ",") {
 			env = strings.TrimSpace(env)
-			if env != "" && os.Getenv(env) == "" {
+			if env != "" && config.GetEnv(env) == "" {
 				return false
 			}
 		}
@@ -297,7 +298,7 @@ func (s *SkillsLoader) GetMissingRequirements(name string) string {
 	if envs, ok := meta["requires_env"]; ok {
 		for _, env := range strings.Split(envs, ",") {
 			env = strings.TrimSpace(env)
-			if env != "" && os.Getenv(env) == "" {
+			if env != "" && config.GetEnv(env) == "" {
 				missing = append(missing, "ENV: "+env)
 			}
 		}
@@ -308,7 +309,7 @@ func (s *SkillsLoader) GetMissingRequirements(name string) string {
 
 // hasBinary 检查二进制文件是否存在
 func hasBinary(name string) bool {
-	path := os.Getenv("PATH")
+	path := config.GetPath()
 	for _, dir := range strings.Split(path, string(os.PathListSeparator)) {
 		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
 			return true

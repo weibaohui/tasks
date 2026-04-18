@@ -15,11 +15,7 @@ import (
 
 // getConfigDir 获取配置目录
 func getConfigDir() string {
-	if dir := os.Getenv("TASKMANAGER_CONFIG_DIR"); dir != "" {
-		return dir
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskmanager")
+	return infraConfig.GetConfigDir()
 }
 
 // getPIDFilePath 获取 PID 文件路径
@@ -29,8 +25,8 @@ func getPIDFilePath() string {
 
 // getServerLogPath 获取服务日志文件路径
 func getServerLogPath() string {
-	if path := os.Getenv("TASKMANAGER_SERVER_LOG_PATH"); strings.TrimSpace(path) != "" {
-		return infraConfig.ExpandPath(path)
+	if path := infraConfig.GetServerLogPathFromEnv(); path != "" {
+		return path
 	}
 	return infraConfig.GetServerLogPath()
 }
@@ -77,12 +73,7 @@ func cleanupPIDFile() {
 
 // getServerPort 获取服务器端口
 func getServerPort() int {
-	if port := os.Getenv("SERVER_PORT"); port != "" {
-		if p, err := strconv.Atoi(port); err == nil {
-			return p
-		}
-	}
-	return 13618
+	return infraConfig.GetServerPortFromEnv()
 }
 
 // findProcessOnPort 查找占用指定端口的进程 PID
@@ -123,11 +114,8 @@ func printStatus() {
 	fmt.Printf("PID: %d\n", pid)
 
 	// 尝试读取端口
-	port := os.Getenv("SERVER_PORT")
-	if port == "" {
-		port = "13618" // 默认端口
-	}
-	fmt.Printf("服务地址: http://localhost:%s\n", port)
+	port := infraConfig.GetServerPortFromEnv()
+	fmt.Printf("服务地址: http://localhost:%d\n", port)
 
 	// 显示日志文件路径
 	logFile := getServerLogPath()

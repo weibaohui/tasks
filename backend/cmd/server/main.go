@@ -328,10 +328,7 @@ func main() {
 	requirementHandler := httpHandler.NewRequirementHandler(requirementService, requirementDispatchService, agentRepo)
 	mcpHandler := httpHandler.NewMCPHandler(mcpService)
 
-	authSecret := os.Getenv("AUTH_SECRET")
-	if authSecret == "" {
-		authSecret = "taskmanager-dev-secret"
-	}
+	authSecret := config.GetAuthSecret()
 	authHandler := httpHandler.NewAuthHandler(userService, userTokenRepo, idGenerator, authSecret)
 	skillHandler := httpHandler.NewSkillHandler(skillsLoader)
 

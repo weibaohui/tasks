@@ -247,6 +247,74 @@ func GetServerPort() int {
 	return cfg.Server.Port
 }
 
+// GetHomeDir 获取用户主目录
+func GetHomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if home := os.Getenv("USERPROFILE"); home != "" {
+		return home
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// GetPath 获取 PATH 环境变量
+func GetPath() string {
+	if path := os.Getenv("PATH"); path != "" {
+		return path
+	}
+	return ""
+}
+
+// GetEnv 获取指定环境变量（统一入口）
+func GetEnv(key string) string {
+	return os.Getenv(key)
+}
+
+// GetAuthSecret 获取认证密钥
+func GetAuthSecret() string {
+	if secret := os.Getenv("AUTH_SECRET"); secret != "" {
+		return secret
+	}
+	return "taskmanager-dev-secret"
+}
+
+// GetWorkspace 获取工作区目录
+func GetWorkspace() string {
+	if workspace := os.Getenv("TASKMANAGER_WORKSPACE"); workspace != "" {
+		return workspace
+	}
+	return ""
+}
+
+// GetConfigDir 获取配置目录
+func GetConfigDir() string {
+	if dir := os.Getenv("TASKMANAGER_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".taskmanager")
+}
+
+// GetServerLogPathFromEnv 从环境变量获取服务器日志路径
+func GetServerLogPathFromEnv() string {
+	if path := os.Getenv("TASKMANAGER_SERVER_LOG_PATH"); strings.TrimSpace(path) != "" {
+		return ExpandPath(path)
+	}
+	return ""
+}
+
+// GetServerPortFromEnv 从环境变量获取服务器端口
+func GetServerPortFromEnv() int {
+	if port := os.Getenv("SERVER_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			return p
+		}
+	}
+	return 13618
+}
+
 // EnsureConfigDir 确保配置目录存在
 func EnsureConfigDir() error {
 	home, _ := os.UserHomeDir()
