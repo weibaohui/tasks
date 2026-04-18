@@ -76,15 +76,37 @@ dev:
 	@echo "========================================="
 	@echo "  后端 API:  http://localhost:13618"
 	@echo "  前端界面: http://localhost:3000"
-	@echo "  日志文件: ~/.taskmanager/server.log"
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@mkdir -p backend/logs
 	@mkdir -p ~/.taskmanager
 	@(trap 'kill 0' INT; \
+		CONFIG_PATH=$${TASKMANAGER_CONFIG:-$$HOME/.taskmanager/config.yaml}; \
+		if [ ! -f "$$CONFIG_PATH" ]; then \
+			cd backend && go run ./cmd/cli config init >/dev/null; \
+			cd ..; \
+		fi; \
+		LOG_FILE=$$(awk '\
+			/^logging:/ {in_logging=1; next} \
+			/^[^[:space:]]/ {in_logging=0} \
+			in_logging && $$1=="server_log_path:" {print $$2; exit} \
+		' "$$CONFIG_PATH"); \
+		if [ -z "$$LOG_FILE" ]; then \
+			echo "配置文件缺少 logging.server_log_path: $$CONFIG_PATH"; \
+			exit 1; \
+		fi; \
+		LOG_FILE=$${LOG_FILE%\"}; \
+		LOG_FILE=$${LOG_FILE#\"}; \
+		LOG_FILE=$${LOG_FILE%\'}; \
+		LOG_FILE=$${LOG_FILE#\'}; \
+		if [[ "$$LOG_FILE" == "~/"* ]]; then \
+			LOG_FILE="$$HOME/$${LOG_FILE#~/}"; \
+		fi; \
+		echo "  日志文件: $$LOG_FILE"; \
+		mkdir -p "$$(dirname "$$LOG_FILE")"; \
 		set -a; source backend/.env; set +a; \
 		echo "[1/2] 启动后端服务 (air)..."; \
-		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a ~/.taskmanager/server.log & \
+		cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a "$$LOG_FILE" & \
 		sleep 2; \
 		echo "[2/2] 启动前端服务 (vite)..."; \
 		cd frontend && pnpm run dev & \
@@ -96,7 +118,30 @@ dev-server:
 	@echo "启动服务 - air 热重载..."
 	@mkdir -p backend/logs
 	@mkdir -p ~/.taskmanager
-	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a ~/.taskmanager/server.log
+	@CONFIG_PATH=$${TASKMANAGER_CONFIG:-$$HOME/.taskmanager/config.yaml}; \
+	if [ ! -f "$$CONFIG_PATH" ]; then \
+		cd backend && go run ./cmd/cli config init >/dev/null; \
+		cd ..; \
+	fi; \
+	LOG_FILE=$$(awk '\
+		/^logging:/ {in_logging=1; next} \
+		/^[^[:space:]]/ {in_logging=0} \
+		in_logging && $$1=="server_log_path:" {print $$2; exit} \
+	' "$$CONFIG_PATH"); \
+	if [ -z "$$LOG_FILE" ]; then \
+		echo "配置文件缺少 logging.server_log_path: $$CONFIG_PATH"; \
+		exit 1; \
+	fi; \
+	LOG_FILE=$${LOG_FILE%\"}; \
+	LOG_FILE=$${LOG_FILE#\"}; \
+	LOG_FILE=$${LOG_FILE%\'}; \
+	LOG_FILE=$${LOG_FILE#\'}; \
+	if [[ "$$LOG_FILE" == "~/"* ]]; then \
+		LOG_FILE="$$HOME/$${LOG_FILE#~/}"; \
+	fi; \
+	echo "日志文件: $$LOG_FILE"; \
+	mkdir -p "$$(dirname "$$LOG_FILE")"; \
+	set -a; source backend/.env; set +a; cd backend && air --build.cmd "go build -o bin/taskmanager-server ./cmd/server" --build.bin "./bin/taskmanager-server" 2>&1 | tee -a "$$LOG_FILE"
 
 # 停止所有 TaskManager 相关进程
 stop:
