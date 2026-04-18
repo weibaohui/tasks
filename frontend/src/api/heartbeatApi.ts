@@ -34,3 +34,7 @@ export async function listProjectHeartbeatRuns(projectId: string, limit: number 
   const res = await apiClient.get(`/projects/${projectId}/heartbeat-runs`, { params: { limit } });
   return res.data;
 }
+
+export async function triggerHeartbeat(id: string): Promise<void> {
+  await apiClient.post(`/heartbeats/${id}/trigger`);
+}

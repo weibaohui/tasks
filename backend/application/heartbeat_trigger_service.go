@@ -31,6 +31,7 @@ type HeartbeatRunRecord struct {
 	Status        string `json:"status"`
 	Title         string `json:"title"`
 	LastError     string `json:"last_error"`
+	ErrorCategory string `json:"error_category"`
 	CreatedAt     int64  `json:"created_at"`
 }
 
@@ -183,6 +184,7 @@ func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbe
 		sessionKey := project.DispatchSessionKey()
 		if channelCode == "" || sessionKey == "" {
 			log.Printf("[HEARTBEAT] 项目缺少派发渠道或会话配置，项目=%s", project.Name())
+			s.markRequirementDispatchFailed(ctx, requirement, "dispatch_config_missing: project has no dispatch channel or session key configured")
 			return nil, fmt.Errorf("project has no dispatch channel or session key configured")
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
@@ -192,11 +194,13 @@ func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbe
 			SessionKey:    sessionKey,
 		})
 		if err != nil {
+			s.markRequirementDispatchFailed(ctx, requirement, fmt.Sprintf("dispatch_failed: %v", err))
 			return nil, fmt.Errorf("failed to dispatch requirement %s: %w", requirement.ID(), err)
 		}
 		log.Printf("[HEARTBEAT] 派发成功，需求ID=%s，任务ID=%s，工作区=%s", requirement.ID(), result.TaskID, result.WorkspacePath)
 	} else {
 		log.Printf("[HEARTBEAT] 派发服务不可用，需求已创建但未派发，需求ID=%s", requirement.ID())
+		s.markRequirementDispatchFailed(ctx, requirement, "dispatch_service_unavailable: requirement dispatch service not available")
 		return nil, fmt.Errorf("requirement dispatch service not available")
 	}
 
@@ -241,6 +245,7 @@ func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heart
 			Status:        string(req.Status()),
 			Title:         req.Title(),
 			LastError:     req.LastError(),
+			ErrorCategory: classifyHeartbeatRunError(req.LastError()),
 			CreatedAt:     req.CreatedAt().UnixMilli(),
 		})
 		if len(records) >= limit {
@@ -248,6 +253,17 @@ func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heart
 		}
 	}
 	return records, nil
+}
+
+// markRequirementDispatchFailed 在派发失败时把需求标记为 failed，避免形成“无状态需求”。
+func (s *HeartbeatTriggerService) markRequirementDispatchFailed(ctx context.Context, requirement *domain.Requirement, reason string) {
+	if requirement == nil {
+		return
+	}
+	requirement.MarkFailed(reason)
+	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
+		log.Printf("[HEARTBEAT] 保存派发失败状态失败，需求ID=%s，错误=%v", requirement.ID(), err)
+	}
 }
 
 // ptrProjectID 返回项目ID指针，便于构建过滤条件。
@@ -286,4 +302,28 @@ func parseTriggerSource(req *domain.Requirement) string {
 		}
 	}
 	return "unknown"
+}
+
+// classifyHeartbeatRunError 对执行错误进行粗分类，方便前端快速过滤排障。
+func classifyHeartbeatRunError(lastError string) string {
+	lower := strings.ToLower(strings.TrimSpace(lastError))
+	if lower == "" {
+		return "none"
+	}
+	if strings.Contains(lower, "dispatch_config_missing") || strings.Contains(lower, "channel") || strings.Contains(lower, "session key") {
+		return "dispatch_config"
+	}
+	if strings.Contains(lower, "dispatch_service_unavailable") || strings.Contains(lower, "not available") {
+		return "dispatch_service"
+	}
+	if strings.Contains(lower, "dispatch_failed") {
+		return "dispatch_runtime"
+	}
+	if strings.Contains(lower, "agent") {
+		return "agent"
+	}
+	if strings.Contains(lower, "project") {
+		return "project"
+	}
+	return "other"
 }

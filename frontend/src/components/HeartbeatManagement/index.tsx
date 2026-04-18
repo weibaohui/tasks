@@ -322,10 +322,11 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
             <Form.Item label="间隔（分钟）" name="interval_minutes" rules={[{ required: true, min: 1, type: 'number' }]}>
               <InputNumber min={1} style={{ width: 120 }} />
             </Form.Item>
-            <Form.Item label="执行 Agent" name="agent_code" rules={[{ required: true, message: '请选择Agent' }]}>
+            <Form.Item label="执行 Agent（可选）" name="agent_code">
               <Select
                 style={{ width: 200 }}
-                placeholder="选择Agent"
+                placeholder="不选则使用项目默认Agent"
+                allowClear
                 options={agents.map((a) => ({ label: `${a.name} (${a.agent_code})`, value: a.agent_code }))}
               />
             </Form.Item>
@@ -443,6 +444,13 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
               dataIndex: 'last_error',
               key: 'last_error',
               render: (err: string) => err || '-',
+            },
+            {
+              title: '错误分类',
+              dataIndex: 'error_category',
+              key: 'error_category',
+              width: 120,
+              render: (value: string) => <Tag color={value === 'none' ? 'default' : 'orange'}>{value || 'none'}</Tag>,
             },
             {
               title: '创建时间',

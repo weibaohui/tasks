@@ -29,7 +29,7 @@ type CreateHeartbeatRequest struct {
 	Name            string `json:"name" binding:"required"`
 	IntervalMinutes int    `json:"interval_minutes" binding:"required,min=1"`
 	MDContent       string `json:"md_content"`
-	AgentCode       string `json:"agent_code" binding:"required"`
+	AgentCode       string `json:"agent_code"`
 	RequirementType string `json:"requirement_type"`
 }
 
@@ -37,7 +37,7 @@ type UpdateHeartbeatRequest struct {
 	Name            string `json:"name" binding:"required"`
 	IntervalMinutes int    `json:"interval_minutes" binding:"required,min=1"`
 	MDContent       string `json:"md_content"`
-	AgentCode       string `json:"agent_code" binding:"required"`
+	AgentCode       string `json:"agent_code"`
 	RequirementType string `json:"requirement_type"`
 	Enabled         bool   `json:"enabled"`
 }

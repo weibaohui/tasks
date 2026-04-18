@@ -17,7 +17,7 @@ export interface CreateHeartbeatRequest {
   name: string;
   interval_minutes: number;
   md_content: string;
-  agent_code: string;
+  agent_code?: string;
   requirement_type: string;
 }
 
@@ -25,7 +25,7 @@ export interface UpdateHeartbeatRequest {
   name: string;
   interval_minutes: number;
   md_content: string;
-  agent_code: string;
+  agent_code?: string;
   requirement_type: string;
   enabled: boolean;
 }
@@ -39,5 +39,6 @@ export interface HeartbeatRunRecord {
   status: string;
   title: string;
   last_error: string;
+  error_category: string;
   created_at: number;
 }
