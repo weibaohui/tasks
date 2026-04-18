@@ -279,4 +279,5 @@ type WebhookHeartbeatBindingRepository interface {
 	FindByConfigID(ctx context.Context, configID GitHubWebhookConfigID) ([]*WebhookHeartbeatBinding, error)
 	FindByConfigIDAndEventType(ctx context.Context, configID GitHubWebhookConfigID, eventType string) ([]*WebhookHeartbeatBinding, error)
 	Delete(ctx context.Context, id WebhookHeartbeatBindingID) error
+	DeleteByHeartbeatID(ctx context.Context, heartbeatID HeartbeatID) error
 }

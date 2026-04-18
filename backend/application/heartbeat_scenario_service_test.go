@@ -94,12 +94,40 @@ func (m *mockHeartbeatRepo) Delete(ctx context.Context, id domain.HeartbeatID) e
 	return nil
 }
 
+// mockWebhookHeartbeatBindingRepo 模拟 WebhookHeartbeatBindingRepository
+type mockWebhookHeartbeatBindingRepo struct{}
+
+func (m *mockWebhookHeartbeatBindingRepo) Save(ctx context.Context, binding *domain.WebhookHeartbeatBinding) error {
+	return nil
+}
+
+func (m *mockWebhookHeartbeatBindingRepo) FindByID(ctx context.Context, id domain.WebhookHeartbeatBindingID) (*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockWebhookHeartbeatBindingRepo) FindByConfigID(ctx context.Context, configID domain.GitHubWebhookConfigID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockWebhookHeartbeatBindingRepo) FindByConfigIDAndEventType(ctx context.Context, configID domain.GitHubWebhookConfigID, eventType string) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockWebhookHeartbeatBindingRepo) Delete(ctx context.Context, id domain.WebhookHeartbeatBindingID) error {
+	return nil
+}
+
+func (m *mockWebhookHeartbeatBindingRepo) DeleteByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) error {
+	return nil
+}
+
 func setupTestScenarioSvc() (*HeartbeatScenarioService, *mockHeartbeatScenarioRepo, *sharedMockProjectRepo, *mockHeartbeatRepo, *mockIDGenerator) {
 	scenarioRepo := newMockHeartbeatScenarioRepo()
 	projectRepo := newSharedMockProjectRepo()
 	heartbeatRepo := newMockHeartbeatRepo()
+	bindingRepo := &mockWebhookHeartbeatBindingRepo{}
 	idGen := &mockIDGenerator{}
-	svc := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, idGen, nil)
+	svc := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, bindingRepo, idGen, nil)
 	return svc, scenarioRepo, projectRepo, heartbeatRepo, idGen
 }
 
@@ -220,7 +248,7 @@ func TestHeartbeatScenarioService_ApplyScenarioToProject(t *testing.T) {
 	scenarioRepo.Save(ctx, scenario)
 
 	// 重新构造 service 使用新的 scenarioRepo
-	svc2 := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, &mockIDGenerator{}, nil)
+	svc2 := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, &mockWebhookHeartbeatBindingRepo{}, &mockIDGenerator{}, nil)
 
 	err := svc2.ApplyScenarioToProject(ctx, "proj-001", "dev_workflow")
 	if err != nil {
@@ -263,7 +291,7 @@ func TestHeartbeatScenarioService_ApplyScenarioToProject_ReplaceExisting(t *test
 	scenarioRepo := newMockHeartbeatScenarioRepo()
 	scenarioRepo.Save(ctx, scenario)
 
-	svc2 := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, idGen, nil)
+	svc2 := NewHeartbeatScenarioService(scenarioRepo, projectRepo, heartbeatRepo, &mockWebhookHeartbeatBindingRepo{}, idGen, nil)
 
 	err := svc2.ApplyScenarioToProject(ctx, "proj-001", "dev_workflow")
 	if err != nil {

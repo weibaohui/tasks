@@ -17,12 +17,39 @@ func (m *mockProjectIDGen) Generate() string {
 	return "project-id-" + strconv.Itoa(m.count)
 }
 
+// mockBindingRepoForProject 模拟 WebhookHeartbeatBindingRepository
+type mockBindingRepoForProject struct{}
+
+func (m *mockBindingRepoForProject) Save(ctx context.Context, binding *domain.WebhookHeartbeatBinding) error {
+	return nil
+}
+
+func (m *mockBindingRepoForProject) FindByID(ctx context.Context, id domain.WebhookHeartbeatBindingID) (*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockBindingRepoForProject) FindByConfigID(ctx context.Context, configID domain.GitHubWebhookConfigID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockBindingRepoForProject) FindByConfigIDAndEventType(ctx context.Context, configID domain.GitHubWebhookConfigID, eventType string) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+func (m *mockBindingRepoForProject) Delete(ctx context.Context, id domain.WebhookHeartbeatBindingID) error {
+	return nil
+}
+
+func (m *mockBindingRepoForProject) DeleteByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) error {
+	return nil
+}
+
 func setupTestProjectSvc() *ProjectApplicationService {
 	repo := newSharedMockProjectRepo()
 	idGen := &mockProjectIDGen{}
 	scenarioRepo := newMockHeartbeatScenarioRepo()
 	heartbeatRepo := newMockHeartbeatRepo()
-	scenarioSvc := NewHeartbeatScenarioService(scenarioRepo, repo, heartbeatRepo, idGen, nil)
+	scenarioSvc := NewHeartbeatScenarioService(scenarioRepo, repo, heartbeatRepo, &mockBindingRepoForProject{}, idGen, nil)
 	return NewProjectApplicationService(repo, nil, idGen, scenarioSvc)
 }
 

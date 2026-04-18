@@ -185,6 +185,7 @@ func main() {
 	requirementRepo := _persistence.NewSQLiteRequirementRepository(db)
 	mcpServerRepo := _persistence.NewSQLiteMCPServerRepository(db)
 	bindingRepo := _persistence.NewSQLiteAgentMCPBindingRepository(db)
+	webhookBindingRepo := _persistence.NewSQLiteWebhookHeartbeatBindingRepository(db)
 	mcpToolRepo := _persistence.NewSQLiteMCPToolRepository(db)
 	mcpToolLogRepo := _persistence.NewSQLiteMCPToolLogRepository(db)
 
@@ -299,7 +300,7 @@ func main() {
 	agentService := application.NewAgentApplicationService(agentRepo, idGenerator)
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator, llm.TestLLMConnection)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
-	heartbeatScenarioService := application.NewHeartbeatScenarioService(heartbeatScenarioRepo, projectRepo, heartbeatRepo, idGenerator, heartbeatScheduler)
+	heartbeatScenarioService := application.NewHeartbeatScenarioService(heartbeatScenarioRepo, projectRepo, heartbeatRepo, webhookBindingRepo, idGenerator, heartbeatScheduler)
 	if err := heartbeatScenarioService.EnsureBuiltInScenarios(context.Background()); err != nil {
 		logger.Fatal("Failed to ensure built-in heartbeat scenarios", zap.Error(err))
 	}
@@ -348,7 +349,6 @@ func main() {
 	// 初始化 Webhook 相关组件
 	webhookConfigRepo := _persistence.NewSQLiteGitHubWebhookConfigRepository(db)
 	webhookEventLogRepo := _persistence.NewSQLiteWebhookEventLogRepository(db)
-	webhookBindingRepo := _persistence.NewSQLiteWebhookHeartbeatBindingRepository(db)
 	// 使用 PublicURL（公网地址）作为 webhook 的回调地址
 	// 优先从 ~/.taskmanager/config.json 读取（tunnel 创建时保存），否则使用配置文件中的 PublicURL
 	webhookURL := config.GetPublicURL()
