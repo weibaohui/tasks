@@ -6,17 +6,18 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes 设置路由
 func SetupRoutes() *gin.Engine {
-	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithUsers(userHandler *UserHandler) *gin.Engine {
-	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	return SetupRoutesWithManagement(userHandler, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func SetupRoutesWithManagement(
@@ -37,6 +38,7 @@ func SetupRoutesWithManagement(
 	heartbeatHandler *HeartbeatHandler,
 	heartbeatTemplateHandler *HeartbeatTemplateHandler,
 	heartbeatScenarioHandler *HeartbeatScenarioHandler,
+	systemLogHandler *SystemLogHandler,
 ) *gin.Engine {
 	engine := gin.Default()
 
@@ -45,6 +47,11 @@ func SetupRoutesWithManagement(
 		if authHandler == nil {
 			c.Next()
 			return
+		}
+		if c.GetHeader("Authorization") == "" {
+			if token := strings.TrimSpace(c.Query("token")); token != "" {
+				c.Request.Header.Set("Authorization", "Bearer "+token)
+			}
 		}
 		if _, err := authHandler.Authorize(c.Request); err != nil {
 			c.JSON(http.StatusUnauthorized, HTTPError{Code: http.StatusUnauthorized, Message: "unauthorized"})
@@ -251,6 +258,15 @@ func SetupRoutesWithManagement(
 		v1.POST("/projects/:project_id/state-machines", requireAuth, projectStateMachineHandler.SetProjectStateMachine)
 		v1.GET("/projects/:project_id/state-machines/:requirement_type", requireAuth, projectStateMachineHandler.GetProjectStateMachineByType)
 		v1.DELETE("/project-state-machines/:id", requireAuth, projectStateMachineHandler.DeleteProjectStateMachine)
+	}
+
+	// 系统日志路由
+	if systemLogHandler != nil {
+		systemLogs := v1.Group("/system/logs", requireAuth)
+		systemLogs.GET("/config", systemLogHandler.GetConfig)
+		systemLogs.GET("/tail", systemLogHandler.GetTail)
+		systemLogs.GET("/stream", systemLogHandler.Stream)
+		systemLogs.POST("/clear", systemLogHandler.Clear)
 	}
 
 	return engine

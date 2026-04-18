@@ -15,11 +15,12 @@ import {
   DownOutlined,
   GithubOutlined,
   HeartOutlined,
+  KeyOutlined,
   LogoutOutlined,
   MessageOutlined,
+  FileTextOutlined,
   RobotOutlined,
   UserOutlined,
-  QuestionCircleOutlined,
   NodeIndexOutlined,
   MenuOutlined,
 } from '@ant-design/icons';
@@ -35,7 +36,8 @@ import { ConversationRecordsPage } from './pages/ConversationRecordsPage';
 import { MCPManagementPage } from './pages/MCPManagementPage';
 import { SkillsManagementPage } from './pages/SkillsManagementPage';
 import StateMachineManagementPage from './pages/StateMachineManagementPage';
-import { SettingsPage } from './pages/SettingsPage';
+import { ApiTokensPage } from './pages/ApiTokensPage';
+import { SystemLogsPage } from './pages/SystemLogsPage';
 import { HeartbeatScenarioManagementPage } from './pages/HeartbeatScenarioManagementPage';
 import { ProjectWebhookPage } from './pages/ProjectWebhookPage';
 import { useAuthStore } from './stores/authStore';
@@ -103,6 +105,10 @@ const MainLayout: React.FC = () => {
                         ? '/state-machines'
                         : location.pathname.startsWith('/dashboard')
                           ? '/dashboard'
+                          : location.pathname.startsWith('/settings/api-tokens')
+                            ? '/settings/api-tokens'
+                            : location.pathname.startsWith('/settings/logs')
+                              ? '/settings/logs'
                           : '/dashboard';
 
   const menuItems = [
@@ -117,7 +123,8 @@ const MainLayout: React.FC = () => {
     { key: '/sessions', icon: <DatabaseOutlined />, label: '会话管理' },
     { key: '/providers', icon: <ApiOutlined />, label: 'LLM 配置' },
     { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-    { key: '/settings', icon: <QuestionCircleOutlined />, label: '开放API' },
+    { key: '/settings/api-tokens', icon: <KeyOutlined />, label: 'API令牌' },
+    { key: '/settings/logs', icon: <FileTextOutlined />, label: '系统日志' },
   ];
 
   const handleMenuClick = (key: string) => {
@@ -247,7 +254,9 @@ const App: React.FC = () => {
             <Route path="providers" element={<ProviderManagementPage />} />
             <Route path="mcp" element={<MCPManagementPage />} />
             <Route path="users" element={<UserManagementPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings" element={<Navigate to="/settings/logs" replace />} />
+            <Route path="settings/api-tokens" element={<ApiTokensPage />} />
+            <Route path="settings/logs" element={<SystemLogsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

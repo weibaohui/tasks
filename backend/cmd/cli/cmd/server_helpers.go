@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	infraConfig "github.com/weibh/taskmanager/infrastructure/config"
 )
 
 // getConfigDir 获取配置目录
@@ -23,6 +25,14 @@ func getConfigDir() string {
 // getPIDFilePath 获取 PID 文件路径
 func getPIDFilePath() string {
 	return filepath.Join(getConfigDir(), pidFileName)
+}
+
+// getServerLogPath 获取服务日志文件路径
+func getServerLogPath() string {
+	if path := os.Getenv("TASKMANAGER_SERVER_LOG_PATH"); strings.TrimSpace(path) != "" {
+		return infraConfig.ExpandPath(path)
+	}
+	return infraConfig.GetServerLogPath()
 }
 
 // getPID 获取服务器进程 PID
@@ -120,7 +130,7 @@ func printStatus() {
 	fmt.Printf("服务地址: http://localhost:%s\n", port)
 
 	// 显示日志文件路径
-	logFile := filepath.Join(getConfigDir(), logFileName)
+	logFile := getServerLogPath()
 	fmt.Printf("日志文件: %s\n", logFile)
 }
 

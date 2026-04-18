@@ -72,7 +72,12 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		// 打开日志文件
-		logFile := filepath.Join(configDir, logFileName)
+		logFile := getServerLogPath()
+		logDir := filepath.Dir(logFile)
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			fmt.Printf("创建日志目录失败: %v\n", err)
+			return
+		}
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			fmt.Printf("打开日志文件失败: %v\n", err)
@@ -188,8 +193,7 @@ var serverLogsCmd = &cobra.Command{
 		follow, _ := cmd.Flags().GetBool("follow")
 		lines, _ := cmd.Flags().GetInt("lines")
 
-		configDir := getConfigDir()
-		logFile := filepath.Join(configDir, logFileName)
+		logFile := getServerLogPath()
 
 		// 检查日志文件是否存在
 		if _, err := os.Stat(logFile); os.IsNotExist(err) {
