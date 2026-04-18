@@ -84,7 +84,7 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 		heartbeatID := binding.HeartbeatID().String()
 		log.Printf("[WEBHOOK] triggering heartbeat %s for event %s", heartbeatID, eventType)
 
-		if err := s.triggerService.Trigger(ctx, heartbeatID); err != nil {
+		if _, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceWebhook); err != nil {
 			log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
 			continue
 		}

@@ -16,6 +16,22 @@ func NewSQLiteHeartbeatRepository(db *sql.DB) *SQLiteHeartbeatRepository {
 	return &SQLiteHeartbeatRepository{db: db}
 }
 
+// RunInTx 在同一数据库事务中执行回调，确保场景应用等批量操作具备原子性。
+func (r *SQLiteHeartbeatRepository) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	txCtx := withTxContext(ctx, tx)
+	if err := fn(txCtx); err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return rollbackErr
+		}
+		return err
+	}
+	return tx.Commit()
+}
+
 func (r *SQLiteHeartbeatRepository) Save(ctx context.Context, hb *domain.Heartbeat) error {
 	snap := hb.ToSnapshot()
 	query := `
@@ -32,7 +48,8 @@ func (r *SQLiteHeartbeatRepository) Save(ctx context.Context, hb *domain.Heartbe
 			sort_order=excluded.sort_order,
 			updated_at=excluded.updated_at
 	`
-	_, err := r.db.ExecContext(
+	executor := executorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(
 		ctx,
 		query,
 		snap.ID.String(),
@@ -51,14 +68,16 @@ func (r *SQLiteHeartbeatRepository) Save(ctx context.Context, hb *domain.Heartbe
 }
 
 func (r *SQLiteHeartbeatRepository) FindByID(ctx context.Context, id domain.HeartbeatID) (*domain.Heartbeat, error) {
-	row := r.db.QueryRowContext(ctx, `
+	executor := executorFromContext(ctx, r.db)
+	row := executor.QueryRowContext(ctx, `
 		SELECT id, project_id, name, enabled, interval_minutes, md_content, agent_code, requirement_type, sort_order, created_at, updated_at
 		FROM heartbeats WHERE id = ?`, id.String())
 	return scanHeartbeat(row)
 }
 
 func (r *SQLiteHeartbeatRepository) FindByProjectID(ctx context.Context, projectID domain.ProjectID) ([]*domain.Heartbeat, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	executor := executorFromContext(ctx, r.db)
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, project_id, name, enabled, interval_minutes, md_content, agent_code, requirement_type, sort_order, created_at, updated_at
 		FROM heartbeats WHERE project_id = ? ORDER BY sort_order, created_at`, projectID.String())
 	if err != nil {
@@ -69,7 +88,8 @@ func (r *SQLiteHeartbeatRepository) FindByProjectID(ctx context.Context, project
 }
 
 func (r *SQLiteHeartbeatRepository) FindAllEnabled(ctx context.Context) ([]*domain.Heartbeat, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	executor := executorFromContext(ctx, r.db)
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, project_id, name, enabled, interval_minutes, md_content, agent_code, requirement_type, sort_order, created_at, updated_at
 		FROM heartbeats WHERE enabled = 1 ORDER BY sort_order, created_at`)
 	if err != nil {
@@ -80,7 +100,8 @@ func (r *SQLiteHeartbeatRepository) FindAllEnabled(ctx context.Context) ([]*doma
 }
 
 func (r *SQLiteHeartbeatRepository) Delete(ctx context.Context, id domain.HeartbeatID) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM heartbeats WHERE id = ?`, id.String())
+	executor := executorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(ctx, `DELETE FROM heartbeats WHERE id = ?`, id.String())
 	return err
 }
 
@@ -100,17 +121,17 @@ func scanHeartbeats(rows *sql.Rows) ([]*domain.Heartbeat, error) {
 
 func scanHeartbeat(scanner rowScanner) (*domain.Heartbeat, error) {
 	var (
-		idStr             string
-		projectIDStr      string
-		name              string
-		enabled           int
-		intervalMinutes   int
-		mdContent         string
-		agentCode         string
-		requirementType   string
-		sortOrder         int
-		createdAtUnix     int64
-		updatedAtUnix     int64
+		idStr           string
+		projectIDStr    string
+		name            string
+		enabled         int
+		intervalMinutes int
+		mdContent       string
+		agentCode       string
+		requirementType string
+		sortOrder       int
+		createdAtUnix   int64
+		updatedAtUnix   int64
 	)
 	err := scanner.Scan(&idStr, &projectIDStr, &name, &enabled, &intervalMinutes, &mdContent, &agentCode, &requirementType, &sortOrder, &createdAtUnix, &updatedAtUnix)
 	if err == sql.ErrNoRows {

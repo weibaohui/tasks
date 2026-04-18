@@ -16,19 +16,68 @@ func NewHeartbeatScenarioHandler(scenarioService *application.HeartbeatScenarioS
 	return &HeartbeatScenarioHandler{scenarioService: scenarioService}
 }
 
-func (h *HeartbeatScenarioHandler) CreateScenario(c *gin.Context) {
-	var req struct {
-		Code        string                         `json:"code" binding:"required"`
-		Name        string                         `json:"name" binding:"required"`
-		Description string                         `json:"description"`
-		Items       []domain.HeartbeatScenarioItem `json:"items"`
-		Enabled     bool                           `json:"enabled"`
+// HeartbeatScenarioItemDTO 是场景项的传输结构，显式声明 HTTP JSON 契约。
+type HeartbeatScenarioItemDTO struct {
+	Name            string `json:"name"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	MDContent       string `json:"md_content"`
+	AgentCode       string `json:"agent_code"`
+	RequirementType string `json:"requirement_type"`
+	SortOrder       int    `json:"sort_order"`
+}
+
+// CreateHeartbeatScenarioRequest 定义创建场景请求体。
+type CreateHeartbeatScenarioRequest struct {
+	Code        string                     `json:"code" binding:"required"`
+	Name        string                     `json:"name" binding:"required"`
+	Description string                     `json:"description"`
+	Items       []HeartbeatScenarioItemDTO `json:"items"`
+	Enabled     bool                       `json:"enabled"`
+}
+
+// UpdateHeartbeatScenarioRequest 定义更新场景请求体。
+type UpdateHeartbeatScenarioRequest struct {
+	Name        string                     `json:"name" binding:"required"`
+	Description string                     `json:"description"`
+	Items       []HeartbeatScenarioItemDTO `json:"items"`
+	Enabled     bool                       `json:"enabled"`
+}
+
+// ApplyScenarioRequest 定义应用场景请求体。
+type ApplyScenarioRequest struct {
+	ScenarioCode string `json:"scenario_code"`
+}
+
+// toDomainScenarioItems 将 HTTP DTO 映射为领域对象。
+func toDomainScenarioItems(items []HeartbeatScenarioItemDTO) []domain.HeartbeatScenarioItem {
+	result := make([]domain.HeartbeatScenarioItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, domain.HeartbeatScenarioItem{
+			Name:            item.Name,
+			IntervalMinutes: item.IntervalMinutes,
+			MDContent:       item.MDContent,
+			AgentCode:       item.AgentCode,
+			RequirementType: item.RequirementType,
+			SortOrder:       item.SortOrder,
+		})
 	}
+	return result
+}
+
+func (h *HeartbeatScenarioHandler) CreateScenario(c *gin.Context) {
+	var req CreateHeartbeatScenarioRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
-	scenario, err := h.scenarioService.CreateScenario(c.Request.Context(), req.Code, req.Name, req.Description, req.Items, req.Enabled)
+	scenario, err := h.scenarioService.CreateScenario(
+		c.Request.Context(),
+		req.Code,
+		req.Name,
+		req.Description,
+		toDomainScenarioItems(req.Items),
+		req.Enabled,
+	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
@@ -73,17 +122,19 @@ func (h *HeartbeatScenarioHandler) UpdateScenario(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "code is required"})
 		return
 	}
-	var req struct {
-		Name        string                         `json:"name" binding:"required"`
-		Description string                         `json:"description"`
-		Items       []domain.HeartbeatScenarioItem `json:"items"`
-		Enabled     bool                           `json:"enabled"`
-	}
+	var req UpdateHeartbeatScenarioRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
 	}
-	scenario, err := h.scenarioService.UpdateScenario(c.Request.Context(), code, req.Name, req.Description, req.Items, req.Enabled)
+	scenario, err := h.scenarioService.UpdateScenario(
+		c.Request.Context(),
+		code,
+		req.Name,
+		req.Description,
+		toDomainScenarioItems(req.Items),
+		req.Enabled,
+	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
@@ -110,9 +161,7 @@ func (h *HeartbeatScenarioHandler) ApplyScenarioToProject(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
 		return
 	}
-	var req struct {
-		ScenarioCode string `json:"scenario_code"`
-	}
+	var req ApplyScenarioRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
 		return
@@ -139,6 +188,62 @@ func (h *HeartbeatScenarioHandler) ApplyScenarioToProject(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, map[string]string{"message": "ok"})
+}
+
+// PreviewApplyScenarioToProject 返回应用场景前的影响预览。
+func (h *HeartbeatScenarioHandler) PreviewApplyScenarioToProject(c *gin.Context) {
+	projectID := c.Param("project_id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
+		return
+	}
+	var req ApplyScenarioRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "invalid request"})
+		return
+	}
+	if req.ScenarioCode == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "scenario_code is required"})
+		return
+	}
+
+	projectService, exists := c.Get("projectService")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project service not available"})
+		return
+	}
+	svc, ok := projectService.(*application.ProjectApplicationService)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project service invalid"})
+		return
+	}
+
+	preview, err := svc.PreviewApplyScenarioToProject(c.Request.Context(), projectID, req.ScenarioCode)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+
+	toDelete := make([]map[string]interface{}, 0, len(preview.ToDelete))
+	for _, hb := range preview.ToDelete {
+		toDelete = append(toDelete, heartbeatToMap(hb))
+	}
+	toCreate := make([]map[string]interface{}, 0, len(preview.ToCreate))
+	for _, hb := range preview.ToCreate {
+		toCreate = append(toCreate, heartbeatToMap(hb))
+	}
+
+	c.JSON(http.StatusOK, map[string]interface{}{
+		"project_id":       preview.ProjectID,
+		"project_name":     preview.ProjectName,
+		"scenario_code":    preview.ScenarioCode,
+		"scenario_name":    preview.ScenarioName,
+		"current_scenario": preview.CurrentScenario,
+		"to_delete":        toDelete,
+		"to_create":        toCreate,
+		"delete_count":     len(preview.ToDelete),
+		"create_count":     len(preview.ToCreate),
+	})
 }
 
 func heartbeatScenarioToMap(scenario *domain.HeartbeatScenario) map[string]interface{} {

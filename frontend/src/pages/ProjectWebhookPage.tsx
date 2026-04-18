@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -41,7 +42,29 @@ import { GITHUB_EVENT_TYPES } from '../types/githubWebhook';
 import type { Project } from '../types/projectRequirement';
 import { useAuthStore } from '../stores/authStore';
 
-export const ProjectWebhookPage: React.FC = () => {
+interface ProjectWebhookPageProps {
+  selectedProject?: Project | null;
+}
+
+/**
+ * normalizeGitHubRepo 将项目仓库地址标准化为 owner/repo 格式。
+ */
+function normalizeGitHubRepo(repoURL: string): string {
+  const trimmed = (repoURL || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (/^[^/\s]+\/[^/\s]+$/.test(trimmed)) {
+    return trimmed.replace(/\.git$/, '');
+  }
+  const match = trimmed.match(/github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i);
+  if (!match) {
+    return '';
+  }
+  return `${match[1]}/${match[2]}`;
+}
+
+export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selectedProject = null }) => {
   const { user } = useAuthStore();
   const [configs, setConfigs] = useState<GitHubWebhookConfig[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -62,12 +85,18 @@ export const ProjectWebhookPage: React.FC = () => {
   const [heartbeats, setHeartbeats] = useState<HeartbeatOption[]>([]);
   const [bindingModalOpen, setBindingModalOpen] = useState(false);
   const [bindingForm] = Form.useForm();
+  const scopedRepo = useMemo(() => normalizeGitHubRepo(selectedProject?.git_repo_url || ''), [selectedProject?.git_repo_url]);
+  const isProjectScoped = !!selectedProject?.id;
 
   const fetchConfigs = async () => {
     setLoading(true);
     try {
       const data = await listWebhookConfigs();
-      setConfigs(data);
+      if (selectedProject?.id) {
+        setConfigs(data.filter((item) => item.project_id === selectedProject.id));
+      } else {
+        setConfigs(data);
+      }
     } catch {
       message.error('加载 Webhook 配置失败');
     } finally {
@@ -129,16 +158,40 @@ export const ProjectWebhookPage: React.FC = () => {
   useEffect(() => {
     fetchConfigs();
     fetchProjects();
-  }, [user?.user_code]);
+  }, [user?.user_code, selectedProject?.id]);
+
+  useEffect(() => {
+    setSelectedConfig(null);
+    setBindings([]);
+    setEventLogs([]);
+  }, [selectedProject?.id]);
 
   const handleOpenCreate = () => {
-    form.resetFields();
+    if (isProjectScoped) {
+      if (!scopedRepo) {
+        message.error('当前项目仓库信息无效，请先在项目中配置 GitHub 仓库地址');
+        return;
+      }
+      form.resetFields();
+      form.setFieldsValue({
+        project_id: selectedProject?.id,
+        repo: scopedRepo,
+      });
+    } else {
+      form.resetFields();
+    }
     setModalOpen(true);
   };
 
   const handleSubmit = async (values: { project_id: string; repo: string }) => {
+    const projectID = isProjectScoped ? (selectedProject?.id || '') : values.project_id;
+    const repo = isProjectScoped ? scopedRepo : values.repo;
+    if (!projectID || !repo) {
+      message.error('缺少项目或仓库信息，无法创建 Webhook 配置');
+      return;
+    }
     try {
-      await createWebhookConfig(values.project_id, values.repo);
+      await createWebhookConfig(projectID, repo);
       message.success('创建 Webhook 配置成功');
       setModalOpen(false);
       fetchConfigs();
@@ -530,7 +583,7 @@ export const ProjectWebhookPage: React.FC = () => {
   return (
     <div style={{ padding: 0 }}>
       <Card
-        title={`GitHub Webhook 配置 (${configs.length})`}
+        title={`GitHub Webhook 配置 (${configs.length})${selectedProject ? ` - ${selectedProject.name}` : ''}`}
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={fetchConfigs}>
@@ -560,31 +613,57 @@ export const ProjectWebhookPage: React.FC = () => {
         destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item
-            label="关联项目"
-            name="project_id"
-            rules={[{ required: true, message: '请选择项目' }]}
-          >
-            <Select
-              showSearch
-              placeholder="选择项目"
-              options={projects.map((p) => ({
-                label: p.name,
-                value: p.id,
-              }))}
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-            />
-          </Form.Item>
-          <Form.Item
-            label="GitHub Repo"
-            name="repo"
-            rules={[{ required: true, message: '请输入 GitHub 仓库' }]}
-            extra="格式: owner/repo，例如 weibaohui/tasks"
-          >
-            <Input placeholder="weibaohui/tasks" />
-          </Form.Item>
+          {isProjectScoped ? (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="已使用当前项目自动填充"
+                description="新建配置会直接使用当前已选择项目及其仓库信息，无需重复填写。"
+              />
+              <Form.Item label="关联项目">
+                <Input value={selectedProject?.name || ''} disabled />
+              </Form.Item>
+              <Form.Item label="GitHub Repo" extra="自动从项目仓库地址解析">
+                <Input value={scopedRepo || '未配置'} disabled />
+              </Form.Item>
+              <Form.Item name="project_id" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="repo" hidden>
+                <Input />
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              <Form.Item
+                label="关联项目"
+                name="project_id"
+                rules={[{ required: true, message: '请选择项目' }]}
+              >
+                <Select
+                  showSearch
+                  placeholder="选择项目"
+                  options={projects.map((p) => ({
+                    label: p.name,
+                    value: p.id,
+                  }))}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                label="GitHub Repo"
+                name="repo"
+                rules={[{ required: true, message: '请输入 GitHub 仓库' }]}
+                extra="格式: owner/repo，例如 weibaohui/tasks"
+              >
+                <Input placeholder="weibaohui/tasks" />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
 

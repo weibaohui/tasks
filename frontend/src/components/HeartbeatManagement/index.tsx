@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, message, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, MinusCircleOutlined, FileTextOutlined } from '@ant-design/icons';
-import type { Heartbeat } from '../../types/heartbeat';
+import { EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, MinusCircleOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
+import type { Heartbeat, HeartbeatRunRecord } from '../../types/heartbeat';
 import type { HeartbeatTemplate } from '../../types/heartbeat_template';
 import type { Agent } from '../../types/agent';
-import { listHeartbeats, createHeartbeat, updateHeartbeat, deleteHeartbeat } from '../../api/heartbeatApi';
+import type { RequirementType } from '../../api/requirementTypeApi';
+import { listHeartbeats, createHeartbeat, updateHeartbeat, deleteHeartbeat, listHeartbeatRuns } from '../../api/heartbeatApi';
 import { listHeartbeatTemplates, createHeartbeatTemplate, deleteHeartbeatTemplate } from '../../api/heartbeatTemplateApi';
 
 interface HeartbeatManagementProps {
   projectId: string;
   agents: Agent[];
+  requirementTypes?: RequirementType[];
 }
 
 const requirementTypeOptions = [
@@ -26,7 +28,7 @@ const typeColorMap: Record<string, string> = {
   optimization: 'purple',
 };
 
-export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projectId, agents }) => {
+export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projectId, agents, requirementTypes }) => {
   const [heartbeats, setHeartbeats] = useState<Heartbeat[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,6 +39,13 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [templateForm] = Form.useForm();
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [runsModalOpen, setRunsModalOpen] = useState(false);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runs, setRuns] = useState<HeartbeatRunRecord[]>([]);
+  const [runsHeartbeatName, setRunsHeartbeatName] = useState('');
+  const dynamicRequirementTypeOptions = requirementTypes && requirementTypes.length > 0
+    ? requirementTypes.map((item) => ({ label: `${item.name} (${item.code})`, value: item.code }))
+    : requirementTypeOptions;
 
   const fetchHeartbeats = async () => {
     setLoading(true);
@@ -191,6 +200,21 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
     }
   };
 
+  const handleViewRuns = async (hb: Heartbeat) => {
+    setRunsHeartbeatName(hb.name);
+    setRunsModalOpen(true);
+    setRunsLoading(true);
+    try {
+      const data = await listHeartbeatRuns(hb.id, 20);
+      setRuns(data);
+    } catch {
+      message.error('加载心跳执行记录失败');
+      setRuns([]);
+    } finally {
+      setRunsLoading(false);
+    }
+  };
+
   const columns = [
     {
       title: 'ID',
@@ -229,7 +253,7 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       width: 110,
       render: (type: string) => (
         <Tag color={typeColorMap[type] || 'default'}>
-          {requirementTypeOptions.find((o) => o.value === type)?.label || type}
+          {dynamicRequirementTypeOptions.find((o) => o.value === type)?.label || type}
         </Tag>
       ),
     },
@@ -258,6 +282,9 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
           </Tooltip>
           <Tooltip title="删除">
             <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
+          </Tooltip>
+          <Tooltip title="执行记录">
+            <Button type="link" icon={<HistoryOutlined />} onClick={() => handleViewRuns(record)} />
           </Tooltip>
         </Space>
       ),
@@ -295,15 +322,16 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
             <Form.Item label="间隔（分钟）" name="interval_minutes" rules={[{ required: true, min: 1, type: 'number' }]}>
               <InputNumber min={1} style={{ width: 120 }} />
             </Form.Item>
-            <Form.Item label="执行 Agent" name="agent_code" rules={[{ required: true, message: '请选择Agent' }]}>
+            <Form.Item label="执行 Agent（可选）" name="agent_code">
               <Select
                 style={{ width: 200 }}
-                placeholder="选择Agent"
+                placeholder="不选则使用项目默认Agent"
+                allowClear
                 options={agents.map((a) => ({ label: `${a.name} (${a.agent_code})`, value: a.agent_code }))}
               />
             </Form.Item>
             <Form.Item label="需求类型" name="requirement_type" rules={[{ required: true }]}>
-              <Select style={{ width: 140 }} options={requirementTypeOptions} />
+              <Select style={{ width: 220 }} options={dynamicRequirementTypeOptions} />
             </Form.Item>
             <Form.Item label="启用" name="enabled" valuePropName="checked">
               <Switch />
@@ -376,6 +404,63 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
             <Input placeholder="例如：PR检查模板" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`执行记录 - ${runsHeartbeatName}`}
+        open={runsModalOpen}
+        onCancel={() => setRunsModalOpen(false)}
+        footer={null}
+        width={900}
+      >
+        <Table<HeartbeatRunRecord>
+          rowKey="requirement_id"
+          dataSource={runs}
+          loading={runsLoading}
+          size="small"
+          pagination={{ pageSize: 10 }}
+          columns={[
+            {
+              title: '触发来源',
+              dataIndex: 'trigger_source',
+              key: 'trigger_source',
+              width: 110,
+              render: (source: string) => <Tag color="blue">{source || 'unknown'}</Tag>,
+            },
+            {
+              title: '状态',
+              dataIndex: 'status',
+              key: 'status',
+              width: 100,
+              render: (status: string) => <Tag color={status === 'failed' ? 'red' : 'green'}>{status}</Tag>,
+            },
+            {
+              title: '标题',
+              dataIndex: 'title',
+              key: 'title',
+            },
+            {
+              title: '最近错误',
+              dataIndex: 'last_error',
+              key: 'last_error',
+              render: (err: string) => err || '-',
+            },
+            {
+              title: '错误分类',
+              dataIndex: 'error_category',
+              key: 'error_category',
+              width: 120,
+              render: (value: string) => <Tag color={value === 'none' ? 'default' : 'orange'}>{value || 'none'}</Tag>,
+            },
+            {
+              title: '创建时间',
+              dataIndex: 'created_at',
+              key: 'created_at',
+              width: 180,
+              render: (value: number) => new Date(value).toLocaleString(),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );

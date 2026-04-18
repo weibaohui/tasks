@@ -1,10 +1,10 @@
 package persistence
 
 import (
-	"fmt"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -36,7 +36,8 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 			heartbeat_scenario_code=excluded.heartbeat_scenario_code,
 			updated_at=excluded.updated_at
 	`
-	_, err := r.db.ExecContext(
+	executor := executorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(
 		ctx,
 		query,
 		snap.ID.String(),
@@ -56,14 +57,16 @@ func (r *SQLiteProjectRepository) Save(ctx context.Context, project *domain.Proj
 }
 
 func (r *SQLiteProjectRepository) FindByID(ctx context.Context, id domain.ProjectID) (*domain.Project, error) {
-	row := r.db.QueryRowContext(ctx, `
+	executor := executorFromContext(ctx, r.db)
+	row := executor.QueryRowContext(ctx, `
 		SELECT id, name, git_repo_url, default_branch, init_steps, dispatch_channel_code, dispatch_session_key, COALESCE(default_agent_code, ''), max_concurrent_agents, COALESCE(heartbeat_scenario_code, ''), created_at, updated_at
 		FROM projects WHERE id = ?`, id.String())
 	return scanProject(row)
 }
 
 func (r *SQLiteProjectRepository) FindAll(ctx context.Context) ([]*domain.Project, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	executor := executorFromContext(ctx, r.db)
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, name, git_repo_url, default_branch, init_steps, dispatch_channel_code, dispatch_session_key, COALESCE(default_agent_code, ''), max_concurrent_agents, COALESCE(heartbeat_scenario_code, ''), created_at, updated_at
 		FROM projects ORDER BY created_at DESC`)
 	if err != nil {
@@ -84,7 +87,8 @@ func (r *SQLiteProjectRepository) FindAll(ctx context.Context) ([]*domain.Projec
 }
 
 func (r *SQLiteProjectRepository) Delete(ctx context.Context, id domain.ProjectID) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id.String())
+	executor := executorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id.String())
 	return err
 }
 

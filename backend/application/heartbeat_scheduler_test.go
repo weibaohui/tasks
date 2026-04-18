@@ -147,6 +147,13 @@ func (m *MockRequirementRepository) FindByProjectID(ctx context.Context, project
 }
 
 func (m *MockRequirementRepository) Save(ctx context.Context, req *domain.Requirement) error {
+	// 按 ID 覆盖已存在需求，模拟真实仓储的 upsert 行为。
+	for i, existing := range m.requirements {
+		if existing.ID().String() == req.ID().String() {
+			m.requirements[i] = req
+			return nil
+		}
+	}
 	m.requirements = append(m.requirements, req)
 	return nil
 }

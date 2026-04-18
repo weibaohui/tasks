@@ -4,7 +4,7 @@ import { CopyOutlined, SettingOutlined, EditOutlined, DeleteOutlined, CheckCircl
 import { batchDeleteRequirements, copyAndDispatchRequirement, createProject, createRequirement, deleteProject, deleteRequirement, dispatchRequirement, getRequirement, listProjects, listRequirements, updateProject, updateRequirement, updateRequirementStatus, getRequirementTransitionHistory, getStatusStats, type TransitionLog, type StatusStat } from '../api/projectRequirementApi';
 import { listAgents } from '../api/agentApi';
 import { listChannels } from '../api/channelApi';
-import { listHeartbeatScenarios, applyHeartbeatScenario, type HeartbeatScenario } from '../api/heartbeatScenarioApi';
+import { listHeartbeatScenarios, applyHeartbeatScenario, previewApplyHeartbeatScenario, type HeartbeatScenario } from '../api/heartbeatScenarioApi';
 import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
@@ -1273,15 +1273,74 @@ export const ProjectRequirementPage: React.FC = () => {
                           value={configProject.heartbeat_scenario_code || undefined}
                           onChange={async (code) => {
                             if (!configProject) return;
-                            setApplyingScenario(true);
+                            if (!code) {
+                              message.warning('请选择有效的心跳场景');
+                              return;
+                            }
                             try {
-                              await applyHeartbeatScenario(configProject.id, code);
-                              message.success('场景应用成功');
-                              const updatedProject = { ...configProject, heartbeat_scenario_code: code };
-                              setConfigProject(updatedProject);
-                              setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
+                              setApplyingScenario(true);
+                              const preview = await previewApplyHeartbeatScenario(configProject.id, code);
+                              setApplyingScenario(false);
+                              Modal.confirm({
+                                title: '确认应用心跳场景',
+                                width: 760,
+                                okText: '确认应用',
+                                cancelText: '取消',
+                                content: (
+                                  <Space direction="vertical" style={{ width: '100%' }}>
+                                    <Alert
+                                      type="warning"
+                                      showIcon
+                                      message={`将应用场景：${preview.scenario_name}`}
+                                      description={`预计删除 ${preview.delete_count} 条旧心跳，新增 ${preview.create_count} 条场景心跳。`}
+                                    />
+                                    <div>
+                                      <div style={{ fontWeight: 600, marginBottom: 6 }}>将删除（最多展示5条）</div>
+                                      {preview.to_delete.length === 0 ? (
+                                        <div style={{ color: '#999' }}>无</div>
+                                      ) : (
+                                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                          {preview.to_delete.slice(0, 5).map((item) => (
+                                            <li key={`delete-${item.id}`}>
+                                              {item.name}（{item.interval_minutes} 分钟）
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div style={{ fontWeight: 600, marginBottom: 6 }}>将新增（最多展示5条）</div>
+                                      {preview.to_create.length === 0 ? (
+                                        <div style={{ color: '#999' }}>无</div>
+                                      ) : (
+                                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                          {preview.to_create.slice(0, 5).map((item) => (
+                                            <li key={`create-${item.id}`}>
+                                              {item.name}（{item.interval_minutes} 分钟）
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </Space>
+                                ),
+                                onOk: async () => {
+                                  setApplyingScenario(true);
+                                  try {
+                                    await applyHeartbeatScenario(configProject.id, code);
+                                    message.success('场景应用成功');
+                                    const updatedProject = { ...configProject, heartbeat_scenario_code: code };
+                                    setConfigProject(updatedProject);
+                                    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
+                                  } catch (_error) {
+                                    message.error('场景应用失败');
+                                  } finally {
+                                    setApplyingScenario(false);
+                                  }
+                                },
+                              });
                             } catch (_error) {
-                              message.error('场景应用失败');
+                              message.error('预览场景应用影响失败');
                             } finally {
                               setApplyingScenario(false);
                             }
@@ -1302,7 +1361,7 @@ export const ProjectRequirementPage: React.FC = () => {
                       />
                     </Space>
                   </Card>
-                  <HeartbeatManagement projectId={configProject.id} agents={agents} />
+                  <HeartbeatManagement projectId={configProject.id} agents={agents} requirementTypes={requirementTypes} />
                 </div>
               ) : null,
             },
