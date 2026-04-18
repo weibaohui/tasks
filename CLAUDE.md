@@ -20,6 +20,7 @@
 ### 代码编写要求
 1. AI 严禁在main分支直接写代码，必须先创建合适的分支
 2. AI 严禁在没有文档的情况下写代码，必须先编写需求、设计、测试文档。
+3. 严禁直接使用 `os.Getenv` 读取环境变量，必须通过 `infrastructure/config` 包统一访问
 
 ### DDD 原则
 - ❌ `infrastructure` 引用 `interfaces`

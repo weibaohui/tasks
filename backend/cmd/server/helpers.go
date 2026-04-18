@@ -3,10 +3,12 @@ package main
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/weibh/taskmanager/infrastructure/config"
 )
 
 func resolveWorkspace() string {
-	if p := os.Getenv("TASKMANAGER_WORKSPACE"); p != "" {
+	if p := config.GetWorkspace(); p != "" {
 		return p
 	}
 	if st, err := os.Stat("./backend"); err == nil && st.IsDir() {

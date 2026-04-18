@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/weibh/taskmanager/infrastructure/config"
+	infraConfig "github.com/weibh/taskmanager/infrastructure/config"
 )
 
 var configCmd = &cobra.Command{
@@ -21,7 +21,7 @@ var configInitCmd = &cobra.Command{
 	Example: `  taskmanager config init`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 优先使用环境变量指定的配置路径
-		configPath := os.Getenv("TASKMANAGER_CONFIG")
+		configPath := infraConfig.GetEnv("TASKMANAGER_CONFIG")
 		if configPath == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -32,21 +32,21 @@ var configInitCmd = &cobra.Command{
 		}
 
 		// 从指定路径加载现有配置（如果存在）
-		existingCfg, _ := config.LoadFromPath(configPath)
+		existingCfg, _ := infraConfig.LoadFromPath(configPath)
 		hasExistingToken := existingCfg != nil && existingCfg.API.Token != ""
 
 		// 创建/覆盖默认配置
-		if err := config.WriteDefaultConfig(configPath); err != nil {
+		if err := infraConfig.WriteDefaultConfig(configPath); err != nil {
 			fmt.Printf("创建配置文件失败: %v\n", err)
 			return
 		}
 
 		// 如果之前有 token，恢复它
 		if hasExistingToken {
-			cfg, _ := config.LoadFromPath(configPath)
+			cfg, _ := infraConfig.LoadFromPath(configPath)
 			if cfg != nil {
 				cfg.API.Token = existingCfg.API.Token
-				config.SaveConfig(configPath, cfg)
+				infraConfig.SaveConfig(configPath, cfg)
 			}
 			fmt.Printf("配置文件已更新: %s\n", configPath)
 			fmt.Printf("API Token 已保留: %s...\n", existingCfg.API.Token[:min(8, len(existingCfg.API.Token))])
@@ -69,7 +69,7 @@ var configShowCmd = &cobra.Command{
 	Short:   "显示当前配置",
 	Example: `  taskmanager config show`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := config.Load()
+		cfg, err := infraConfig.Load()
 		if err != nil {
 			fmt.Printf("加载配置失败: %v\n", err)
 			return
@@ -90,7 +90,7 @@ var configShowCmd = &cobra.Command{
 		fmt.Println("")
 		fmt.Println("配置加载来源:")
 		configPath := ""
-		if p := os.Getenv("TASKMANAGER_CONFIG"); p != "" {
+		if p := infraConfig.GetEnv("TASKMANAGER_CONFIG"); p != "" {
 			configPath = fmt.Sprintf("TASKMANAGER_CONFIG=%s", p)
 		} else {
 			home, _ := os.UserHomeDir()
@@ -104,13 +104,13 @@ var configShowCmd = &cobra.Command{
 		fmt.Printf("  %s\n", configPath)
 		fmt.Println("")
 		fmt.Println("环境变量覆盖:")
-		if apiURL := os.Getenv("TASKMANAGER_API_BASE_URL"); apiURL != "" {
+		if apiURL := infraConfig.GetEnv("TASKMANAGER_API_BASE_URL"); apiURL != "" {
 			fmt.Printf("  TASKMANAGER_API_BASE_URL=%s\n", apiURL)
 		}
-		if apiURL := os.Getenv("API_BASE_URL"); apiURL != "" {
+		if apiURL := infraConfig.GetEnv("API_BASE_URL"); apiURL != "" {
 			fmt.Printf("  API_BASE_URL=%s\n", apiURL)
 		}
-		if port := os.Getenv("TASKMANAGER_SERVER_PORT"); port != "" {
+		if port := infraConfig.GetEnv("TASKMANAGER_SERVER_PORT"); port != "" {
 			fmt.Printf("  TASKMANAGER_SERVER_PORT=%s\n", port)
 		}
 	},

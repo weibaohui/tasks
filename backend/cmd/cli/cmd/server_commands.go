@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	infraConfig "github.com/weibh/taskmanager/infrastructure/config"
 )
 
 const (
@@ -67,7 +68,7 @@ var serverStartCmd = &cobra.Command{
 			env = append(env, fmt.Sprintf("SERVER_PORT=%d", port))
 		}
 		// 传递 TASKMANAGER_DB_PATH（如果存在）
-		if dbPath := os.Getenv("TASKMANAGER_DB_PATH"); dbPath != "" {
+		if dbPath := infraConfig.GetEnv("TASKMANAGER_DB_PATH"); dbPath != "" {
 			env = append(env, fmt.Sprintf("TASKMANAGER_DB_PATH=%s", dbPath))
 		}
 
