@@ -3,11 +3,13 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Empty,
   Form,
   Input,
   InputNumber,
   Popconfirm,
+  Row,
   Space,
   Switch,
   Tag,
@@ -56,8 +58,44 @@ export const SystemLogViewer: React.FC = () => {
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(520);
   const reconnectTimerRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // 监听视口高度变化
+  useEffect(() => {
+    const updateHeight = () => {
+      if (viewportRef.current) {
+        setViewportHeight(viewportRef.current.clientHeight);
+      }
+    };
+
+    // 延迟执行确保 DOM 已渲染
+    const timer = setTimeout(() => {
+      updateHeight();
+    }, 100);
+
+    // 使用 ResizeObserver 监听尺寸变化
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    // 等待下一帧再观察
+    const raf = requestAnimationFrame(() => {
+      if (viewportRef.current) {
+        observer.observe(viewportRef.current);
+        updateHeight();
+      }
+    });
+
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, []);
 
   const filteredRows = useMemo(() => {
     const keyword = clientKeyword.trim();
@@ -68,12 +106,11 @@ export const SystemLogViewer: React.FC = () => {
   }, [rows, clientKeyword]);
 
   const visibleRange = useMemo(() => {
-    const viewportHeight = viewportRef.current?.clientHeight || 520;
     const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
     const count = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
     const end = Math.min(filteredRows.length, start + count);
     return { start, end };
-  }, [scrollTop, filteredRows.length]);
+  }, [scrollTop, viewportHeight, filteredRows.length]);
 
   const visibleRows = useMemo(
     () => filteredRows.slice(visibleRange.start, visibleRange.end),
@@ -241,55 +278,60 @@ export const SystemLogViewer: React.FC = () => {
       title="系统运行日志"
       className="system-log-card"
       extra={
-        <Space size={8} wrap>
+        <div className="system-log-header-extra">
           <Tag color={streamStatus === 'connected' ? 'success' : streamStatus === 'connecting' ? 'processing' : 'default'}>
             {streamStatus === 'connected' ? '流已连接' : streamStatus === 'connecting' ? '连接中' : '已断开'}
           </Tag>
-          <Switch checked={autoRefresh} onChange={setAutoRefresh} checkedChildren="自动刷新" unCheckedChildren="手动模式" />
-        </Space>
+          <div className="system-log-switch">
+            <Switch checked={autoRefresh} onChange={setAutoRefresh} />
+            <Text type="secondary" className="system-log-switch-label">
+              {autoRefresh ? '自动刷新' : '手动模式'}
+            </Text>
+          </div>
+        </div>
       }
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <div className="system-log-content">
         <Text type="secondary" className="system-log-path">日志文件: {logPath || '加载中...'}</Text>
 
         {streamError ? (
           <Alert type="warning" showIcon message={streamError} />
         ) : null}
 
-        <Form layout="vertical">
-          <Space wrap size={12} style={{ width: '100%' }}>
-            <Form.Item label="服务端过滤" style={{ marginBottom: 0 }}>
+        <Form layout="inline" className="system-log-form">
+          <Row gutter={[8, 8]} align="middle">
+            <Col xs={24} sm={12} md={7}>
               <Input
                 allowClear
-                placeholder="按关键字过滤后再推流"
+                placeholder="服务端过滤关键字"
                 value={serverKeywordInput}
                 onChange={(e) => setServerKeywordInput(e.target.value)}
-                style={{ width: 240 }}
               />
-            </Form.Item>
-            <Form.Item label="前端搜索" style={{ marginBottom: 0 }}>
+            </Col>
+            <Col xs={24} sm={12} md={7}>
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-                placeholder="仅在当前缓冲区搜索"
+                placeholder="前端搜索"
                 value={clientKeyword}
                 onChange={(e) => setClientKeyword(e.target.value)}
-                style={{ width: 220 }}
               />
-            </Form.Item>
-            <Form.Item label="显示行数" style={{ marginBottom: 0 }}>
+            </Col>
+            <Col xs={12} sm={6} md={4}>
               <InputNumber
                 min={MIN_TAIL_LINES}
                 max={MAX_TAIL_LINES}
                 value={tailLines}
                 onChange={(val) => setTailLines(Number(val || DEFAULT_TAIL_LINES))}
-                style={{ width: 120 }}
+                style={{ width: '100%' }}
+                placeholder="行数"
               />
-            </Form.Item>
-            <Form.Item label="操作" style={{ marginBottom: 0 }}>
-              <Space wrap>
+            </Col>
+            <Col xs={12} sm={6} md={6}>
+              <Space wrap size="small">
                 <Button
                   type="primary"
+                  size="small"
                   onClick={() => {
                     setServerKeyword(serverKeywordInput.trim());
                     setRows([]);
@@ -300,9 +342,9 @@ export const SystemLogViewer: React.FC = () => {
                     }
                   }}
                 >
-                  应用过滤
+                  应用
                 </Button>
-                <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadTail()}>
+                <Button icon={<ReloadOutlined />} size="small" loading={loading} onClick={() => void loadTail()}>
                   刷新
                 </Button>
                 <Popconfirm
@@ -313,18 +355,17 @@ export const SystemLogViewer: React.FC = () => {
                   okButtonProps={{ danger: true }}
                   onConfirm={handleClear}
                 >
-                  <Button danger icon={<ClearOutlined />}>
-                    清空日志
+                  <Button danger size="small" icon={<ClearOutlined />}>
+                    清空
                   </Button>
                 </Popconfirm>
               </Space>
-            </Form.Item>
-          </Space>
+            </Col>
+          </Row>
         </Form>
 
         <div className="system-log-toolbar">
-          <Text type="secondary">当前缓冲区 {rows.length} 行（上限 {MAX_BUFFER_LINES}）</Text>
-          <Text type="secondary">过滤后显示 {filteredRows.length} 行</Text>
+          <Text type="secondary">缓冲区 {rows.length} 行 / 过滤后 {filteredRows.length} 行</Text>
         </div>
 
         <div
@@ -349,7 +390,7 @@ export const SystemLogViewer: React.FC = () => {
             </div>
           )}
         </div>
-      </Space>
+      </div>
     </Card>
   );
 };

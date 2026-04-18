@@ -2,11 +2,53 @@
   border-radius: 12px;
 }
 
+.system-log-card .ant-card-body {
+  padding: 16px;
+}
+
+/* 内容区域 */
+.system-log-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Card 头部额外控件 */
+.system-log-header-extra {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.system-log-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.system-log-switch-label {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 日志文件路径 */
 .system-log-path {
   display: block;
   overflow-wrap: anywhere;
+  font-size: 13px;
 }
 
+/* 表单区域 */
+.system-log-form {
+  width: 100%;
+}
+
+.system-log-form .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* 工具栏 */
 .system-log-toolbar {
   display: flex;
   justify-content: space-between;
@@ -15,15 +57,20 @@
   flex-wrap: wrap;
 }
 
+/* 日志视口 */
 .system-log-viewport {
-  height: min(62vh, 680px);
+  flex: 1;
+  min-height: 400px;
+  max-height: calc(100vh - 360px);
   border: 1px solid #1f1f1f;
   border-radius: 10px;
   background: radial-gradient(circle at top right, #1f2432, #111319 60%);
   overflow: auto;
   box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.25);
+  -webkit-overflow-scrolling: touch;
 }
 
+/* 空状态 */
 .system-log-empty {
   min-height: 320px;
   display: flex;
@@ -31,6 +78,7 @@
   justify-content: center;
 }
 
+/* 日志行 */
 .system-log-row {
   display: flex;
   align-items: center;
@@ -42,6 +90,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+/* 行号 */
 .system-log-line {
   width: 84px;
   flex-shrink: 0;
@@ -52,6 +101,7 @@
   user-select: none;
 }
 
+/* 日志内容 */
 .system-log-text {
   flex: 1;
   padding: 0 12px;
@@ -59,9 +109,61 @@
   overflow-x: auto;
 }
 
-@media (max-width: 768px) {
+/* 平板端适配 (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
   .system-log-viewport {
-    height: min(58vh, 520px);
+    min-height: 350px;
+    max-height: calc(100vh - 380px);
+  }
+}
+
+/* 手机端适配 (<=768px) */
+@media (max-width: 768px) {
+  .system-log-card {
+    margin: 0 -4px;
+  }
+
+  .system-log-card .ant-card-head {
+    padding: 0 12px;
+    min-height: 48px;
+  }
+
+  .system-log-card .ant-card-head-title {
+    font-size: 15px;
+    padding: 8px 0;
+  }
+
+  .system-log-card .ant-card-body {
+    padding: 12px;
+  }
+
+  .system-log-header-extra {
+    gap: 8px;
+  }
+
+  .system-log-switch-label {
+    font-size: 12px;
+  }
+
+  .system-log-path {
+    font-size: 12px;
+  }
+
+  .system-log-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .system-log-toolbar .ant-typography {
+    font-size: 11px;
+  }
+
+  .system-log-viewport {
+    min-height: 300px;
+    max-height: calc(100vh - 420px);
+    border-radius: 8px;
+    margin: 0 -4px;
   }
 
   .system-log-line {
@@ -73,5 +175,50 @@
   .system-log-text {
     padding: 0 8px;
     font-size: 11px;
+  }
+
+  .system-log-row {
+    min-height: 24px;
+    line-height: 24px;
+  }
+
+  .system-log-empty {
+    min-height: 240px;
+  }
+}
+
+/* 小屏手机适配 (<=480px) */
+@media (max-width: 480px) {
+  .system-log-card {
+    margin: 0 -8px;
+  }
+
+  .system-log-card .ant-card-head {
+    padding: 0 8px;
+  }
+
+  .system-log-card .ant-card-body {
+    padding: 8px;
+  }
+
+  .system-log-viewport {
+    min-height: 250px;
+    max-height: calc(100vh - 460px);
+    margin: 0 -8px;
+  }
+
+  .system-log-line {
+    width: 56px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
+  .system-log-text {
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .system-log-toolbar .ant-typography {
+    font-size: 10px;
   }
 }
