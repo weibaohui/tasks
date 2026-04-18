@@ -11,7 +11,6 @@ import type { CreateProjectRequest, CreateRequirementRequest, Project, Requireme
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { RequirementKanban } from '../components/RequirementKanban';
-import { ProjectStateMachineConfig } from '../components/ProjectStateMachineConfig';
 import { RequirementTypeManagementPage } from '../components/RequirementTypeManagement';
 import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
 import { getProjectStateMachineByType } from '../api/projectStateMachineApi';
@@ -1237,11 +1236,6 @@ export const ProjectRequirementPage: React.FC = () => {
                   />
                 </>
               ),
-            },
-            {
-              key: 'stateMachine',
-              label: '状态机配置',
-              children: configProject ? <ProjectStateMachineConfig projectId={configProject.id} /> : null,
             },
             {
               key: 'requirementTypes',

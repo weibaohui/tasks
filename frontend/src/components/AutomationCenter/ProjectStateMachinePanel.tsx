@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Button, Card, Form, message, Select, Space, Table, Tag, Tooltip } from 'antd';
-import { LinkOutlined } from '@ant-design/icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Form, message, Popconfirm, Select, Space, Table, Tag, Tooltip } from 'antd';
+import { LinkOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import type { Project } from '../../types/projectRequirement';
 import {
   deleteProjectStateMachine,
   listProjectStateMachines,
@@ -12,54 +13,63 @@ import { listStateMachines } from '../../api/stateMachineApi';
 import { requirementTypeApi, type RequirementType } from '../../api/requirementTypeApi';
 import type { StateMachine } from '../../types/stateMachine';
 
-interface ProjectStateMachineConfigProps {
-  projectId: string;
+interface ProjectStateMachinePanelProps {
+  project: Project | null;
 }
 
-
-export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps> = ({ projectId }) => {
+export const ProjectStateMachinePanel: React.FC<ProjectStateMachinePanelProps> = ({ project }) => {
   const [form] = Form.useForm();
   const [mappings, setMappings] = useState<ProjectStateMachineMapping[]>([]);
   const [stateMachines, setStateMachines] = useState<StateMachine[]>([]);
   const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const requestIdRef = useRef(0);
 
-  // 获取状态机列表
   const fetchStateMachines = async () => {
     try {
       const data = await listStateMachines();
       setStateMachines(data);
-    } catch (_error) {
+    } catch {
       message.error('获取状态机列表失败');
     }
   };
 
-  // 获取项目状态机映射
   const fetchMappings = async () => {
+    if (!project?.id) return;
+    const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const data = await listProjectStateMachines(projectId);
-      setMappings(data);
-    } catch (_error) {
-      message.error('获取项目状态机配置失败');
+      const data = await listProjectStateMachines(project.id);
+      if (currentRequestId === requestIdRef.current) {
+        setMappings(data);
+      }
+    } catch {
+      if (currentRequestId === requestIdRef.current) {
+        message.error('获取项目状态机配置失败');
+      }
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  // 获取需求类型列表
   const fetchRequirementTypes = async () => {
+    if (!project?.id) return;
+    const currentRequestId = requestIdRef.current;
     try {
-      const data = await requirementTypeApi.list(projectId);
-      setRequirementTypes(data);
-    } catch (_error) {
-      // 使用空数组，让下面的 getTypeConfig 回退到默认配置
-      setRequirementTypes([]);
+      const data = await requirementTypeApi.list(project.id);
+      if (currentRequestId === requestIdRef.current) {
+        setRequirementTypes(data);
+      }
+    } catch {
+      if (currentRequestId === requestIdRef.current) {
+        setRequirementTypes([]);
+      }
     }
   };
 
-  // 获取类型配置（从 API 返回的类型列表中查找）
   const getTypeConfig = (code: string): { label: string; color: string; description: string } => {
     const apiType = requirementTypes.find((t) => t.code === code);
     if (apiType) {
@@ -73,52 +83,67 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
   };
 
   useEffect(() => {
-    fetchStateMachines();
-    fetchMappings();
-    fetchRequirementTypes();
-  }, [projectId]);
+    if (project?.id) {
+      // Increment request ID to invalidate any pending requests
+      ++requestIdRef.current;
+      // Clear old data immediately
+      setMappings([]);
+      setRequirementTypes([]);
+      form.resetFields();
+      void fetchStateMachines();
+      void fetchMappings();
+      void fetchRequirementTypes();
+    }
+  }, [project?.id]);
 
-  // 保存状态机映射
   const handleSubmit = async (values: { requirement_type: string; state_machine_id: string }) => {
+    if (!project?.id) return;
     setSubmitting(true);
     try {
-      await setProjectStateMachine(projectId, {
+      await setProjectStateMachine(project.id, {
         requirement_type: values.requirement_type,
         state_machine_id: values.state_machine_id,
       });
       message.success('状态机配置已保存');
       form.resetFields();
-      fetchMappings();
-    } catch (_error) {
+      void fetchMappings();
+    } catch {
       message.error('保存失败');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 删除状态机映射
   const handleDelete = async (id: string) => {
     try {
       await deleteProjectStateMachine(id);
       message.success('已删除');
-      fetchMappings();
-    } catch (_error) {
+      void fetchMappings();
+    } catch {
       message.error('删除失败');
     }
   };
 
   const columns: ColumnsType<ProjectStateMachineMapping> = [
-      {
-            title: '操作',
-            key: 'action',
-            render: (_: unknown, record: ProjectStateMachineMapping) => (
-              <Button danger onClick={() => handleDelete(record.id)} type="link" size="small" style={{ padding: 0 }}>
-                删除
-              </Button>
-            ),
-              width: 100,
-              fixed: 'left' as const
-          },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: unknown, record: ProjectStateMachineMapping) => (
+        <Popconfirm
+          title="确认删除该状态机关联？"
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          onConfirm={() => handleDelete(record.id)}
+        >
+          <Button danger type="link" size="small" style={{ padding: 0 }}>
+            删除
+          </Button>
+        </Popconfirm>
+      ),
+      width: 100,
+      fixed: 'left' as const,
+    },
     {
       title: '需求类型',
       dataIndex: 'requirement_type',
@@ -144,7 +169,6 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
             <LinkOutlined
               style={{ color: '#1890ff', cursor: 'pointer' }}
               onClick={() => {
-                // 打开状态机管理页面
                 window.open(`/state-machines?id=${record.state_machine_id}`, '_blank');
               }}
             />
@@ -158,10 +182,9 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
       key: 'updated_at',
       width: 180,
       render: (timestamp: number) => new Date(timestamp).toLocaleString(),
-    }
+    },
   ];
 
-  // 获取未配置的需求类型
   const getAvailableTypes = () => {
     const configuredTypes = new Set(mappings.map((m) => m.requirement_type));
     const allTypes: Array<[string, { label: string; color: string; description: string }]> = [];
@@ -177,9 +200,13 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
 
   const availableTypes = getAvailableTypes();
 
+  if (!project) {
+    return <Alert type="info" showIcon message="请先选择项目后再配置状态机" />;
+  }
+
   return (
-    <div>
-      <Card title="添加状态机关联" style={{ marginBottom: 16 }}>
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Card size="small" title="添加状态机关联">
         <Form form={form} layout="inline" onFinish={handleSubmit}>
           <Form.Item
             name="requirement_type"
@@ -223,16 +250,22 @@ export const ProjectStateMachineConfig: React.FC<ProjectStateMachineConfigProps>
         )}
       </Card>
 
-      <Card title="已配置的状态机关联">
+      <Card size="small" title="已配置的状态机关联">
+        <Space style={{ marginBottom: 8 }}>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchMappings()} size="small">
+            刷新
+          </Button>
+        </Space>
         <Table
           columns={columns}
           dataSource={mappings}
           rowKey="id"
           loading={loading}
           pagination={false}
+          size="small"
           locale={{ emptyText: '暂无配置，请上方添加' }}
         />
       </Card>
-    </div>
+    </Space>
   );
 };
