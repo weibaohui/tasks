@@ -100,6 +100,25 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
     }
   };
 
+  const handleToggleEnabled = async (id: string, enabled: boolean) => {
+    try {
+      const hb = heartbeats.find((h) => h.id === id);
+      if (!hb) return;
+      await updateHeartbeat(id, {
+        name: hb.name,
+        interval_minutes: hb.interval_minutes,
+        md_content: hb.md_content,
+        agent_code: hb.agent_code,
+        requirement_type: hb.requirement_type || 'heartbeat',
+        enabled,
+      });
+      message.success(enabled ? '已启用' : '已禁用');
+      fetchHeartbeats();
+    } catch {
+      message.error('切换状态失败');
+    }
+  };
+
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
@@ -219,7 +238,14 @@ export const HeartbeatManagement: React.FC<HeartbeatManagementProps> = ({ projec
       dataIndex: 'enabled',
       key: 'enabled',
       width: 80,
-      render: (enabled: boolean) => (enabled ? <Tag color="success">启用</Tag> : <Tag>禁用</Tag>),
+      render: (enabled: boolean, record: Heartbeat) => (
+        <Switch
+          checked={enabled}
+          onChange={(checked) => handleToggleEnabled(record.id, checked)}
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+        />
+      ),
     },
     {
       title: '操作',
