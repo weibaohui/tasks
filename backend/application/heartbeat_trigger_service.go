@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/weibh/taskmanager/domain"
@@ -11,15 +12,37 @@ import (
 	channelBus "github.com/weibh/taskmanager/pkg/bus"
 )
 
+// HeartbeatTriggerSource 定义心跳触发来源。
+type HeartbeatTriggerSource string
+
+const (
+	HeartbeatTriggerSourceManual    HeartbeatTriggerSource = "manual"
+	HeartbeatTriggerSourceScheduler HeartbeatTriggerSource = "scheduler"
+	HeartbeatTriggerSourceWebhook   HeartbeatTriggerSource = "webhook"
+)
+
+// HeartbeatRunRecord 描述一次心跳触发执行记录。
+type HeartbeatRunRecord struct {
+	RequirementID string `json:"requirement_id"`
+	HeartbeatID   string `json:"heartbeat_id"`
+	HeartbeatName string `json:"heartbeat_name"`
+	ProjectID     string `json:"project_id"`
+	TriggerSource string `json:"trigger_source"`
+	Status        string `json:"status"`
+	Title         string `json:"title"`
+	LastError     string `json:"last_error"`
+	CreatedAt     int64  `json:"created_at"`
+}
+
 // HeartbeatTriggerService 心跳触发服务
 // 负责执行单次心跳的完整流程：创建需求、初始化状态机、派发需求
 type HeartbeatTriggerService struct {
-	heartbeatRepo              domain.HeartbeatRepository
-	projectRepo                domain.ProjectRepository
-	agentRepo                  domain.AgentRepository
-	requirementRepo            domain.RequirementRepository
-	idGenerator                domain.IDGenerator
-	inboundPublisher           interface {
+	heartbeatRepo    domain.HeartbeatRepository
+	projectRepo      domain.ProjectRepository
+	agentRepo        domain.AgentRepository
+	requirementRepo  domain.RequirementRepository
+	idGenerator      domain.IDGenerator
+	inboundPublisher interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	requirementDispatchService *RequirementDispatchService
@@ -53,20 +76,36 @@ func NewHeartbeatTriggerService(
 
 // Trigger 触发指定心跳的执行
 func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID string) error {
+	_, err := s.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceManual)
+	return err
+}
+
+// TriggerWithSource 按指定触发来源执行心跳，并返回创建的需求。
+func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbeatID string, source HeartbeatTriggerSource) (*domain.Requirement, error) {
 	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
-	if err != nil || hb == nil {
-		return fmt.Errorf("failed to find heartbeat %s: %w", heartbeatID, err)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find heartbeat %s: %w", heartbeatID, err)
+	}
+	if hb == nil {
+		return nil, fmt.Errorf("failed to find heartbeat %s: not found", heartbeatID)
 	}
 	if !hb.Enabled() {
-		return fmt.Errorf("heartbeat %s is disabled", heartbeatID)
+		return nil, fmt.Errorf("heartbeat %s is disabled", heartbeatID)
 	}
 
 	project, err := s.projectRepo.FindByID(ctx, hb.ProjectID())
-	if err != nil || project == nil {
-		return fmt.Errorf("failed to find project for heartbeat %s: %w", heartbeatID, err)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project for heartbeat %s: %w", heartbeatID, err)
+	}
+	if project == nil {
+		return nil, fmt.Errorf("failed to find project for heartbeat %s: not found", heartbeatID)
 	}
 
-	log.Printf("[HEARTBEAT] executing heartbeat %s for project %s", hb.Name(), project.Name())
+	triggerSource := strings.TrimSpace(string(source))
+	if triggerSource == "" {
+		triggerSource = string(HeartbeatTriggerSourceManual)
+	}
+	log.Printf("[HEARTBEAT] 执行心跳，来源=%s，心跳=%s，项目=%s", triggerSource, hb.Name(), project.Name())
 
 	// 解析 Agent：优先使用心跳指定的 agent，若不存在则回退到项目默认 agent
 	agentCode := hb.AgentCode()
@@ -74,21 +113,21 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 		// 心跳未指定 agentCode，使用项目默认
 		agentCode = project.DefaultAgentCode()
 		if agentCode == "" {
-			log.Printf("[HEARTBEAT] heartbeat %s has no agent code and project %s has no default agent, cannot dispatch", hb.Name(), project.Name())
-			return fmt.Errorf("heartbeat has no agent code and project has no default agent")
+			log.Printf("[HEARTBEAT] 心跳和项目均未配置可用Agent，无法派发，心跳=%s，项目=%s", hb.Name(), project.Name())
+			return nil, fmt.Errorf("heartbeat has no agent code and project has no default agent")
 		}
-		log.Printf("[HEARTBEAT] heartbeat %s using project default agent %s", hb.Name(), agentCode)
+		log.Printf("[HEARTBEAT] 心跳使用项目默认Agent，心跳=%s，agent=%s", hb.Name(), agentCode)
 	} else if s.agentRepo != nil {
 		// 心跳指定了 agentCode，验证是否存在
 		baseAgent, _ := s.agentRepo.FindByAgentCode(ctx, domain.NewAgentCode(agentCode))
 		if baseAgent == nil {
 			fallback := project.DefaultAgentCode()
 			if fallback != "" {
-				log.Printf("[HEARTBEAT] agent %s not found for heartbeat %s, falling back to project default %s", agentCode, hb.Name(), fallback)
+				log.Printf("[HEARTBEAT] 心跳Agent不存在，回退项目默认Agent，心跳=%s，原Agent=%s，回退Agent=%s", hb.Name(), agentCode, fallback)
 				agentCode = fallback
 			} else {
-				log.Printf("[HEARTBEAT] agent %s not found for heartbeat %s and project has no default agent", agentCode, hb.Name())
-				return fmt.Errorf("heartbeat agent %s not found and project has no default agent", agentCode)
+				// 为了兼容历史行为：未找到 agent 时仅记录告警，后续交由派发阶段兜底处理。
+				log.Printf("[HEARTBEAT] 心跳Agent不存在且项目无默认Agent，保持原Agent尝试派发，心跳=%s，agent=%s", hb.Name(), agentCode)
 			}
 		}
 	}
@@ -106,13 +145,13 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 	requirement, err := domain.NewRequirement(
 		domain.NewRequirementID(s.idGenerator.Generate()),
 		project.ID(),
-		fmt.Sprintf("[心跳] %s - %s", hb.Name(), time.Now().Format("2006-01-02 15:04")),
+		fmt.Sprintf("[心跳][%s] %s - %s", triggerSource, hb.Name(), time.Now().Format("2006-01-02 15:04")),
 		prompt,
-		"心跳自动生成",
+		fmt.Sprintf("心跳自动生成\nheartbeat_id: %s\ntrigger_source: %s\ntrigger_time: %s", hb.ID().String(), triggerSource, time.Now().Format(time.RFC3339)),
 		"",
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create requirement: %w", err)
+		return nil, fmt.Errorf("failed to create requirement: %w", err)
 	}
 
 	// 设置需求类型
@@ -120,7 +159,7 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 
 	// 保存需求
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
-		return fmt.Errorf("failed to save requirement: %w", err)
+		return nil, fmt.Errorf("failed to save requirement: %w", err)
 	}
 
 	// 初始化状态机状态（如果项目绑定了状态机）
@@ -136,15 +175,15 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 		}
 	}
 
-	log.Printf("[HEARTBEAT] created requirement %s for heartbeat %s, dispatching...", requirement.ID(), hb.Name())
+	log.Printf("[HEARTBEAT] 已创建心跳需求，需求ID=%s，心跳=%s，准备派发", requirement.ID(), hb.Name())
 
 	// 直接派发心跳需求
 	if s.requirementDispatchService != nil {
 		channelCode := project.DispatchChannelCode()
 		sessionKey := project.DispatchSessionKey()
 		if channelCode == "" || sessionKey == "" {
-			log.Printf("heartbeat: project %s has no dispatch channel or session key configured", project.Name())
-			return fmt.Errorf("project has no dispatch channel or session key configured")
+			log.Printf("[HEARTBEAT] 项目缺少派发渠道或会话配置，项目=%s", project.Name())
+			return nil, fmt.Errorf("project has no dispatch channel or session key configured")
 		}
 		result, err := s.requirementDispatchService.DispatchRequirement(ctx, DispatchRequirementCommand{
 			RequirementID: requirement.ID(),
@@ -153,13 +192,98 @@ func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID strin
 			SessionKey:    sessionKey,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to dispatch requirement %s: %w", requirement.ID(), err)
+			return nil, fmt.Errorf("failed to dispatch requirement %s: %w", requirement.ID(), err)
 		}
-		log.Printf("[HEARTBEAT] dispatched requirement %s, task_id: %s, workspace: %s", requirement.ID(), result.TaskID, result.WorkspacePath)
+		log.Printf("[HEARTBEAT] 派发成功，需求ID=%s，任务ID=%s，工作区=%s", requirement.ID(), result.TaskID, result.WorkspacePath)
 	} else {
-		log.Printf("heartbeat: requirementDispatchService not available, requirement %s created but not dispatched", requirement.ID())
-		return fmt.Errorf("requirement dispatch service not available")
+		log.Printf("[HEARTBEAT] 派发服务不可用，需求已创建但未派发，需求ID=%s", requirement.ID())
+		return nil, fmt.Errorf("requirement dispatch service not available")
 	}
 
-	return nil
+	return requirement, nil
+}
+
+// ListRunsByHeartbeat 查询指定心跳的最近执行记录。
+func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heartbeatID string, limit int) ([]HeartbeatRunRecord, error) {
+	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find heartbeat %s: %w", heartbeatID, err)
+	}
+	if hb == nil {
+		return nil, fmt.Errorf("heartbeat %s not found", heartbeatID)
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := domain.RequirementListFilter{
+		ProjectID:       ptrProjectID(hb.ProjectID()),
+		RequirementType: string(domain.RequirementTypeHeartbeat),
+		SortBy:          "created_at",
+		Order:           "desc",
+		Limit:           limit * 3,
+		Offset:          0,
+	}
+	reqs, err := s.requirementRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]HeartbeatRunRecord, 0, limit)
+	for _, req := range reqs {
+		if !isRequirementFromHeartbeat(req, hb) {
+			continue
+		}
+		records = append(records, HeartbeatRunRecord{
+			RequirementID: req.ID().String(),
+			HeartbeatID:   hb.ID().String(),
+			HeartbeatName: hb.Name(),
+			ProjectID:     hb.ProjectID().String(),
+			TriggerSource: parseTriggerSource(req),
+			Status:        string(req.Status()),
+			Title:         req.Title(),
+			LastError:     req.LastError(),
+			CreatedAt:     req.CreatedAt().UnixMilli(),
+		})
+		if len(records) >= limit {
+			break
+		}
+	}
+	return records, nil
+}
+
+// ptrProjectID 返回项目ID指针，便于构建过滤条件。
+func ptrProjectID(projectID domain.ProjectID) *domain.ProjectID {
+	return &projectID
+}
+
+// isRequirementFromHeartbeat 判断需求是否由指定心跳触发产生。
+func isRequirementFromHeartbeat(req *domain.Requirement, hb *domain.Heartbeat) bool {
+	ac := req.AcceptanceCriteria()
+	if strings.Contains(ac, "heartbeat_id: "+hb.ID().String()) {
+		return true
+	}
+	legacyTitle := "[心跳] " + hb.Name()
+	return strings.Contains(req.Title(), legacyTitle)
+}
+
+// parseTriggerSource 从需求验收标准中提取触发来源。
+func parseTriggerSource(req *domain.Requirement) string {
+	lines := strings.Split(req.AcceptanceCriteria(), "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "trigger_source:") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "trigger_source:"))
+		}
+	}
+	title := req.Title()
+	if strings.Contains(title, "[心跳][") {
+		start := strings.Index(title, "[心跳][")
+		if start >= 0 {
+			rest := title[start+len("[心跳]["):]
+			end := strings.Index(rest, "]")
+			if end > 0 {
+				return strings.TrimSpace(rest[:end])
+			}
+		}
+	}
+	return "unknown"
 }

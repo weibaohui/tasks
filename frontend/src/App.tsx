@@ -40,6 +40,7 @@ import { ApiTokensPage } from './pages/ApiTokensPage';
 import { SystemLogsPage } from './pages/SystemLogsPage';
 import { HeartbeatScenarioManagementPage } from './pages/HeartbeatScenarioManagementPage';
 import { ProjectWebhookPage } from './pages/ProjectWebhookPage';
+import { AutomationCenterPage } from './pages/AutomationCenterPage';
 import { useAuthStore } from './stores/authStore';
 
 const { Header, Sider, Content } = Layout;
@@ -91,8 +92,10 @@ const MainLayout: React.FC = () => {
             ? '/projects'
             : location.pathname.startsWith('/skills')
             ? '/skills'
-            : location.pathname.startsWith('/heartbeat-scenarios')
-              ? '/heartbeat-scenarios'
+            : location.pathname.startsWith('/automation-center')
+              ? '/automation-center'
+              : location.pathname.startsWith('/heartbeat-scenarios')
+                ? '/heartbeat-scenarios'
               : location.pathname.startsWith('/state-machines')
                 ? '/state-machines'
                 : location.pathname.startsWith('/channels')
@@ -116,7 +119,7 @@ const MainLayout: React.FC = () => {
     { key: '/projects', icon: <BranchesOutlined />, label: '项目需求' },
     { key: '/conversation-records', icon: <MessageOutlined />, label: '对话记录' },
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent 工坊' },
-    { key: '/heartbeat-scenarios', icon: <HeartOutlined />, label: '心跳场景' },
+    { key: '/automation-center', icon: <HeartOutlined />, label: '自动化中心' },
     { key: '/webhooks', icon: <GithubOutlined />, label: 'GitHub Webhook' },
     { key: '/state-machines', icon: <NodeIndexOutlined />, label: '状态机管理' },
     { key: '/channels', icon: <ApartmentOutlined />, label: '渠道管理' },
@@ -246,6 +249,7 @@ const App: React.FC = () => {
             <Route path="conversation-records" element={<ConversationRecordsPage />} />
             <Route path="agents" element={<AgentManagementPage />} />
             <Route path="skills" element={<SkillsManagementPage />} />
+            <Route path="automation-center" element={<AutomationCenterPage />} />
             <Route path="heartbeat-scenarios" element={<HeartbeatScenarioManagementPage />} />
             <Route path="webhooks" element={<ProjectWebhookPage />} />
             <Route path="state-machines" element={<StateMachineManagementPage />} />

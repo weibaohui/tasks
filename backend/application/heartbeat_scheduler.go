@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -14,13 +15,13 @@ import (
 
 // HeartbeatScheduler 心跳调度器
 type HeartbeatScheduler struct {
-	cron                       *cron.Cron
-	heartbeatRepo              domain.HeartbeatRepository
-	projectRepo                domain.ProjectRepository
-	agentRepo                  domain.AgentRepository
-	requirementRepo            domain.RequirementRepository
-	idGenerator                domain.IDGenerator
-	inboundPublisher           interface {
+	cron             *cron.Cron
+	heartbeatRepo    domain.HeartbeatRepository
+	projectRepo      domain.ProjectRepository
+	agentRepo        domain.AgentRepository
+	requirementRepo  domain.RequirementRepository
+	idGenerator      domain.IDGenerator
+	inboundPublisher interface {
 		PublishInbound(msg *channelBus.InboundMessage)
 	}
 	requirementDispatchService *RequirementDispatchService
@@ -28,6 +29,7 @@ type HeartbeatScheduler struct {
 	triggerService             *HeartbeatTriggerService
 	rootCtx                    context.Context
 	entries                    map[string]cron.EntryID
+	entriesMu                  sync.RWMutex
 }
 
 // NewHeartbeatScheduler 创建心跳调度器
@@ -224,15 +226,22 @@ func (s *HeartbeatScheduler) scheduleHeartbeat(hb *domain.Heartbeat) error {
 	if err != nil {
 		return err
 	}
+	s.entriesMu.Lock()
 	s.entries[heartbeatID] = entryID
+	s.entriesMu.Unlock()
 	return nil
 }
 
 // RefreshSchedule 刷新单条心跳的调度
 func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context, heartbeatID string) error {
-	if entryID, exists := s.entries[heartbeatID]; exists {
+	s.entriesMu.RLock()
+	entryID, exists := s.entries[heartbeatID]
+	s.entriesMu.RUnlock()
+	if exists {
 		s.cron.Remove(entryID)
+		s.entriesMu.Lock()
 		delete(s.entries, heartbeatID)
+		s.entriesMu.Unlock()
 	}
 
 	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
@@ -247,7 +256,7 @@ func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context, heartbeatID st
 
 // executeHeartbeat 执行心跳
 func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, heartbeatID string) {
-	if err := s.triggerService.Trigger(ctx, heartbeatID); err != nil {
+	if _, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceScheduler); err != nil {
 		log.Printf("heartbeat: failed to execute heartbeat %s: %v", heartbeatID, err)
 	}
 }

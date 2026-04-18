@@ -7,12 +7,27 @@ import (
 	"github.com/weibh/taskmanager/domain"
 )
 
+type heartbeatTxRunner interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// HeartbeatApplyPreview 描述场景应用前的影响范围。
+type HeartbeatApplyPreview struct {
+	ProjectID       string
+	ProjectName     string
+	ScenarioCode    string
+	ScenarioName    string
+	ToDelete        []*domain.Heartbeat
+	ToCreate        []*domain.Heartbeat
+	CurrentScenario string
+}
+
 type HeartbeatScenarioService struct {
-	scenarioRepo    domain.HeartbeatScenarioRepository
-	projectRepo     domain.ProjectRepository
-	heartbeatRepo   domain.HeartbeatRepository
-	idGenerator     domain.IDGenerator
-	scheduler       *HeartbeatScheduler
+	scenarioRepo  domain.HeartbeatScenarioRepository
+	projectRepo   domain.ProjectRepository
+	heartbeatRepo domain.HeartbeatRepository
+	idGenerator   domain.IDGenerator
+	scheduler     *HeartbeatScheduler
 }
 
 func NewHeartbeatScenarioService(
@@ -89,65 +104,112 @@ func (s *HeartbeatScenarioService) DeleteScenario(ctx context.Context, id string
 	return s.scenarioRepo.Delete(ctx, domain.NewHeartbeatScenarioID(id))
 }
 
+// PreviewApplyScenarioToProject 预览项目应用场景后的影响。
+func (s *HeartbeatScenarioService) PreviewApplyScenarioToProject(ctx context.Context, projectID, scenarioCode string) (*HeartbeatApplyPreview, error) {
+	project, scenario, existingHeartbeats, newHeartbeats, err := s.loadApplyScenarioPlan(ctx, projectID, scenarioCode)
+	if err != nil {
+		return nil, err
+	}
+	return &HeartbeatApplyPreview{
+		ProjectID:       project.ID().String(),
+		ProjectName:     project.Name(),
+		ScenarioCode:    scenario.Code(),
+		ScenarioName:    scenario.Name(),
+		ToDelete:        existingHeartbeats,
+		ToCreate:        newHeartbeats,
+		CurrentScenario: project.HeartbeatScenarioCode(),
+	}, nil
+}
+
 // ApplyScenarioToProject 为项目应用场景，创建该场景下的所有心跳
 func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, projectID, scenarioCode string) error {
+	project, _, existingHeartbeats, heartbeats, err := s.loadApplyScenarioPlan(ctx, projectID, scenarioCode)
+	if err != nil {
+		return err
+	}
+
+	// 记录刷新调度所需的心跳 ID，事务提交后再同步调度器。
+	affectedHeartbeatIDs := make([]string, 0, len(existingHeartbeats)+len(heartbeats))
+	for _, hb := range existingHeartbeats {
+		affectedHeartbeatIDs = append(affectedHeartbeatIDs, hb.ID().String())
+	}
+	for _, hb := range heartbeats {
+		affectedHeartbeatIDs = append(affectedHeartbeatIDs, hb.ID().String())
+	}
+
+	applyFn := func(execCtx context.Context) error {
+		// 简化策略：删除该项目下所有现有心跳（由场景产生的或未修改的）
+		// 然后重新创建。未来可以优化为只删除由同一场景生成的心跳。
+		for _, hb := range existingHeartbeats {
+			if err := s.heartbeatRepo.Delete(execCtx, hb.ID()); err != nil {
+				return fmt.Errorf("failed to delete existing heartbeat: %w", err)
+			}
+		}
+
+		for _, hb := range heartbeats {
+			if err := s.heartbeatRepo.Save(execCtx, hb); err != nil {
+				return fmt.Errorf("failed to save heartbeat: %w", err)
+			}
+		}
+
+		// 更新项目的场景编码
+		project.SetHeartbeatScenarioCode(scenarioCode)
+		if err := s.projectRepo.Save(execCtx, project); err != nil {
+			return fmt.Errorf("failed to save project: %w", err)
+		}
+		return nil
+	}
+
+	if txRunner, ok := s.heartbeatRepo.(heartbeatTxRunner); ok {
+		if err := txRunner.RunInTx(ctx, applyFn); err != nil {
+			return err
+		}
+	} else {
+		if err := applyFn(ctx); err != nil {
+			return err
+		}
+	}
+
+	if s.scheduler != nil {
+		for _, heartbeatID := range affectedHeartbeatIDs {
+			if err := s.scheduler.RefreshSchedule(ctx, heartbeatID); err != nil {
+				return fmt.Errorf("failed to refresh schedule: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// loadApplyScenarioPlan 加载应用场景所需的项目、场景和心跳变化计划。
+func (s *HeartbeatScenarioService) loadApplyScenarioPlan(ctx context.Context, projectID, scenarioCode string) (*domain.Project, *domain.HeartbeatScenario, []*domain.Heartbeat, []*domain.Heartbeat, error) {
 	project, err := s.projectRepo.FindByID(ctx, domain.NewProjectID(projectID))
 	if err != nil {
-		return fmt.Errorf("failed to find project: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to find project: %w", err)
 	}
 	if project == nil {
-		return fmt.Errorf("project not found")
+		return nil, nil, nil, nil, fmt.Errorf("project not found")
 	}
 
 	scenario, err := s.scenarioRepo.FindByCode(ctx, scenarioCode)
 	if err != nil {
-		return fmt.Errorf("failed to find scenario: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to find scenario: %w", err)
 	}
 	if scenario == nil {
-		return fmt.Errorf("scenario not found")
+		return nil, nil, nil, nil, fmt.Errorf("scenario not found")
 	}
 
-	// 简化策略：删除该项目下所有现有心跳（由场景产生的或未修改的）
-	// 然后重新创建。未来可以优化为只删除由同一场景生成的心跳。
-	existingHeartbeats, err := s.heartbeatRepo.FindByProjectID(ctx, domain.NewProjectID(projectID))
+	// 实例化场景心跳。
+	newHeartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator)
 	if err != nil {
-		return fmt.Errorf("failed to list existing heartbeats: %w", err)
-	}
-	for _, hb := range existingHeartbeats {
-		if err := s.heartbeatRepo.Delete(ctx, hb.ID()); err != nil {
-			return fmt.Errorf("failed to delete existing heartbeat: %w", err)
-		}
-		if s.scheduler != nil {
-			if err := s.scheduler.RefreshSchedule(ctx, hb.ID().String()); err != nil {
-				return fmt.Errorf("failed to refresh schedule: %w", err)
-			}
-		}
+		return nil, nil, nil, nil, fmt.Errorf("failed to apply scenario: %w", err)
 	}
 
-	// 实例化场景心跳
-	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator)
+	existingHeartbeats, err := s.heartbeatRepo.FindByProjectID(ctx, project.ID())
 	if err != nil {
-		return fmt.Errorf("failed to apply scenario: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
-
-	for _, hb := range heartbeats {
-		if err := s.heartbeatRepo.Save(ctx, hb); err != nil {
-			return fmt.Errorf("failed to save heartbeat: %w", err)
-		}
-		if s.scheduler != nil {
-			if err := s.scheduler.RefreshSchedule(ctx, hb.ID().String()); err != nil {
-				return fmt.Errorf("failed to refresh schedule: %w", err)
-			}
-		}
-	}
-
-	// 更新项目的场景编码
-	project.SetHeartbeatScenarioCode(scenarioCode)
-	if err := s.projectRepo.Save(ctx, project); err != nil {
-		return fmt.Errorf("failed to save project: %w", err)
-	}
-
-	return nil
+	return project, scenario, existingHeartbeats, newHeartbeats, nil
 }
 
 // EnsureBuiltInScenarios 确保内置场景存在，并更新已有内置场景的定义

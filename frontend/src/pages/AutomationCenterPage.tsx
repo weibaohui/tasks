@@ -1,0 +1,142 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Card, Empty, Space, Tabs, Typography } from 'antd';
+import { listProjects } from '../api/projectRequirementApi';
+import { listAgents } from '../api/agentApi';
+import { requirementTypeApi, type RequirementType } from '../api/requirementTypeApi';
+import { useAuthStore } from '../stores/authStore';
+import type { Project } from '../types/projectRequirement';
+import type { Agent } from '../types/agent';
+import { HeartbeatManagement } from '../components/HeartbeatManagement';
+import { OverviewStats, ProjectRunsPanel, ProjectSelectorCard, ScenarioApplyPanel } from '../components/AutomationCenter';
+import { HeartbeatScenarioManagementPage } from './HeartbeatScenarioManagementPage';
+import { ProjectWebhookPage } from './ProjectWebhookPage';
+
+const { Text } = Typography;
+
+/**
+ * AutomationCenterPage 作为自动化统一入口，聚合心跳实例、场景与 Webhook 管理能力。
+ */
+export const AutomationCenterPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
+
+  /**
+   * fetchBaseData 加载自动化中心基础依赖数据。
+   */
+  const fetchBaseData = async () => {
+    const projectList = await listProjects();
+    setProjects(projectList);
+    if (!selectedProjectId && projectList.length > 0) {
+      setSelectedProjectId(projectList[0].id);
+    }
+    if (user?.user_code) {
+      const agentList = await listAgents(user.user_code);
+      setAgents(agentList.filter((agent) => ['CodingAgent', 'OpenCodeAgent'].includes(agent.agent_type)));
+    }
+  };
+
+  useEffect(() => {
+    void fetchBaseData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.user_code]);
+
+  /**
+   * fetchRequirementTypes 加载当前项目可用需求类型。
+   */
+  const fetchRequirementTypes = async (projectId: string) => {
+    if (!projectId) {
+      setRequirementTypes([]);
+      return;
+    }
+    try {
+      const data = await requirementTypeApi.list(projectId);
+      setRequirementTypes(data);
+    } catch {
+      setRequirementTypes([]);
+    }
+  };
+
+  useEffect(() => {
+    void fetchRequirementTypes(selectedProjectId);
+  }, [selectedProjectId]);
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) || null,
+    [projects, selectedProjectId],
+  );
+
+  /**
+   * handleProjectScenarioChanged 更新项目缓存中的场景编码，保持界面状态一致。
+   */
+  const handleProjectScenarioChanged = (scenarioCode: string) => {
+    if (!selectedProjectId) {
+      return;
+    }
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === selectedProjectId
+          ? { ...project, heartbeat_scenario_code: scenarioCode }
+          : project,
+      ),
+    );
+  };
+
+  return (
+    <div style={{ padding: 0 }}>
+      <Card
+        title="自动化中心"
+        extra={
+          <Space>
+            <Text type="secondary">统一管理心跳实例、场景模板与 Webhook 事件触发</Text>
+          </Space>
+        }
+      >
+        <OverviewStats projects={projects} agents={agents} />
+        <ProjectSelectorCard projects={projects} selectedProjectId={selectedProjectId} onChange={setSelectedProjectId} />
+
+        <Tabs
+          items={[
+            {
+              key: 'overview',
+              label: '总览',
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="重构进行中"
+                    description="当前版本已完成统一入口与场景影响预览。后续将继续补齐执行时序、运行结果追踪和模块化组件体系。"
+                  />
+                  <ScenarioApplyPanel project={selectedProject} onProjectScenarioChanged={handleProjectScenarioChanged} />
+                  <ProjectRunsPanel project={selectedProject} />
+                </Space>
+              ),
+            },
+            {
+              key: 'heartbeats',
+              label: '心跳实例',
+              children: selectedProjectId ? (
+                <HeartbeatManagement projectId={selectedProjectId} agents={agents} requirementTypes={requirementTypes} />
+              ) : (
+                <Empty description="请先选择项目后再管理心跳实例" />
+              ),
+            },
+            {
+              key: 'scenarios',
+              label: '场景模板',
+              children: <HeartbeatScenarioManagementPage />,
+            },
+            {
+              key: 'webhooks',
+              label: 'Webhook 事件',
+              children: <ProjectWebhookPage />,
+            },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+};

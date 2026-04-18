@@ -163,6 +163,7 @@ func SetupRoutesWithManagement(
 		heartbeats := v1.Group("/heartbeats", requireAuth)
 		heartbeats.GET("", heartbeatHandler.ListHeartbeats)
 		heartbeats.POST("", heartbeatHandler.CreateHeartbeat)
+		heartbeats.GET("/:id/runs", heartbeatHandler.ListHeartbeatRuns)
 		heartbeats.GET("/:id", heartbeatHandler.GetHeartbeat)
 		heartbeats.PUT("/:id", heartbeatHandler.UpdateHeartbeat)
 		heartbeats.DELETE("/:id", heartbeatHandler.DeleteHeartbeat)
@@ -186,10 +187,17 @@ func SetupRoutesWithManagement(
 	}
 
 	if projectHandler != nil && heartbeatScenarioHandler != nil {
+		v1.POST("/projects/:project_id/preview-apply-scenario", requireAuth, func(c *gin.Context) {
+			c.Set("projectService", projectHandler.ProjectService())
+			heartbeatScenarioHandler.PreviewApplyScenarioToProject(c)
+		})
 		v1.POST("/projects/:project_id/apply-scenario", requireAuth, func(c *gin.Context) {
 			c.Set("projectService", projectHandler.ProjectService())
 			heartbeatScenarioHandler.ApplyScenarioToProject(c)
 		})
+	}
+	if projectHandler != nil && heartbeatHandler != nil {
+		v1.GET("/projects/:project_id/heartbeat-runs", requireAuth, heartbeatHandler.ListProjectHeartbeatRuns)
 	}
 
 	if requirementHandler != nil {

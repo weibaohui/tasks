@@ -32,7 +32,7 @@ type UpdateProjectCommand struct {
 }
 
 type ProjectApplicationService struct {
-	projectRepo           domain.ProjectRepository
+	projectRepo          domain.ProjectRepository
 	requirementTypeRepo  domain.RequirementTypeEntityRepository
 	idGenerator          domain.IDGenerator
 	heartbeatScenarioSvc *HeartbeatScenarioService
@@ -52,6 +52,14 @@ func (s *ProjectApplicationService) ApplyScenarioToProject(ctx context.Context, 
 		return fmt.Errorf("heartbeat scenario service not available")
 	}
 	return s.heartbeatScenarioSvc.ApplyScenarioToProject(ctx, projectID, scenarioCode)
+}
+
+// PreviewApplyScenarioToProject 预览项目应用场景后的影响明细。
+func (s *ProjectApplicationService) PreviewApplyScenarioToProject(ctx context.Context, projectID, scenarioCode string) (*HeartbeatApplyPreview, error) {
+	if s.heartbeatScenarioSvc == nil {
+		return nil, fmt.Errorf("heartbeat scenario service not available")
+	}
+	return s.heartbeatScenarioSvc.PreviewApplyScenarioToProject(ctx, projectID, scenarioCode)
 }
 
 func (s *ProjectApplicationService) CreateProject(ctx context.Context, cmd CreateProjectCommand) (*domain.Project, error) {

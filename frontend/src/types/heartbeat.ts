@@ -29,3 +29,15 @@ export interface UpdateHeartbeatRequest {
   requirement_type: string;
   enabled: boolean;
 }
+
+export interface HeartbeatRunRecord {
+  requirement_id: string;
+  heartbeat_id: string;
+  heartbeat_name: string;
+  project_id: string;
+  trigger_source: string;
+  status: string;
+  title: string;
+  last_error: string;
+  created_at: number;
+}

@@ -2,6 +2,8 @@ package http
 
 import (
 	"net/http"
+	"sort"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -131,11 +133,65 @@ func (h *HeartbeatHandler) TriggerHeartbeat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
 		return
 	}
-	if err := h.triggerService.Trigger(c.Request.Context(), id); err != nil {
+	if _, err := h.triggerService.TriggerWithSource(c.Request.Context(), id, application.HeartbeatTriggerSourceManual); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, map[string]string{"message": "triggered"})
+}
+
+// ListHeartbeatRuns 查询指定心跳的最近执行记录。
+func (h *HeartbeatHandler) ListHeartbeatRuns(c *gin.Context) {
+	id := c.Param("id")
+	if h.triggerService == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	records, err := h.triggerService.ListRunsByHeartbeat(c.Request.Context(), id, limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, records)
+}
+
+// ListProjectHeartbeatRuns 查询项目下所有心跳的最近执行记录（聚合视图）。
+func (h *HeartbeatHandler) ListProjectHeartbeatRuns(c *gin.Context) {
+	projectID := c.Param("project_id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "project_id is required"})
+		return
+	}
+	if h.triggerService == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	perHeartbeatLimit, _ := strconv.Atoi(c.DefaultQuery("per_heartbeat_limit", "10"))
+	if perHeartbeatLimit <= 0 {
+		perHeartbeatLimit = 10
+	}
+	heartbeats, err := h.service.ListHeartbeatsByProject(c.Request.Context(), projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
+		return
+	}
+	records := make([]application.HeartbeatRunRecord, 0, limit)
+	for _, hb := range heartbeats {
+		runs, err := h.triggerService.ListRunsByHeartbeat(c.Request.Context(), hb.ID().String(), perHeartbeatLimit)
+		if err != nil {
+			continue
+		}
+		records = append(records, runs...)
+	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].CreatedAt > records[j].CreatedAt
+	})
+	if limit > 0 && len(records) > limit {
+		records = records[:limit]
+	}
+	c.JSON(http.StatusOK, records)
 }
 
 func heartbeatToMap(hb *domain.Heartbeat) map[string]interface{} {

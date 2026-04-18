@@ -21,6 +21,29 @@ export interface HeartbeatScenario {
   updated_at: number;
 }
 
+export interface HeartbeatPreviewItem {
+  id: string;
+  name: string;
+  interval_minutes: number;
+  md_content: string;
+  agent_code: string;
+  requirement_type: string;
+  enabled: boolean;
+  sort_order: number;
+}
+
+export interface ApplyScenarioPreview {
+  project_id: string;
+  project_name: string;
+  scenario_code: string;
+  scenario_name: string;
+  current_scenario: string;
+  to_delete: HeartbeatPreviewItem[];
+  to_create: HeartbeatPreviewItem[];
+  delete_count: number;
+  create_count: number;
+}
+
 export interface CreateScenarioRequest {
   code: string;
   name: string;
@@ -62,4 +85,9 @@ export async function deleteHeartbeatScenario(id: string): Promise<void> {
 
 export async function applyHeartbeatScenario(projectId: string, scenarioCode: string): Promise<void> {
   await apiClient.post(`/projects/${projectId}/apply-scenario`, { scenario_code: scenarioCode });
+}
+
+export async function previewApplyHeartbeatScenario(projectId: string, scenarioCode: string): Promise<ApplyScenarioPreview> {
+  const response = await apiClient.post<ApplyScenarioPreview>(`/projects/${projectId}/preview-apply-scenario`, { scenario_code: scenarioCode });
+  return response.data;
 }
