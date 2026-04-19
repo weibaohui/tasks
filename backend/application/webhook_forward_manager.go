@@ -230,10 +230,12 @@ func (m *WebhookGitHubManager) updateWebhookURL(repo string, webhookID int64, ne
 // deleteWebhook 删除 GitHub webhook
 func (m *WebhookGitHubManager) deleteWebhook(repo string, webhookID int64) error {
 	cmd := ExecCommand("gh", "api", fmt.Sprintf("repos/%s/hooks/%d", repo, webhookID), "-X", "DELETE")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to delete webhook: %w", err)
+		return fmt.Errorf("failed to delete webhook: %w (stderr: %s)", err, stderr.String())
 	}
 
 	return nil
@@ -279,11 +281,13 @@ func (m *WebhookGitHubManager) UpdateWebhookURL(repo string, webhookID int64, ne
 func (m *WebhookGitHubManager) getWebhookURL(repo string, webhookID int64) (string, error) {
 	cmd := ExecCommand("gh", "api", fmt.Sprintf("repos/%s/hooks/%d", repo, webhookID), "--jq", ".config.url")
 	var out bytes.Buffer
+	var stderr bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &stderr
 
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("failed to get webhook URL: %w", err)
+		return "", fmt.Errorf("failed to get webhook URL: %w (stderr: %s)", err, stderr.String())
 	}
 
 	return strings.TrimSpace(out.String()), nil

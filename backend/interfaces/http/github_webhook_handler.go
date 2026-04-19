@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibh/taskmanager/application"
@@ -243,11 +242,7 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 	}
 
 	// 需要更新，先获取 webhook ID
-	repoPath := config.Repo()
-	if strings.HasPrefix(repoPath, "https://github.com/") {
-		repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
-	}
-	repoPath = strings.TrimSuffix(repoPath, ".git")
+	repoPath := application.NormalizeRepo(config.Repo())
 
 	webhookID, err := h.webhookGitHub.FindExistingWebhook(repoPath)
 	if err != nil || webhookID == 0 {
