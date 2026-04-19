@@ -153,12 +153,6 @@ export const ScenarioApplyPanel: React.FC<ScenarioApplyPanelProps> = ({ project,
             预览并应用
           </Button>
         </Space>
-        <Alert
-          type="info"
-          showIcon
-          message="应用说明"
-          description="应用场景将替换项目当前心跳实例。建议先预览影响范围，再确认执行。"
-        />
         <div>
           <Tag color="blue">当前场景：{currentScenarioName || '未设置'}</Tag>
           <Tag color="purple">当前项目：{project.name}</Tag>
