@@ -153,7 +153,7 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	// 查找匹配的 repo 配置
 	var matchedConfig *domain.GitHubWebhookConfig
 	for _, config := range configs {
-		configRepo := config.Repo()
+		configRepo := application.NormalizeRepo(config.Repo())
 		// 精确匹配 owner/repo 格式
 		if configRepo == repoName {
 			matchedConfig = config

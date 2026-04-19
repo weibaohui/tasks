@@ -167,12 +167,8 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		return fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
 	for _, hb := range existingHeartbeats {
-		// 删除引用该心跳的所有绑定（避免无效绑定）
-		if s.bindingRepo != nil {
-			if err := s.bindingRepo.DeleteByHeartbeatID(ctx, hb.ID()); err != nil {
-				return fmt.Errorf("failed to delete bindings for heartbeat: %w", err)
-			}
-		}
+		// 注意：不删除 bindings，因为 bindings 可能是用户手动创建的。
+		// 即使心跳被删除，binding 会在触发时发现心跳不存在而被跳过。
 		if err := s.heartbeatRepo.Delete(ctx, hb.ID()); err != nil {
 			return fmt.Errorf("failed to delete existing heartbeat: %w", err)
 		}
