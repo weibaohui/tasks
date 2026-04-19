@@ -351,14 +351,19 @@ flowchart LR
 
 ## 7. 元需求数据模型
 
-### 7.1 需求类型枚举
+### 7.1 需求类型管理（动态化）
 
-| requirement_type | 用途 |
-|------------------|------|
-| `github_meta_issue` | 追踪 Issue |
-| `github_meta_pr` | 追踪 PR |
+**原则**：需求类型**不**在代码中硬编码枚举，全部通过 `requirement_types` 数据库表管理（详见 [§C.2](#c2-需求类型管理完全动态化通过requirement_types表驱动) 与 [§C.3](#c3-requirement_types表的扩展与初始化)）。
 
-若希望减少枚举，可合并为 `github_meta` + 列 `meta_object_type`。
+| `code` | `name` | 用途 | 绑定状态机 |
+|--------|--------|------|-----------|
+| `github_meta_issue` | Issue 元需求 | 追踪 Issue | `github_issue_lifecycle` |
+| `github_meta_pr` | PR 元需求 | 追踪 PR | `github_pr_lifecycle` |
+| `github_meta_manager` | 管家心跳 | 管家调度 | 可选（轻量或无） |
+| `github_implement` | GitHub 实现 | 指定 Issue 开发 | 可选或复用 `github_issue_lifecycle` |
+| `github_pr_fix` | GitHub PR 修复 | 指定 PR 修复 | 可选或复用 `github_pr_lifecycle` |
+
+创建元需求或触发专用心跳时，系统按 `code` 查询 `requirement_types` 表，自动获取对应的 `state_machine_id` 并初始化状态机实例。
 
 ### 7.2 表结构扩展（推荐）
 
@@ -895,15 +900,17 @@ transitions:
 2. gh issue list --state open --json number,title,labels,updatedAt
 3. gh pr list --state open --json number,title,updatedAt,headRefName
 4. 对每条 Issue/PR：
-   a. upsert 元需求（唯一索引）
-   b. 若无状态机实例则 InitializeRequirementState
-   c. 运行规则引擎 apply_issue_rules / apply_pr_rules（无 LLM）
+   a. 从 requirement_types 表按 code 查找对应类型与 state_machine_id
+   b. upsert 元需求（唯一索引），若元需求首次创建则 InitializeRequirementState
+   c. 基于 gh JSON 结果 + 元需求当前状态 → 调用 StateMachineService.TriggerTransition
+      进行确定性迁移（如：检测到 lgtm label → lgtm_label_applied；检测到评论含关键字 → requirement_approved）
+   d. 迁移失败或无需迁移则跳过，记录 meta_last_scanned_at
 5. 从「待处理集合」按优先级选 1～2 条：
    priority: blocked > 超时 > 24h 内有活动 > FIFO
 6. 对选中项：
-   a. 若需编码/大修 → TriggerHeartbeatWithParams
+   a. 若需编码/大修 → TriggerHeartbeatWithParams（带 issue_number/pr_number）
    b. 否则在 Prompt 指导下发评论 / 仅记录系统内执行摘要
-7. 更新 meta_last_scanned_at / meta_last_action_*
+7. 更新 meta_last_action_*，回写 Runbook（upsert snapshot + append voyage entry）
 ```
 
 ### 9.3 Prompt 骨架（节选）
@@ -1001,9 +1008,12 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 | 模块 | 职责 |
 |------|------|
-| `MetaRequirementService` | `EnsureMetaForIssue`、`EnsureMetaForPR`、`GetByObject`、`ListByProject` |
-| `GitHubRuleEngine`（包内） | `IssueHasLabel(n,"lgtm")`、`PROpenForIssue` 等纯函数 + `gh` 调用 |
-| `HeartbeatTriggerService` | `TriggerWithSourceAndParams`；修复运行记录查询条件（见 §14） |
+| `MetaRequirementService` | `EnsureMetaForIssue`（按 `requirement_types.code` 查类型+状态机）、`EnsureMetaForPR`、`GetByObject`、`ListByProject` |
+| `RequirementTypeService` | 按 `code` 读取类型信息 + 绑定状态机；项目初始化时自动注册内置类型（见 §C.3） |
+| `HeartbeatTriggerService` | `TriggerWithSourceAndParams`；Runbook 注入（§9.0.4）；运行记录查询修正（见 §14.3） |
+| `RunbookService` | 快照 upsert + 航程条目 append；供管家每轮结束时回写 |
+
+> **注意**：不再新建独立的 `GitHubRuleEngine` 模块；所有规则判定通过状态机迁移管线处理（详见 [§C.1](#c1-规则引擎归属使用状态机管理禁止写死)）。
 
 ### 13.2 HTTP（示例）
 
@@ -1258,8 +1268,65 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 ---
 
-## 附录 B：文档修订记录
+## 附录 C：架构决策记录
+
+> 以下决策在代码评审与架构分析后形成，作为实施的权威参考。
+
+### C.1 规则引擎归属：使用状态机管理，禁止写死
+
+| 决策项 | 说明 |
+|--------|------|
+| **问题** | §9.2 伪代码中 `apply_issue_rules` / `apply_pr_rules` 暗示需要一个独立的规则引擎模块 |
+| **决策** | **不新建独立规则引擎模块**；所有规则判定（label 存在性、评论关键字匹配等）均通过 **状态机迁移 + Webhook / 管家心跳** 驱动 |
+| **理由** | 独立规则引擎容易成为死代码（与状态机逻辑重复、维护不同步）；状态机本身已是规则的权威来源 |
+| **落地方式** | 管家心跳 Prompt 内指导 Agent 使用 `gh` 命令获取 JSON 后自行判定（确定性迁移），或由 Webhook Handler 解析 payload 后直接调用 `StateMachineService.TriggerTransition` |
+
+### C.2 需求类型管理：完全动态化，通过 `requirement_types` 表驱动
+
+| 决策项 | 说明 |
+|--------|------|
+| **问题** | 设计中引入了 `github_meta_issue` / `github_meta_pr` / `github_meta_manager` / `github_implement` / `github_pr_fix` 等多种需求类型，原有代码仅有 `normal` / `heartbeat` 两种硬编码类型 |
+| **决策** | **所有需求类型（含新增）均通过 `requirement_types` 数据库表管理**，不在 Go 代码中硬编码枚举 |
+| **理由** | ① 类型可热更新，无需重新编译部署；② 每种类型可在表中绑定 `state_machine_id`，实现类型→状态机的声明式关联；③ 前端可动态渲染类型卡片和颜色 |
+| **落地方式** | 详见 §C.3 |
+
+### C.3 `requirement_types` 表的扩展与初始化
+
+| 字段 | 用途 |
+|------|------|
+| `code` | 类型唯一标识（如 `github_meta_issue`、`github_implement`） |
+| `name` | 人类可读名称（如「Issue 元需求」、「GitHub 实现」） |
+| `state_machine_id` | 绑定该类型使用的状态机（**核心字段**，类型→状态机的一对一关系） |
+| `is_system` | 是否为系统内置类型（1 = 系统，不可删除；0 = 用户自定义） |
+
+**项目创建时自动注册机制**：
+
+1. 在 `HeartbeatScenarioService.ApplyScenarioToProject`（或新项目创建流程）中，检测 `requirement_types` 表是否已存在所需类型；
+2. 若不存在，则按 `code` 插入新行，并关联对应的内置状态机 ID；
+3. 若已存在但 `state_machine_id` 有变更，则更新绑定（需校验该类型下无活跃需求）；
+4. 所有类型读取操作走 `requirement_types` 表查询，**不再使用** Go `const` 枚举。
+ 
+
+### C.4 与 §7 元需求数据模型的关系
+
+§7.1 中的 `requirement_type` 枚举（`github_meta_issue` / `github_meta_pr`）**不再在代码中声明**，改为：
+- 通过 `requirement_types.code` 匹配；
+- 通过 `requirement_types.state_machine_id` 自动获取对应状态机；
+- `MetaRequirementService.EnsureMetaForIssue` 在创建元需求时，从表中查询 `github_meta_issue` 类型的 `state_machine_id` 并初始化状态。
+
+### C.5 对 Phase P0 实施计划的影响
+
+| 原计划 | 调整后 |
+|--------|--------|
+| 在 `domain/requirement.go` 中新增 `RequirementType` 常量枚举 | **取消**：改为运行时从 `requirement_types` 表读取 |
+| 新建独立的 `GitHubRuleEngine` 模块 | **取消**：规则逻辑并入状态机迁移管线 |
+| `MetaRequirementService` 硬编码类型名 | 改为按 `code` 查 `requirement_types` 表获取类型与状态机绑定 |
+
+---
+
+## 附录 D：文档修订记录
 
 | 版本 | 说明 |
 |------|------|
 | 详细版 | 补全状态机 YAML、时序/对象图、表结构、Webhook、阶段任务、测试；状态 ID 对齐 `todo`/`completed` 校验器；PR 转移无重复 `(from,trigger)`。 |
+| 架构决策版 | 新增附录 C（架构决策记录）：规则引擎归入状态机、需求类型完全动态化、`requirement_types` 扩展方案 |
