@@ -1015,6 +1015,73 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 （具体路径以 `router.go` 为准。）
 
+### 13.3 航海日记与事件航线接口（前端重点依赖）
+
+为支持「看得到路线、看得到进度、看得到事件线条」，建议新增 **聚合读接口**（避免前端 N 次拼装）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/projects/:pid/voyage/overview` | 返回航海总览：快照、核心 KPI、当前阶段进度、风险摘要 |
+| `GET` | `/api/v1/projects/:pid/voyage/route` | 返回事件航线图（节点+边+进度），用于前端路线图/线条渲染 |
+| `GET` | `/api/v1/projects/:pid/voyage/entries?cursor=&limit=&type=` | 分页读取航海日记条目（支持按类型筛选） |
+| `GET` | `/api/v1/projects/:pid/voyage/entries/stream` | SSE 增量流，实时推送新条目/状态变化（可选） |
+| `POST` | `/api/v1/projects/:pid/voyage/entries` | 人工补记（`manual_note`） |
+| `PUT` | `/api/v1/projects/:pid/runbook` | 更新快照（`phase_goal/current_focus` 等） |
+
+`/voyage/route` 返回建议结构（前端可直接画路线）：
+
+```json
+{
+  "project_id": "p_123",
+  "generated_at": 1760000000,
+  "summary": {
+    "overall_progress_percent": 68,
+    "current_phase": "执行与收敛",
+    "active_meta_requirements": 14,
+    "blocked_count": 2
+  },
+  "nodes": [
+    {
+      "node_id": "phase_refining",
+      "node_type": "phase",
+      "title": "需求完善",
+      "status": "completed",
+      "progress_percent": 100,
+      "x": 120,
+      "y": 80
+    },
+    {
+      "node_id": "issue_42",
+      "node_type": "issue",
+      "title": "Issue #42",
+      "status": "in_progress",
+      "progress_percent": 55,
+      "meta_requirement_id": "req_meta_42",
+      "github_url": "https://github.com/org/repo/issues/42",
+      "x": 420,
+      "y": 160
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e_1",
+      "from": "phase_refining",
+      "to": "issue_42",
+      "edge_type": "state_transition",
+      "trigger": "project_requirement_created",
+      "occurred_at": 1760000100,
+      "is_critical_path": true
+    }
+  ]
+}
+```
+
+实现建议：
+
+- 路线图布局优先由后端提供近似坐标（`x/y`），前端只做响应式缩放与微调，减少首屏抖动。
+- 以 `transition_logs + requirements(meta_*) + project_voyage_entries` 聚合构图；必要时增加 `voyage_route_snapshots` 做缓存。
+- 对于超大项目（>500 节点）采用分层加载：先阶段骨架，再按视口/筛选条件拉取 Issue/PR 子图。
+
 ---
 
 ## 14. 前端与可观测性
@@ -1038,6 +1105,91 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 - **不得**仅用 `requirement_type == heartbeat` 过滤。
 - 条件：`title LIKE '[心跳]%'` **或** `acceptance_criteria LIKE '%heartbeat_id: <id>%'` **或** 显式 `origin_heartbeat` 字段（若后续添加）。
+
+### 14.4 设计目标与视觉语言（美观、大方、直观）
+
+目标不是“多图表”，而是让用户在 10 秒内回答三件事：**我们在哪、走过哪、下一步去哪**。
+
+| 设计目标 | 界面表达 |
+|----------|----------|
+| 看得到路线 | 主视觉使用「航线图（节点+连线）」展示阶段与 Issue/PR 流转路径 |
+| 看得到进度 | 顶部总进度 + 阶段进度条 + 关键路径高亮 |
+| 看得到事件 | 右侧事件时间线（航海日记）实时追加，支持筛选与回放 |
+| 看得懂风险 | 阻塞事件使用高对比色与醒目标识，提供一键定位到对应节点 |
+
+视觉基调建议：
+
+- 整体采用「深海蓝 + 青绿强调 + 琥珀告警」三阶色板，背景低对比渐变，强调专业与稳定。
+- 路线线条采用双层描边（底层弱光 + 顶层实线），关键路径加轻微流动动画，形成“正在航行”的直觉反馈。
+- 信息密度控制：主区只放“路线+进度”；次级信息（详情、日志、参数）进入抽屉，避免首屏噪音。
+- 时间统一：全局使用相对时间 + 精确时间 Tooltip，保证审计与可读性并存。
+
+### 14.5 页面信息架构（Automation Center 内）
+
+建议将「航海日记」提升为项目级一级页签，与总览并列：
+
+| 页面 | 目的 | 关键组件 |
+|------|------|----------|
+| 总览（Overview） | 快速健康检查 | KPI 卡片、阶段进度、风险摘要、最近 5 条航海条目 |
+| 航海日记（Voyage Journal） | 连续叙事与回放 | 日记时间线、阶段里程碑、人工批注 |
+| 事件航线（Event Route） | 路径与依赖分析 | 节点连线图、关键路径、高亮回放、筛选器 |
+| 元需求看板 | 任务对象管理 | Issue/PR 元需求表、状态过滤、批量操作 |
+| 心跳实例 | 执行追踪 | 心跳运行列表、耗时、失败原因、重试 |
+
+### 14.6 关键页面交互设计
+
+#### A. 航海日记（Voyage Journal）
+
+- 顶部「今日航况」卡：`phase_goal`、`current_focus`、`last_run_outcome`、`overall_progress_percent`。
+- 中部纵向时间线：按 `entry_type` 分组（`heartbeat_round`、`child_heartbeat`、`webhook_milestone`、`manual_note`）。
+- 条目卡片三段式：标题（发生了什么）/ 摘要（为什么）/ 证据链接（`requirement_id`、GitHub URL、状态迁移）。
+- 支持“回放模式”：选择时间区间后自动高亮该区间涉及的路线节点与边。
+
+#### B. 事件航线（Event Route）
+
+- 主画布展示「阶段节点 + Issue/PR 节点 + 连线触发」。
+- 左上角提供视图切换：`全局航线` / `仅关键路径` / `仅阻塞链路`。
+- 节点视觉编码：形状区分对象类型（阶段/Issue/PR/心跳），颜色区分状态（进行中/完成/阻塞）。
+- 点击任一节点，右侧抽屉展示：当前状态、最近迁移、关联条目、可执行动作（触发心跳/打开 GitHub）。
+
+#### C. 进度可视化
+
+- 全局进度采用「环形总进度 + 阶段分段条」组合，避免单一百分比失真。
+- 进度计算透明化：在 Tooltip 中显示分子分母（如 `已完成元需求 34 / 50`、`阻塞 2`）。
+- 对“卡住但高优先级”的链路增加 `ETA risk` 标记，提示需要人工介入。
+
+### 14.7 前端实现建议（React）
+
+组件分层建议：
+
+| 层级 | 组件建议 | 职责 |
+|------|----------|------|
+| Page | `VoyageJournalPage`、`EventRoutePage` | 路由级容器，处理筛选参数与布局 |
+| Domain Components | `RouteCanvas`、`ProgressRibbon`、`VoyageTimeline`、`NodeDetailDrawer` | 业务可视化核心 |
+| State | `useVoyageOverview`、`useVoyageRoute`、`useVoyageEntries` | 统一请求/缓存/重试 |
+| Infra | `sseClient`、`timeFormatter`、`routeLayoutAdapter` | SSE、时间格式、坐标适配 |
+
+渲染与性能：
+
+- 路线图建议基于 SVG + Canvas 混合：线条/动画走 Canvas，节点与交互层走 SVG/HTML，提高可交互性。
+- 时间线列表使用虚拟滚动（已有日志页经验可复用），保证长历史下仍流畅。
+- 采用「静态快照 + 增量事件」模型：首屏拉 `overview + route + 首屏 entries`，随后通过 SSE 增量更新。
+
+### 14.8 后端到前端的数据契约（必须稳定）
+
+前端可视化高度依赖统一语义，后端需固定以下字段语义：
+
+- `status`: `todo|in_progress|blocked|completed|closed`，避免同义词导致颜色映射混乱。
+- `progress_percent`: `0~100`，由后端计算，前端只展示不二次推断。
+- `entry_type`: 与 §9.0.8 枚举一致，新增类型必须向后兼容。
+- `is_critical_path`: 用于关键路径高亮，避免前端自行跑图算法。
+- `trace_refs`: 提供跳转锚点（`requirement_id`、`meta_requirement_id`、`transition_id`、`github_url`）。
+
+### 14.9 观测与诊断
+
+- 在航线图页面内置“数据诊断”面板：显示最近一次聚合耗时、节点数、边数、SSE 延迟。
+- 对缺失映射（例如条目引用了不存在节点）给出黄条告警，并允许导出诊断 JSON 供排障。
+- 提供前端埋点：视图切换、节点点击、筛选使用率，反哺后续交互优化。
 
 ---
 
@@ -1073,6 +1225,9 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 ### Phase P2 — 体验与指标
 
 - [ ] 元需求看板与详情页
+- [ ] 航海日记页（快照卡 + 时间线 + 人工批注）与事件航线页（节点连线 + 关键路径 + 回放模式）
+- [ ] 新增 voyage 聚合接口：`overview` / `route` / `entries` / `entries/stream`，并完成前后端联调
+- [ ] 进度算法落地（全局进度、阶段进度、阻塞权重）及口径校验
 - [ ] 可选：阻塞/耗时统计、告警
 
 ---
