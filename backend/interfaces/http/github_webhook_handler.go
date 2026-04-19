@@ -301,11 +301,7 @@ func (h *GitHubWebhookHandler) UpdateAllWebhooksIfNeeded() {
 			continue
 		}
 
-		repoPath := config.Repo()
-		if strings.HasPrefix(repoPath, "https://github.com/") {
-			repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
-		}
-		repoPath = strings.TrimSuffix(repoPath, ".git")
+		repoPath := application.NormalizeRepo(config.Repo())
 
 		needsUpdate, _, err := h.webhookGitHub.CheckAndUpdateWebhook(context.Background(), repoPath)
 		if err != nil || !needsUpdate {

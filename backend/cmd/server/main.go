@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -67,11 +66,7 @@ func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, 
 				zap.String("current_url", currentURL),
 				zap.String("expected_url", config.WebhookURL()))
 
-			repoPath := config.Repo()
-			if strings.HasPrefix(repoPath, "https://github.com/") {
-				repoPath = strings.TrimPrefix(repoPath, "https://github.com/")
-			}
-			repoPath = strings.TrimSuffix(repoPath, ".git")
+			repoPath := application.NormalizeRepo(config.Repo())
 
 			webhookID, err := webhookGitHub.FindExistingWebhook(repoPath)
 			if err != nil || webhookID == 0 {
