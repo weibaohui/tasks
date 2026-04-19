@@ -213,23 +213,30 @@ func (s *HeartbeatScenarioService) EnsureBuiltInScenarios(ctx context.Context) e
 	if err != nil {
 		return fmt.Errorf("failed to check built-in scenario: %w", err)
 	}
-	scenarioUpdated := false
+	scenarioContentChanged := false
 	if existing != nil {
-		// 更新现有内置场景的定义（保留 ID、创建时间、启用状态）
-		existing.Update(expected.Name(), expected.Description(), expected.Items())
-		existing.SetIsBuiltIn(true)
-		if err := s.scenarioRepo.Save(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update built-in scenario: %w", err)
+		// 检查内容是否有变化（name、description、items）
+		nameChanged := existing.Name() != expected.Name()
+		descChanged := existing.Description() != expected.Description()
+		itemsChanged := !scenarioItemsEqual(existing.Items(), expected.Items())
+
+		if nameChanged || descChanged || itemsChanged {
+			// 更新现有内置场景的定义（保留 ID、创建时间、启用状态）
+			existing.Update(expected.Name(), expected.Description(), expected.Items())
+			existing.SetIsBuiltIn(true)
+			if err := s.scenarioRepo.Save(ctx, existing); err != nil {
+				return fmt.Errorf("failed to update built-in scenario: %w", err)
+			}
+			scenarioContentChanged = true
 		}
-		scenarioUpdated = true
 	} else {
 		if err := s.scenarioRepo.Save(ctx, expected); err != nil {
 			return fmt.Errorf("failed to save built-in scenario: %w", err)
 		}
 	}
 
-	// 若内置场景已更新，同步刷新所有已绑定该场景的项目的具体心跳实例
-	if scenarioUpdated {
+	// 若内置场景内容有变化，同步刷新所有已绑定该场景的项目的具体心跳实例
+	if scenarioContentChanged {
 		projects, err := s.projectRepo.FindAll(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list projects for scenario refresh: %w", err)
@@ -424,4 +431,20 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 	)
 	scenario.SetIsBuiltIn(true)
 	return scenario
+}
+
+// scenarioItemsEqual 比较两个心跳场景项列表是否相等
+func scenarioItemsEqual(a, b []domain.HeartbeatScenarioItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name ||
+			a[i].IntervalMinutes != b[i].IntervalMinutes ||
+			a[i].RequirementType != b[i].RequirementType ||
+			a[i].MDContent != b[i].MDContent {
+			return false
+		}
+	}
+	return true
 }
