@@ -1093,7 +1093,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 
 ### Phase 4: 状态机与心跳集成（优先级：P1）
 
-**目标**：让状态机转换可以触发心跳，心跳结果可以反馈状态机
+**目标**：让状态机转换触发心跳，心跳结果反馈状态机
 
 - [ ] 实现 `trigger_heartbeat` hook 的参数化
 - [ ] 在关键状态转换中配置心跳触发
@@ -1136,23 +1136,23 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 ## 验收标准
 
 ### Phase 1 验收
-- [ ] 可以创建 Issue 元需求并绑定状态机
-- [ ] 可以创建 PR 元需求并绑定状态机
-- [ ] 前端可以看到元需求列表
+- [ ] 创建 Issue 元需求并绑定状态机
+- [ ] 创建 PR 元需求并绑定状态机
+- [ ] 前端显示元需求列表
 
 ### Phase 2 验收
-- [ ] 管家心跳可以正常扫描项目 Issues/PRs
-- [ ] 管家心跳可以自动创建元需求
-- [ ] 元需求状态机可以正常初始化
+- [ ] 管家心跳正常扫描项目 Issues/PRs
+- [ ] 管家心跳自动创建元需求
+- [ ] 元需求状态机正常初始化
 
 ### Phase 3 验收
-- [ ] 8 个专用心跳都可以接受参数调用
-- [ ] 心跳可以聚焦处理单个指定 Issue/PR
+- [ ] 8 个专用心跳都接受参数调用
+- [ ] 心跳聚焦处理单个指定 Issue/PR
 
 ### Phase 4 验收
-- [ ] 状态机转换可以触发相应心跳
-- [ ] 心跳执行结果可以反馈到状态机
-- [ ] 可以演示完整的 Issue → PR → 合并闭环
+- [ ] 状态机转换触发相应心跳
+- [ ] 心跳执行结果反馈到状态机
+- [ ] 演示完整的 Issue → PR → 合并闭环
 
 ### Phase 5 验收
 - [ ] 前端元需求看板功能完整
