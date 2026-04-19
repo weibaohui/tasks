@@ -104,7 +104,8 @@
 1. 用户在 GitHub 创建 Issue。
 2. 管家扫描 → 若无元需求则 **创建 `github_meta_issue`**，状态机从 `todo` 进入后续阶段（可由 AI 或人工在 GitHub 协作）。
 3. Issue 经讨论后打上 **label `lgtm`** → **服务端规则**（或管家内规则）将元需求迁移到「可同步项目需求」状态 → 创建 **项目需求** 并关联 `meta_object_id`。
-4. 管家或人工触发 **派发** 或 **专用心跳 `github_implement`**（带 `issue_number`）。
+4. 管家或人工触发 **项目需求派发**，进入实现阶段。  
+   `github_implement` / `github_pr_fix` 等专用心跳属于 **P1 增强能力**，不作为 P0 主链路依赖。
 5. Agent 创建 PR（`Closes #n`）→ Webhook / 规则将 Issue 元需求迁到「已关联 PR」，PR 侧 **创建 `github_meta_pr`** 或使用已有追踪。
 6. PR 走评审、修复、合并闸门；合并事件 → **确定性** 将 PR 元需求、`github_meta_issue` 置为 `completed`。
 
@@ -117,8 +118,6 @@ sequenceDiagram
     participant API as Taskmanager API
     participant GH as gh / GitHub
     participant SM as 状态机服务
-    participant Sub as 专用心跳(可选)
-
     Cron->>HB: 触发心跳
     HB->>API: 创建心跳需求并派发
     Note over HB: Agent 执行 Prompt
@@ -126,10 +125,7 @@ sequenceDiagram
     GH-->>HB: 开放项列表
     HB->>API: 查询/创建元需求
     HB->>SM: 规则迁移(无模型)
-    alt 需重活
-        HB->>API: TriggerHeartbeatWithParams
-        API->>Sub: 创建子任务并派发
-    end
+    HB->>API: 必要时创建项目需求 / 推进派发
     HB->>API: 更新元需求 meta_last_*
 ```
 
@@ -360,10 +356,10 @@ flowchart LR
 | `github_meta_issue` | Issue 元需求 | 追踪 Issue | `github_issue_lifecycle` |
 | `github_meta_pr` | PR 元需求 | 追踪 PR | `github_pr_lifecycle` |
 | `github_meta_manager` | 管家心跳 | 管家调度 | 可选（轻量或无） |
-| `github_implement` | GitHub 实现 | 指定 Issue 开发 | 可选或复用 `github_issue_lifecycle` |
-| `github_pr_fix` | GitHub PR 修复 | 指定 PR 修复 | 可选或复用 `github_pr_lifecycle` |
 
-创建元需求或触发专用心跳时，系统按 `code` 查询 `requirement_types` 表，自动获取对应的 `state_machine_id` 并初始化状态机实例。
+创建元需求或触发管家心跳时，系统按 `code` 查询 `requirement_types` 表，自动获取对应的 `state_machine_id` 并初始化状态机实例。
+
+> 说明：`requirement_types` 继续保持**动态化**；P0 只依赖以上三类 GitHub 相关类型。`github_implement` / `github_pr_fix` 若后续启用，可在 P1 通过数据库继续注册，无需改代码枚举。
 
 ### 7.2 表结构扩展（推荐）
 
@@ -484,7 +480,7 @@ states:
     name: 等待派发
     is_final: false
     ai_guide: |
-      等待 dispatch 或触发 github_implement 专用心跳。
+      等待创建出的项目需求被 dispatch；P0 不依赖专用心跳。
     triggers:
       - trigger: dispatch_started
         description: 已派发或已触发实现类心跳
@@ -493,7 +489,7 @@ states:
     name: 开发中
     is_final: false
     ai_guide: |
-      由专用心跳/Agent 在独立 workspace 执行；关注是否已开 PR 并关联 Issue。
+      由已派发的项目需求/Agent 在独立 workspace 执行；关注是否已开 PR 并关联 Issue。
     triggers:
       - trigger: pr_opened
         description: 已有关联 PR
@@ -548,7 +544,7 @@ transitions:
   - { from: blocked, to: waiting_lgtm, trigger: unblock_to_lgtm }
 ```
 
-**Hook 示例（可选）**：在 `lgtm_label_applied` **之后**可为 `sync_project_requirement` 配置 `trigger_heartbeat` 调用 `github_implement` 的 heartbeat_id（若策略为「一打 lgtm 自动开干」）。
+**实现建议（P0）**：`lgtm_label_applied` 之后先进入 `sync_project_requirement`，由服务端创建项目需求并推进到 `waiting_dispatch`。专用心跳自动开工策略放到 P1 再评估。
 
 ### 8.2 `github_pr_lifecycle`（PR 元需求）
 
@@ -595,7 +591,7 @@ states:
     name: 等待作者修改
     is_final: false
     ai_guide: |
-      等待新 commit；可触发 github_pr_fix。
+      等待新 commit；P0 以作者或人工修复为主，`github_pr_fix` 属于 P1 增强能力。
     triggers:
       - trigger: changes_pushed
         description: 有新 push
@@ -753,7 +749,7 @@ transitions:
 | `next_planned` | TEXT(JSON) | 可选：队列下一批编号列表，供 Prompt 直接展示 |
 | `rolling_notes` | TEXT | 可选：短滚动笔记（限制长度，例如 ≤2KB），超时由实现截断或摘要 |
 
-实现可选：**扩 `projects` 一列 `automation_runbook_json`**，或独立表 `project_automation_runbook(project_id[, heartbeat_id], payload_json, updated_at)`。
+**建议落地（P0）**：直接使用独立表 `project_runbook_snapshots`，避免把项目表做成大 JSON 杂糅区，也避免后续再搬迁。
 
 #### 9.0.4 注入点（与现有代码对齐）
 
@@ -777,15 +773,14 @@ transitions:
 
 #### 9.0.5 回写协议（每轮结束必须更新 Runbook）
 
-否则下一轮仍为空。任选一种或组合：
+否则下一轮仍为空。P0 建议只采用 **服务端权威回写**，必要时再开放人工修正：
 
 | 方式 | 做法 |
 |------|------|
-| **A. Agent 结构化收尾** | 要求管家 Prompt 末尾输出固定 JSON 块（如 `<!-- RUNBOOK_UPDATE {...} -->`），派发通道或后处理任务解析并 `PATCH` Runbook |
-| **B. 显式 API** | `PUT /api/v1/projects/:id/automation-runbook`，由 Agent 调用或人工修正 |
-| **C. 服务端摘要** | 管家需求进入 `completed` 时，用 `agent_runtime_result` 截断写入 `last_run_summary`（质量依赖运行时） |
+| **B. 显式 API** | `PUT /api/v1/projects/:id/runbook`，优先供人工修正或系统内部调用 |
+| **C. 服务端摘要** | 管家需求进入 `completed` 时，用 `agent_runtime_result` 截断写入 `last_run_summary`，作为默认回写路径 |
 
-推荐 **A+B**：机器可解析 + 人可纠偏。
+P0 推荐 **C 为主、B 为辅**。`A. Agent 结构化收尾` 依赖模型输出格式稳定性，放到后续版本再引入。
 
 #### 9.0.6 与「小任务」原则的关系
 
@@ -797,7 +792,10 @@ transitions:
 
 `butler_run_log(id, project_id, heartbeat_id, requirement_id, summary, outcome, created_at)` 仅追加、不删，供排障与回放；Runbook 存「最新快照」，日志存「全历史」。
 
-#### 9.0.8 项目航海日记：推荐数据结构（伴随项目一生）
+#### 9.0.8 项目航海日记：P2 增强能力（暂不纳入 P0）
+
+为避免 P0 同时背负“调度闭环”和“复杂项目叙事 UI”两类工作，`ProjectVoyageEntry`、路线图聚合接口、时间线回放等能力统一下沉到 **P2**。  
+P0 只要求 **Runbook 快照可读可写**，保证管家具备跨轮连续性。
 
 **原则**：**一个项目一本日记**；日记由两部分组成——**当前页（快照）** 给管家每轮读入 Prompt；**按时间追加的条目** 记录从立项到归档的完整过程，可审计、可回放，不把全历史塞进单次 Prompt。
 
@@ -829,7 +827,7 @@ transitions:
 
 项目创建时可 **惰性插入**（第一次管家跑之前）或 **建项目时插入空快照**。
 
-##### （3）表 B：`project_voyage_entries`（航海日记正文，多条，伴随项目一生）
+##### （3）表 B：`project_voyage_entries`（P2 再引入）
 
 | 列名 | 类型 | 说明 |
 |------|------|------|
@@ -866,7 +864,7 @@ transitions:
 - **`transition_logs`**：仍是单条需求状态机迁移；**航海日记**是 **项目级** 叙事，二者可互链：`detail_json` 里可写 `requirement_id` / `transition_id`。
 - **元需求**：管「每票 Issue/PR」；**航海日记**管「整条船」——层级不同。
 
-##### （5）API 形态（建议）
+##### （5）API 形态（建议，P2）
 
 | 操作 | 说明 |
 |------|------|
@@ -890,7 +888,7 @@ transitions:
 | 名称 | GitHub 项目管家 |
 | 场景内编码 | `github_project_manager` |
 | `interval_minutes` | 30（可配置） |
-| `requirement_type` | `github_meta_manager`（新建枚举）或复用 `github_meta` |
+| `requirement_type` | `github_meta_manager` |
 | `agent_code` | 项目默认 Agent 或专用「调度型」Agent |
 
 ### 9.2 单轮算法（伪代码）
@@ -908,9 +906,10 @@ transitions:
 5. 从「待处理集合」按优先级选 1～2 条：
    priority: blocked > 超时 > 24h 内有活动 > FIFO
 6. 对选中项：
-   a. 若需编码/大修 → TriggerHeartbeatWithParams（带 issue_number/pr_number）
-   b. 否则在 Prompt 指导下发评论 / 仅记录系统内执行摘要
-7. 更新 meta_last_action_*，回写 Runbook（upsert snapshot + append voyage entry）
+   a. 若处于 `sync_project_requirement` → 创建项目需求并关联 `source_meta_requirement_id`
+   b. 若处于 `waiting_dispatch` → 派发已创建的项目需求
+   c. 否则在 Prompt 指导下发评论 / 仅记录系统内执行摘要
+7. 更新 meta_last_action_*，回写 Runbook 快照
 ```
 
 ### 9.3 Prompt 骨架（节选）
@@ -927,7 +926,7 @@ transitions:
 3. 对已存在元需求：读取当前状态机状态（从 taskmanager 查询），不要臆造。
 4. 仅对 1～2 个最高优先级事项采取行动；其余写入「下回合计划」到系统内执行摘要。
 5. 禁止：merge PR、关闭 Issue，除非配置显式开启。
-6. 需要专用心跳时：仅输出 heartbeat_id 与 issue_number/pr_number，由系统触发（若当前环境不支持，则记录待办）。
+6. P0 不依赖专用心跳；如识别出后续适合参数化专用执行，记录到执行摘要，待 P1 接入。
 
 执行摘要请写在任务汇报中，GitHub 侧仅发必要评论。
 ```
@@ -937,6 +936,8 @@ transitions:
 ## 10. 专用心跳
 
 每个专用心跳对应的需求仍须满足 **[§1.4](#14-任务粒度原则心跳与需求要足够简单)**：目标单一、可验收、时间有界；若 Issue 过大，先在 GitHub 拆 Issue 再分别派发。
+
+> **阶段说明**：本节能力统一放在 **P1**，不阻塞 P0 主闭环。
 
 ### 10.1 `github_implement`（示例）
 
@@ -960,7 +961,7 @@ transitions:
 
 ## 11. 触发与参数传递
 
-### 11.1 `TriggerHeartbeatWithParams`
+### 11.1 `TriggerHeartbeatWithParams`（P1）
 
 ```go
 // 语义示意
@@ -972,13 +973,13 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 ) (*domain.Requirement, error)
 ```
 
-**持久化**：新建心跳任务需求时，将 `params` JSON 写入 `AcceptanceCriteria` 前缀块或独立列 `heartbeat_params_json`；`Heartbeat.RenderPrompt` 合并 `project` 与 `params` 模板变量。
+**持久化建议**：优先新增独立列 `heartbeat_params_json`；若必须兼容过渡，再考虑临时写入 `AcceptanceCriteria` 前缀块。
 
 ### 11.2 状态机 Hook（`transition_executor`）
 
 `Config` 键名：**`heartbeat_id`**（见 `executeTriggerHeartbeat`）。
 
-可选扩展（需实现）：`heartbeat_params` map 合并进 Hook 上下文并写入触发链路。
+可选扩展（需实现）：`heartbeat_params` map 合并进 Hook 上下文并写入触发链路。此能力同样放在 P1。
 
 ---
 
@@ -989,9 +990,9 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 | GitHub 事件 | 用途 |
 |-------------|------|
 | `pull_request` closed + merged=true | `merged` 迁移 PR 元需求；联动 Issue 元需求 `pr_merged` |
-| `pull_request` synchronize | 可选：从 `waiting_changes` 触发 `changes_pushed` |
 | `issues` labeled | 检测 `lgtm` → `lgtm_label_applied` |
-| `issue_comment` / `pull_request_review` | 可选：检测「需求评审通过」关键字（注意限流与防抖） |
+
+> P1 只实现以上两个高价值事件。`pull_request synchronize`、`issue_comment`、`pull_request_review` 等事件先不纳入主路径，避免过早放大事件风暴与去抖复杂度。
 
 ### 12.2 处理管线
 
@@ -1010,8 +1011,8 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 |------|------|
 | `MetaRequirementService` | `EnsureMetaForIssue`（按 `requirement_types.code` 查类型+状态机）、`EnsureMetaForPR`、`GetByObject`、`ListByProject` |
 | `RequirementTypeService` | 按 `code` 读取类型信息 + 绑定状态机；项目初始化时自动注册内置类型（见 §C.3） |
-| `HeartbeatTriggerService` | `TriggerWithSourceAndParams`；Runbook 注入（§9.0.4）；运行记录查询修正（见 §14.3） |
-| `RunbookService` | 快照 upsert + 航程条目 append；供管家每轮结束时回写 |
+| `HeartbeatTriggerService` | P0 负责 Runbook 注入（§9.0.4）与运行记录查询修正（见 §14.3）；`TriggerWithSourceAndParams` 放到 P1 |
+| `RunbookService` | P0 仅负责 Runbook 快照 upsert/read；航程条目 append 放到 P2 |
 
 > **注意**：不再新建独立的 `GitHubRuleEngine` 模块；所有规则判定通过状态机迁移管线处理（详见 [§C.1](#c1-规则引擎归属使用状态机管理禁止写死)）。
 
@@ -1025,7 +1026,16 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 （具体路径以 `router.go` 为准。）
 
-### 13.3 航海日记与事件航线接口（前端重点依赖）
+### 13.3 航海日记与事件航线接口（P2）
+
+P0 不要求引入聚合读接口；先提供最小可用接口即可：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/projects/:id/runbook` | 读取当前 Runbook 快照 |
+| `PUT` | `/api/v1/projects/:id/runbook` | 更新 Runbook 快照 |
+
+以下聚合接口放到 P2：
 
 为支持「看得到路线、看得到进度、看得到事件线条」，建议新增 **聚合读接口**（避免前端 N 次拼装）：
 
@@ -1098,6 +1108,8 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 ### 14.1 自动化中心 Tab
 
+P0 目标是“先看得见闭环状态”，不是一次到位做完整可视化系统。
+
 | Tab | 内容 |
 |-----|------|
 | 总览 | 保留；增加「元需求数量、阻塞数」卡片 |
@@ -1116,7 +1128,7 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 - **不得**仅用 `requirement_type == heartbeat` 过滤。
 - 条件：`title LIKE '[心跳]%'` **或** `acceptance_criteria LIKE '%heartbeat_id: <id>%'` **或** 显式 `origin_heartbeat` 字段（若后续添加）。
 
-### 14.4 设计目标与视觉语言（美观、大方、直观）
+### 14.4 设计目标与视觉语言（P2）
 
 目标不是“多图表”，而是让用户在 10 秒内回答三件事：**我们在哪、走过哪、下一步去哪**。
 
@@ -1216,25 +1228,27 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 ## 16. 实施阶段与任务拆解
 
-### Phase P0 — 基础可跑
+### Phase P0 — 基础可跑（后端闭环最小可用）
 
 - [ ] DB migration：`meta_*` 列与唯一索引
 - [ ] `MetaRequirementService` + 基础 API
-- [ ] 状态机 YAML：`github_issue_lifecycle`、`github_pr_lifecycle` 入库并绑定项目需求类型
-- [ ] `TriggerWithSourceAndParams` + Prompt 变量渲染
-- [ ] 管家心跳 v1（Prompt + 规则引擎骨架）
-- [ ] **航海日记**：`project_runbook_snapshots` + `project_voyage_entries`（§9.0.8）、触发时仅注入快照（§9.0.4）、每轮结束 upsert 快照并 append 条目、API（§9.0.8 第五节）
+- [ ] 状态机 YAML：`github_issue_lifecycle`、`github_pr_lifecycle` 入库并绑定相关需求类型
+- [ ] 管家心跳 v1：扫描 GitHub、upsert 元需求、做确定性迁移、创建项目需求、推进派发
+- [ ] **Runbook 最小快照**：`project_runbook_snapshots`、触发时仅注入快照（§9.0.4）、每轮结束 upsert 快照
 - [ ] 运行记录查询修正（§14.3）
+- [ ] 前端最小查看能力：元需求列表/详情 + Runbook 快照卡片
 
-### Phase P1 — 闭环加强
+### Phase P1 — 自动推进增强
 
 - [ ] Webhook：`pull_request` merged、`issues` labeled
+- [ ] `TriggerWithSourceAndParams` + Prompt 变量渲染
 - [ ] 专用心跳 `github_implement`、`github_pr_fix` 模板与场景注册
-- [ ] `source_meta_requirement_id` 与从 Issue 创建项目需求流程
+- [ ] PR/Issue 并发与去重控制
 
-### Phase P2 — 体验与指标
+### Phase P2 — 体验与观测增强
 
 - [ ] 元需求看板与详情页
+- [ ] `project_voyage_entries`
 - [ ] 航海日记页（快照卡 + 时间线 + 人工批注）与事件航线页（节点连线 + 关键路径 + 回放模式）
 - [ ] 新增 voyage 聚合接口：`overview` / `route` / `entries` / `entries/stream`，并完成前后端联调
 - [ ] 进度算法落地（全局进度、阶段进度、阻塞权重）及口径校验
@@ -1246,9 +1260,9 @@ func (s *HeartbeatTriggerService) TriggerWithSourceAndParams(
 
 | 层级 | 内容 |
 |------|------|
-| 单元 | `GitHubRuleEngine` 对 mock JSON；状态机 `Validate()` 必须通过 |
-| 集成 | Webhook payload → 期望 `TriggerTransition`；元需求唯一约束 |
-| E2E | 沙盒仓库：建 Issue → label → 创建 WR → 模拟 merge → 元需求 `completed` |
+| 单元 | 状态机 `Validate()` 必须通过；管家确定性迁移判定与项目需求创建映射 |
+| 集成 | P0：元需求唯一约束、Runbook 快照读写、项目需求创建与关联；P1：Webhook payload → 期望 `TriggerTransition` |
+| E2E | P0：沙盒仓库建 Issue → label → 创建 WR；P1：模拟 merge → 元需求 `completed` |
 
 ---
 
