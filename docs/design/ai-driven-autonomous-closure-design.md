@@ -594,6 +594,8 @@ states:
     triggers:
       - trigger: changes_pushed
         description: 有新 push
+      - trigger: assign_fix
+        description: 指派专用心跳修复
       - trigger: give_up
         description: 放弃并关闭（少见）
 
@@ -679,6 +681,12 @@ transitions:
   - { from: todo, to: closed, trigger: pr_closed }
   - { from: requirement_reviewing, to: closed, trigger: pr_closed }
   - { from: code_reviewing, to: closed, trigger: pr_closed }
+  - { from: waiting_changes, to: closed, trigger: pr_closed }
+  - { from: fixing, to: closed, trigger: pr_closed }
+  - { from: checking_merge_ready, to: closed, trigger: pr_closed }
+  - { from: adding_doc, to: closed, trigger: pr_closed }
+  - { from: adding_test, to: closed, trigger: pr_closed }
+  - { from: waiting_merge, to: closed, trigger: pr_closed }
 ```
 
 **可选简化**：若团队不需要独立「文档/测试」阶段，可将 `checking_merge_ready` 直接 `merge_ready` → `waiting_merge`，删除 `adding_doc` / `adding_test` 两状态。
