@@ -1,6 +1,7 @@
 import React from 'react';
-import { Card, Select, Space, Typography } from 'antd';
+import { Card, Select, Space, Typography, Tag } from 'antd';
 import type { Project } from '../../types/projectRequirement';
+import { detectPlatformType, getPlatformDisplayName } from '../../types/projectRequirement';
 
 const { Text } = Typography;
 
@@ -19,6 +20,7 @@ export const ProjectSelectorCard: React.FC<ProjectSelectorCardProps> = ({
   onChange,
 }) => {
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const platformType = selectedProject ? detectPlatformType(selectedProject.git_repo_url) : null;
 
   return (
     <Card size="small" style={{ marginBottom: 16 }}>
@@ -31,15 +33,29 @@ export const ProjectSelectorCard: React.FC<ProjectSelectorCardProps> = ({
             value={selectedProjectId || undefined}
             onChange={onChange}
             options={projects.map((project) => ({
-              label: project.name,
+              label: (
+                <Space>
+                  {project.name}
+                  <Tag color={detectPlatformType(project.git_repo_url) === 'github' ? 'blue' : 'green'} style={{ marginLeft: 8 }}>
+                    {getPlatformDisplayName(detectPlatformType(project.git_repo_url))}
+                  </Tag>
+                </Space>
+              ),
               value: project.id,
             }))}
           />
         </Space>
-        <Text type="secondary">
-          当前场景：
-          {selectedProject?.heartbeat_scenario_code || '未设置'}
-        </Text>
+        <Space>
+          {platformType && (
+            <Tag color={platformType === 'github' ? 'blue' : 'green'}>
+              {getPlatformDisplayName(platformType)}
+            </Tag>
+          )}
+          <Text type="secondary">
+            场景：
+            {selectedProject?.heartbeat_scenario_code || '未设置'}
+          </Text>
+        </Space>
       </Space>
     </Card>
   );

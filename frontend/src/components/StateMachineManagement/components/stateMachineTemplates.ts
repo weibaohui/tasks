@@ -215,7 +215,7 @@ states:
       2. git add <files>
       3. git commit -m "<描述做了什么>"
       4. git push -u origin <branch_name>
-      5. gh pr create --title "<标题>" --body "<描述>"
+      5. 使用平台命令创建 PR（GitHub: gh pr create, AtomGit: 对应命令）
 
       PR 创建成功 → 转换到 completed
       命令：taskmanager requirement transition --id {{requirement_id}} --trigger pr_submitted
@@ -293,8 +293,8 @@ states:
     ai_guide: |
       ## 子状态：获取 PR 信息
       执行步骤：
-      1. gh pr list --state open --mergeable non-conflicting --json number,title,author,body,url
-      2. 对每个 PR 获取详情：gh pr view <PR_NUMBER> --json title,body,state,url,author,headRefName,baseRefName
+      1. 使用平台命令获取 open PR 列表（GitHub: gh pr list, AtomGit: 对应命令）
+      2. 对每个 PR 获取详情：使用平台命令获取 PR 详情
       3. 查看 PR 描述和变更内容
 
       理解 PR 的背景和目的后 → 转换到 reviewing
@@ -306,11 +306,11 @@ states:
     ai_guide: |
       ## 子状态：审查 PR 代码
       执行步骤：
-      1. 查看变更文件：gh pr diff <PR_NUMBER>
+      1. 查看变更文件：使用平台命令获取 PR diff
       2. 检查代码质量和风格
       3. 验证是否遵循项目规范
-      4. 检查 CI 状态：gh pr checks <PR_NUMBER>
-      5. 查看评论：gh pr view <PR_NUMBER> --json comments
+      4. 检查 CI 状态：使用平台命令获取 PR checks 状态
+      5. 查看评论：使用平台命令获取 PR 评论
 
       **判断标准**：
       - CI 是否全部通过？
@@ -347,7 +347,7 @@ states:
     is_final: false
     ai_guide: |
       ## 子状态：写入 /lgtm 评论
-      执行步骤：gh pr comment <PR_NUMBER> --body "/lgtm"
+      执行步骤：使用平台命令在 PR 下评论 "/lgtm"
       评论成功后 → 转换到 deciding（再次检查是否可以直接合并）
       命令：taskmanager requirement transition --id {{requirement_id}} --trigger lgtm_posted
 
@@ -356,7 +356,7 @@ states:
     is_final: false
     ai_guide: |
       ## 子状态：合并 PR
-      执行步骤：gh pr merge <PR_NUMBER> --squash --delete-branch
+      执行步骤：使用平台命令合并 PR（GitHub: gh pr merge --squash --delete-branch, AtomGit: 对应命令）
       合并成功后 → 转换到 completed
       命令：taskmanager requirement transition --id {{requirement_id}} --trigger merged
 

@@ -126,7 +126,7 @@ func (s *HeartbeatScenarioService) PreviewApplyScenarioToProject(ctx context.Con
 		return nil, fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
 
-	toCreate, err := scenario.ApplyToProject(project.ID(), s.idGenerator)
+	toCreate, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply scenario: %w", err)
 	}
@@ -180,7 +180,7 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 	}
 
 	// 实例化场景心跳
-	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator)
+	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
 	if err != nil {
 		return fmt.Errorf("failed to apply scenario: %w", err)
 	}
