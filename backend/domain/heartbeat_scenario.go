@@ -28,10 +28,26 @@ func (id HeartbeatScenarioID) String() string {
 type HeartbeatScenarioItem struct {
 	Name            string
 	IntervalMinutes int
-	MDContent       string
+	MDContent       string // 默认内容（用于 GitHub 平台或向后兼容）
 	AgentCode       string
 	RequirementType string
 	SortOrder       int
+	// PlatformCommands 平台特定的模板内容，key 是 PlatformType
+	// 如果为空或不存在，则使用 MDContent
+	PlatformCommands map[PlatformType]string
+	// PlatformType 标识该心跳适用的平台类型，用于过滤和快速访问
+	PlatformType PlatformType
+}
+
+// GetMDContent 获取指定平台的模板内容
+func (i *HeartbeatScenarioItem) GetMDContent(platformType PlatformType) string {
+	if i.PlatformCommands != nil {
+		if content, ok := i.PlatformCommands[platformType]; ok {
+			return content
+		}
+	}
+	// 降级到默认内容
+	return i.MDContent
 }
 
 // HeartbeatScenario 心跳场景聚合根
@@ -109,7 +125,8 @@ func (s *HeartbeatScenario) SetIsBuiltIn(v bool) {
 }
 
 // ApplyToProject 将场景实例化为一组项目心跳
-func (s *HeartbeatScenario) ApplyToProject(projectID ProjectID, idGen IDGenerator) ([]*Heartbeat, error) {
+// platformType 参数指定使用哪个平台的模板内容
+func (s *HeartbeatScenario) ApplyToProject(projectID ProjectID, idGen IDGenerator, platformType PlatformType) ([]*Heartbeat, error) {
 	if s.id.String() == "" {
 		return nil, ErrHeartbeatScenarioIDRequired
 	}
@@ -118,12 +135,18 @@ func (s *HeartbeatScenario) ApplyToProject(projectID ProjectID, idGen IDGenerato
 	}
 	result := make([]*Heartbeat, 0, len(s.items))
 	for _, item := range s.items {
+		// 如果心跳指定了平台类型且与请求的平台不匹配，跳过
+		if item.PlatformType != "" && item.PlatformType != platformType {
+			continue
+		}
+		// 获取对应平台的模板内容
+		mdContent := item.GetMDContent(platformType)
 		hb, err := NewHeartbeat(
 			NewHeartbeatID(idGen.Generate()),
 			projectID,
 			s.name+" - "+item.Name,
 			item.IntervalMinutes,
-			item.MDContent,
+			mdContent,
 			item.AgentCode,
 			item.RequirementType,
 		)
