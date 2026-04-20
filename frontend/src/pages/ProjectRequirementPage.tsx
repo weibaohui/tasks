@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Agent } from '../types/agent';
 import type { Channel } from '../types/channel';
 import type { CreateProjectRequest, CreateRequirementRequest, Project, Requirement, ProgressData, TodoItem } from '../types/projectRequirement';
+import { detectPlatformType, getPlatformDisplayName } from '../types/projectRequirement';
 import { TraceViewer } from '../components/TraceViewer';
 import { RequirementStatusStats } from '../components/RequirementStatusStats';
 import { RequirementKanban } from '../components/RequirementKanban';
@@ -870,7 +871,7 @@ export const ProjectRequirementPage: React.FC = () => {
                 ]}
               >
                 <Card.Meta
-                  title={project.name}
+                  title={<Space>{project.name}<Tag color={detectPlatformType(project.git_repo_url) === 'github' ? 'blue' : 'green'} style={{ marginLeft: 8 }}>{getPlatformDisplayName(detectPlatformType(project.git_repo_url))}</Tag></Space>}
                   description={
                     <div>
                       <div style={{ fontSize: 12, color: '#999', marginBottom: 8, wordBreak: 'break-all' }}>
