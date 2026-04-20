@@ -43,7 +43,7 @@ const (
 )
 
 // checkAndUpdateWebhookURLs 检查所有启用的 webhook，更新过期的 webhook URL
-func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, webhookConfigRepo *_persistence.SQLiteGitHubWebhookConfigRepository, logger *zap.Logger) {
+func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, webhookAMC *application.WebhookAMCManager, webhookConfigRepo *_persistence.SQLiteGitHubWebhookConfigRepository, projectRepo *_persistence.SQLiteProjectRepository, logger *zap.Logger) {
 	ctx := context.Background()
 	configs, err := webhookConfigRepo.FindAllEnabled(ctx)
 	if err != nil {
@@ -52,37 +52,91 @@ func checkAndUpdateWebhookURLs(webhookGitHub *application.WebhookGitHubManager, 
 	}
 
 	for _, config := range configs {
-		needsUpdate, currentURL, err := webhookGitHub.CheckAndUpdateWebhook(ctx, config.Repo())
+		// 获取项目信息，判断平台类型
+		project, err := projectRepo.FindByID(ctx, config.ProjectID())
 		if err != nil {
-			logger.Warn("failed to check webhook",
-				zap.String("repo", config.Repo()),
+			logger.Warn("failed to find project for webhook config",
+				zap.String("project_id", config.ProjectID().String()),
 				zap.Error(err))
 			continue
 		}
+		if project == nil {
+			logger.Warn("project not found for webhook config",
+				zap.String("project_id", config.ProjectID().String()))
+			continue
+		}
 
-		if needsUpdate {
-			logger.Info("webhook URL mismatch, updating",
-				zap.String("repo", config.Repo()),
-				zap.String("current_url", currentURL),
-				zap.String("expected_url", config.WebhookURL()))
+		// 根据平台类型选择 webhook manager
+		platformType := project.PlatformType()
+		repoPath := application.NormalizeRepo(config.Repo())
 
-			repoPath := application.NormalizeRepo(config.Repo())
+		var needsUpdate bool
+		var currentURL string
 
-			webhookID, err := webhookGitHub.FindExistingWebhook(repoPath)
-			if err != nil || webhookID == 0 {
-				logger.Warn("webhook not found, skipping update",
-					zap.String("repo", config.Repo()))
-				continue
-			}
-
-			if err := webhookGitHub.UpdateWebhookURL(repoPath, webhookID, config.WebhookURL()); err != nil {
-				logger.Warn("failed to update webhook URL",
+		if platformType == domain.PlatformTypeAtomGit {
+			// AtomGit 平台，使用 AMC
+			needsUpdate, currentURL, err = webhookAMC.CheckAndUpdateWebhook(ctx, config.Repo())
+			if err != nil {
+				logger.Warn("failed to check AMC webhook",
 					zap.String("repo", config.Repo()),
 					zap.Error(err))
 				continue
 			}
-			logger.Info("webhook URL updated successfully",
-				zap.String("repo", config.Repo()))
+
+			if needsUpdate {
+				logger.Info("AMC webhook URL mismatch, updating",
+					zap.String("repo", config.Repo()),
+					zap.String("current_url", currentURL),
+					zap.String("expected_url", config.WebhookURL()))
+
+				webhookID, err := webhookAMC.FindExistingWebhook(repoPath)
+				if err != nil || webhookID == "" {
+					logger.Warn("AMC webhook not found, skipping update",
+						zap.String("repo", config.Repo()))
+					continue
+				}
+
+				if err := webhookAMC.UpdateWebhookURL(repoPath, webhookID, config.WebhookURL()); err != nil {
+					logger.Warn("failed to update AMC webhook URL",
+						zap.String("repo", config.Repo()),
+						zap.Error(err))
+					continue
+				}
+				logger.Info("AMC webhook URL updated successfully",
+					zap.String("repo", config.Repo()))
+			}
+		} else {
+			// GitHub 平台，使用 gh
+			needsUpdate, currentURL, err = webhookGitHub.CheckAndUpdateWebhook(ctx, config.Repo())
+			if err != nil {
+				logger.Warn("failed to check GitHub webhook",
+					zap.String("repo", config.Repo()),
+					zap.Error(err))
+				continue
+			}
+
+			if needsUpdate {
+				logger.Info("webhook URL mismatch, updating",
+					zap.String("repo", config.Repo()),
+					zap.String("current_url", currentURL),
+					zap.String("expected_url", config.WebhookURL()))
+
+				webhookID, err := webhookGitHub.FindExistingWebhook(repoPath)
+				if err != nil || webhookID == 0 {
+					logger.Warn("webhook not found, skipping update",
+						zap.String("repo", config.Repo()))
+					continue
+				}
+
+				if err := webhookGitHub.UpdateWebhookURL(repoPath, webhookID, config.WebhookURL()); err != nil {
+					logger.Warn("failed to update webhook URL",
+						zap.String("repo", config.Repo()),
+						zap.Error(err))
+					continue
+				}
+				logger.Info("webhook URL updated successfully",
+					zap.String("repo", config.Repo()))
+			}
 		}
 	}
 }
@@ -349,6 +403,7 @@ func main() {
 		logger.Warn("Public URL not configured, using BaseURL for webhooks. GitHub webhooks require a public URL to work properly.")
 	}
 	webhookGitHub := application.NewWebhookGitHubManager(webhookURL)
+	webhookAMC := application.NewWebhookAMCManager(webhookURL)
 	githubWebhookService := application.NewGitHubWebhookService(
 		webhookConfigRepo,
 		webhookEventLogRepo,
@@ -358,10 +413,10 @@ func main() {
 		idGenerator,
 	)
 	webhookHandler := httpHandler.NewWebhookHandler(githubWebhookService)
-	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookGitHub, authHandler)
+	githubWebhookHandler := httpHandler.NewGitHubWebhookHandler(githubWebhookService, webhookGitHub, webhookAMC, projectRepo, authHandler)
 
 	// 检查所有启用的 webhook 配置，更新过期的 webhook URL
-	go checkAndUpdateWebhookURLs(webhookGitHub, webhookConfigRepo, logger)
+	go checkAndUpdateWebhookURLs(webhookGitHub, webhookAMC, webhookConfigRepo, projectRepo, logger)
 
 	ginEngine := httpHandler.SetupRoutesWithManagement(
 		userHandler, agentHandler, providerHandler,
