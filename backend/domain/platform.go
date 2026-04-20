@@ -27,8 +27,8 @@ func (t PlatformType) IsValid() bool {
 func DetectPlatformType(repo string) PlatformType {
 	repo = strings.ToLower(repo)
 
-	// AtomGit 优先检测（更具体）
-	if strings.Contains(repo, "atomgit.com") {
+	// AtomGit (gitcode.com) 优先检测
+	if strings.Contains(repo, "gitcode.com") {
 		return PlatformTypeAtomGit
 	}
 

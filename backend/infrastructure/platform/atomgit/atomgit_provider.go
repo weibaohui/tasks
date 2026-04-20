@@ -25,13 +25,15 @@ func (p *Provider) PlatformType() domain.PlatformType {
 }
 
 // NormalizeRepo 将仓库URL或路径转换为标准格式 (owner/repo)
-// AtomGit 仓库格式可能是 git@atomgit.com:owner/repo 或 https://atomgit.com/owner/repo
+// AtomGit 仓库格式可能是：
+//   - git@gitcode.com:owner/repo
+//   - https://gitcode.com/owner/repo
 func (p *Provider) NormalizeRepo(repo string) string {
-	if strings.HasPrefix(repo, "git@atomgit.com:") {
-		repo = strings.TrimPrefix(repo, "git@atomgit.com:")
+	if strings.HasPrefix(repo, "git@gitcode.com:") {
+		repo = strings.TrimPrefix(repo, "git@gitcode.com:")
 	}
-	if strings.HasPrefix(repo, "https://atomgit.com/") {
-		repo = strings.TrimPrefix(repo, "https://atomgit.com/")
+	if strings.HasPrefix(repo, "https://gitcode.com/") {
+		repo = strings.TrimPrefix(repo, "https://gitcode.com/")
 	}
 	return strings.TrimSuffix(repo, ".git")
 }
