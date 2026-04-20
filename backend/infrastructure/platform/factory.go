@@ -28,3 +28,19 @@ func MustNewProvider(platformType domain.PlatformType) domain.PlatformProvider {
 	}
 	return provider
 }
+
+// NewProviderByRepo 根据仓库 URL 自动检测平台类型并创建对应的 Provider
+func NewProviderByRepo(repo string) (domain.PlatformProvider, error) {
+	platformType := domain.DetectPlatformType(repo)
+	return NewProvider(platformType)
+}
+
+// MustNewProviderByRepo 根据仓库 URL 自动检测平台类型并创建对应的 Provider
+// 如果不支持则 panic
+func MustNewProviderByRepo(repo string) domain.PlatformProvider {
+	provider, err := NewProviderByRepo(repo)
+	if err != nil {
+		panic(err)
+	}
+	return provider
+}

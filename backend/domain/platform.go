@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,24 @@ func (t PlatformType) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+// DetectPlatformType 根据仓库 URL 自动检测平台类型
+func DetectPlatformType(repo string) PlatformType {
+	repo = strings.ToLower(repo)
+
+	// AtomGit 优先检测（更具体）
+	if strings.Contains(repo, "atomgit.com") {
+		return PlatformTypeAtomGit
+	}
+
+	// GitHub 检测
+	if strings.Contains(repo, "github.com") {
+		return PlatformTypeGitHub
+	}
+
+	// 默认返回 GitHub（向后兼容）
+	return PlatformTypeGitHub
 }
 
 // PlatformProvider 平台操作接口

@@ -72,6 +72,7 @@ func NewProject(id ProjectID, name, gitRepoURL, defaultBranch string, initSteps 
 func (p *Project) ID() ProjectID                 { return p.id }
 func (p *Project) Name() string                  { return p.name }
 func (p *Project) GitRepoURL() string            { return p.gitRepoURL }
+func (p *Project) PlatformType() PlatformType     { return DetectPlatformType(p.gitRepoURL) }
 func (p *Project) DefaultBranch() string         { return p.defaultBranch }
 func (p *Project) InitSteps() []string           { return append([]string(nil), p.initSteps...) }
 func (p *Project) DispatchChannelCode() string   { return p.dispatchChannelCode }
