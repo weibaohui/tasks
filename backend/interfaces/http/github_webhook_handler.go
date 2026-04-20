@@ -16,13 +16,17 @@ import (
 type GitHubWebhookHandler struct {
 	webhookService *application.GitHubWebhookService
 	webhookGitHub  *application.WebhookGitHubManager
+	webhookAMC     *application.WebhookAMCManager
+	projectRepo    domain.ProjectRepository
 	authHandler    *AuthHandler
 }
 
-func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, webhookGitHub *application.WebhookGitHubManager, authHandler *AuthHandler) *GitHubWebhookHandler {
+func NewGitHubWebhookHandler(webhookService *application.GitHubWebhookService, webhookGitHub *application.WebhookGitHubManager, webhookAMC *application.WebhookAMCManager, projectRepo domain.ProjectRepository, authHandler *AuthHandler) *GitHubWebhookHandler {
 	return &GitHubWebhookHandler{
 		webhookService: webhookService,
 		webhookGitHub:  webhookGitHub,
+		webhookAMC:     webhookAMC,
+		projectRepo:    projectRepo,
 		authHandler:    authHandler,
 	}
 }
@@ -117,7 +121,7 @@ func (h *GitHubWebhookHandler) DeleteConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
-// EnableWebhook 启用 webhook（创建 GitHub webhook）
+// EnableWebhook 启用 webhook（根据平台类型创建 GitHub 或 AMC webhook）
 func (h *GitHubWebhookHandler) EnableWebhook(c *gin.Context) {
 	id := c.Param("id")
 	config, err := h.webhookService.GetConfig(c.Request.Context(), id)
@@ -126,8 +130,28 @@ func (h *GitHubWebhookHandler) EnableWebhook(c *gin.Context) {
 		return
 	}
 
-	// 创建 GitHub webhook 并获取 URL
-	webhookURL, err := h.webhookGitHub.CreateWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo())
+	// 获取项目信息，判断平台类型
+	project, err := h.projectRepo.FindByID(c.Request.Context(), config.ProjectID())
+	if err != nil || project == nil {
+		log.Printf("[WEBHOOK] EnableWebhook: project lookup failed, err=%v, project=%v, projectID=%s", err, project, config.ProjectID())
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project not found"})
+		return
+	}
+
+	platformType := project.PlatformType()
+	log.Printf("[WEBHOOK] EnableWebhook: configID=%s, projectID=%s, repo=%s, gitURL=%s, platform=%s, webhookAMC=%v",
+		config.ID(), config.ProjectID(), config.Repo(), project.GitRepoURL(), platformType, h.webhookAMC)
+	var webhookURL string
+
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		// AtomGit 平台，使用 AMC 创建 webhook
+		webhookURL, err = h.webhookAMC.CreateWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo())
+	} else {
+		// GitHub 平台，使用 gh 创建 webhook
+		log.Printf("[WEBHOOK] EnableWebhook: using GitHub path for repo=%s", config.Repo())
+		webhookURL, err = h.webhookGitHub.CreateWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo())
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to create webhook: " + err.Error()})
 		return
@@ -143,7 +167,7 @@ func (h *GitHubWebhookHandler) EnableWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, configToMap(config))
 }
 
-// DisableWebhook 停用 webhook（删除 GitHub webhook）
+// DisableWebhook 停用 webhook（根据平台类型删除 GitHub 或 AMC webhook）
 func (h *GitHubWebhookHandler) DisableWebhook(c *gin.Context) {
 	id := c.Param("id")
 	config, err := h.webhookService.GetConfig(c.Request.Context(), id)
@@ -152,9 +176,25 @@ func (h *GitHubWebhookHandler) DisableWebhook(c *gin.Context) {
 		return
 	}
 
-	// 删除 GitHub webhook
-	if err := h.webhookGitHub.DeleteWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
-		log.Printf("[WEBHOOK] failed to delete webhook: %v", err)
+	// 获取项目信息，判断平台类型
+	project, err := h.projectRepo.FindByID(c.Request.Context(), config.ProjectID())
+	if err != nil || project == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project not found"})
+		return
+	}
+
+	platformType := project.PlatformType()
+
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		// AtomGit 平台，使用 AMC 删除 webhook
+		if err := h.webhookAMC.DeleteWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
+			log.Printf("[WEBHOOK] failed to delete AMC webhook: %v", err)
+		}
+	} else {
+		// GitHub 平台，使用 gh 删除 webhook
+		if err := h.webhookGitHub.DeleteWebhook(c.Request.Context(), config.ID().String(), config.ProjectID().String(), config.Repo()); err != nil {
+			log.Printf("[WEBHOOK] failed to delete webhook: %v", err)
+		}
 	}
 
 	// 更新配置状态，清除 webhook URL
@@ -176,8 +216,24 @@ func (h *GitHubWebhookHandler) GetWebhookStatus(c *gin.Context) {
 		return
 	}
 
-	// 检查 GitHub 上 webhook 是否存在
-	exists, _ := h.webhookGitHub.CheckWebhookExists(c.Request.Context(), config.Repo())
+	// 获取项目信息，判断平台类型
+	project, err := h.projectRepo.FindByID(c.Request.Context(), config.ProjectID())
+	if err != nil || project == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project not found"})
+		return
+	}
+
+	platformType := project.PlatformType()
+	var exists bool
+
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		// AtomGit 平台，使用 AMC 检查 webhook
+		exists, _ = h.webhookAMC.CheckWebhookExists(c.Request.Context(), config.Repo())
+	} else {
+		// GitHub 平台，使用 gh 检查 webhook
+		exists, _ = h.webhookGitHub.CheckWebhookExists(c.Request.Context(), config.Repo())
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"enabled":     config.Enabled(),
 		"webhook_url": config.WebhookURL(),
@@ -199,7 +255,25 @@ func (h *GitHubWebhookHandler) CheckWebhookURL(c *gin.Context) {
 		return
 	}
 
-	needsUpdate, currentURL, err := h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	// 获取项目信息，判断平台类型
+	project, err := h.projectRepo.FindByID(c.Request.Context(), config.ProjectID())
+	if err != nil || project == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project not found"})
+		return
+	}
+
+	platformType := project.PlatformType()
+	var needsUpdate bool
+	var currentURL string
+
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		// AtomGit 平台，使用 AMC 检查 webhook
+		needsUpdate, currentURL, err = h.webhookAMC.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	} else {
+		// GitHub 平台，使用 gh 检查 webhook
+		needsUpdate, currentURL, err = h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to check webhook: " + err.Error()})
 		return
@@ -226,8 +300,26 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 		return
 	}
 
-	// 检查是否需要更新
-	needsUpdate, currentURL, err := h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	// 获取项目信息，判断平台类型
+	project, err := h.projectRepo.FindByID(c.Request.Context(), config.ProjectID())
+	if err != nil || project == nil {
+		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "project not found"})
+		return
+	}
+
+	platformType := project.PlatformType()
+	repoPath := application.NormalizeRepo(config.Repo())
+	var needsUpdate bool
+	var currentURL string
+
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		// AtomGit 平台，使用 AMC 检查 webhook
+		needsUpdate, currentURL, err = h.webhookAMC.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	} else {
+		// GitHub 平台，使用 gh 检查 webhook
+		needsUpdate, currentURL, err = h.webhookGitHub.CheckAndUpdateWebhook(c.Request.Context(), config.Repo())
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to check webhook: " + err.Error()})
 		return
@@ -242,17 +334,27 @@ func (h *GitHubWebhookHandler) UpdateWebhookURL(c *gin.Context) {
 	}
 
 	// 需要更新，先获取 webhook ID
-	repoPath := application.NormalizeRepo(config.Repo())
+	var webhookID interface{}
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		webhookID, err = h.webhookAMC.FindExistingWebhook(repoPath)
+	} else {
+		webhookID, err = h.webhookGitHub.FindExistingWebhook(repoPath)
+	}
 
-	webhookID, err := h.webhookGitHub.FindExistingWebhook(repoPath)
-	if err != nil || webhookID == 0 {
+	if err != nil || webhookID == nil || webhookID == "" || webhookID == 0 {
 		c.JSON(http.StatusNotFound, HTTPError{Code: http.StatusNotFound, Message: "webhook not found, please enable again"})
 		return
 	}
 
 	// 更新 webhook URL
 	newURL := config.WebhookURL()
-	if err := h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID, newURL); err != nil {
+	if platformType == domain.PlatformTypeAtomGit && h.webhookAMC != nil {
+		err = h.webhookAMC.UpdateWebhookURL(repoPath, webhookID.(string), newURL)
+	} else {
+		err = h.webhookGitHub.UpdateWebhookURL(repoPath, webhookID.(int64), newURL)
+	}
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "failed to update webhook: " + err.Error()})
 		return
 	}
