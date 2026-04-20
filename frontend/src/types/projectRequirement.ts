@@ -13,6 +13,35 @@ export interface Project {
   updated_at: number;
 }
 
+/**
+ * 根据 git_repo_url 检测平台类型
+ */
+export function detectPlatformType(gitRepoUrl: string): 'github' | 'atom_git' {
+  const url = gitRepoUrl.toLowerCase();
+  if (url.includes('gitcode.com')) {
+    return 'atom_git';
+  }
+  if (url.includes('github.com')) {
+    return 'github';
+  }
+  // 默认返回 github
+  return 'github';
+}
+
+/**
+ * 平台类型显示名称
+ */
+export function getPlatformDisplayName(platformType: 'github' | 'atom_git'): string {
+  switch (platformType) {
+    case 'github':
+      return 'GitHub';
+    case 'atom_git':
+      return 'AtomGit';
+    default:
+      return platformType;
+  }
+}
+
 export interface RequirementAgentInfo {
   id?: string;
   agent_code?: string;
