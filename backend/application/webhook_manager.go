@@ -80,12 +80,15 @@ func (m *WebhookManager) SetDefaultPlatform(platformType domain.PlatformType) {
 }
 
 // BuildWebhookURL 构建 webhook URL
-func (m *WebhookManager) BuildWebhookURL(repo string, platformType domain.PlatformType) string {
+func (m *WebhookManager) BuildWebhookURL(repo string, platformType domain.PlatformType) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	provider := m.providers[platformType]
+	provider, ok := m.providers[platformType]
+	if !ok {
+		return "", fmt.Errorf("unsupported platform: %s", platformType)
+	}
 	repoPath := provider.NormalizeRepo(repo)
-	return fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath)
+	return fmt.Sprintf("%s/api/v1/webhook/repos/%s", m.serverURL, repoPath), nil
 }
 
 // CreateWebhook 创建 webhook
@@ -96,12 +99,15 @@ func (m *WebhookManager) CreateWebhook(ctx context.Context, configID, projectID,
 	}
 
 	repoPath := provider.NormalizeRepo(repo)
-	webhookURL := m.BuildWebhookURL(repo, platformType)
+	webhookURL, err := m.BuildWebhookURL(repo, platformType)
+	if err != nil {
+		return "", err
+	}
 
 	// 先检查是否已有 webhook
 	existingID, err := provider.FindExistingWebhook(ctx, repoPath)
 	if err != nil {
-		log.Printf("[WEBHOOK] failed to check existing webhooks: %v", err)
+		return "", fmt.Errorf("failed to check existing webhooks: %w", err)
 	}
 
 	if existingID > 0 {
@@ -177,7 +183,10 @@ func (m *WebhookManager) CheckAndUpdateWebhook(ctx context.Context, repo string,
 	}
 
 	repoPath := provider.NormalizeRepo(repo)
-	expectedURL := m.BuildWebhookURL(repo, platformType)
+	expectedURL, err := m.BuildWebhookURL(repo, platformType)
+	if err != nil {
+		return false, "", err
+	}
 
 	webhookID, err := provider.FindExistingWebhook(ctx, repoPath)
 	if err != nil {
@@ -212,7 +221,10 @@ func (m *WebhookManager) UpdateWebhookURL(ctx context.Context, repo string, plat
 	}
 
 	repoPath := provider.NormalizeRepo(repo)
-	expectedURL := m.BuildWebhookURL(repo, platformType)
+	expectedURL, err := m.BuildWebhookURL(repo, platformType)
+	if err != nil {
+		return err
+	}
 
 	webhookID, err := provider.FindExistingWebhook(ctx, repoPath)
 	if err != nil {

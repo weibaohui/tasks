@@ -126,7 +126,7 @@ func (p *Provider) UpdateWebhookURL(ctx context.Context, repo string, webhookID 
 	return nil
 }
 
-// FindExistingWebhook 查找是否已存在 webhook，返回 webhook ID（未找到返回0）
+// FindExistingWebhook 查找是否已存在 webhook，返回 webhook ID（未找到返回0，错误返回 error）
 func (p *Provider) FindExistingWebhook(ctx context.Context, repo string) (int64, error) {
 	cmd := ExecCommand("gh", "api", fmt.Sprintf("repos/%s/hooks", repo), "--jq", "[.[] | select(.name == \"web\")] | .[0].id")
 	var out bytes.Buffer
@@ -136,7 +136,7 @@ func (p *Provider) FindExistingWebhook(ctx context.Context, repo string) (int64,
 
 	err := cmd.Run()
 	if err != nil {
-		return 0, nil
+		return 0, fmt.Errorf("failed to find existing webhook: %w (stderr: %s)", err, stderr.String())
 	}
 
 	idStr := strings.TrimSpace(out.String())

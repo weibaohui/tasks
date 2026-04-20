@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -10,7 +11,7 @@ import (
 type PlatformType string
 
 const (
-	PlatformTypeGitHub  PlatformType = "github"
+	PlatformTypeGitHub   PlatformType = "github"
 	PlatformTypeAtomGit PlatformType = "atom_git"
 )
 
@@ -23,21 +24,41 @@ func (t PlatformType) IsValid() bool {
 	}
 }
 
+// extractHost 从仓库 URL 中提取 host
+func extractHost(repo string) string {
+	repo = strings.TrimSpace(repo)
+	// 尝试解析为 URL
+	if strings.HasPrefix(repo, "git@") {
+		// SSH 格式 git@host:owner/repo
+		afterAt := strings.TrimPrefix(repo, "git@")
+		if colonIdx := strings.Index(afterAt, ":"); colonIdx != -1 {
+			return strings.ToLower(afterAt[:colonIdx])
+		}
+	} else if strings.HasPrefix(repo, "http") || strings.HasPrefix(repo, "https") {
+		// HTTP/HTTPS 格式
+		if u, err := url.Parse(repo); err == nil {
+			return strings.ToLower(u.Host)
+		}
+	}
+	// 降级处理：直接返回原始字符串
+	return strings.ToLower(repo)
+}
+
 // DetectPlatformType 根据仓库 URL 自动检测平台类型
 func DetectPlatformType(repo string) PlatformType {
-	repo = strings.ToLower(repo)
+	host := extractHost(repo)
 
-	// AtomGit (gitcode.com) 优先检测
-	if strings.Contains(repo, "gitcode.com") {
+	// AtomGit (gitcode.com) 精确匹配
+	if host == "gitcode.com" || strings.HasSuffix(host, ".gitcode.com") {
 		return PlatformTypeAtomGit
 	}
 
-	// GitHub 检测
-	if strings.Contains(repo, "github.com") {
+	// GitHub 精确匹配
+	if host == "github.com" || strings.HasSuffix(host, ".github.com") {
 		return PlatformTypeGitHub
 	}
 
-	// 默认返回 GitHub（向后兼容）
+	// 无法识别，默认返回 GitHub（向后兼容）
 	return PlatformTypeGitHub
 }
 
