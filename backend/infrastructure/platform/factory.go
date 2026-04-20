@@ -3,9 +3,9 @@ package platform
 import (
 	"fmt"
 
-	"taskmanager/backend/domain"
-	"taskmanager/backend/infrastructure/platform/atomgit"
-	"taskmanager/backend/infrastructure/platform/github"
+	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/platform/atomgit"
+	"github.com/weibh/taskmanager/infrastructure/platform/github"
 )
 
 // NewProvider 根据平台类型创建对应的 Provider

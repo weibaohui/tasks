@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"taskmanager/backend/domain"
+	"github.com/weibh/taskmanager/domain"
 )
 
 // Provider AtomGit 平台 Provider 实现

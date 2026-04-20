@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"taskmanager/backend/domain"
+	"github.com/weibh/taskmanager/domain"
 )
 
 // ExecCommand 用于创建执行命令，测试时可替换

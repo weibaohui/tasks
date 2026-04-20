@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"taskmanager/backend/domain"
-	"taskmanager/backend/infrastructure/platform"
+	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/platform"
 )
 
 // WebhookManager 管理 Webhook 的创建和删除（支持多平台）
