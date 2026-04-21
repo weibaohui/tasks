@@ -22,7 +22,7 @@ func NewWebhookHandler(webhookService *application.GitHubWebhookService) *Webhoo
 	}
 }
 
-// HandleWebhook 处理 GitHub webhook 事件（无需认证）
+// HandleWebhook 处理 GitHub/ATG webhook 事件（无需认证）
 func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
@@ -33,11 +33,8 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 	payload := string(body)
 
-	// 获取事件类型
-	eventType := c.GetHeader("X-GitHub-Event")
-	if eventType == "" {
-		eventType = "unknown"
-	}
+	// 获取事件类型（支持 GitHub 和 ATG/AtomGit）
+	eventType := getEventType(c)
 
 	// 解析 payload 获取 repo 信息来确定项目
 	var payloadData map[string]interface{}
@@ -130,11 +127,8 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	}
 	payload := string(body)
 
-	// 获取事件类型
-	eventType := c.GetHeader("X-GitHub-Event")
-	if eventType == "" {
-		eventType = "unknown"
-	}
+	// 获取事件类型（支持 GitHub 和 ATG/AtomGit）
+	eventType := getEventType(c)
 
 	log.Printf("[WEBHOOK] received event %s for repo %s", eventType, repoName)
 
@@ -196,4 +190,37 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 		"repo":       repoName,
 		"project_id": matchedConfig.ProjectID().String(),
 	})
+}
+
+// getEventType 获取事件类型，支持 GitHub 和 ATG/AtomGit 的 webhook
+func getEventType(c *gin.Context) string {
+	// 尝试 GitHub header
+	if eventType := c.GetHeader("X-GitHub-Event"); eventType != "" {
+		return eventType
+	}
+	// 尝试 ATG/AtomGit header
+	if eventType := c.GetHeader("X-GitCode-Event"); eventType != "" {
+		return normalizeATGEventType(eventType)
+	}
+	return "unknown"
+}
+
+// normalizeATGEventType 将 ATG 事件类型映射为内部统一格式
+func normalizeATGEventType(eventType string) string {
+	switch eventType {
+	case "Push Hook", "push":
+		return "push_events"
+	case "Tag Push Hook", "tag_push":
+		return "tag_push_events"
+	case "Issues Hook", "issues":
+		return "issues_events"
+	case "Issue Comment Hook", "issue_comment":
+		return "note_events"
+	case "Merge Request Hook", "merge_request":
+		return "merge_requests_events"
+	case "Note Hook", "note":
+		return "note_events"
+	default:
+		return eventType
+	}
 }
