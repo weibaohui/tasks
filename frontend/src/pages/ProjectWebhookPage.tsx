@@ -91,11 +91,13 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const scopedRepo = useMemo(() => normalizeGitHubRepo(selectedProject?.git_repo_url || ''), [selectedProject?.git_repo_url]);
   const isProjectScoped = !!selectedProject?.id;
 
-  // 当前项目平台类型
-  const platformType = useMemo(
-    () => (selectedProject ? detectPlatformType(selectedProject.git_repo_url) : null),
-    [selectedProject?.git_repo_url]
-  );
+  // 当前项目平台类型 - 从 selectedConfig 派生（避免 prop 滞后问题）
+  const platformType = useMemo(() => {
+    if (!selectedConfig) return null;
+    const project = projects.find((p) => p.id === selectedConfig.project_id);
+    if (!project) return null;
+    return detectPlatformType(project.git_repo_url);
+  }, [selectedConfig?.project_id, projects]);
 
   // 绑定modal中选中事件类型state
   const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
