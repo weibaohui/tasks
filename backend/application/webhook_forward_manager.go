@@ -303,14 +303,14 @@ func (m *WebhookGitHubManager) getWebhookURL(repo string, webhookID int64) (stri
 type WebhookAMCManager struct {
 	mu        sync.RWMutex
 	serverURL string // public URL for webhook
-	amcPath   string // amc 命令路径
+	atgPath   string // atg 命令路径
 }
 
 // NewWebhookAMCManager 创建 WebhookAMCManager
 func NewWebhookAMCManager(serverURL string) *WebhookAMCManager {
 	return &WebhookAMCManager{
 		serverURL: strings.TrimSuffix(serverURL, "/api/v1"),
-		amcPath:   "/Users/weibh/bin/amc", // 默认路径
+		atgPath:   "/Users/weibh/bin/atg", // 默认路径
 	}
 }
 
@@ -408,7 +408,7 @@ func (m *WebhookAMCManager) CheckWebhookExists(ctx context.Context, repo string)
 
 // FindExistingWebhook 查找是否已存在 webhook
 func (m *WebhookAMCManager) FindExistingWebhook(repo string) (string, error) {
-	cmd := ExecCommand(m.amcPath, "hook", "list", "-R", repo)
+	cmd := ExecCommand(m.atgPath, "hook", "list", "-R", repo)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -445,7 +445,7 @@ func (m *WebhookAMCManager) FindExistingWebhook(repo string) (string, error) {
 
 // createWebhook 创建 AMC webhook
 func (m *WebhookAMCManager) createWebhook(repo, url string) (string, error) {
-	cmd := ExecCommand(m.amcPath, "hook", "create", "-R", repo, "--url", url, "--events", "*")
+	cmd := ExecCommand(m.atgPath, "hook", "create", "-R", repo, "--url", url, "--events", "*")
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -461,7 +461,7 @@ func (m *WebhookAMCManager) createWebhook(repo, url string) (string, error) {
 
 // updateWebhookURL 更新 webhook 的 URL
 func (m *WebhookAMCManager) updateWebhookURL(repo string, webhookID string, newURL string) error {
-	cmd := ExecCommand(m.amcPath, "hook", "update", webhookID, "-R", repo, "--url", newURL)
+	cmd := ExecCommand(m.atgPath, "hook", "update", webhookID, "-R", repo, "--url", newURL)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -475,7 +475,7 @@ func (m *WebhookAMCManager) updateWebhookURL(repo string, webhookID string, newU
 
 // deleteWebhook 删除 AMC webhook
 func (m *WebhookAMCManager) deleteWebhook(repo string, webhookID string) error {
-	cmd := ExecCommand(m.amcPath, "hook", "delete", webhookID, "-R", repo)
+	cmd := ExecCommand(m.atgPath, "hook", "delete", webhookID, "-R", repo)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -525,7 +525,7 @@ func (m *WebhookAMCManager) UpdateWebhookURL(repo string, webhookID string, newU
 
 // getWebhookURL 获取 webhook 的当前 URL
 func (m *WebhookAMCManager) getWebhookURL(repo string, webhookID string) (string, error) {
-	cmd := ExecCommand(m.amcPath, "hook", "view", webhookID, "-R", repo)
+	cmd := ExecCommand(m.atgPath, "hook", "view", webhookID, "-R", repo)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out
