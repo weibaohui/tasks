@@ -310,7 +310,7 @@ type WebhookAMCManager struct {
 func NewWebhookAMCManager(serverURL string) *WebhookAMCManager {
 	return &WebhookAMCManager{
 		serverURL: strings.TrimSuffix(serverURL, "/api/v1"),
-		atgPath:   "/Users/weibh/bin/atg", // 默认路径
+		atgPath:   "atg", // 从 PATH 中查找
 	}
 }
 
