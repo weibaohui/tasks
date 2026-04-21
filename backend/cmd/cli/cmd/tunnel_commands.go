@@ -306,16 +306,12 @@ func stopHostcTunnel(force bool) {
 }
 
 func extractHostcURL(line string) string {
-	// hostc 可能输出的 URL 格式类似: https://xxx.hostc.io 或直接显示 URL
-	if strings.Contains(line, "https://") && strings.Contains(line, ".trycloudflare.com") {
-		return cloudflareTunnelURLRegex.FindString(line)
-	}
-	// hostc 可能有其他输出格式，尝试通用匹配
-	if strings.Contains(line, "->") {
-		parts := strings.Split(line, "->")
+	// hostc 输出格式: "Public URL: https://xxx.hostc.dev" - 优先匹配这个
+	if strings.Contains(line, "Public URL:") {
+		parts := strings.Split(line, "Public URL:")
 		if len(parts) >= 2 {
 			url := strings.TrimSpace(parts[len(parts)-1])
-			if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") {
+			if strings.HasPrefix(url, "https://") {
 				return strings.Fields(url)[0]
 			}
 		}
