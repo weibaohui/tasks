@@ -84,11 +84,17 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 		heartbeatID := binding.HeartbeatID().String()
 		log.Printf("[WEBHOOK] triggering heartbeat %s for event %s", heartbeatID, eventType)
 
-		if _, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceWebhook); err != nil {
+		requirement, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceWebhook)
+		if err != nil {
 			log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
 			continue
 		}
-		eventLog.SetProcessed(heartbeatID)
+		// 保存 requirementID 以便后续查看对话链路
+		if requirement != nil {
+			eventLog.SetProcessed(heartbeatID, requirement.ID().String())
+		} else {
+			eventLog.SetProcessed(heartbeatID, "")
+		}
 	}
 
 	// 更新事件日志状态

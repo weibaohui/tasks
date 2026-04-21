@@ -145,14 +145,15 @@ func (id WebhookEventLogID) String() string {
 }
 
 type WebhookEventLog struct {
-	id                WebhookEventLogID
-	projectID         ProjectID
-	eventType        string
-	payload           string
-	status            WebhookEventStatus
+	id                 WebhookEventLogID
+	projectID          ProjectID
+	eventType         string
+	payload            string
+	status             WebhookEventStatus
 	triggerHeartbeatID string
-	errorMessage      string
-	receivedAt        time.Time
+	requirementID      string
+	errorMessage       string
+	receivedAt         time.Time
 }
 
 func NewWebhookEventLog(
@@ -183,12 +184,14 @@ func (l *WebhookEventLog) EventType() string        { return l.eventType }
 func (l *WebhookEventLog) Payload() string          { return l.payload }
 func (l *WebhookEventLog) Status() WebhookEventStatus { return l.status }
 func (l *WebhookEventLog) TriggerHeartbeatID() string { return l.triggerHeartbeatID }
-func (l *WebhookEventLog) ErrorMessage() string      { return l.errorMessage }
-func (l *WebhookEventLog) ReceivedAt() time.Time    { return l.receivedAt }
+func (l *WebhookEventLog) ErrorMessage() string        { return l.errorMessage }
+func (l *WebhookEventLog) ReceivedAt() time.Time      { return l.receivedAt }
+func (l *WebhookEventLog) RequirementID() string     { return l.requirementID }
 
-func (l *WebhookEventLog) SetProcessed(heartbeatID string) {
+func (l *WebhookEventLog) SetProcessed(heartbeatID, requirementID string) {
 	l.status = WebhookEventStatusProcessed
 	l.triggerHeartbeatID = heartbeatID
+	l.requirementID = requirementID
 }
 
 func (l *WebhookEventLog) SetFailed(errMsg string) {
@@ -203,6 +206,7 @@ type WebhookEventLogSnapshot struct {
 	Payload            string
 	Status             WebhookEventStatus
 	TriggerHeartbeatID string
+	RequirementID      string
 	ErrorMessage       string
 	ReceivedAt         time.Time
 }
@@ -215,6 +219,7 @@ func (l *WebhookEventLog) ToSnapshot() WebhookEventLogSnapshot {
 		Payload:            l.payload,
 		Status:             l.status,
 		TriggerHeartbeatID: l.triggerHeartbeatID,
+		RequirementID:      l.requirementID,
 		ErrorMessage:       l.errorMessage,
 		ReceivedAt:         l.receivedAt,
 	}
@@ -227,6 +232,7 @@ func (l *WebhookEventLog) FromSnapshot(s WebhookEventLogSnapshot) {
 	l.payload = s.Payload
 	l.status = s.Status
 	l.triggerHeartbeatID = s.TriggerHeartbeatID
+	l.requirementID = s.RequirementID
 	l.errorMessage = s.ErrorMessage
 	l.receivedAt = s.ReceivedAt
 }
