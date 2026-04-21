@@ -684,8 +684,8 @@ export const ProjectRequirementPage: React.FC = () => {
       title: '标题',
       dataIndex: 'title',
       key: 'title',
+      width: 200,
       ellipsis: true,
-      minWidth: 150,
       render: (title: string, item: Requirement) => {
         if (!item.trace_id) return title;
 
@@ -993,6 +993,7 @@ export const ProjectRequirementPage: React.FC = () => {
             loading={loadingRequirements}
             dataSource={filteredRequirements}
             columns={requirementColumns}
+            scroll={{ x: 'max-content' }}
             rowSelection={{
               type: 'checkbox',
               selectedRowKeys: selectedRequirementKeys,
