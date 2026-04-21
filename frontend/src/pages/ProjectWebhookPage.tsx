@@ -39,8 +39,9 @@ import {
   type HeartbeatOption,
 } from '../api/githubWebhookApi';
 import { listProjects, getRequirement } from '../api/projectRequirementApi';
-import { GITHUB_EVENT_TYPES } from '../types/githubWebhook';
+import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES, EVENT_TO_REQUIREMENT_TYPE } from '../types/githubWebhook';
 import type { Project } from '../types/projectRequirement';
+import { detectPlatformType } from '../types/projectRequirement';
 import { useAuthStore } from '../stores/authStore';
 
 interface ProjectWebhookPageProps {
@@ -89,6 +90,28 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [bindingForm] = Form.useForm();
   const scopedRepo = useMemo(() => normalizeGitHubRepo(selectedProject?.git_repo_url || ''), [selectedProject?.git_repo_url]);
   const isProjectScoped = !!selectedProject?.id;
+
+  // 当前项目平台类型
+  const platformType = useMemo(
+    () => (selectedProject ? detectPlatformType(selectedProject.git_repo_url) : null),
+    [selectedProject?.git_repo_url]
+  );
+
+  // 绑定modal中选中事件类型state
+  const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
+
+  // 根据选中事件类型过滤后的心跳列表
+  const filteredHeartbeats = useMemo(() => {
+    if (!selectedEventType || !platformType) {
+      return heartbeats.filter((h) => h.enabled);
+    }
+    const mapping = EVENT_TO_REQUIREMENT_TYPE[selectedEventType];
+    if (!mapping) {
+      return heartbeats.filter((h) => h.enabled);
+    }
+    const requiredType = platformType === 'github' ? mapping.github : mapping.atg;
+    return heartbeats.filter((h) => h.enabled && h.requirement_type === requiredType);
+  }, [heartbeats, selectedEventType, platformType]);
 
   // Trace viewer state
   const [traceVisible, setTraceVisible] = useState(false);
@@ -787,36 +810,37 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         onCancel={() => {
           setBindingModalOpen(false);
           bindingForm.resetFields();
+          setSelectedEventType(null);
         }}
         destroyOnClose
       >
         <Form form={bindingForm} layout="vertical" onFinish={handleCreateBinding}>
           <Form.Item
-            label="GitHub 事件类型"
+            label={`${platformType === 'github' ? 'GitHub' : 'AtomGit'} 事件类型`}
             name="event_type"
             rules={[{ required: true, message: '请选择事件类型' }]}
           >
             <Select
-              placeholder="选择 GitHub 事件"
-              options={GITHUB_EVENT_TYPES.map((e) => ({
+              placeholder={`选择 ${platformType === 'github' ? 'GitHub' : 'AtomGit'} 事件`}
+              options={(platformType === 'github' ? GITHUB_EVENT_TYPES : ATG_EVENT_TYPES).map((e) => ({
                 label: e.label,
                 value: e.value,
               }))}
+              onChange={(value) => setSelectedEventType(value)}
             />
           </Form.Item>
           <Form.Item
             label="触发的心跳"
             name="heartbeat_id"
             rules={[{ required: true, message: '请选择心跳' }]}
+            extra={selectedEventType && filteredHeartbeats.length === 0 ? '当前事件类型没有匹配的心跳，请先为项目应用对应场景' : ''}
           >
             <Select
               placeholder="选择心跳"
-              options={heartbeats
-                .filter((h) => h.enabled)
-                .map((h) => ({
-                  label: `${h.name} (${h.interval_minutes}分钟, ${h.agent_code})`,
-                  value: h.id,
-                }))}
+              options={filteredHeartbeats.map((h) => ({
+                label: `${h.name} (${h.interval_minutes}分钟, ${h.agent_code})`,
+                value: h.id,
+              }))}
             />
           </Form.Item>
         </Form>
