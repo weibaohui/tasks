@@ -19,11 +19,12 @@ func NewSQLiteWebhookEventLogRepository(db *sql.DB) *SQLiteWebhookEventLogReposi
 func (r *SQLiteWebhookEventLogRepository) Save(ctx context.Context, log *domain.WebhookEventLog) error {
 	snap := log.ToSnapshot()
 	query := `
-		INSERT INTO webhook_event_logs (id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, error_message, received_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO webhook_event_logs (id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, requirement_id, error_message, received_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			forwarder_status=excluded.forwarder_status,
 			trigger_heartbeat_id=excluded.trigger_heartbeat_id,
+			requirement_id=excluded.requirement_id,
 			error_message=excluded.error_message
 	`
 	_, err := r.db.ExecContext(
@@ -35,6 +36,7 @@ func (r *SQLiteWebhookEventLogRepository) Save(ctx context.Context, log *domain.
 		snap.Payload,
 		string(snap.Status),
 		snap.TriggerHeartbeatID,
+		snap.RequirementID,
 		snap.ErrorMessage,
 		snap.ReceivedAt.Unix(),
 	)
@@ -43,7 +45,7 @@ func (r *SQLiteWebhookEventLogRepository) Save(ctx context.Context, log *domain.
 
 func (r *SQLiteWebhookEventLogRepository) FindByID(ctx context.Context, id domain.WebhookEventLogID) (*domain.WebhookEventLog, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, error_message, received_at
+		SELECT id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, requirement_id, error_message, received_at
 		FROM webhook_event_logs WHERE id = ?`, id.String())
 	return scanWebhookEventLog(row)
 }
@@ -53,7 +55,7 @@ func (r *SQLiteWebhookEventLogRepository) FindByProjectID(ctx context.Context, p
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, error_message, received_at
+		SELECT id, project_id, event_type, payload, forwarder_status, trigger_heartbeat_id, requirement_id, error_message, received_at
 		FROM webhook_event_logs WHERE project_id = ? ORDER BY received_at DESC LIMIT ? OFFSET ?`, projectID.String(), limit, offset)
 	if err != nil {
 		return nil, err
@@ -100,10 +102,11 @@ func scanWebhookEventLog(scanner rowScanner) (*domain.WebhookEventLog, error) {
 		payload            string
 		status             string
 		triggerHeartbeatID sql.NullString
+		requirementID      sql.NullString
 		errorMessage       sql.NullString
 		receivedAtUnix     int64
 	)
-	err := scanner.Scan(&idStr, &projectIDStr, &eventType, &payload, &status, &triggerHeartbeatID, &errorMessage, &receivedAtUnix)
+	err := scanner.Scan(&idStr, &projectIDStr, &eventType, &payload, &status, &triggerHeartbeatID, &requirementID, &errorMessage, &receivedAtUnix)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -118,6 +121,7 @@ func scanWebhookEventLog(scanner rowScanner) (*domain.WebhookEventLog, error) {
 		Payload:            payload,
 		Status:             domain.WebhookEventStatus(status),
 		TriggerHeartbeatID: triggerHeartbeatID.String,
+		RequirementID:      requirementID.String,
 		ErrorMessage:       errorMessage.String,
 		ReceivedAt:         time.Unix(receivedAtUnix, 0),
 	})

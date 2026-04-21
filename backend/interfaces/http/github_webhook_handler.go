@@ -555,8 +555,10 @@ func eventLogToMap(log *domain.WebhookEventLog) map[string]interface{} {
 		"id":                   log.ID().String(),
 		"project_id":           log.ProjectID().String(),
 		"event_type":           log.EventType(),
+		"payload":              log.Payload(),
 		"status":               string(log.Status()),
 		"trigger_heartbeat_id": log.TriggerHeartbeatID(),
+		"requirement_id":       log.RequirementID(),
 		"error_message":        log.ErrorMessage(),
 		"received_at":          log.ReceivedAt().UnixMilli(),
 	}

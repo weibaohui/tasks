@@ -17,6 +17,7 @@ import {
 } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { TraceViewer } from '../components/TraceViewer';
 import {
   listWebhookConfigs,
   createWebhookConfig,
@@ -37,7 +38,7 @@ import {
   type WebhookHeartbeatBinding,
   type HeartbeatOption,
 } from '../api/githubWebhookApi';
-import { listProjects } from '../api/projectRequirementApi';
+import { listProjects, getRequirement } from '../api/projectRequirementApi';
 import { GITHUB_EVENT_TYPES } from '../types/githubWebhook';
 import type { Project } from '../types/projectRequirement';
 import { useAuthStore } from '../stores/authStore';
@@ -88,6 +89,10 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [bindingForm] = Form.useForm();
   const scopedRepo = useMemo(() => normalizeGitHubRepo(selectedProject?.git_repo_url || ''), [selectedProject?.git_repo_url]);
   const isProjectScoped = !!selectedProject?.id;
+
+  // Trace viewer state
+  const [traceVisible, setTraceVisible] = useState(false);
+  const [currentTraceId, setCurrentTraceId] = useState('');
 
   const fetchConfigs = async () => {
     setLoading(true);
@@ -306,6 +311,20 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     }
   };
 
+  const handleViewTrace = async (requirementId: string) => {
+    try {
+      const requirement = await getRequirement(requirementId);
+      if (requirement.trace_id) {
+        setCurrentTraceId(requirement.trace_id);
+        setTraceVisible(true);
+      } else {
+        message.warning('该需求没有 trace_id');
+      }
+    } catch {
+      message.error('获取需求信息失败');
+    }
+  };
+
   const handleCheckWebhookURL = async (configId: string) => {
     try {
       const result = await checkWebhookURL(configId);
@@ -460,25 +479,36 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 180,
       render: (_, record) => (
-        record.trigger_heartbeat_id ? (
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
-          >
-            重新触发
-          </Button>
-        ) : (
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleRetriggerByEventType(record.event_type)}
-          >
-            手动触发
-          </Button>
-        )
+        <Space>
+          {record.requirement_id && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleViewTrace(record.requirement_id)}
+            >
+              查看链路
+            </Button>
+          )}
+          {record.trigger_heartbeat_id ? (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
+            >
+              重新触发
+            </Button>
+          ) : (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleRetriggerByEventType(record.event_type)}
+            >
+              手动触发
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
@@ -791,6 +821,16 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Trace Viewer Modal */}
+      <TraceViewer
+        traceId={currentTraceId}
+        visible={traceVisible}
+        onClose={() => {
+          setTraceVisible(false);
+          setCurrentTraceId('');
+        }}
+      />
     </div>
   );
 };

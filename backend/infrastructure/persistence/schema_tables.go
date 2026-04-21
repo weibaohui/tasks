@@ -406,6 +406,7 @@ CREATE TABLE IF NOT EXISTS webhook_event_logs (
     payload TEXT NOT NULL,
     forwarder_status TEXT NOT NULL DEFAULT 'received',
     trigger_heartbeat_id TEXT,
+    requirement_id TEXT,
     error_message TEXT,
     received_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
