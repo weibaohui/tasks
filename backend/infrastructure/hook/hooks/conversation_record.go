@@ -5,6 +5,7 @@
 package hooks
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -154,4 +155,34 @@ func containsToolCalls(rawResponse string) bool {
 		return false
 	}
 	return strings.Contains(rawResponse, `"tool_calls"`)
+}
+
+// extractToolNames 从 RawResponse 提取工具名称列表
+func extractToolNames(rawResponse string) []string {
+	if rawResponse == "" {
+		return nil
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(rawResponse), &data); err != nil {
+		return nil
+	}
+
+	toolCalls, ok := data["tool_calls"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var names []string
+	for _, tc := range toolCalls {
+		if tcMap, ok := tc.(map[string]interface{}); ok {
+			if fn, ok := tcMap["function"].(map[string]interface{}); ok {
+				if name, ok := fn["name"].(string); ok && name != "" {
+					names = append(names, name)
+				}
+			}
+		}
+	}
+
+	return names
 }
