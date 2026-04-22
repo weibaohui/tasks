@@ -215,6 +215,10 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 					)
 					// 只发送思考卡片，不累积到 result
 					callback.OnThinking(b.Thinking)
+					// 保存思考过程到对话记录
+					if p.hookManager != nil {
+						p.hookManager.OnThinking(hookCtx, b.Thinking)
+					}
 				default:
 					p.logger.Info("Claude Code 未知内容块",
 						zap.String("session_key", sessionKey),

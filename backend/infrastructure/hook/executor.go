@@ -282,6 +282,31 @@ func (e *Executor) ExecuteOnToolExecutionComplete(ctx *domain.HookContext) {
 	}
 }
 
+// ExecuteOnThinking 执行 OnThinking 钩子
+func (e *Executor) ExecuteOnThinking(ctx *domain.HookContext, thinking string) {
+	if thinking == "" {
+		return
+	}
+
+	hooks := e.getAllEnabledHooks()
+	hooks = e.sortByPriority(hooks)
+
+	for _, hook := range hooks {
+		llmWithToolsHook, ok := hook.(domain.LLMWithToolsHook)
+		if !ok {
+			continue
+		}
+
+		e.logger.Debug("executing OnThinking",
+			zap.String("hook", hook.Name()),
+			zap.Int("priority", hook.Priority()),
+			zap.Int("thinking_len", len(thinking)))
+
+		llmWithToolsHook.OnThinking(ctx, thinking)
+		ctx.AddHook(hook.Name())
+	}
+}
+
 func (e *Executor) getEnabledHooks(hookType domain.HookType) []domain.Hook {
 	hooks := e.registry.ListByType(hookType)
 	var enabled []domain.Hook

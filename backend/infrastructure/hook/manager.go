@@ -122,3 +122,8 @@ func (m *Manager) OnLLMCalledWithTools(ctx *domain.HookContext, callCtx *domain.
 func (m *Manager) OnToolExecutionComplete(ctx *domain.HookContext) {
 	m.executor.ExecuteOnToolExecutionComplete(ctx)
 }
+
+// OnThinking 当 LLM 生成思考过程时调用
+func (m *Manager) OnThinking(ctx *domain.HookContext, thinking string) {
+	m.executor.ExecuteOnThinking(ctx, thinking)
+}

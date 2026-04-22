@@ -137,6 +137,8 @@ type LLMWithToolsHook interface {
 	// OnToolExecutionComplete 当一轮工具调用完成后调用
 	// 此时可以记录最终的 llm_response，parent 应为 tool_call 的 span
 	OnToolExecutionComplete(ctx *HookContext)
+	// OnThinking 当 LLM 生成思考过程时调用
+	OnThinking(ctx *HookContext, thinking string)
 }
 
 // ============================================================================

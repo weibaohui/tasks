@@ -2,6 +2,8 @@ package hooks
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/weibh/taskmanager/domain"
 	"github.com/weibh/taskmanager/infrastructure/trace"
@@ -127,6 +129,24 @@ func (h *ConversationRecordHook) PostLLMCall(ctx *domain.HookContext, callCtx *d
 	// 如果 LLM 决定调用工具
 	if hasToolCalls {
 		toolCallsSpanID := h.idGenerator.Generate()
+
+		// 记录工具决策：LLM 决定调用哪些工具
+		if toolNames := extractToolNames(resp.RawResponse); len(toolNames) > 0 {
+			decisionContent := fmt.Sprintf("调用工具: %s", strings.Join(toolNames, ", "))
+			decisionRecord, err := h.createRecord(traceID, h.idGenerator.Generate(), parentSpanID, "tool_decision", "assistant", decisionContent)
+			if err != nil {
+				h.logger.Error("Failed to create conversation record for tool decision", zap.Error(err))
+			} else {
+				decisionRecord.SetScope(sessionKey, userCode, agentCode, channelCode, channelType)
+				if err := h.repo.Save(context.Background(), decisionRecord); err != nil {
+					h.logger.Error("Failed to save conversation record for tool decision", zap.Error(err))
+				} else {
+					h.logger.Debug("ConversationRecord: saved tool decision",
+						zap.String("trace_id", traceID),
+						zap.Strings("tool_names", toolNames))
+				}
+			}
+		}
 
 		// 仅当有内容时记录中间响应
 		if resp.Content != "" {
@@ -255,4 +275,46 @@ func (h *ConversationRecordHook) OnToolExecutionComplete(ctx *domain.HookContext
 
 	// 清除延迟响应信息
 	ctx.WithValue(deferredResponseKey, nil)
+}
+
+// OnThinking 记录 LLM 思考过程
+func (h *ConversationRecordHook) OnThinking(ctx *domain.HookContext, thinking string) {
+	if thinking == "" {
+		return
+	}
+
+	traceID := h.extractTraceID(ctx)
+	if traceID == "" {
+		traceID = trace.MustGetTraceID(ctx.Context)
+	}
+
+	// 获取父 span_id（优先使用 ToolParentSpanKey，其次 SpanKey）
+	parentSpanID, _ := ctx.Get(ToolParentSpanKey).(string)
+	if parentSpanID == "" {
+		parentSpanID, _ = ctx.Get(SpanKey).(string)
+	}
+
+	spanID := h.idGenerator.Generate()
+
+	// 记录思考过程，event_type 为 "thinking"
+	record, err := h.createRecord(traceID, spanID, parentSpanID, "thinking", "assistant", thinking)
+	if err != nil {
+		h.logger.Error("Failed to create conversation record for thinking", zap.Error(err))
+		return
+	}
+
+	// 设置范围信息
+	if scope, ok := ctx.Get(ScopeKey).(ScopeInfo); ok {
+		record.SetScope(scope.SessionKey, scope.UserCode, scope.AgentCode, scope.ChannelCode, scope.ChannelType)
+	}
+
+	if err := h.repo.Save(ctx.Context, record); err != nil {
+		h.logger.Error("Failed to save conversation record for thinking", zap.Error(err))
+		return
+	}
+
+	h.logger.Debug("ConversationRecord: saved thinking",
+		zap.String("trace_id", traceID),
+		zap.String("span_id", spanID),
+		zap.Int("thinking_len", len(thinking)))
 }
