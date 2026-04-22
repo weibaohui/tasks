@@ -735,6 +735,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                     <div style={{ margin: '8px 0' }}>
                       <div style={{ fontWeight: 500, marginBottom: 8 }}>触发的心跳列表：</div>
                       <Table
+                        key={record.id}
                         dataSource={triggered}
                         columns={[
                           {
@@ -789,7 +790,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                         ]}
                         pagination={false}
                         size="small"
-                        rowKey="id"
+                        rowKey={(record) => record.id}
                       />
                     </div>
                   );
