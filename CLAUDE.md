@@ -139,39 +139,29 @@ taskmanager tunnel --port 8888
 | `backend/pkg/channel/processor.go` | 消息处理器 |
 | `frontend/src/pages/ConversationRecordsPage.tsx` | 对话记录页面 |
 
-## AMC (AtomGit) CLI 配置
+## atg (AtomGit) CLI 配置
 
-AMC CLI 用于与 AtomGit 平台交互，管理 webhooks 等。
-
-**环境变量：**
-- `ATOMGIT_TOKEN` - AtomGit API 访问令牌
+atg CLI 用于与 AtomGit 平台交互，管理 webhooks 等。认证信息保存在配置文件中，无需设置环境变量。
 
 **登录命令：**
 ```bash
 source ~/.zshrc  # 确保加载环境变量
-echo $ATOMGIT_TOKEN  # 查看当前 token
 
-# 登录 AMC（需要先获取 token）
-/Users/weibh/bin/amc auth login --token <YOUR_TOKEN>
+# 登录 atg（需要先获取 token）
+atg auth login --token <YOUR_TOKEN>
 ```
 
-**AMC 命令示例：**
+**atg 命令示例：**
 ```bash
 # 查看认证状态
-ATOMGIT_TOKEN=<token> /Users/weibh/bin/amc auth status
+atg auth status
 
 # 查看 webhook
-ATOMGIT_TOKEN=<token> /Users/weibh/bin/amc hook list -R owner/repo
+atg hook list -R owner/repo
 
 # 创建 webhook
-ATOMGIT_TOKEN=<token> /Users/weibh/bin/amc hook create -R owner/repo --url <webhook_url> --events "*"
-```
-
-**服务器启动（需要 ATOMGIT_TOKEN）：**
-```bash
-# 启动服务器时设置 ATOMGIT_TOKEN
-ATOMGIT_TOKEN=<token> taskmanager server start
+atg hook create -R owner/repo --url <webhook_url> --events "*"
 ```
 
 **配置文件位置：**
-- `~/.config/atomgit-cli/config.toml` - AMC CLI 配置
+- `~/.config/atg/config.toml` - atg CLI 配置
