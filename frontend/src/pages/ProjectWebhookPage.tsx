@@ -515,12 +515,13 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       dataIndex: 'error_message',
       key: 'error_message',
       ellipsis: true,
+      width: 150,
       render: (msg: string) => msg || '-',
     },
     {
       title: '原始内容',
       key: 'payload',
-      width: 100,
+      width: 80,
       render: (_, record) => (
         <Button
           type="link"
@@ -723,6 +724,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 onChange: (page) => fetchEventLogs(selectedConfig!.id, (page - 1) * logsLimit),
               }}
               size="small"
+              scroll={{ x: 'max-content' }}
               expandable={{
                 expandedRowRender: (record) => {
                   const triggered = record.triggered_heartbeats || [];
