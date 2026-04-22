@@ -1,5 +1,6 @@
 .PHONY: help build clean dev dev-server dev-frontend stop test fmt lint setup install
 SHELL := /bin/bash
+export PATH := /usr/local/go/bin:$(PATH)
 
 # 默认目标
 help:
