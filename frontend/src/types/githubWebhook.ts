@@ -13,8 +13,12 @@ export interface WebhookEventLog {
   id: string;
   project_id: string;
   event_type: string;
+  method: string;
+  headers: string;
+  payload: string;
   status: 'received' | 'processed' | 'failed';
   trigger_heartbeat_id: string;
+  requirement_id: string;
   error_message: string;
   received_at: number;
 }
