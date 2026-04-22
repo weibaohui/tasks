@@ -465,12 +465,19 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     },
   ];
 
+  // 事件日志表格列宽常量 - 移动端优化
+  // error_message: 150px - 足够显示常见错误信息（50字符左右）
+  // payload: 80px - 仅显示"查看"按钮，无需太宽
+  const EVENT_LOG_ERROR_WIDTH = 150;
+  const EVENT_LOG_PAYLOAD_WIDTH = 80;
+
   const eventLogColumns: ColumnsType<WebhookEventLog> = [
     {
       title: '时间',
       dataIndex: 'received_at',
       key: 'received_at',
       width: 170,
+      minWidth: 120,
       render: (time: number) => new Date(time).toLocaleString(),
     },
     {
@@ -478,6 +485,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       dataIndex: 'event_type',
       key: 'event_type',
       width: 150,
+      minWidth: 100,
       render: (type: string) => <Tag color="blue">{type}</Tag>,
     },
     {
@@ -485,6 +493,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       dataIndex: 'status',
       key: 'status',
       width: 100,
+      minWidth: 80,
       render: (status: string) => {
         const colorMap: Record<string, string> = {
           received: 'default',
@@ -499,6 +508,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       key: 'triggered_heartbeats',
       ellipsis: true,
       width: 200,
+      minWidth: 150,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
         if (triggered.length === 0) {
@@ -515,13 +525,15 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       dataIndex: 'error_message',
       key: 'error_message',
       ellipsis: true,
-      width: 150,
+      width: EVENT_LOG_ERROR_WIDTH,
+      minWidth: 100,
       render: (msg: string) => msg || '-',
     },
     {
       title: '原始内容',
       key: 'payload',
-      width: 80,
+      width: EVENT_LOG_PAYLOAD_WIDTH,
+      minWidth: 60,
       render: (_, record) => (
         <Button
           type="link"
@@ -542,6 +554,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       title: '操作',
       key: 'action',
       width: 180,
+      minWidth: 150,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
         // 如果有触发的心跳，显示"查看链路"按钮
