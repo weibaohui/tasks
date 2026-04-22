@@ -119,6 +119,11 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [traceVisible, setTraceVisible] = useState(false);
   const [currentTraceId, setCurrentTraceId] = useState('');
 
+  // Payload 查看 state
+  const [payloadModalVisible, setPayloadModalVisible] = useState(false);
+  const [currentPayload, setCurrentPayload] = useState('');
+  const [currentEventType, setCurrentEventType] = useState('');
+
   const fetchConfigs = async () => {
     setLoading(true);
     try {
@@ -502,6 +507,24 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       render: (msg: string) => msg || '-',
     },
     {
+      title: '原始内容',
+      key: 'payload',
+      width: 100,
+      render: (_, record) => (
+        <Button
+          type="link"
+          size="small"
+          onClick={() => {
+            setCurrentPayload(record.payload || '');
+            setCurrentEventType(record.event_type || '');
+            setPayloadModalVisible(true);
+          }}
+        >
+          查看
+        </Button>
+      ),
+    },
+    {
       title: '操作',
       key: 'action',
       width: 180,
@@ -857,6 +880,19 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
           setCurrentTraceId('');
         }}
       />
+
+      {/* Payload 查看 Modal */}
+      <Modal
+        title={`原始事件内容 - ${currentEventType}`}
+        open={payloadModalVisible}
+        onCancel={() => setPayloadModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        <pre style={{ maxHeight: 500, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+          {currentPayload || '(无 payload)'}
+        </pre>
+      </Modal>
     </div>
   );
 };
