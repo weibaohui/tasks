@@ -123,6 +123,8 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [payloadModalVisible, setPayloadModalVisible] = useState(false);
   const [currentPayload, setCurrentPayload] = useState('');
   const [currentEventType, setCurrentEventType] = useState('');
+  const [currentMethod, setCurrentMethod] = useState('');
+  const [currentHeaders, setCurrentHeaders] = useState('');
 
   const fetchConfigs = async () => {
     setLoading(true);
@@ -517,6 +519,8 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
           onClick={() => {
             setCurrentPayload(record.payload || '');
             setCurrentEventType(record.event_type || '');
+            setCurrentMethod(record.method || '');
+            setCurrentHeaders(record.headers || '');
             setPayloadModalVisible(true);
           }}
         >
@@ -887,11 +891,57 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         open={payloadModalVisible}
         onCancel={() => setPayloadModalVisible(false)}
         footer={null}
-        width={800}
+        width={900}
       >
-        <pre style={{ maxHeight: 500, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-          {currentPayload || '(无 payload)'}
-        </pre>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* 请求信息头部 */}
+          <div style={{ display: 'flex', gap: 16, padding: '8px 12px', background: '#f0f5ff', borderRadius: 4, fontSize: 13 }}>
+            <span><strong>Method:</strong> {currentMethod || 'POST'}</span>
+            <span><strong>Event:</strong> {currentEventType}</span>
+          </div>
+
+          {/* Headers */}
+          <div>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>Headers</div>
+            <pre style={{
+              maxHeight: 150,
+              overflow: 'auto',
+              background: '#f8f8f8',
+              padding: 12,
+              borderRadius: 4,
+              fontSize: 12,
+              fontFamily: 'Monaco, Menlo, monospace',
+              whiteSpace: 'pre-wrap',
+              margin: 0,
+            }}>
+              {currentHeaders || '(无 headers)'}
+            </pre>
+          </div>
+
+          {/* Payload */}
+          <div>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>Payload</div>
+            <pre style={{
+              maxHeight: 400,
+              overflow: 'auto',
+              background: '#f8f8f8',
+              padding: 12,
+              borderRadius: 4,
+              fontSize: 12,
+              fontFamily: 'Monaco, Menlo, monospace',
+              whiteSpace: 'pre-wrap',
+              margin: 0,
+            }}>
+              {(() => {
+                try {
+                  return JSON.stringify(JSON.parse(currentPayload || '{}'), null, 2);
+                } catch {
+                  return currentPayload || '(无 payload)';
+                }
+              })()}
+            </pre>
+          </div>
+        </div>
       </Modal>
     </div>
   );

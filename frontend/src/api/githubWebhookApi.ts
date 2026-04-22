@@ -15,6 +15,8 @@ export interface WebhookEventLog {
   id: string;
   project_id: string;
   event_type: string;
+  method: string;
+  headers: string;
   payload: string;
   status: string;
   trigger_heartbeat_id: string;
