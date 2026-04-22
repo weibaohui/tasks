@@ -345,15 +345,14 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
-			MDContent: "你是项目的自动化协作助手。当前任务是：对已通过需求评审的 open PR 进行代码质量和安全评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open PR 进行代码质量和安全评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 gh pr list --repo owner/repo --state open 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有\"需求评审通过\"评论。若无，跳过该 PR（阶段闸门）。\n" +
-				"3. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"4. 使用 gh pr view 和 gh pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
-				"5. 将评审意见以评论形式发布到 PR 下。\n" +
-				"6. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
+				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
+				"3. 使用 gh pr view 和 gh pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"4. 将评审意见以评论形式发布到 PR 下。\n" +
+				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 gh CLI 操作 GitHub。\n" +
 				"- 不修改任何源代码。\n" +
@@ -524,15 +523,14 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
-			MDContent: "你是项目的自动化协作助手。当前任务是：对已通过需求评审的 open PR 进行代码质量和安全评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open PR 进行代码质量和安全评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有\"需求评审通过\"评论。若无，跳过该 PR（阶段闸门）。\n" +
-				"3. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"4. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
-				"5. 将评审意见以评论形式发布到 PR 下。\n" +
-				"6. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
+				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
+				"3. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"4. 将评审意见以评论形式发布到 PR 下。\n" +
+				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
 				"- 不修改任何源代码。\n" +
@@ -703,15 +701,14 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
-			MDContent: "你是项目的自动化协作助手。当前任务是：对已通过需求评审的 open PR 进行代码质量和安全评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open PR 进行代码质量和安全评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有\"需求评审通过\"评论。若无，跳过该 PR（阶段闸门）。\n" +
-				"3. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"4. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
-				"5. 将评审意见以评论形式发布到 PR 下。\n" +
-				"6. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
+				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
+				"3. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"4. 将评审意见以评论形式发布到 PR 下。\n" +
+				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
 				"- 不修改任何源代码。\n" +
