@@ -10,12 +10,13 @@ import (
 
 // GitHubWebhookService 处理 GitHub webhook 事件
 type GitHubWebhookService struct {
-	configRepo     domain.GitHubWebhookConfigRepository
-	eventLogRepo   domain.WebhookEventLogRepository
-	bindingRepo    domain.WebhookHeartbeatBindingRepository
-	heartbeatRepo  domain.HeartbeatRepository
-	triggerService *HeartbeatTriggerService
-	idGenerator    domain.IDGenerator
+	configRepo              domain.GitHubWebhookConfigRepository
+	eventLogRepo            domain.WebhookEventLogRepository
+	bindingRepo             domain.WebhookHeartbeatBindingRepository
+	heartbeatRepo           domain.HeartbeatRepository
+	triggeredHeartbeatRepo  domain.WebhookEventTriggeredHeartbeatRepository
+	triggerService          *HeartbeatTriggerService
+	idGenerator             domain.IDGenerator
 }
 
 // NewGitHubWebhookService 创建 GitHub webhook 服务
@@ -24,16 +25,18 @@ func NewGitHubWebhookService(
 	eventLogRepo domain.WebhookEventLogRepository,
 	bindingRepo domain.WebhookHeartbeatBindingRepository,
 	heartbeatRepo domain.HeartbeatRepository,
+	triggeredHeartbeatRepo domain.WebhookEventTriggeredHeartbeatRepository,
 	triggerService *HeartbeatTriggerService,
 	idGenerator domain.IDGenerator,
 ) *GitHubWebhookService {
 	return &GitHubWebhookService{
-		configRepo:     configRepo,
-		eventLogRepo:   eventLogRepo,
-		bindingRepo:    bindingRepo,
-		heartbeatRepo:  heartbeatRepo,
-		triggerService: triggerService,
-		idGenerator:    idGenerator,
+		configRepo:             configRepo,
+		eventLogRepo:           eventLogRepo,
+		bindingRepo:            bindingRepo,
+		heartbeatRepo:          heartbeatRepo,
+		triggeredHeartbeatRepo:  triggeredHeartbeatRepo,
+		triggerService:          triggerService,
+		idGenerator:            idGenerator,
 	}
 }
 
@@ -78,7 +81,8 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 		return nil
 	}
 
-	// 3. 触发每个绑定的心跳
+	// 3. 触发每个绑定的心跳，并记录触发的心跳
+	hasSuccess := false
 	for _, binding := range bindings {
 		if !binding.Enabled() {
 			continue
@@ -91,15 +95,33 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 			log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
 			continue
 		}
-		// 保存 requirementID 以便后续查看对话链路
+
+		hasSuccess = true
+		requirementID := ""
 		if requirement != nil {
-			eventLog.SetProcessed(heartbeatID, requirement.ID().String())
-		} else {
-			eventLog.SetProcessed(heartbeatID, "")
+			requirementID = requirement.ID().String()
+		}
+
+		// 记录触发的心跳到关联表
+		triggered, err := domain.NewWebhookEventTriggeredHeartbeat(
+			domain.NewWebhookEventTriggeredHeartbeatID(s.idGenerator.Generate()),
+			eventLog.ID(),
+			binding.HeartbeatID(),
+			requirementID,
+		)
+		if err != nil {
+			log.Printf("[WEBHOOK] failed to create triggered heartbeat record: %v", err)
+		} else if err := s.triggeredHeartbeatRepo.Save(ctx, triggered); err != nil {
+			log.Printf("[WEBHOOK] failed to save triggered heartbeat: %v", err)
 		}
 	}
 
-	// 更新事件日志状态
+	// 4. 更新事件日志状态
+	if hasSuccess {
+		eventLog.SetStatus(domain.WebhookEventStatusProcessed)
+	} else {
+		eventLog.SetFailed("all heartbeat triggers failed")
+	}
 	return s.eventLogRepo.Save(ctx, eventLog)
 }
 
@@ -172,6 +194,36 @@ func (s *GitHubWebhookService) ListEventLogs(ctx context.Context, projectID stri
 		return nil, 0, err
 	}
 	return logs, count, nil
+}
+
+// ListEventLogsWithTriggeredHeartbeats 列出项目的事件日志（包含触发的心跳列表）
+func (s *GitHubWebhookService) ListEventLogsWithTriggeredHeartbeats(ctx context.Context, projectID string, limit, offset int) ([]*domain.WebhookEventLog, []*domain.WebhookEventTriggeredHeartbeat, int, error) {
+	logs, count, err := s.ListEventLogs(ctx, projectID, limit, offset)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	// 收集所有事件日志 ID
+	eventLogIDs := make([]domain.WebhookEventLogID, len(logs))
+	for i, log := range logs {
+		eventLogIDs[i] = log.ID()
+	}
+
+	// 获取所有触发的心跳记录
+	allTriggered := make([]*domain.WebhookEventTriggeredHeartbeat, 0)
+	triggeredByEventLog := make(map[domain.WebhookEventLogID][]*domain.WebhookEventTriggeredHeartbeat)
+
+	for _, eventLogID := range eventLogIDs {
+		triggered, err := s.triggeredHeartbeatRepo.FindByEventLogID(ctx, eventLogID)
+		if err != nil {
+			log.Printf("[WEBHOOK] failed to find triggered heartbeats for event %s: %v", eventLogID.String(), err)
+			continue
+		}
+		triggeredByEventLog[eventLogID] = triggered
+		allTriggered = append(allTriggered, triggered...)
+	}
+
+	return logs, allTriggered, count, nil
 }
 
 // ClearEventLogs 清空项目的事件日志

@@ -295,6 +295,26 @@ func MigrateGitHubWebhookConfigColumns(db *sql.DB) error {
 	return nil
 }
 
+// MigrateWebhookEventTriggeredHeartbeatsTable 创建 webhook_event_triggered_heartbeats 表（如果不存在）
+func MigrateWebhookEventTriggeredHeartbeatsTable(db *sql.DB) error {
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS webhook_event_triggered_heartbeats (
+		id TEXT PRIMARY KEY,
+		webhook_event_log_id TEXT NOT NULL,
+		heartbeat_id TEXT NOT NULL,
+		requirement_id TEXT,
+		triggered_at INTEGER NOT NULL,
+		FOREIGN KEY (webhook_event_log_id) REFERENCES webhook_event_logs(id) ON DELETE CASCADE,
+		FOREIGN KEY (heartbeat_id) REFERENCES heartbeats(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_webhook_event_triggered_heartbeats_event_id ON webhook_event_triggered_heartbeats(webhook_event_log_id);
+	`
+	if _, err := db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("创建 webhook_event_triggered_heartbeats 表失败: %w", err)
+	}
+	return nil
+}
+
 // SeedHeartbeatTemplates 预置默认心跳模板（如果表为空）
 func SeedHeartbeatTemplates(db *sql.DB) error {
 	var count int

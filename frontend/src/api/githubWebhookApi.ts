@@ -11,6 +11,13 @@ export interface GitHubWebhookConfig {
   updated_at: number;
 }
 
+export interface TriggeredHeartbeat {
+  id: string;
+  heartbeat_id: string;
+  requirement_id: string;
+  triggered_at: number;
+}
+
 export interface WebhookEventLog {
   id: string;
   project_id: string;
@@ -23,6 +30,7 @@ export interface WebhookEventLog {
   requirement_id: string;
   error_message: string;
   received_at: number;
+  triggered_heartbeats?: TriggeredHeartbeat[];
 }
 
 export interface WebhookHeartbeatBinding {
