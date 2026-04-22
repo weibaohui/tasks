@@ -22,8 +22,14 @@ func NewWebhookHandler(webhookService *application.GitHubWebhookService) *Webhoo
 	}
 }
 
-// HandleWebhook 处理 GitHub webhook 事件（无需认证）
+// HandleWebhook 处理 GitHub/ATG webhook 事件（无需认证）
 func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
+	// 获取请求方法
+	method := c.Request.Method
+
+	// 提取 Headers
+	headers := formatHeaders(c.Request.Header)
+
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -33,11 +39,8 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 	payload := string(body)
 
-	// 获取事件类型
-	eventType := c.GetHeader("X-GitHub-Event")
-	if eventType == "" {
-		eventType = "unknown"
-	}
+	// 获取事件类型（支持 GitHub 和 ATG/AtomGit）
+	eventType := getEventType(c)
 
 	// 解析 payload 获取 repo 信息来确定项目
 	var payloadData map[string]interface{}
@@ -97,7 +100,7 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	// 处理事件
-	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, payload); err != nil {
+	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, method, headers, payload); err != nil {
 		log.Printf("[WEBHOOK] failed to handle event: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -121,6 +124,12 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	}
 	repoName := owner + "/" + repo
 
+	// 获取请求方法
+	method := c.Request.Method
+
+	// 提取 Headers
+	headers := formatHeaders(c.Request.Header)
+
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -130,11 +139,8 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	}
 	payload := string(body)
 
-	// 获取事件类型
-	eventType := c.GetHeader("X-GitHub-Event")
-	if eventType == "" {
-		eventType = "unknown"
-	}
+	// 获取事件类型（支持 GitHub 和 ATG/AtomGit）
+	eventType := getEventType(c)
 
 	log.Printf("[WEBHOOK] received event %s for repo %s", eventType, repoName)
 
@@ -184,7 +190,7 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	}
 
 	// 处理事件
-	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, payload); err != nil {
+	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, method, headers, payload); err != nil {
 		log.Printf("[WEBHOOK] failed to handle event: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -196,4 +202,48 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 		"repo":       repoName,
 		"project_id": matchedConfig.ProjectID().String(),
 	})
+}
+
+// formatHeaders 将请求头转换为字符串格式
+func formatHeaders(header map[string][]string) string {
+	var lines []string
+	for key, values := range header {
+		for _, value := range values {
+			lines = append(lines, key+": "+value)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// getEventType 获取事件类型，支持 GitHub 和 ATG/AtomGit 的 webhook
+func getEventType(c *gin.Context) string {
+	// 尝试 GitHub header
+	if eventType := c.GetHeader("X-GitHub-Event"); eventType != "" {
+		return eventType
+	}
+	// 尝试 ATG/AtomGit header
+	if eventType := c.GetHeader("X-GitCode-Event"); eventType != "" {
+		return normalizeATGEventType(eventType)
+	}
+	return "unknown"
+}
+
+// normalizeATGEventType 将 ATG 事件类型映射为内部统一格式
+func normalizeATGEventType(eventType string) string {
+	switch eventType {
+	case "Push Hook", "push":
+		return "push_events"
+	case "Tag Push Hook", "tag_push":
+		return "tag_push_events"
+	case "Issues Hook", "issues":
+		return "issues_events"
+	case "Issue Comment Hook", "issue_comment":
+		return "note_events"
+	case "Merge Request Hook", "merge_request":
+		return "merge_requests_events"
+	case "Note Hook", "note":
+		return "note_events"
+	default:
+		return eventType
+	}
 }
