@@ -160,15 +160,62 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		return fmt.Errorf("scenario not found")
 	}
 
-	// 简化策略：删除该项目下所有现有心跳（由场景产生的或未修改的）
-	// 然后重新创建。未来可以优化为只删除由同一场景生成的心跳。
+	// 获取现有心跳，用于后续更新 bindings
 	existingHeartbeats, err := s.heartbeatRepo.FindByProjectID(ctx, domain.NewProjectID(projectID))
 	if err != nil {
 		return fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
+
+	// 建立旧心跳 name -> ID 的映射，用于更新 bindings
+	oldHeartbeatNameToID := make(map[string]domain.HeartbeatID)
 	for _, hb := range existingHeartbeats {
-		// 注意：不删除 bindings，因为 bindings 可能是用户手动创建的。
-		// 即使心跳被删除，binding 会在触发时发现心跳不存在而被跳过。
+		oldHeartbeatNameToID[hb.Name()] = hb.ID()
+	}
+
+	// 实例化场景心跳
+	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
+	if err != nil {
+		return fmt.Errorf("failed to apply scenario: %w", err)
+	}
+
+	// 建立新心跳 name -> 新心跳的映射
+	newHeartbeatByName := make(map[string]*domain.Heartbeat)
+	for _, hb := range heartbeats {
+		newHeartbeatByName[hb.Name()] = hb
+	}
+
+	// 删除旧心跳前，先更新所有引用旧心跳的 bindings 指向新心跳
+	for _, oldHB := range existingHeartbeats {
+		newHB, exists := newHeartbeatByName[oldHB.Name()]
+		if !exists {
+			// 新心跳中没有对应的（可能心跳被从场景中移除了），跳过 binding 更新
+			continue
+		}
+		// 查找所有引用旧心跳的 bindings，更新为新心跳 ID
+		bindings, err := s.bindingRepo.FindByHeartbeatID(ctx, oldHB.ID())
+		if err != nil {
+			return fmt.Errorf("failed to find bindings for heartbeat %s: %w", oldHB.ID().String(), err)
+		}
+		for _, binding := range bindings {
+			// 创建新的 binding，引用新心跳 ID
+			newBinding, err := domain.NewWebhookHeartbeatBinding(
+				binding.ID(),
+				binding.ProjectID(),
+				binding.ConfigID(),
+				binding.GitHubEventType(),
+				newHB.ID(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to update binding: %w", err)
+			}
+			if err := s.bindingRepo.Save(ctx, newBinding); err != nil {
+				return fmt.Errorf("failed to save binding: %w", err)
+			}
+		}
+	}
+
+	// 删除旧心跳
+	for _, hb := range existingHeartbeats {
 		if err := s.heartbeatRepo.Delete(ctx, hb.ID()); err != nil {
 			return fmt.Errorf("failed to delete existing heartbeat: %w", err)
 		}
@@ -179,12 +226,7 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		}
 	}
 
-	// 实例化场景心跳
-	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
-	if err != nil {
-		return fmt.Errorf("failed to apply scenario: %w", err)
-	}
-
+	// 保存新心跳
 	for _, hb := range heartbeats {
 		if err := s.heartbeatRepo.Save(ctx, hb); err != nil {
 			return fmt.Errorf("failed to save heartbeat: %w", err)

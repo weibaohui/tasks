@@ -121,6 +121,10 @@ func (m *mockWebhookHeartbeatBindingRepo) DeleteByHeartbeatID(ctx context.Contex
 	return nil
 }
 
+func (m *mockWebhookHeartbeatBindingRepo) FindByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
 func setupTestScenarioSvc() (*HeartbeatScenarioService, *mockHeartbeatScenarioRepo, *sharedMockProjectRepo, *mockHeartbeatRepo, *mockIDGenerator) {
 	scenarioRepo := newMockHeartbeatScenarioRepo()
 	projectRepo := newSharedMockProjectRepo()
