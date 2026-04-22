@@ -385,17 +385,19 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 gh pr list --repo owner/repo --state open 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（gh pr checks）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（gh pr checks）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 gh pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 gh pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 gh CLI 操作 GitHub。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{
@@ -563,17 +565,19 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（atg pr merge-status）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（atg pr merge-status）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 atg pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 atg pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{
@@ -741,17 +745,19 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（atg pr merge-status）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（atg pr merge-status）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 atg pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 atg pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{
