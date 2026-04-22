@@ -38,7 +38,7 @@ func NewGitHubWebhookService(
 }
 
 // HandleWebhookEvent 处理收到的 webhook 事件
-func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID, projectID, eventType, payload string) error {
+func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID, projectID, eventType, method, headers, payload string) error {
 	log.Printf("[WEBHOOK] received event %s for project %s", eventType, projectID)
 
 	// 1. 创建事件日志
@@ -46,6 +46,8 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 		domain.NewWebhookEventLogID(s.idGenerator.Generate()),
 		domain.NewProjectID(projectID),
 		eventType,
+		method,
+		headers,
 		payload,
 	)
 	if err != nil {

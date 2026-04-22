@@ -24,6 +24,12 @@ func NewWebhookHandler(webhookService *application.GitHubWebhookService) *Webhoo
 
 // HandleWebhook 处理 GitHub/ATG webhook 事件（无需认证）
 func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
+	// 获取请求方法
+	method := c.Request.Method
+
+	// 提取 Headers
+	headers := formatHeaders(c.Request.Header)
+
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -94,7 +100,7 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	// 处理事件
-	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, payload); err != nil {
+	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, method, headers, payload); err != nil {
 		log.Printf("[WEBHOOK] failed to handle event: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -117,6 +123,12 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 		return
 	}
 	repoName := owner + "/" + repo
+
+	// 获取请求方法
+	method := c.Request.Method
+
+	// 提取 Headers
+	headers := formatHeaders(c.Request.Header)
 
 	// 读取原始 body
 	body, err := io.ReadAll(c.Request.Body)
@@ -178,7 +190,7 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 	}
 
 	// 处理事件
-	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, payload); err != nil {
+	if err := h.webhookService.HandleWebhookEvent(c.Request.Context(), matchedConfig.ID().String(), matchedConfig.ProjectID().String(), eventType, method, headers, payload); err != nil {
 		log.Printf("[WEBHOOK] failed to handle event: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -190,6 +202,17 @@ func (h *WebhookHandler) HandleWebhookByRepo(c *gin.Context) {
 		"repo":       repoName,
 		"project_id": matchedConfig.ProjectID().String(),
 	})
+}
+
+// formatHeaders 将请求头转换为字符串格式
+func formatHeaders(header map[string][]string) string {
+	var lines []string
+	for key, values := range header {
+		for _, value := range values {
+			lines = append(lines, key+": "+value)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // getEventType 获取事件类型，支持 GitHub 和 ATG/AtomGit 的 webhook
