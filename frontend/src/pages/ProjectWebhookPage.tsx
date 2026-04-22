@@ -496,10 +496,19 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     },
     {
       title: '触发的心跳',
-      dataIndex: 'trigger_heartbeat_id',
-      key: 'trigger_heartbeat_id',
+      key: 'triggered_heartbeats',
       ellipsis: true,
-      render: (id: string) => id || '-',
+      width: 200,
+      render: (_, record) => {
+        const triggered = record.triggered_heartbeats || [];
+        if (triggered.length === 0) {
+          return record.trigger_heartbeat_id || '-';
+        }
+        if (triggered.length === 1) {
+          return triggered[0].heartbeat_id || '-';
+        }
+        return `${triggered.length} 个心跳`;
+      },
     },
     {
       title: '错误信息',
@@ -532,36 +541,59 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       title: '操作',
       key: 'action',
       width: 180,
-      render: (_, record) => (
-        <Space>
-          {record.requirement_id && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleViewTrace(record.requirement_id)}
-            >
-              查看链路
-            </Button>
-          )}
-          {record.trigger_heartbeat_id ? (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
-            >
-              重新触发
-            </Button>
-          ) : (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleRetriggerByEventType(record.event_type)}
-            >
-              手动触发
-            </Button>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const triggered = record.triggered_heartbeats || [];
+        // 如果有触发的心跳，显示"查看链路"按钮
+        const hasTriggered = triggered.length > 0;
+        const firstTriggered = hasTriggered ? triggered[0] : null;
+
+        // 使用触发的心跳中的 requirement_id（优先）或旧字段
+        const requirementId = hasTriggered && firstTriggered?.requirement_id
+          ? firstTriggered.requirement_id
+          : record.requirement_id;
+
+        return (
+          <Space>
+            {requirementId && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleViewTrace(requirementId)}
+              >
+                查看链路
+              </Button>
+            )}
+            {hasTriggered ? (
+              // 有触发的心跳，显示重新触发按钮（使用第一个）
+              <Button
+                type="link"
+                size="small"
+                onClick={() => firstTriggered && handleRetrigger(firstTriggered.heartbeat_id)}
+              >
+                重新触发
+              </Button>
+            ) : record.trigger_heartbeat_id ? (
+              // 兼容旧数据
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
+              >
+                重新触发
+              </Button>
+            ) : (
+              // 没有任何触发记录，显示手动触发
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleRetriggerByEventType(record.event_type)}
+              >
+                手动触发
+              </Button>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -691,6 +723,77 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 onChange: (page) => fetchEventLogs(selectedConfig!.id, (page - 1) * logsLimit),
               }}
               size="small"
+              expandable={{
+                expandedRowRender: (record) => {
+                  const triggered = record.triggered_heartbeats || [];
+                  if (triggered.length === 0) {
+                    return <span>无触发的心跳</span>;
+                  }
+                  return (
+                    <div style={{ margin: '8px 0' }}>
+                      <div style={{ fontWeight: 500, marginBottom: 8 }}>触发的心跳列表：</div>
+                      <Table
+                        dataSource={triggered}
+                        columns={[
+                          {
+                            title: '心跳 ID',
+                            dataIndex: 'heartbeat_id',
+                            key: 'heartbeat_id',
+                            width: 200,
+                            render: (id: string) => {
+                              const hb = heartbeats.find((h) => h.id === id);
+                              return hb?.name || id;
+                            },
+                          },
+                          {
+                            title: '需求 ID',
+                            dataIndex: 'requirement_id',
+                            key: 'requirement_id',
+                            ellipsis: true,
+                            render: (id: string) => id || '-',
+                          },
+                          {
+                            title: '触发时间',
+                            dataIndex: 'triggered_at',
+                            key: 'triggered_at',
+                            width: 170,
+                            render: (time: number) => new Date(time).toLocaleString(),
+                          },
+                          {
+                            title: '操作',
+                            key: 'action',
+                            width: 120,
+                            render: (_, t) => (
+                              <Space>
+                                {t.requirement_id && (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    onClick={() => handleViewTrace(t.requirement_id)}
+                                  >
+                                    查看链路
+                                  </Button>
+                                )}
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  onClick={() => handleRetrigger(t.heartbeat_id)}
+                                >
+                                  重新触发
+                                </Button>
+                              </Space>
+                            ),
+                          },
+                        ]}
+                        pagination={false}
+                        size="small"
+                        rowKey="id"
+                      />
+                    </div>
+                  );
+                },
+                rowExpandable: (record) => (record.triggered_heartbeats?.length || 0) > 0,
+              }}
             />
           </div>
         ),

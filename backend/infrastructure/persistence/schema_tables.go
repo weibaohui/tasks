@@ -424,4 +424,16 @@ CREATE TABLE IF NOT EXISTS webhook_heartbeat_bindings (
     FOREIGN KEY (github_webhook_config_id) REFERENCES github_webhook_configs(id) ON DELETE CASCADE,
     FOREIGN KEY (heartbeat_id) REFERENCES heartbeats(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS webhook_event_triggered_heartbeats (
+    id TEXT PRIMARY KEY,
+    webhook_event_log_id TEXT NOT NULL,
+    heartbeat_id TEXT NOT NULL,
+    requirement_id TEXT,
+    triggered_at INTEGER NOT NULL,
+    FOREIGN KEY (webhook_event_log_id) REFERENCES webhook_event_logs(id) ON DELETE CASCADE,
+    FOREIGN KEY (heartbeat_id) REFERENCES heartbeats(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_event_triggered_heartbeats_event_id ON webhook_event_triggered_heartbeats(webhook_event_log_id);
 `

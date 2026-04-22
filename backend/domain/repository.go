@@ -281,3 +281,10 @@ type WebhookHeartbeatBindingRepository interface {
 	Delete(ctx context.Context, id WebhookHeartbeatBindingID) error
 	DeleteByHeartbeatID(ctx context.Context, heartbeatID HeartbeatID) error
 }
+
+// WebhookEventTriggeredHeartbeatRepository Webhook 事件触发的心跳记录仓储
+type WebhookEventTriggeredHeartbeatRepository interface {
+	Save(ctx context.Context, triggered *WebhookEventTriggeredHeartbeat) error
+	FindByEventLogID(ctx context.Context, eventLogID WebhookEventLogID) ([]*WebhookEventTriggeredHeartbeat, error)
+	DeleteByEventLogID(ctx context.Context, eventLogID WebhookEventLogID) error
+}

@@ -214,6 +214,10 @@ func main() {
 	if err := _persistence.MigrateGitHubWebhookConfigColumns(db); err != nil {
 		logger.Fatal("Failed to migrate github_webhook_configs columns", zap.Error(err))
 	}
+	// 兼容旧数据库：创建 webhook_event_triggered_heartbeats 表
+	if err := _persistence.MigrateWebhookEventTriggeredHeartbeatsTable(db); err != nil {
+		logger.Fatal("Failed to migrate webhook_event_triggered_heartbeats table", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖
@@ -395,6 +399,7 @@ func main() {
 	// 初始化 Webhook 相关组件
 	webhookConfigRepo := _persistence.NewSQLiteGitHubWebhookConfigRepository(db)
 	webhookEventLogRepo := _persistence.NewSQLiteWebhookEventLogRepository(db)
+	webhookEventTriggeredHeartbeatRepo := _persistence.NewSQLiteWebhookEventTriggeredHeartbeatRepository(db)
 	// 使用 PublicURL（公网地址）作为 webhook 的回调地址
 	// 优先从 ~/.taskmanager/config.json 读取（tunnel 创建时保存），否则使用配置文件中的 PublicURL
 	webhookURL := config.GetPublicURL()
@@ -409,6 +414,7 @@ func main() {
 		webhookEventLogRepo,
 		webhookBindingRepo,
 		heartbeatRepo,
+		webhookEventTriggeredHeartbeatRepo,
 		heartbeatTriggerService,
 		idGenerator,
 	)

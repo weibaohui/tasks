@@ -439,14 +439,14 @@ func (h *GitHubWebhookHandler) ListEventLogs(c *gin.Context) {
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	logs, total, err := h.webhookService.ListEventLogs(c.Request.Context(), config.ProjectID().String(), limit, offset)
+	logs, triggered, total, err := h.webhookService.ListEventLogsWithTriggeredHeartbeats(c.Request.Context(), config.ProjectID().String(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()})
 		return
 	}
 	resp := make([]map[string]interface{}, 0, len(logs))
 	for _, log := range logs {
-		resp = append(resp, eventLogToMap(log))
+		resp = append(resp, eventLogToMap(log, triggered))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"data":   resp,
@@ -550,17 +550,30 @@ func configToMap(config *domain.GitHubWebhookConfig) map[string]interface{} {
 	}
 }
 
-func eventLogToMap(log *domain.WebhookEventLog) map[string]interface{} {
+func eventLogToMap(log *domain.WebhookEventLog, allTriggered []*domain.WebhookEventTriggeredHeartbeat) map[string]interface{} {
+	// 筛选出属于当前事件的心跳
+	triggeredHeartbeats := make([]map[string]interface{}, 0)
+	for _, t := range allTriggered {
+		if t.WebhookEventLogID() == log.ID() {
+			triggeredHeartbeats = append(triggeredHeartbeats, map[string]interface{}{
+				"id":             t.ID().String(),
+				"heartbeat_id":    t.HeartbeatID().String(),
+				"requirement_id": t.RequirementID(),
+				"triggered_at":    t.TriggeredAt().UnixMilli(),
+			})
+		}
+	}
 	return map[string]interface{}{
-		"id":                   log.ID().String(),
-		"project_id":           log.ProjectID().String(),
-		"event_type":           log.EventType(),
-		"payload":              log.Payload(),
-		"status":               string(log.Status()),
-		"trigger_heartbeat_id": log.TriggerHeartbeatID(),
-		"requirement_id":       log.RequirementID(),
-		"error_message":        log.ErrorMessage(),
-		"received_at":          log.ReceivedAt().UnixMilli(),
+		"id":                      log.ID().String(),
+		"project_id":              log.ProjectID().String(),
+		"event_type":              log.EventType(),
+		"payload":                 log.Payload(),
+		"status":                  string(log.Status()),
+		"trigger_heartbeat_id":    log.TriggerHeartbeatID(),
+		"requirement_id":          log.RequirementID(),
+		"error_message":           log.ErrorMessage(),
+		"received_at":             log.ReceivedAt().UnixMilli(),
+		"triggered_heartbeats":    triggeredHeartbeats,
 	}
 }
 

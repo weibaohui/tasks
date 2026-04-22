@@ -207,6 +207,10 @@ func (l *WebhookEventLog) SetFailed(errMsg string) {
 	l.errorMessage = errMsg
 }
 
+func (l *WebhookEventLog) SetStatus(status WebhookEventStatus) {
+	l.status = status
+}
+
 type WebhookEventLogSnapshot struct {
 	ID                 WebhookEventLogID
 	ProjectID          ProjectID
@@ -349,4 +353,75 @@ func (b *WebhookHeartbeatBinding) FromSnapshot(s WebhookHeartbeatBindingSnapshot
 	b.heartbeatID = s.HeartbeatID
 	b.enabled = s.Enabled
 	b.createdAt = s.CreatedAt
+}
+
+// WebhookEventTriggeredHeartbeat 表示一个 Webhook 事件触发的心跳记录
+type WebhookEventTriggeredHeartbeatID struct {
+	value string
+}
+
+func NewWebhookEventTriggeredHeartbeatID(value string) WebhookEventTriggeredHeartbeatID {
+	return WebhookEventTriggeredHeartbeatID{value: value}
+}
+
+func (id WebhookEventTriggeredHeartbeatID) String() string {
+	return id.value
+}
+
+type WebhookEventTriggeredHeartbeat struct {
+	id              WebhookEventTriggeredHeartbeatID
+	webhookEventLogID WebhookEventLogID
+	heartbeatID     HeartbeatID
+	requirementID   string
+	triggeredAt     time.Time
+}
+
+func NewWebhookEventTriggeredHeartbeat(
+	id WebhookEventTriggeredHeartbeatID,
+	webhookEventLogID WebhookEventLogID,
+	heartbeatID HeartbeatID,
+	requirementID string,
+) (*WebhookEventTriggeredHeartbeat, error) {
+	if id.String() == "" {
+		return nil, errors.New("webhook event triggered heartbeat id is required")
+	}
+	return &WebhookEventTriggeredHeartbeat{
+		id:              id,
+		webhookEventLogID: webhookEventLogID,
+		heartbeatID:     heartbeatID,
+		requirementID:   requirementID,
+		triggeredAt:     time.Now(),
+	}, nil
+}
+
+func (t *WebhookEventTriggeredHeartbeat) ID() WebhookEventTriggeredHeartbeatID { return t.id }
+func (t *WebhookEventTriggeredHeartbeat) WebhookEventLogID() WebhookEventLogID { return t.webhookEventLogID }
+func (t *WebhookEventTriggeredHeartbeat) HeartbeatID() HeartbeatID             { return t.heartbeatID }
+func (t *WebhookEventTriggeredHeartbeat) RequirementID() string                 { return t.requirementID }
+func (t *WebhookEventTriggeredHeartbeat) TriggeredAt() time.Time                { return t.triggeredAt }
+
+type WebhookEventTriggeredHeartbeatSnapshot struct {
+	ID                WebhookEventTriggeredHeartbeatID
+	WebhookEventLogID  WebhookEventLogID
+	HeartbeatID       HeartbeatID
+	RequirementID     string
+	TriggeredAt       time.Time
+}
+
+func (t *WebhookEventTriggeredHeartbeat) ToSnapshot() WebhookEventTriggeredHeartbeatSnapshot {
+	return WebhookEventTriggeredHeartbeatSnapshot{
+		ID:               t.id,
+		WebhookEventLogID: t.webhookEventLogID,
+		HeartbeatID:      t.heartbeatID,
+		RequirementID:    t.requirementID,
+		TriggeredAt:      t.triggeredAt,
+	}
+}
+
+func (t *WebhookEventTriggeredHeartbeat) FromSnapshot(s WebhookEventTriggeredHeartbeatSnapshot) {
+	t.id = s.ID
+	t.webhookEventLogID = s.WebhookEventLogID
+	t.heartbeatID = s.HeartbeatID
+	t.requirementID = s.RequirementID
+	t.triggeredAt = s.TriggeredAt
 }
