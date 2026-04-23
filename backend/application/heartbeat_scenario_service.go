@@ -361,25 +361,29 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"- 如遇到编译/测试失败，在 PR 或 issue 下评论说明，不强制提交。",
 		},
 		{
-			Name:            "PR 需求评审",
+			Name:            "Issue 需求评审",
 			IntervalMinutes: 480,
-			RequirementType: "github_pr_review",
+			RequirementType: "github_issue",
 			AgentCode:       "",
 			SortOrder:       3,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 open PR 是否已完成需求评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open Issue 进行需求评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
-				"1. 使用 gh pr list --repo owner/repo --state open 获取 open PRs。\n" +
-				"2. 对每个 PR，先检查是否已有你的评论。如有，跳过。\n" +
-				"3. 再检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
-				"4. 若不存在，通过 PR 描述或 API 查找关联的 issue，阅读 issue 内容后在 PR 下评论：\n" +
-				"   - 原始需求摘要\n" +
+				"1. 使用 gh issue list --repo owner/repo --state open 获取 open Issues。\n" +
+				"2. 对每个 Issue，检查是否已有你的评论。如有，跳过。\n" +
+				"3. 检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
+				"4. 若不存在，阅读 Issue 描述，从以下角度评审：\n" +
+				"   - 需求描述是否清晰完整\n" +
+				"   - 是否有明确的验收标准\n" +
+				"   - 是否存在矛盾或缺失信息\n" +
+				"5. 在 Issue 下评论：\n" +
 				"   - 需求评审结论（通过/需补充信息）\n" +
-				"5. 如果所有 PR 都已通过需求评审或处于冷却期，直接返回\"所有 PR 已完成需求评审\"。\n\n" +
+				"   - 具体补充建议（如有）\n" +
+				"6. 如果所有 Issue 都已通过需求评审或处于冷却期，直接返回\"所有 Issue 已完成需求评审\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 gh CLI 操作 GitHub。\n" +
 				"- 不修改任何源代码。\n" +
-				"- 每次最多评审 2 个 PR。",
+				"- 每次最多评审 2 个 Issue。",
 		},
 		{
 			Name:            "PR 代码质量评审",
@@ -541,25 +545,29 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"- 如遇到编译/测试失败，在 PR 或 issue 下评论说明，不强制提交。",
 		},
 		{
-			Name:            "PR 需求评审",
+			Name:            "Issue 需求评审",
 			IntervalMinutes: 480,
-			RequirementType: "atg_pr_review",
+			RequirementType: "atg_issue",
 			AgentCode:       "",
 			SortOrder:       3,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 open PR 是否已完成需求评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open Issue 进行需求评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
-				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，先检查是否已有你的评论。如有，跳过。\n" +
-				"3. 再检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
-				"4. 若不存在，通过 PR 描述或 API 查找关联的 issue，阅读 issue 内容后在 PR 下评论：\n" +
-				"   - 原始需求摘要\n" +
+				"1. 使用 atg issue list -R owner/repo 获取 open Issues。\n" +
+				"2. 对每个 Issue，检查是否已有你的评论。如有，跳过。\n" +
+				"3. 检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
+				"4. 若不存在，阅读 Issue 描述，从以下角度评审：\n" +
+				"   - 需求描述是否清晰完整\n" +
+				"   - 是否有明确的验收标准\n" +
+				"   - 是否存在矛盾或缺失信息\n" +
+				"5. 在 Issue 下评论：\n" +
 				"   - 需求评审结论（通过/需补充信息）\n" +
-				"5. 如果所有 PR 都已通过需求评审或处于冷却期，直接返回\"所有 PR 已完成需求评审\"。\n\n" +
+				"   - 具体补充建议（如有）\n" +
+				"6. 如果所有 Issue 都已通过需求评审或处于冷却期，直接返回\"所有 Issue 已完成需求评审\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
 				"- 不修改任何源代码。\n" +
-				"- 每次最多评审 2 个 PR。",
+				"- 每次最多评审 2 个 Issue。",
 		},
 		{
 			Name:            "PR 代码质量评审",
@@ -721,25 +729,29 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"- 如遇到编译/测试失败，在 PR 或 issue 下评论说明，不强制提交。",
 		},
 		{
-			Name:            "PR 需求评审",
+			Name:            "Issue 需求评审",
 			IntervalMinutes: 480,
-			RequirementType: "atg_pr_review",
+			RequirementType: "atg_issue",
 			AgentCode:       "",
 			SortOrder:       3,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 open PR 是否已完成需求评审。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：对 open Issue 进行需求评审。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
-				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，先检查是否已有你的评论。如有，跳过。\n" +
-				"3. 再检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
-				"4. 若不存在，通过 PR 描述或 API 查找关联的 issue，阅读 issue 内容后在 PR 下评论：\n" +
-				"   - 原始需求摘要\n" +
+				"1. 使用 atg issue list -R owner/repo 获取 open Issues。\n" +
+				"2. 对每个 Issue，检查是否已有你的评论。如有，跳过。\n" +
+				"3. 检查评论中是否包含\"需求评审通过\"字样。若已存在，跳过。\n" +
+				"4. 若不存在，阅读 Issue 描述，从以下角度评审：\n" +
+				"   - 需求描述是否清晰完整\n" +
+				"   - 是否有明确的验收标准\n" +
+				"   - 是否存在矛盾或缺失信息\n" +
+				"5. 在 Issue 下评论：\n" +
 				"   - 需求评审结论（通过/需补充信息）\n" +
-				"5. 如果所有 PR 都已通过需求评审或处于冷却期，直接返回\"所有 PR 已完成需求评审\"。\n\n" +
+				"   - 具体补充建议（如有）\n" +
+				"6. 如果所有 Issue 都已通过需求评审或处于冷却期，直接返回\"所有 Issue 已完成需求评审\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
 				"- 不修改任何源代码。\n" +
-				"- 每次最多评审 2 个 PR。",
+				"- 每次最多评审 2 个 Issue。",
 		},
 		{
 			Name:            "PR 代码质量评审",
