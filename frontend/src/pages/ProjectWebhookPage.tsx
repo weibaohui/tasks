@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Empty,
   Form,
   Input,
   Modal,
@@ -11,6 +12,7 @@ import {
   Switch,
   Table,
   Tag,
+  Typography,
   message,
   Select,
   Tabs,
@@ -37,6 +39,7 @@ import {
   type WebhookEventLog,
   type WebhookHeartbeatBinding,
   type HeartbeatOption,
+  type TriggeredHeartbeat,
 } from '../api/githubWebhookApi';
 import { listProjects, getRequirement } from '../api/projectRequirementApi';
 import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES } from '../types/githubWebhook';
@@ -67,6 +70,7 @@ function normalizeGitHubRepo(repoURL: string): string {
 }
 
 export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selectedProject = null }) => {
+  const { Text } = Typography;
   const { user } = useAuthStore();
   const [configs, setConfigs] = useState<GitHubWebhookConfig[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -115,6 +119,11 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [currentMethod, setCurrentMethod] = useState('');
   const [currentHeaders, setCurrentHeaders] = useState('');
 
+  // 触发的心跳查看 Modal state
+  const [triggeredHeartbeatsModalVisible, setTriggeredHeartbeatsModalVisible] = useState(false);
+  const [currentTriggeredHeartbeats, setCurrentTriggeredHeartbeats] = useState<TriggeredHeartbeat[]>([]);
+  const [currentEventLogTime, setCurrentEventLogTime] = useState<string>('');
+
   const fetchConfigs = async () => {
     setLoading(true);
     try {
@@ -162,6 +171,12 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     } catch {
       message.error('清空日志失败');
     }
+  };
+
+  const handleViewTriggeredHeartbeats = (triggered: TriggeredHeartbeat[], receivedAt: number) => {
+    setCurrentTriggeredHeartbeats(triggered || []);
+    setCurrentEventLogTime(new Date(receivedAt).toLocaleString());
+    setTriggeredHeartbeatsModalVisible(true);
   };
 
   const fetchBindings = async (configId: string) => {
@@ -495,18 +510,15 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '触发的心跳',
       key: 'triggered_heartbeats',
-      ellipsis: true,
-      width: 200,
-      minWidth: 150,
+      width: 100,
+      minWidth: 80,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        if (triggered.length === 0) {
-          return record.trigger_heartbeat_id || '-';
+        const count = triggered.length || (record.trigger_heartbeat_id ? 1 : 0);
+        if (count === 0) {
+          return '-';
         }
-        if (triggered.length === 1) {
-          return triggered[0].heartbeat_id || '-';
-        }
-        return `${triggered.length} 个心跳`;
+        return count;
       },
     },
     {
@@ -542,56 +554,59 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '操作',
       key: 'action',
-      width: 180,
-      minWidth: 150,
+      width: 200,
+      minWidth: 180,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        // 如果有触发的心跳，显示"查看链路"按钮
-        const hasTriggered = triggered.length > 0;
-        const firstTriggered = hasTriggered ? triggered[0] : null;
+        const hasTriggered = triggered.length > 0 || record.trigger_heartbeat_id;
+        const firstTriggered = triggered.length > 0 ? triggered[0] : null;
 
         // 使用触发的心跳中的 requirement_id（优先）或旧字段
-        const requirementId = hasTriggered && firstTriggered?.requirement_id
-          ? firstTriggered.requirement_id
-          : record.requirement_id;
+        const requirementId = firstTriggered?.requirement_id || record.requirement_id;
 
         return (
-          <Space>
+          <Space size="small">
+            {hasTriggered && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleViewTriggeredHeartbeats(triggered, record.received_at)}
+              >
+                查看心跳 ({triggered.length || 1})
+              </Button>
+            )}
             {requirementId && (
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleViewTrace(requirementId)}
               >
-                查看链路
+                链路
               </Button>
             )}
-            {hasTriggered ? (
-              // 有触发的心跳，显示重新触发按钮（使用第一个）
+            {firstTriggered ? (
               <Button
                 type="link"
                 size="small"
-                onClick={() => firstTriggered && handleRetrigger(firstTriggered.heartbeat_id)}
+                onClick={() => handleRetrigger(firstTriggered.heartbeat_id)}
               >
-                重新触发
+                重试
               </Button>
             ) : record.trigger_heartbeat_id ? (
-              // 兼容旧数据
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
               >
-                重新触发
+                重试
               </Button>
             ) : (
-              // 没有任何触发记录，显示手动触发
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleRetriggerByEventType(record.event_type)}
               >
-                手动触发
+                触发
               </Button>
             )}
           </Space>
@@ -1072,6 +1087,82 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
             </pre>
           </div>
         </div>
+      </Modal>
+
+      {/* 触发的心跳查看 Modal */}
+      <Modal
+        title={`触发的心跳列表 - ${currentEventLogTime}`}
+        open={triggeredHeartbeatsModalVisible}
+        onCancel={() => setTriggeredHeartbeatsModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {currentTriggeredHeartbeats.length === 0 ? (
+          <Empty description="该事件没有触发任何心跳" />
+        ) : (
+          <Table
+            dataSource={currentTriggeredHeartbeats}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            columns={[
+              {
+                title: '心跳',
+                key: 'heartbeat',
+                render: (_, t) => {
+                  const hb = heartbeats.find((h) => h.id === t.heartbeat_id);
+                  return hb ? (
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{hb.name}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{t.heartbeat_id}</Text>
+                    </Space>
+                  ) : (
+                    <Text type="secondary">{t.heartbeat_id}</Text>
+                  );
+                },
+              },
+              {
+                title: '需求 ID',
+                dataIndex: 'requirement_id',
+                key: 'requirement_id',
+                ellipsis: true,
+                render: (id: string) => id || '-',
+              },
+              {
+                title: '触发时间',
+                dataIndex: 'triggered_at',
+                key: 'triggered_at',
+                width: 170,
+                render: (time: number) => new Date(time).toLocaleString(),
+              },
+              {
+                title: '操作',
+                key: 'action',
+                width: 150,
+                render: (_, t) => (
+                  <Space size="small">
+                    {t.requirement_id && (
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => handleViewTrace(t.requirement_id)}
+                      >
+                        查看链路
+                      </Button>
+                    )}
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => handleRetrigger(t.heartbeat_id)}
+                    >
+                      重新触发
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        )}
       </Modal>
     </div>
   );
