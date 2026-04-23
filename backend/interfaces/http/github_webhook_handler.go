@@ -494,6 +494,15 @@ func (h *GitHubWebhookHandler) CreateBinding(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
+	// 延迟分钟数上限校验
+	if req.DelayMinutes < 0 {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "delay_minutes cannot be negative"})
+		return
+	}
+	if req.DelayMinutes > 60 {
+		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: "delay_minutes cannot exceed 60 minutes"})
+		return
+	}
 	binding, err := h.webhookService.CreateBinding(c.Request.Context(), req.ProjectID, req.ConfigID, req.EventType, req.HeartbeatID, req.DelayMinutes)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})

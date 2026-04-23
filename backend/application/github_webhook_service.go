@@ -119,10 +119,13 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 		}
 
 		if delayMinutes > 0 {
+			log.Printf("[WEBHOOK] heartbeat %s will trigger after %d minutes delay", heartbeatID, delayMinutes)
 			go func(delay int) {
 				time.Sleep(time.Duration(delay) * time.Minute)
 				trigger()
 			}(delayMinutes)
+			// 延迟触发已成功调度
+			hasSuccess = true
 		} else {
 			trigger()
 			hasSuccess = true
