@@ -39,7 +39,7 @@ import {
   type HeartbeatOption,
 } from '../api/githubWebhookApi';
 import { listProjects, getRequirement } from '../api/projectRequirementApi';
-import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES, EVENT_TO_REQUIREMENT_TYPE } from '../types/githubWebhook';
+import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES } from '../types/githubWebhook';
 import type { Project } from '../types/projectRequirement';
 import { detectPlatformType } from '../types/projectRequirement';
 import { useAuthStore } from '../stores/authStore';
@@ -99,21 +99,10 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     return detectPlatformType(project.git_repo_url);
   }, [selectedConfig?.project_id, projects]);
 
-  // 绑定modal中选中事件类型state
-  const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
-
-  // 根据选中事件类型过滤后的心跳列表
+  // 心跳列表不过滤，显示所有已启用的心跳
   const filteredHeartbeats = useMemo(() => {
-    if (!selectedEventType || !platformType) {
-      return heartbeats.filter((h) => h.enabled);
-    }
-    const mapping = EVENT_TO_REQUIREMENT_TYPE[selectedEventType];
-    if (!mapping) {
-      return heartbeats.filter((h) => h.enabled);
-    }
-    const requiredType = platformType === 'github' ? mapping.github : mapping.atg;
-    return heartbeats.filter((h) => h.enabled && h.requirement_type === requiredType);
-  }, [heartbeats, selectedEventType, platformType]);
+    return heartbeats.filter((h) => h.enabled);
+  }, [heartbeats]);
 
   // Trace viewer state
   const [traceVisible, setTraceVisible] = useState(false);
@@ -966,7 +955,6 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         onCancel={() => {
           setBindingModalOpen(false);
           bindingForm.resetFields();
-          setSelectedEventType(null);
         }}
         destroyOnClose
       >
@@ -982,14 +970,12 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 label: e.label,
                 value: e.value,
               }))}
-              onChange={(value) => setSelectedEventType(value)}
             />
           </Form.Item>
           <Form.Item
             label="触发的心跳"
             name="heartbeat_id"
             rules={[{ required: true, message: '请选择心跳' }]}
-            extra={selectedEventType && filteredHeartbeats.length === 0 ? '当前事件类型没有匹配的心跳，请先为项目应用对应场景' : ''}
           >
             <Select
               placeholder="选择心跳"
