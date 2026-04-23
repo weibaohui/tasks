@@ -46,9 +46,11 @@ prepare-embed:
 	@echo "前端文件已复制到 backend/internal/embed/ui/dist/"
 
 # 安装
-install: build
+install: clean build
 	@echo "安装 taskmanager 到 ~/bin..."
 	@mkdir -p $(HOME)/bin
+	@rm -f $(HOME)/bin/taskmanager-server
+	@rm -f $(HOME)/bin/taskmanager
 	@cp backend/bin/taskmanager-server $(HOME)/bin/taskmanager-server
 	@cp backend/bin/taskmanager $(HOME)/bin/taskmanager
 	@echo "安装完成！"

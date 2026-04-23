@@ -647,6 +647,14 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       },
     },
     {
+      title: '延迟',
+      key: 'delay',
+      width: 100,
+      render: (_, record) => {
+        return record.delay_minutes > 0 ? `${record.delay_minutes} 分钟` : '-';
+      },
+    },
+    {
       title: '操作',
       key: 'action',
       width: 100,
