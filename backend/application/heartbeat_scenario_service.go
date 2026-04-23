@@ -396,8 +396,12 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 gh pr list --repo owner/repo --state open 获取 open PRs。\n" +
-				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"3. 使用 gh pr view 和 gh pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"2. 对每个 PR，检查是否有新 commit：\n" +
+				"   a. 使用 gh pr view <pr_number> --json updatedAt 获取 PR 最后更新时间\n" +
+				"   b. 使用 gh api repos/owner/repo/pulls/<pr_number>/comments 获取你对该 PR 的评论列表，取最新一条评论时间\n" +
+				"   c. 如果 PR 更新时间晚于你的最后评论时间，说明有新的 commit，需要重新评审\n" +
+				"   d. 如果 PR 更新时间早于或等于你的最后评论时间，说明没有新 commit，跳过（冷却机制）\n" +
+				"3. 使用 gh pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
 				"4. 将评审意见以评论形式发布到 PR 下。\n" +
 				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
@@ -580,8 +584,12 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"3. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"2. 对每个 PR，检查是否有新 commit：\n" +
+				"   a. 使用 atg pr view <pr_number> --output json 获取 PR 最后更新时间\n" +
+				"   b. 使用 atg note list -R owner/repo --pr <pr_number> 获取你对该 PR 的评论列表，取最新一条评论时间\n" +
+				"   c. 如果 PR 更新时间晚于你的最后评论时间，说明有新的 commit，需要重新评审\n" +
+				"   d. 如果 PR 更新时间早于或等于你的最后评论时间，说明没有新 commit，跳过（冷却机制）\n" +
+				"3. 使用 atg pr diff <pr_number> 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
 				"4. 将评审意见以评论形式发布到 PR 下。\n" +
 				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
@@ -764,8 +772,12 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 检查该 PR 是否已有你的评论。如有，跳过（冷却机制）。\n" +
-				"3. 使用 atg pr view 和 atg pr diff 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
+				"2. 对每个 PR，检查是否有新 commit：\n" +
+				"   a. 使用 atg pr view <pr_number> --output json 获取 PR 最后更新时间\n" +
+				"   b. 使用 atg note list -R owner/repo --pr <pr_number> 获取你对该 PR 的评论列表，取最新一条评论时间\n" +
+				"   c. 如果 PR 更新时间晚于你的最后评论时间，说明有新的 commit，需要重新评审\n" +
+				"   d. 如果 PR 更新时间早于或等于你的最后评论时间，说明没有新 commit，跳过（冷却机制）\n" +
+				"3. 使用 atg pr diff <pr_number> 查看变更，从代码质量、潜在 bug、安全漏洞、性能问题等角度进行评审。\n" +
 				"4. 将评审意见以评论形式发布到 PR 下。\n" +
 				"5. 如果没有符合条件的 PR，直接返回\"当前无待评审 PR\"。\n\n" +
 				"## 约束\n" +
