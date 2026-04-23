@@ -510,15 +510,17 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '触发的心跳',
       key: 'triggered_heartbeats',
-      width: 100,
-      minWidth: 80,
+      width: 120,
+      minWidth: 100,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        const count = triggered.length || (record.trigger_heartbeat_id ? 1 : 0);
-        if (count === 0) {
-          return '-';
+        if (triggered.length > 0) {
+          return triggered.length;
         }
-        return count;
+        if (record.trigger_heartbeat_id) {
+          return '1';
+        }
+        return '-';
       },
     },
     {
@@ -554,25 +556,25 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '操作',
       key: 'action',
-      width: 200,
-      minWidth: 180,
+      width: 280,
+      minWidth: 250,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        const hasTriggered = triggered.length > 0 || record.trigger_heartbeat_id;
-        const firstTriggered = triggered.length > 0 ? triggered[0] : null;
-
-        // 使用触发的心跳中的 requirement_id（优先）或旧字段
+        const hasTriggeredHeartbeats = triggered.length > 0;
+        const hasOldTriggerId = !!record.trigger_heartbeat_id;
+        const canTrigger = hasTriggeredHeartbeats || hasOldTriggerId;
+        const firstTriggered = hasTriggeredHeartbeats ? triggered[0] : null;
         const requirementId = firstTriggered?.requirement_id || record.requirement_id;
 
         return (
-          <Space size="small">
-            {hasTriggered && (
+          <Space size="small" wrap>
+            {canTrigger && (
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleViewTriggeredHeartbeats(triggered, record.received_at)}
               >
-                查看心跳 ({triggered.length || 1})
+                查看心跳({hasTriggeredHeartbeats ? triggered.length : 1})
               </Button>
             )}
             {requirementId && (
@@ -592,7 +594,7 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
               >
                 重试
               </Button>
-            ) : record.trigger_heartbeat_id ? (
+            ) : hasOldTriggerId ? (
               <Button
                 type="link"
                 size="small"
