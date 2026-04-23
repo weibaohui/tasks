@@ -164,6 +164,10 @@ func (m *testMockWebhookBindingRepo) DeleteByHeartbeatID(ctx context.Context, he
 	return nil
 }
 
+func (m *testMockWebhookBindingRepo) FindByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
 type testMockIDGen struct {
 	id string
 }
