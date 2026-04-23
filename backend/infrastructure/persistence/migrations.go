@@ -315,6 +315,33 @@ func MigrateWebhookEventTriggeredHeartbeatsTable(db *sql.DB) error {
 	return nil
 }
 
+// MigrateWebhookEventLogsAddColumns 为 webhook_event_logs 表添加缺失的列
+func MigrateWebhookEventLogsAddColumns(db *sql.DB) error {
+	columns, err := getTableColumns(db, "webhook_event_logs")
+	if err != nil {
+		return fmt.Errorf("获取 webhook_event_logs 表列信息失败: %w", err)
+	}
+
+	alterStatements := []struct {
+		column string
+		sql    string
+	}{
+		{"method", "ALTER TABLE webhook_event_logs ADD COLUMN method TEXT NOT NULL DEFAULT ''"},
+		{"headers", "ALTER TABLE webhook_event_logs ADD COLUMN headers TEXT NOT NULL DEFAULT ''"},
+		{"requirement_id", "ALTER TABLE webhook_event_logs ADD COLUMN requirement_id TEXT"},
+	}
+
+	for _, stmt := range alterStatements {
+		if _, exists := columns[stmt.column]; !exists {
+			if _, err := db.Exec(stmt.sql); err != nil {
+				return fmt.Errorf("添加 %s 列失败: %w", stmt.column, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // SeedHeartbeatTemplates 预置默认心跳模板（如果表为空）
 func SeedHeartbeatTemplates(db *sql.DB) error {
 	var count int

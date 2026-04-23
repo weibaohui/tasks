@@ -403,6 +403,8 @@ CREATE TABLE IF NOT EXISTS webhook_event_logs (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
+    method TEXT NOT NULL DEFAULT '',
+    headers TEXT NOT NULL DEFAULT '',
     payload TEXT NOT NULL,
     forwarder_status TEXT NOT NULL DEFAULT 'received',
     trigger_heartbeat_id TEXT,
