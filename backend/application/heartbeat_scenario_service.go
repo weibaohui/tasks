@@ -160,15 +160,62 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		return fmt.Errorf("scenario not found")
 	}
 
-	// 简化策略：删除该项目下所有现有心跳（由场景产生的或未修改的）
-	// 然后重新创建。未来可以优化为只删除由同一场景生成的心跳。
+	// 获取现有心跳，用于后续更新 bindings
 	existingHeartbeats, err := s.heartbeatRepo.FindByProjectID(ctx, domain.NewProjectID(projectID))
 	if err != nil {
 		return fmt.Errorf("failed to list existing heartbeats: %w", err)
 	}
+
+	// 建立旧心跳 name -> ID 的映射，用于更新 bindings
+	oldHeartbeatNameToID := make(map[string]domain.HeartbeatID)
 	for _, hb := range existingHeartbeats {
-		// 注意：不删除 bindings，因为 bindings 可能是用户手动创建的。
-		// 即使心跳被删除，binding 会在触发时发现心跳不存在而被跳过。
+		oldHeartbeatNameToID[hb.Name()] = hb.ID()
+	}
+
+	// 实例化场景心跳
+	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
+	if err != nil {
+		return fmt.Errorf("failed to apply scenario: %w", err)
+	}
+
+	// 建立新心跳 name -> 新心跳的映射
+	newHeartbeatByName := make(map[string]*domain.Heartbeat)
+	for _, hb := range heartbeats {
+		newHeartbeatByName[hb.Name()] = hb
+	}
+
+	// 删除旧心跳前，先更新所有引用旧心跳的 bindings 指向新心跳
+	for _, oldHB := range existingHeartbeats {
+		newHB, exists := newHeartbeatByName[oldHB.Name()]
+		if !exists {
+			// 新心跳中没有对应的（可能心跳被从场景中移除了），跳过 binding 更新
+			continue
+		}
+		// 查找所有引用旧心跳的 bindings，更新为新心跳 ID
+		bindings, err := s.bindingRepo.FindByHeartbeatID(ctx, oldHB.ID())
+		if err != nil {
+			return fmt.Errorf("failed to find bindings for heartbeat %s: %w", oldHB.ID().String(), err)
+		}
+		for _, binding := range bindings {
+			// 创建新的 binding，引用新心跳 ID
+			newBinding, err := domain.NewWebhookHeartbeatBinding(
+				binding.ID(),
+				binding.ProjectID(),
+				binding.ConfigID(),
+				binding.GitHubEventType(),
+				newHB.ID(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to update binding: %w", err)
+			}
+			if err := s.bindingRepo.Save(ctx, newBinding); err != nil {
+				return fmt.Errorf("failed to save binding: %w", err)
+			}
+		}
+	}
+
+	// 删除旧心跳
+	for _, hb := range existingHeartbeats {
 		if err := s.heartbeatRepo.Delete(ctx, hb.ID()); err != nil {
 			return fmt.Errorf("failed to delete existing heartbeat: %w", err)
 		}
@@ -179,12 +226,7 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 		}
 	}
 
-	// 实例化场景心跳
-	heartbeats, err := scenario.ApplyToProject(project.ID(), s.idGenerator, project.PlatformType())
-	if err != nil {
-		return fmt.Errorf("failed to apply scenario: %w", err)
-	}
-
+	// 保存新心跳
 	for _, hb := range heartbeats {
 		if err := s.heartbeatRepo.Save(ctx, hb); err != nil {
 			return fmt.Errorf("failed to save heartbeat: %w", err)
@@ -385,17 +427,19 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 gh pr list --repo owner/repo --state open 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（gh pr checks）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（gh pr checks）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 gh pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 gh pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 gh CLI 操作 GitHub。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{
@@ -563,17 +607,19 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（atg pr merge-status）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（atg pr merge-status）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 atg pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 atg pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{
@@ -741,17 +787,19 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
-			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态。\n\n" +
+			MDContent: "你是项目的自动化协作助手。当前任务是：检查 PR 是否达到可合并状态并执行合并。\n\n" +
 				"项目仓库：${project.git_repo_url}\n\n" +
 				"## 执行步骤\n" +
 				"1. 使用 atg pr list -R owner/repo 获取 open PRs。\n" +
-				"2. 对每个 PR，检查是否已有你的 /lgtm 评论。如有，跳过。\n" +
-				"3. 检查：CI 是否通过（atg pr merge-status）、是否有至少一条 /lgtm 或类似批准评论、是否有未解决的修改建议。\n" +
-				"4. 若满足合并条件，在 PR 下评论 /lgtm。\n" +
-				"5. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
+				"2. 对每个 PR 检查合并条件：\n" +
+				"   a. 检查 CI 是否通过（atg pr merge-status）\n" +
+				"   b. 检查是否有未解决的修改建议（change requests）\n" +
+				"3. 若 CI 通过且无未解决的修改建议，执行以下操作：\n" +
+				"   a. 若你已有 /lgtm 评论，直接使用 atg pr merge 合并\n" +
+				"   b. 若你没有 /lgtm 评论，先评论 /lgtm，再使用 atg pr merge 合并\n" +
+				"4. 如果没有满足条件的 PR，直接返回\"当前无可合并 PR\"。\n\n" +
 				"## 约束\n" +
 				"- 使用 atg CLI 操作 AtomGit。\n" +
-				"- 不实际执行合并操作（仅评论 /lgtm，由人类或后续流程触发合并）。\n" +
 				"- 每次最多检查 2 个 PR。",
 		},
 		{

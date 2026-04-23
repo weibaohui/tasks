@@ -74,6 +74,17 @@ func (r *SQLiteWebhookHeartbeatBindingRepository) Delete(ctx context.Context, id
 	return err
 }
 
+func (r *SQLiteWebhookHeartbeatBindingRepository) FindByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at
+		FROM webhook_heartbeat_bindings WHERE heartbeat_id = ?`, heartbeatID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanWebhookHeartbeatBindings(rows)
+}
+
 func (r *SQLiteWebhookHeartbeatBindingRepository) DeleteByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM webhook_heartbeat_bindings WHERE heartbeat_id = ?`, heartbeatID.String())
 	return err

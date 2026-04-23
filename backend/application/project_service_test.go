@@ -44,6 +44,10 @@ func (m *mockBindingRepoForProject) DeleteByHeartbeatID(ctx context.Context, hea
 	return nil
 }
 
+func (m *mockBindingRepoForProject) FindByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
 func setupTestProjectSvc() *ProjectApplicationService {
 	repo := newSharedMockProjectRepo()
 	idGen := &mockProjectIDGen{}

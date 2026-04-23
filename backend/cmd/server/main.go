@@ -354,9 +354,10 @@ func main() {
 	providerService := application.NewLLMProviderApplicationService(providerRepo, idGenerator, llm.TestLLMConnection)
 	conversationRecordService := application.NewConversationRecordApplicationService(conversationRecordRepo, idGenerator)
 	heartbeatScenarioService := application.NewHeartbeatScenarioService(heartbeatScenarioRepo, projectRepo, heartbeatRepo, webhookBindingRepo, idGenerator, heartbeatScheduler)
-	if err := heartbeatScenarioService.EnsureBuiltInScenarios(context.Background()); err != nil {
-		logger.Fatal("Failed to ensure built-in heartbeat scenarios", zap.Error(err))
-	}
+	// 禁用启动时自动刷新场景，避免心跳 ID 变化导致 webhook bindings 失效
+	// if err := heartbeatScenarioService.EnsureBuiltInScenarios(context.Background()); err != nil {
+	// 	logger.Fatal("Failed to ensure built-in heartbeat scenarios", zap.Error(err))
+	// }
 	projectService := application.NewProjectApplicationService(projectRepo, requirementTypeRepo, idGenerator, heartbeatScenarioService)
 	heartbeatService := application.NewHeartbeatApplicationService(heartbeatRepo, idGenerator, heartbeatScheduler)
 	heartbeatTemplateService := application.NewHeartbeatTemplateApplicationService(heartbeatTemplateRepo, idGenerator)
