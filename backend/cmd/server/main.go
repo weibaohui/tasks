@@ -218,6 +218,10 @@ func main() {
 	if err := _persistence.MigrateWebhookEventTriggeredHeartbeatsTable(db); err != nil {
 		logger.Fatal("Failed to migrate webhook_event_triggered_heartbeats table", zap.Error(err))
 	}
+	// 兼容旧数据库：为 webhook_event_logs 添加缺失的列
+	if err := _persistence.MigrateWebhookEventLogsAddColumns(db); err != nil {
+		logger.Fatal("Failed to migrate webhook_event_logs columns", zap.Error(err))
+	}
 	logger.Info("数据库初始化完成", zap.String("db_path", dbPath))
 
 	// 3. 初始化依赖

@@ -84,6 +84,9 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 
 	// 3. 触发每个绑定的心跳，并记录触发的心跳
 	hasSuccess := false
+	var capturedHeartbeatID string
+	var capturedRequirementID string
+
 	for _, binding := range bindings {
 		if !binding.Enabled() {
 			continue
@@ -103,6 +106,12 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 			requirementID := ""
 			if requirement != nil {
 				requirementID = requirement.ID().String()
+			}
+
+			// 记录第一个成功的触发（用于事件日志的 trigger_heartbeat_id 字段）
+			if capturedHeartbeatID == "" {
+				capturedHeartbeatID = heartbeatID
+				capturedRequirementID = requirementID
 			}
 
 			triggered, err := domain.NewWebhookEventTriggeredHeartbeat(
@@ -134,7 +143,11 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 
 	// 4. 更新事件日志状态
 	if hasSuccess {
-		eventLog.SetStatus(domain.WebhookEventStatusProcessed)
+		if capturedHeartbeatID != "" {
+			eventLog.SetProcessed(capturedHeartbeatID, capturedRequirementID)
+		} else {
+			eventLog.SetStatus(domain.WebhookEventStatusProcessed)
+		}
 	} else {
 		eventLog.SetFailed("all heartbeat triggers failed")
 	}
