@@ -294,10 +294,10 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     ]);
   };
 
-  const handleCreateBinding = async (values: { event_type: string; heartbeat_id: string }) => {
+  const handleCreateBinding = async (values: { event_type: string; heartbeat_id: string; delay_minutes: number }) => {
     if (!selectedConfig) return;
     try {
-      await createBinding(selectedConfig.project_id, selectedConfig.id, values.event_type, values.heartbeat_id);
+      await createBinding(selectedConfig.project_id, selectedConfig.id, values.event_type, values.heartbeat_id, values.delay_minutes || 0);
       message.success('创建绑定成功');
       setBindingModalOpen(false);
       bindingForm.resetFields();
@@ -989,6 +989,23 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 label: `${h.name} (${h.interval_minutes}分钟, ${h.agent_code})`,
                 value: h.id,
               }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="延迟执行"
+            name="delay_minutes"
+            extra="事件触发后，延迟一段时间再执行心跳，实现错峰效果"
+          >
+            <Select
+              placeholder="选择延迟时间"
+              allowClear
+              options={[
+                { label: '3 分钟', value: 3 },
+                { label: '5 分钟', value: 5 },
+                { label: '10 分钟', value: 10 },
+                { label: '15 分钟', value: 15 },
+                { label: '20 分钟', value: 20 },
+              ]}
             />
           </Form.Item>
         </Form>

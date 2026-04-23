@@ -168,6 +168,20 @@ func (m *testMockWebhookBindingRepo) FindByHeartbeatID(ctx context.Context, hear
 	return nil, nil
 }
 
+type testMockTriggeredHeartbeatRepo struct{}
+
+func (m *testMockTriggeredHeartbeatRepo) Save(ctx context.Context, triggered *domain.WebhookEventTriggeredHeartbeat) error {
+	return nil
+}
+
+func (m *testMockTriggeredHeartbeatRepo) FindByEventLogID(ctx context.Context, eventLogID domain.WebhookEventLogID) ([]*domain.WebhookEventTriggeredHeartbeat, error) {
+	return nil, nil
+}
+
+func (m *testMockTriggeredHeartbeatRepo) DeleteByEventLogID(ctx context.Context, eventLogID domain.WebhookEventLogID) error {
+	return nil
+}
+
 type testMockIDGen struct {
 	id string
 }
@@ -188,6 +202,7 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatNotFound(t *testing.T) {
 	eventLogRepo := &testMockWebhookEventLogRepo{}
 	bindingRepo := &testMockWebhookBindingRepo{}
 	heartbeatRepo := &testMockHeartbeatRepo{heartbeats: []*domain.Heartbeat{}}
+	triggeredHeartbeatRepo := &testMockTriggeredHeartbeatRepo{}
 	idGen := &testMockIDGen{id: "binding-001"}
 
 	triggerService := &HeartbeatTriggerService{}
@@ -197,11 +212,12 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatNotFound(t *testing.T) {
 		eventLogRepo,
 		bindingRepo,
 		heartbeatRepo,
+		triggeredHeartbeatRepo,
 		triggerService,
 		idGen,
 	)
 
-	_, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID)
+	_, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID, 0)
 	if err == nil {
 		t.Error("expected error for non-existent heartbeat")
 	}
@@ -237,6 +253,7 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatExists(t *testing.T) {
 	eventLogRepo := &testMockWebhookEventLogRepo{}
 	bindingRepo := &testMockWebhookBindingRepo{}
 	heartbeatRepo := &testMockHeartbeatRepo{heartbeats: []*domain.Heartbeat{hb}}
+	triggeredHeartbeatRepo := &testMockTriggeredHeartbeatRepo{}
 	idGen := &testMockIDGen{id: "binding-001"}
 
 	triggerService := &HeartbeatTriggerService{}
@@ -246,11 +263,12 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatExists(t *testing.T) {
 		eventLogRepo,
 		bindingRepo,
 		heartbeatRepo,
+		triggeredHeartbeatRepo,
 		triggerService,
 		idGen,
 	)
 
-	binding, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID)
+	binding, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID, 0)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -274,6 +292,7 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatRepoError(t *testing.T) {
 	eventLogRepo := &testMockWebhookEventLogRepo{}
 	bindingRepo := &testMockWebhookBindingRepo{}
 	heartbeatRepo := &testMockHeartbeatRepo{findErr: errors.New("database error")}
+	triggeredHeartbeatRepo := &testMockTriggeredHeartbeatRepo{}
 	idGen := &testMockIDGen{id: "binding-001"}
 
 	triggerService := &HeartbeatTriggerService{}
@@ -283,11 +302,12 @@ func TestGitHubWebhookService_CreateBinding_HeartbeatRepoError(t *testing.T) {
 		eventLogRepo,
 		bindingRepo,
 		heartbeatRepo,
+		triggeredHeartbeatRepo,
 		triggerService,
 		idGen,
 	)
 
-	_, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID)
+	_, err := svc.CreateBinding(ctx, projectID, configID, eventType, heartbeatID, 0)
 	if err == nil {
 		t.Error("expected error from heartbeat repo")
 	}

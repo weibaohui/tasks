@@ -197,13 +197,14 @@ func (s *HeartbeatScenarioService) ApplyScenarioToProject(ctx context.Context, p
 			return fmt.Errorf("failed to find bindings for heartbeat %s: %w", oldHB.ID().String(), err)
 		}
 		for _, binding := range bindings {
-			// 创建新的 binding，引用新心跳 ID
+			// 创建新的 binding，引用新心跳 ID，保留原 delayMinutes
 			newBinding, err := domain.NewWebhookHeartbeatBinding(
 				binding.ID(),
 				binding.ProjectID(),
 				binding.ConfigID(),
 				binding.GitHubEventType(),
 				newHB.ID(),
+				binding.DelayMinutes(),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to update binding: %w", err)

@@ -52,10 +52,11 @@ type UpdateConfigRequest struct {
 
 // CreateWebhookBindingRequest 创建心跳绑定请求
 type CreateWebhookBindingRequest struct {
-	ProjectID   string `json:"project_id" binding:"required"`
-	ConfigID    string `json:"config_id" binding:"required"`
-	EventType   string `json:"event_type" binding:"required"`
-	HeartbeatID string `json:"heartbeat_id" binding:"required"`
+	ProjectID    string `json:"project_id" binding:"required"`
+	ConfigID     string `json:"config_id" binding:"required"`
+	EventType    string `json:"event_type" binding:"required"`
+	HeartbeatID  string `json:"heartbeat_id" binding:"required"`
+	DelayMinutes int    `json:"delay_minutes"`
 }
 
 // ListConfigs 列出所有 webhook 配置
@@ -493,7 +494,7 @@ func (h *GitHubWebhookHandler) CreateBinding(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}
-	binding, err := h.webhookService.CreateBinding(c.Request.Context(), req.ProjectID, req.ConfigID, req.EventType, req.HeartbeatID)
+	binding, err := h.webhookService.CreateBinding(c.Request.Context(), req.ProjectID, req.ConfigID, req.EventType, req.HeartbeatID, req.DelayMinutes)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
@@ -585,6 +586,7 @@ func webhookBindingToMap(binding *domain.WebhookHeartbeatBinding) map[string]int
 		"github_event_type":        binding.GitHubEventType(),
 		"heartbeat_id":             binding.HeartbeatID().String(),
 		"enabled":                  binding.Enabled(),
+		"delay_minutes":            binding.DelayMinutes(),
 		"created_at":               binding.CreatedAt().UnixMilli(),
 	}
 }
