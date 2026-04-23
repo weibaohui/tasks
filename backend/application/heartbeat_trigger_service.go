@@ -228,12 +228,11 @@ func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heart
 		limit = 20
 	}
 	filter := domain.RequirementListFilter{
-		ProjectID:       ptrProjectID(hb.ProjectID()),
-		RequirementType: string(domain.RequirementTypeHeartbeat),
-		SortBy:          "created_at",
-		Order:           "desc",
-		Limit:           limit * 3,
-		Offset:          0,
+		ProjectID: ptrProjectID(hb.ProjectID()),
+		SortBy:    "created_at",
+		Order:     "desc",
+		Limit:     limit * 3,
+		Offset:    0,
 	}
 	reqs, err := s.requirementRepo.List(ctx, filter)
 	if err != nil {
