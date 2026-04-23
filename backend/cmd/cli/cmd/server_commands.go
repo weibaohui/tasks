@@ -61,6 +61,7 @@ var serverStartCmd = &cobra.Command{
 			fmt.Println("未找到 server 可执行文件，请确保已编译: make build")
 			return
 		}
+		fmt.Printf("使用服务器: %s\n", serverExe)
 
 		// 设置环境变量
 		env := os.Environ()

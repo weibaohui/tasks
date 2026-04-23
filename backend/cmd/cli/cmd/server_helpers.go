@@ -128,17 +128,15 @@ func findServerExecutable(cliPath string) string {
 
 	// 可能的 server 可执行文件路径（按优先级）
 	possiblePaths := []string{
-		// 用户本地安装路径（最高优先级）
+		// 用户本地安装路径（make install 安装位置）
 		filepath.Join(home, "bin", "taskmanager-server"),
-		// 与 CLI 同目录下的 server
+		// 与 CLI 同目录下的 server（开发环境）
 		filepath.Join(filepath.Dir(cliPath), "taskmanager-server"),
 		// 开发环境路径
 		"./backend/bin/taskmanager-server",
 		"./bin/taskmanager-server",
 		// 相对于 CLI 的上级目录
 		filepath.Join(filepath.Dir(cliPath), "..", "bin", "taskmanager-server"),
-		// 标准系统安装路径（兼容旧版本安装）
-		"/usr/local/bin/taskmanager-server",
 	}
 
 	for _, path := range possiblePaths {
