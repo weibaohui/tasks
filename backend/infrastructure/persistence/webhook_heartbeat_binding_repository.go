@@ -19,12 +19,13 @@ func NewSQLiteWebhookHeartbeatBindingRepository(db *sql.DB) *SQLiteWebhookHeartb
 func (r *SQLiteWebhookHeartbeatBindingRepository) Save(ctx context.Context, binding *domain.WebhookHeartbeatBinding) error {
 	snap := binding.ToSnapshot()
 	query := `
-		INSERT INTO webhook_heartbeat_bindings (id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO webhook_heartbeat_bindings (id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, delay_minutes, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			github_event_type=excluded.github_event_type,
 			heartbeat_id=excluded.heartbeat_id,
-			enabled=excluded.enabled
+			enabled=excluded.enabled,
+			delay_minutes=excluded.delay_minutes
 	`
 	_, err := r.db.ExecContext(
 		ctx,
@@ -35,6 +36,7 @@ func (r *SQLiteWebhookHeartbeatBindingRepository) Save(ctx context.Context, bind
 		snap.GitHubEventType,
 		snap.HeartbeatID.String(),
 		boolToInt(snap.Enabled),
+		snap.DelayMinutes,
 		snap.CreatedAt.Unix(),
 	)
 	return err
@@ -42,14 +44,14 @@ func (r *SQLiteWebhookHeartbeatBindingRepository) Save(ctx context.Context, bind
 
 func (r *SQLiteWebhookHeartbeatBindingRepository) FindByID(ctx context.Context, id domain.WebhookHeartbeatBindingID) (*domain.WebhookHeartbeatBinding, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at
+		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, delay_minutes, created_at
 		FROM webhook_heartbeat_bindings WHERE id = ?`, id.String())
 	return scanWebhookHeartbeatBinding(row)
 }
 
 func (r *SQLiteWebhookHeartbeatBindingRepository) FindByConfigID(ctx context.Context, configID domain.GitHubWebhookConfigID) ([]*domain.WebhookHeartbeatBinding, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at
+		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, delay_minutes, created_at
 		FROM webhook_heartbeat_bindings WHERE github_webhook_config_id = ? ORDER BY created_at`, configID.String())
 	if err != nil {
 		return nil, err
@@ -60,7 +62,7 @@ func (r *SQLiteWebhookHeartbeatBindingRepository) FindByConfigID(ctx context.Con
 
 func (r *SQLiteWebhookHeartbeatBindingRepository) FindByConfigIDAndEventType(ctx context.Context, configID domain.GitHubWebhookConfigID, eventType string) ([]*domain.WebhookHeartbeatBinding, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at
+		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, delay_minutes, created_at
 		FROM webhook_heartbeat_bindings WHERE github_webhook_config_id = ? AND github_event_type = ? AND enabled = 1`, configID.String(), eventType)
 	if err != nil {
 		return nil, err
@@ -76,7 +78,7 @@ func (r *SQLiteWebhookHeartbeatBindingRepository) Delete(ctx context.Context, id
 
 func (r *SQLiteWebhookHeartbeatBindingRepository) FindByHeartbeatID(ctx context.Context, heartbeatID domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, created_at
+		SELECT id, project_id, github_webhook_config_id, github_event_type, heartbeat_id, enabled, delay_minutes, created_at
 		FROM webhook_heartbeat_bindings WHERE heartbeat_id = ?`, heartbeatID.String())
 	if err != nil {
 		return nil, err
@@ -112,9 +114,10 @@ func scanWebhookHeartbeatBinding(scanner rowScanner) (*domain.WebhookHeartbeatBi
 		eventType      string
 		heartbeatIDStr string
 		enabled        int
+		delayMinutes   int
 		createdAtUnix  int64
 	)
-	err := scanner.Scan(&idStr, &projectIDStr, &configIDStr, &eventType, &heartbeatIDStr, &enabled, &createdAtUnix)
+	err := scanner.Scan(&idStr, &projectIDStr, &configIDStr, &eventType, &heartbeatIDStr, &enabled, &delayMinutes, &createdAtUnix)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -129,6 +132,7 @@ func scanWebhookHeartbeatBinding(scanner rowScanner) (*domain.WebhookHeartbeatBi
 		GitHubEventType: eventType,
 		HeartbeatID:     domain.NewHeartbeatID(heartbeatIDStr),
 		Enabled:         enabled == 1,
+		DelayMinutes:    delayMinutes,
 		CreatedAt:       time.Unix(createdAtUnix, 0),
 	})
 	return binding, nil

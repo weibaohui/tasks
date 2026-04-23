@@ -275,6 +275,7 @@ type WebhookHeartbeatBinding struct {
 	githubEventType    string
 	heartbeatID        HeartbeatID
 	enabled            bool
+	delayMinutes       int
 	createdAt          time.Time
 }
 
@@ -284,6 +285,7 @@ func NewWebhookHeartbeatBinding(
 	configID GitHubWebhookConfigID,
 	githubEventType string,
 	heartbeatID HeartbeatID,
+	delayMinutes int,
 ) (*WebhookHeartbeatBinding, error) {
 	if id.String() == "" {
 		return nil, ErrWebhookBindingIDRequired
@@ -307,6 +309,7 @@ func NewWebhookHeartbeatBinding(
 		githubEventType: strings.TrimSpace(githubEventType),
 		heartbeatID:     heartbeatID,
 		enabled:         true,
+		delayMinutes:    delayMinutes,
 		createdAt:       time.Now(),
 	}, nil
 }
@@ -323,6 +326,14 @@ func (b *WebhookHeartbeatBinding) SetEnabled(v bool) {
 	b.enabled = v
 }
 
+func (b *WebhookHeartbeatBinding) DelayMinutes() int {
+	return b.delayMinutes
+}
+
+func (b *WebhookHeartbeatBinding) SetDelayMinutes(v int) {
+	b.delayMinutes = v
+}
+
 type WebhookHeartbeatBindingSnapshot struct {
 	ID              WebhookHeartbeatBindingID
 	ProjectID       ProjectID
@@ -330,6 +341,7 @@ type WebhookHeartbeatBindingSnapshot struct {
 	GitHubEventType string
 	HeartbeatID     HeartbeatID
 	Enabled         bool
+	DelayMinutes    int
 	CreatedAt       time.Time
 }
 
@@ -341,6 +353,7 @@ func (b *WebhookHeartbeatBinding) ToSnapshot() WebhookHeartbeatBindingSnapshot {
 		GitHubEventType: b.githubEventType,
 		HeartbeatID:     b.heartbeatID,
 		Enabled:         b.enabled,
+		DelayMinutes:    b.delayMinutes,
 		CreatedAt:       b.createdAt,
 	}
 }
@@ -352,6 +365,7 @@ func (b *WebhookHeartbeatBinding) FromSnapshot(s WebhookHeartbeatBindingSnapshot
 	b.githubEventType = s.GitHubEventType
 	b.heartbeatID = s.HeartbeatID
 	b.enabled = s.Enabled
+	b.delayMinutes = s.DelayMinutes
 	b.createdAt = s.CreatedAt
 }
 

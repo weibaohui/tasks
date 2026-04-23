@@ -33,14 +33,7 @@ export const ProjectSelectorCard: React.FC<ProjectSelectorCardProps> = ({
             value={selectedProjectId || undefined}
             onChange={onChange}
             options={projects.map((project) => ({
-              label: (
-                <Space>
-                  {project.name}
-                  <Tag color={detectPlatformType(project.git_repo_url) === 'github' ? 'blue' : 'green'} style={{ marginLeft: 8 }}>
-                    {getPlatformDisplayName(detectPlatformType(project.git_repo_url))}
-                  </Tag>
-                </Space>
-              ),
+              label: project.name,
               value: project.id,
             }))}
           />

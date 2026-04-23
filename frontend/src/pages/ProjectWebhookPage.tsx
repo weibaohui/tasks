@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Empty,
   Form,
   Input,
   Modal,
@@ -11,6 +12,7 @@ import {
   Switch,
   Table,
   Tag,
+  Typography,
   message,
   Select,
   Tabs,
@@ -37,9 +39,10 @@ import {
   type WebhookEventLog,
   type WebhookHeartbeatBinding,
   type HeartbeatOption,
+  type TriggeredHeartbeat,
 } from '../api/githubWebhookApi';
 import { listProjects, getRequirement } from '../api/projectRequirementApi';
-import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES, EVENT_TO_REQUIREMENT_TYPE } from '../types/githubWebhook';
+import { GITHUB_EVENT_TYPES, ATG_EVENT_TYPES } from '../types/githubWebhook';
 import type { Project } from '../types/projectRequirement';
 import { detectPlatformType } from '../types/projectRequirement';
 import { useAuthStore } from '../stores/authStore';
@@ -67,6 +70,7 @@ function normalizeGitHubRepo(repoURL: string): string {
 }
 
 export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selectedProject = null }) => {
+  const { Text } = Typography;
   const { user } = useAuthStore();
   const [configs, setConfigs] = useState<GitHubWebhookConfig[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -99,21 +103,10 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     return detectPlatformType(project.git_repo_url);
   }, [selectedConfig?.project_id, projects]);
 
-  // 绑定modal中选中事件类型state
-  const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
-
-  // 根据选中事件类型过滤后的心跳列表
+  // 心跳列表不过滤，显示所有已启用的心跳
   const filteredHeartbeats = useMemo(() => {
-    if (!selectedEventType || !platformType) {
-      return heartbeats.filter((h) => h.enabled);
-    }
-    const mapping = EVENT_TO_REQUIREMENT_TYPE[selectedEventType];
-    if (!mapping) {
-      return heartbeats.filter((h) => h.enabled);
-    }
-    const requiredType = platformType === 'github' ? mapping.github : mapping.atg;
-    return heartbeats.filter((h) => h.enabled && h.requirement_type === requiredType);
-  }, [heartbeats, selectedEventType, platformType]);
+    return heartbeats.filter((h) => h.enabled);
+  }, [heartbeats]);
 
   // Trace viewer state
   const [traceVisible, setTraceVisible] = useState(false);
@@ -125,6 +118,11 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
   const [currentEventType, setCurrentEventType] = useState('');
   const [currentMethod, setCurrentMethod] = useState('');
   const [currentHeaders, setCurrentHeaders] = useState('');
+
+  // 触发的心跳查看 Modal state
+  const [triggeredHeartbeatsModalVisible, setTriggeredHeartbeatsModalVisible] = useState(false);
+  const [currentTriggeredHeartbeats, setCurrentTriggeredHeartbeats] = useState<TriggeredHeartbeat[]>([]);
+  const [currentEventLogTime, setCurrentEventLogTime] = useState<string>('');
 
   const fetchConfigs = async () => {
     setLoading(true);
@@ -173,6 +171,12 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     } catch {
       message.error('清空日志失败');
     }
+  };
+
+  const handleViewTriggeredHeartbeats = (triggered: TriggeredHeartbeat[], receivedAt: number) => {
+    setCurrentTriggeredHeartbeats(triggered || []);
+    setCurrentEventLogTime(new Date(receivedAt).toLocaleString());
+    setTriggeredHeartbeatsModalVisible(true);
   };
 
   const fetchBindings = async (configId: string) => {
@@ -294,10 +298,10 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     ]);
   };
 
-  const handleCreateBinding = async (values: { event_type: string; heartbeat_id: string }) => {
+  const handleCreateBinding = async (values: { event_type: string; heartbeat_id: string; delay_minutes: number }) => {
     if (!selectedConfig) return;
     try {
-      await createBinding(selectedConfig.project_id, selectedConfig.id, values.event_type, values.heartbeat_id);
+      await createBinding(selectedConfig.project_id, selectedConfig.id, values.event_type, values.heartbeat_id, values.delay_minutes || 0);
       message.success('创建绑定成功');
       setBindingModalOpen(false);
       bindingForm.resetFields();
@@ -506,18 +510,17 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '触发的心跳',
       key: 'triggered_heartbeats',
-      ellipsis: true,
-      width: 200,
-      minWidth: 150,
+      width: 120,
+      minWidth: 100,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        if (triggered.length === 0) {
-          return record.trigger_heartbeat_id || '-';
+        if (triggered.length > 0) {
+          return triggered.length;
         }
-        if (triggered.length === 1) {
-          return triggered[0].heartbeat_id || '-';
+        if (record.trigger_heartbeat_id) {
+          return '1';
         }
-        return `${triggered.length} 个心跳`;
+        return '-';
       },
     },
     {
@@ -553,56 +556,59 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
     {
       title: '操作',
       key: 'action',
-      width: 180,
-      minWidth: 150,
+      width: 280,
+      minWidth: 250,
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
-        // 如果有触发的心跳，显示"查看链路"按钮
-        const hasTriggered = triggered.length > 0;
-        const firstTriggered = hasTriggered ? triggered[0] : null;
-
-        // 使用触发的心跳中的 requirement_id（优先）或旧字段
-        const requirementId = hasTriggered && firstTriggered?.requirement_id
-          ? firstTriggered.requirement_id
-          : record.requirement_id;
+        const hasTriggeredHeartbeats = triggered.length > 0;
+        const hasOldTriggerId = !!record.trigger_heartbeat_id;
+        const canTrigger = hasTriggeredHeartbeats || hasOldTriggerId;
+        const firstTriggered = hasTriggeredHeartbeats ? triggered[0] : null;
+        const requirementId = firstTriggered?.requirement_id || record.requirement_id;
 
         return (
-          <Space>
+          <Space size="small" wrap>
+            {canTrigger && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleViewTriggeredHeartbeats(triggered, record.received_at)}
+              >
+                查看心跳({hasTriggeredHeartbeats ? triggered.length : 1})
+              </Button>
+            )}
             {requirementId && (
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleViewTrace(requirementId)}
               >
-                查看链路
+                链路
               </Button>
             )}
-            {hasTriggered ? (
-              // 有触发的心跳，显示重新触发按钮（使用第一个）
+            {firstTriggered ? (
               <Button
                 type="link"
                 size="small"
-                onClick={() => firstTriggered && handleRetrigger(firstTriggered.heartbeat_id)}
+                onClick={() => handleRetrigger(firstTriggered.heartbeat_id)}
               >
-                重新触发
+                重试
               </Button>
-            ) : record.trigger_heartbeat_id ? (
-              // 兼容旧数据
+            ) : hasOldTriggerId ? (
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
               >
-                重新触发
+                重试
               </Button>
             ) : (
-              // 没有任何触发记录，显示手动触发
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleRetriggerByEventType(record.event_type)}
               >
-                手动触发
+                触发
               </Button>
             )}
           </Space>
@@ -644,6 +650,14 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       render: (_, record) => {
         const hb = heartbeats.find((h) => h.id === record.heartbeat_id);
         return hb?.agent_code || '-';
+      },
+    },
+    {
+      title: '延迟',
+      key: 'delay',
+      width: 100,
+      render: (_, record) => {
+        return record.delay_minutes > 0 ? `${record.delay_minutes} 分钟` : '-';
       },
     },
     {
@@ -958,7 +972,6 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         onCancel={() => {
           setBindingModalOpen(false);
           bindingForm.resetFields();
-          setSelectedEventType(null);
         }}
         destroyOnClose
       >
@@ -974,14 +987,12 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 label: e.label,
                 value: e.value,
               }))}
-              onChange={(value) => setSelectedEventType(value)}
             />
           </Form.Item>
           <Form.Item
             label="触发的心跳"
             name="heartbeat_id"
             rules={[{ required: true, message: '请选择心跳' }]}
-            extra={selectedEventType && filteredHeartbeats.length === 0 ? '当前事件类型没有匹配的心跳，请先为项目应用对应场景' : ''}
           >
             <Select
               placeholder="选择心跳"
@@ -989,6 +1000,23 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 label: `${h.name} (${h.interval_minutes}分钟, ${h.agent_code})`,
                 value: h.id,
               }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="延迟执行"
+            name="delay_minutes"
+            extra="事件触发后，延迟一段时间再执行心跳，实现错峰效果"
+          >
+            <Select
+              placeholder="选择延迟时间"
+              allowClear
+              options={[
+                { label: '3 分钟', value: 3 },
+                { label: '5 分钟', value: 5 },
+                { label: '10 分钟', value: 10 },
+                { label: '15 分钟', value: 15 },
+                { label: '20 分钟', value: 20 },
+              ]}
             />
           </Form.Item>
         </Form>
@@ -1061,6 +1089,82 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
             </pre>
           </div>
         </div>
+      </Modal>
+
+      {/* 触发的心跳查看 Modal */}
+      <Modal
+        title={`触发的心跳列表 - ${currentEventLogTime}`}
+        open={triggeredHeartbeatsModalVisible}
+        onCancel={() => setTriggeredHeartbeatsModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {currentTriggeredHeartbeats.length === 0 ? (
+          <Empty description="该事件没有触发任何心跳" />
+        ) : (
+          <Table
+            dataSource={currentTriggeredHeartbeats}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            columns={[
+              {
+                title: '心跳',
+                key: 'heartbeat',
+                render: (_, t) => {
+                  const hb = heartbeats.find((h) => h.id === t.heartbeat_id);
+                  return hb ? (
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{hb.name}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{t.heartbeat_id}</Text>
+                    </Space>
+                  ) : (
+                    <Text type="secondary">{t.heartbeat_id}</Text>
+                  );
+                },
+              },
+              {
+                title: '需求 ID',
+                dataIndex: 'requirement_id',
+                key: 'requirement_id',
+                ellipsis: true,
+                render: (id: string) => id || '-',
+              },
+              {
+                title: '触发时间',
+                dataIndex: 'triggered_at',
+                key: 'triggered_at',
+                width: 170,
+                render: (time: number) => new Date(time).toLocaleString(),
+              },
+              {
+                title: '操作',
+                key: 'action',
+                width: 150,
+                render: (_, t) => (
+                  <Space size="small">
+                    {t.requirement_id && (
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => handleViewTrace(t.requirement_id)}
+                      >
+                        查看链路
+                      </Button>
+                    )}
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => handleRetrigger(t.heartbeat_id)}
+                    >
+                      重新触发
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        )}
       </Modal>
     </div>
   );

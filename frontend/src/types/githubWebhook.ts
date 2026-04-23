@@ -38,6 +38,7 @@ export interface WebhookHeartbeatBinding {
   github_event_type: string;
   heartbeat_id: string;
   enabled: boolean;
+  delay_minutes: number;
   created_at: number;
 }
 

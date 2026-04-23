@@ -95,6 +95,18 @@ func (r *mockBindingRepo) FindByConfigIDAndEventType(_ context.Context, _ domain
 }
 func (r *mockBindingRepo) Delete(_ context.Context, _ domain.WebhookHeartbeatBindingID) error          { return nil }
 func (r *mockBindingRepo) DeleteByHeartbeatID(_ context.Context, _ domain.HeartbeatID) error           { return nil }
+func (r *mockBindingRepo) FindByHeartbeatID(_ context.Context, _ domain.HeartbeatID) ([]*domain.WebhookHeartbeatBinding, error) {
+	return nil, nil
+}
+
+// mockTriggeredHeartbeatRepo 空实现
+type mockTriggeredHeartbeatRepo struct{}
+
+func (r *mockTriggeredHeartbeatRepo) Save(_ context.Context, _ *domain.WebhookEventTriggeredHeartbeat) error { return nil }
+func (r *mockTriggeredHeartbeatRepo) FindByEventLogID(_ context.Context, _ domain.WebhookEventLogID) ([]*domain.WebhookEventTriggeredHeartbeat, error) {
+	return nil, nil
+}
+func (r *mockTriggeredHeartbeatRepo) DeleteByEventLogID(_ context.Context, _ domain.WebhookEventLogID) error { return nil }
 
 // mockHeartbeatRepo 空实现
 type mockHeartbeatRepo struct{}
@@ -129,9 +141,9 @@ func newTestConfig(repo string) *domain.GitHubWebhookConfig {
 
 func TestEnableWebhook_ConfigNotFound(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	c, w := setupGinContext("POST", "/api/v1/github-webhooks/configs/nonexistent/enable", nil)
 	c.Params = gin.Params{{Key: "id", Value: "nonexistent"}}
@@ -148,9 +160,9 @@ func TestEnableWebhook_CreateWebhookSuccess(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	// Mock execCommand 让 CreateWebhook 成功
 	origExec := application.ExecCommand
@@ -192,9 +204,9 @@ func TestEnableWebhook_CreateWebhookFails(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	// Mock execCommand 让 CreateWebhook 失败
 	origExec := application.ExecCommand
@@ -226,9 +238,9 @@ func TestEnableWebhook_SSHRepoFormat(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	origExec := application.ExecCommand
 	callCount := 0
@@ -261,9 +273,9 @@ func TestEnableWebhook_SSHRepoFormat(t *testing.T) {
 
 func TestDisableWebhook_ConfigNotFound(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	c, w := setupGinContext("POST", "/api/v1/github-webhooks/configs/nonexistent/disable", nil)
 	c.Params = gin.Params{{Key: "id", Value: "nonexistent"}}
@@ -281,9 +293,9 @@ func TestDisableWebhook_Success(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	origExec := application.ExecCommand
 	callCount := 0
@@ -321,9 +333,9 @@ func TestDisableWebhook_DeleteFailsStillReturns200(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	origExec := application.ExecCommand
 	application.ExecCommand = func(name string, args ...string) *exec.Cmd {
@@ -348,9 +360,9 @@ func TestDisableWebhook_NoExistingWebhook(t *testing.T) {
 	repo := newMockWebhookConfigRepo()
 	repo.configs["test-config-1"] = config
 
-	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, nil, &mockIDGen{})
+	svc := application.NewGitHubWebhookService(repo, &mockEventLogRepo{}, &mockBindingRepo{}, &mockHeartbeatRepo{}, &mockTriggeredHeartbeatRepo{}, nil, &mockIDGen{})
 	mgr := application.NewWebhookGitHubManager("https://public.example.com")
-	handler := NewGitHubWebhookHandler(svc, mgr, nil)
+	handler := NewGitHubWebhookHandler(svc, mgr, nil, nil, nil)
 
 	origExec := application.ExecCommand
 	application.ExecCommand = func(name string, args ...string) *exec.Cmd {

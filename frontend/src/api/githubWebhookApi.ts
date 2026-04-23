@@ -40,6 +40,7 @@ export interface WebhookHeartbeatBinding {
   github_event_type: string;
   heartbeat_id: string;
   enabled: boolean;
+  delay_minutes: number;
   created_at: number;
 }
 
@@ -137,13 +138,15 @@ export async function createBinding(
   projectId: string,
   configId: string,
   eventType: string,
-  heartbeatId: string
+  heartbeatId: string,
+  delayMinutes: number = 0
 ): Promise<WebhookHeartbeatBinding> {
   const res = await apiClient.post('/github-webhooks/bindings', {
     project_id: projectId,
     config_id: configId,
     event_type: eventType,
     heartbeat_id: heartbeatId,
+    delay_minutes: delayMinutes,
   });
   return res.data;
 }

@@ -419,6 +419,7 @@ CREATE TABLE IF NOT EXISTS webhook_heartbeat_bindings (
     github_event_type TEXT NOT NULL,
     heartbeat_id TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
+    delay_minutes INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (github_webhook_config_id) REFERENCES github_webhook_configs(id) ON DELETE CASCADE,

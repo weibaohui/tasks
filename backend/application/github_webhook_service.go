@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/weibh/taskmanager/domain"
 )
@@ -88,31 +89,46 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 			continue
 		}
 		heartbeatID := binding.HeartbeatID().String()
-		log.Printf("[WEBHOOK] triggering heartbeat %s for event %s", heartbeatID, eventType)
+		delayMinutes := binding.DelayMinutes()
+		log.Printf("[WEBHOOK] triggering heartbeat %s for event %s (delay: %d min)", heartbeatID, eventType, delayMinutes)
 
-		requirement, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceWebhook)
-		if err != nil {
-			log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
-			continue
+		trigger := func() {
+			bgCtx := context.Background()
+			requirement, err := s.triggerService.TriggerWithSource(bgCtx, heartbeatID, HeartbeatTriggerSourceWebhook)
+			if err != nil {
+				log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
+				return
+			}
+
+			requirementID := ""
+			if requirement != nil {
+				requirementID = requirement.ID().String()
+			}
+
+			triggered, err := domain.NewWebhookEventTriggeredHeartbeat(
+				domain.NewWebhookEventTriggeredHeartbeatID(s.idGenerator.Generate()),
+				eventLog.ID(),
+				binding.HeartbeatID(),
+				requirementID,
+			)
+			if err != nil {
+				log.Printf("[WEBHOOK] failed to create triggered heartbeat record: %v", err)
+			} else if err := s.triggeredHeartbeatRepo.Save(bgCtx, triggered); err != nil {
+				log.Printf("[WEBHOOK] failed to save triggered heartbeat: %v", err)
+			}
 		}
 
-		hasSuccess = true
-		requirementID := ""
-		if requirement != nil {
-			requirementID = requirement.ID().String()
-		}
-
-		// 记录触发的心跳到关联表
-		triggered, err := domain.NewWebhookEventTriggeredHeartbeat(
-			domain.NewWebhookEventTriggeredHeartbeatID(s.idGenerator.Generate()),
-			eventLog.ID(),
-			binding.HeartbeatID(),
-			requirementID,
-		)
-		if err != nil {
-			log.Printf("[WEBHOOK] failed to create triggered heartbeat record: %v", err)
-		} else if err := s.triggeredHeartbeatRepo.Save(ctx, triggered); err != nil {
-			log.Printf("[WEBHOOK] failed to save triggered heartbeat: %v", err)
+		if delayMinutes > 0 {
+			log.Printf("[WEBHOOK] heartbeat %s will trigger after %d minutes delay", heartbeatID, delayMinutes)
+			go func(delay int) {
+				time.Sleep(time.Duration(delay) * time.Minute)
+				trigger()
+			}(delayMinutes)
+			// 延迟触发已成功调度
+			hasSuccess = true
+		} else {
+			trigger()
+			hasSuccess = true
 		}
 	}
 
@@ -232,7 +248,7 @@ func (s *GitHubWebhookService) ClearEventLogs(ctx context.Context, projectID str
 }
 
 // CreateBinding 创建心跳绑定
-func (s *GitHubWebhookService) CreateBinding(ctx context.Context, projectID, configID, eventType, heartbeatID string) (*domain.WebhookHeartbeatBinding, error) {
+func (s *GitHubWebhookService) CreateBinding(ctx context.Context, projectID, configID, eventType, heartbeatID string, delayMinutes int) (*domain.WebhookHeartbeatBinding, error) {
 	// 验证心跳是否存在
 	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
 	if err != nil {
@@ -248,6 +264,7 @@ func (s *GitHubWebhookService) CreateBinding(ctx context.Context, projectID, con
 		domain.NewGitHubWebhookConfigID(configID),
 		eventType,
 		domain.NewHeartbeatID(heartbeatID),
+		delayMinutes,
 	)
 	if err != nil {
 		return nil, err
