@@ -321,7 +321,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 	items := []domain.HeartbeatScenarioItem{
 		{
 			Name:            "Issue 分析",
-			IntervalMinutes: 180,
+			IntervalMinutes: 60,
 			RequirementType: "github_issue",
 			AgentCode:       "",
 			SortOrder:       1,
@@ -362,7 +362,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 需求评审",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       3,
@@ -383,7 +383,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 代码质量评审",
-			IntervalMinutes: 180,
+			IntervalMinutes: 480,
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
@@ -402,7 +402,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 修改修复",
-			IntervalMinutes: 240,
+			IntervalMinutes: 480,
 			RequirementType: "github_coding",
 			AgentCode:       "",
 			SortOrder:       5,
@@ -423,7 +423,7 @@ func BuildGitHubDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 合并检查",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "github_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
@@ -501,7 +501,7 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 	items := []domain.HeartbeatScenarioItem{
 		{
 			Name:            "Issue 分析",
-			IntervalMinutes: 180,
+			IntervalMinutes: 60,
 			RequirementType: "atg_issue",
 			AgentCode:       "",
 			SortOrder:       1,
@@ -542,7 +542,7 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 需求评审",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       3,
@@ -563,7 +563,7 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 代码质量评审",
-			IntervalMinutes: 180,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
@@ -582,7 +582,7 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 修改修复",
-			IntervalMinutes: 240,
+			IntervalMinutes: 480,
 			RequirementType: "atg_coding",
 			AgentCode:       "",
 			SortOrder:       5,
@@ -603,7 +603,7 @@ func BuildAMCDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 合并检查",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
@@ -722,7 +722,7 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 需求评审",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       3,
@@ -743,7 +743,7 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 代码质量评审",
-			IntervalMinutes: 180,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       4,
@@ -762,7 +762,7 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 修改修复",
-			IntervalMinutes: 240,
+			IntervalMinutes: 480,
 			RequirementType: "atg_coding",
 			AgentCode:       "",
 			SortOrder:       5,
@@ -783,7 +783,7 @@ func BuildATGDevWorkflowScenario(id string) *domain.HeartbeatScenario {
 		},
 		{
 			Name:            "PR 合并检查",
-			IntervalMinutes: 120,
+			IntervalMinutes: 480,
 			RequirementType: "atg_pr_review",
 			AgentCode:       "",
 			SortOrder:       6,
