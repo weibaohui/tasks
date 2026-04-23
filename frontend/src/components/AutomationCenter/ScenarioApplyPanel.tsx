@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Empty, Modal, Select, Space, Tag, message } from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Card, Empty, Modal, Select, Space, message } from 'antd';
 import type { Project } from '../../types/projectRequirement';
 import {
   applyHeartbeatScenario,
@@ -111,14 +111,6 @@ export const ScenarioApplyPanel: React.FC<ScenarioApplyPanelProps> = ({ project,
     }
   };
 
-  const currentScenarioName = useMemo(() => {
-    if (!project?.heartbeat_scenario_code) {
-      return '';
-    }
-    const matched = scenarios.find((item) => item.code === project.heartbeat_scenario_code);
-    return matched?.name || project.heartbeat_scenario_code;
-  }, [project?.heartbeat_scenario_code, scenarios]);
-
   useEffect(() => {
     void fetchScenarios();
   }, [fetchScenarios]);
@@ -153,10 +145,6 @@ export const ScenarioApplyPanel: React.FC<ScenarioApplyPanelProps> = ({ project,
             预览并应用
           </Button>
         </Space>
-        <div>
-          <Tag color="blue">当前场景：{currentScenarioName || '未设置'}</Tag>
-          <Tag color="purple">当前项目：{project.name}</Tag>
-        </div>
       </Space>
     </Card>
   );
