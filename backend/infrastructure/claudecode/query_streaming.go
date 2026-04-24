@@ -2,12 +2,9 @@ package claudecode
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"time"
 
-	claudecode "github.com/severity1/claude-agent-sdk-go"
 	"github.com/weibh/taskmanager/domain"
+	"github.com/weibh/taskmanager/infrastructure/claudecode/cli"
 	"github.com/weibh/taskmanager/infrastructure/hook"
 	"github.com/weibh/taskmanager/pkg/bus"
 	"go.uber.org/zap"
@@ -16,20 +13,30 @@ import (
 func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg *bus.InboundMessage, userInput, cliSessionID, traceID string, provider *domain.LLMProvider, agent *domain.Agent, callback StreamingCallback) (string, *domain.Usage, error) {
 	sessionKey := msg.SessionKey()
 
-	// 创建工具钩子适配器
-	var ccToolHookAdapter *toolHookAdapter
+	// 创建 CLI 处理器
+	cliProcessor := cli.NewProcessor(p.logger)
+
+	// 获取配置
+	var config *domain.ClaudeCodeConfig
+	if agent != nil {
+		config = agent.ClaudeCodeConfig()
+	}
+	if config == nil {
+		config = domain.DefaultClaudeCodeConfig()
+	}
+
+	// 创建工具钩子桥接器
 	var hookCtx *domain.HookContext
-	var result string
 	var llmCallCtx *domain.LLMCallContext
+	var toolAdapter *hook.ToolHookBridge
+	var result string
 	var llmUsage = &domain.Usage{}
 
 	if p.hookManager != nil {
 		hookCtx = domain.NewHookContext(ctx)
 		hookCtx.SetMetadata("session_key", sessionKey)
 		hookCtx.SetMetadata("trace_id", traceID)
-		// 启用思考过程，让 FeishuThinkingProcessHook 发送中间过程卡片
 		hookCtx.SetMetadata("enable_thinking_process", "true")
-		// 设置渠道信息，供 sendThinkingMessage 使用
 		hookCtx.SetMetadata("chat_id", msg.ChatID)
 		hookCtx.SetMetadata("channel_type", msg.Channel)
 
@@ -40,7 +47,6 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			userCode = agent.UserCode()
 		}
 
-		// 从 msg.Metadata 提取 channel_code
 		channelCode := ""
 		if msg.Metadata != nil {
 			if v, ok := msg.Metadata["channel_code"].(string); ok {
@@ -48,21 +54,18 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			}
 		}
 
-		ccToolHookAdapter = &toolHookAdapter{
-			bridge: &hook.ToolHookBridge{
-				Manager:     p.hookManager,
-				Logger:      p.logger,
-				HookCtx:     hookCtx,
-				SessionKey:  sessionKey,
-				UserCode:    userCode,
-				AgentCode:   agentCode,
-				ChannelCode: channelCode,
-				ChannelType: msg.Channel,
-				TraceID:     traceID,
-			},
+		toolAdapter = &hook.ToolHookBridge{
+			Manager:     p.hookManager,
+			Logger:      p.logger,
+			HookCtx:     hookCtx,
+			SessionKey:  sessionKey,
+			UserCode:    userCode,
+			AgentCode:   agentCode,
+			ChannelCode: channelCode,
+			ChannelType: msg.Channel,
+			TraceID:     traceID,
 		}
 
-		// 构建 LLMCallContext 并调用 PreLLMCall hooks
 		llmCallCtx = &domain.LLMCallContext{
 			Prompt:    userInput,
 			UserInput: userInput,
@@ -80,7 +83,6 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			},
 		}
 
-		// 调用 PreLLMCall hooks
 		modifiedCtx, err := p.hookManager.PreLLMCall(hookCtx, llmCallCtx)
 		if err != nil {
 			p.logger.Error("PreLLMCall failed", zap.Error(err))
@@ -89,208 +91,71 @@ func (p *ClaudeCodeProcessor) queryClaudeCodeStreaming(ctx context.Context, msg 
 			llmCallCtx = modifiedCtx
 		}
 
-		// 确保 PostLLMCall 和 OnToolExecutionComplete 被调用
-		// 使用 hookCtx（而非新建 context），确保 span 状态在 PreToolCall/PostToolCall 之间正确共享
+		// 包装 callback 以桥接 tool hooks
+		wrappedCallback := &toolHookCallback{
+			StreamingCallback: callback,
+			toolAdapter:        toolAdapter,
+		}
+
 		defer func() {
 			resp := &domain.LLMResponse{Content: result, Usage: domain.Usage{}}
 			if llmUsage != nil {
 				resp.Usage = *llmUsage
 			}
 			p.hookManager.PostLLMCall(hookCtx, llmCallCtx, resp)
-			// 工具执行完成后，写入延迟的最终 llm_response
 			p.hookManager.OnToolExecutionComplete(hookCtx)
 		}()
-	}
 
-	// 构建选项
-	opts := p.buildOptions(provider, cliSessionID, agent, ccToolHookAdapter)
-
-	p.logger.Info("开始 Claude Code 流式查询",
-		zap.String("session_key", sessionKey),
-		zap.String("cli_session_id", cliSessionID),
-	)
-
-	startTime := time.Now()
-
-	// 使用 Client 接口进行流式处理
-	client := claudecode.NewClient(opts...)
-
-	if err := client.Connect(ctx); err != nil {
-		p.logger.Error("Claude Code Connect 失败",
-			zap.String("session_key", sessionKey),
-			zap.Duration("duration", time.Since(startTime)),
-			zap.Error(err),
+		result, tokenUsage, _, err := cliProcessor.QueryStreaming(
+			ctx, msg, userInput, cliSessionID, traceID, provider, config, wrappedCallback,
 		)
-		return "", nil, fmt.Errorf("Claude Code Connect 失败: %w", err)
-	}
-	defer client.Disconnect()
-
-	p.logger.Info("Claude Code 连接成功，开始流式查询",
-		zap.String("session_key", sessionKey),
-		zap.Duration("duration", time.Since(startTime)),
-	)
-
-	// 使用 QueryWithSession 发送查询
-	sessionID := cliSessionID
-	if sessionID == "" {
-		sessionID = "default"
-	}
-	if err := client.QueryWithSession(ctx, userInput, sessionID); err != nil {
-		p.logger.Error("Claude Code QueryWithSession 失败",
-			zap.String("session_key", sessionKey),
-			zap.Duration("duration", time.Since(startTime)),
-			zap.Error(err),
-		)
-		return "", nil, fmt.Errorf("Claude Code QueryWithSession 失败: %w", err)
-	}
-	p.logger.Info("Claude Code QueryWithSession 成功",
-		zap.String("session_key", sessionKey),
-		zap.Duration("duration", time.Since(startTime)),
-	)
-
-	// 流式接收消息
-	var cliSessionIDResult string
-	var mu sync.Mutex
-	var msgCount int
-
-	msgChan := client.ReceiveMessages(ctx)
-	for msg := range msgChan {
-		msgCount++
-		if msg == nil {
-			p.logger.Debug("Claude Code 收到 nil message",
-				zap.String("session_key", sessionKey),
-				zap.Int("msg_count", msgCount),
-			)
-			continue
+		if err != nil {
+			return "", nil, err
 		}
-
-		p.logger.Info("Claude Code 收到消息",
-			zap.String("session_key", sessionKey),
-			zap.Int("msg_count", msgCount),
-			zap.String("msg_type", fmt.Sprintf("%T", msg)),
-		)
-
-		switch m := msg.(type) {
-		case *claudecode.AssistantMessage:
-			p.logger.Info("Claude Code AssistantMessage",
-				zap.String("session_key", sessionKey),
-				zap.Int("content_blocks", len(m.Content)),
-			)
-			for i, block := range m.Content {
-				switch b := block.(type) {
-				case *claudecode.TextBlock:
-					p.logger.Info("Claude Code TextBlock",
-						zap.String("session_key", sessionKey),
-						zap.Int("block_index", i),
-						zap.Int("text_len", len(b.Text)),
-					)
-					mu.Lock()
-					result += b.Text
-					mu.Unlock()
-					callback.OnText(b.Text)
-				case *claudecode.ToolUseBlock:
-					p.logger.Info("Claude Code 工具调用",
-						zap.String("session_key", sessionKey),
-						zap.String("tool_name", b.Name),
-					)
-					toolInput := make(map[string]any)
-					if b.Input != nil {
-						toolInput = b.Input
-					}
-					callback.OnToolCall(b.Name, toolInput)
-				case *claudecode.ToolResultBlock:
-					p.logger.Info("Claude Code 工具结果",
-						zap.String("session_key", sessionKey),
-						zap.Any("content", b.Content),
-					)
-					content := fmt.Sprintf("%v", b.Content)
-					mu.Lock()
-					result += content
-					mu.Unlock()
-					callback.OnToolResult("", content)
-				case *claudecode.ThinkingBlock:
-					p.logger.Info("Claude Code ThinkingBlock",
-						zap.String("session_key", sessionKey),
-						zap.Int("thinking_len", len(b.Thinking)),
-					)
-					// 只发送思考卡片，不累积到 result
-					callback.OnThinking(b.Thinking)
-					// 保存思考过程到对话记录
-					if p.hookManager != nil {
-						p.hookManager.OnThinking(hookCtx, b.Thinking)
-					}
-				default:
-					p.logger.Info("Claude Code 未知内容块",
-						zap.String("session_key", sessionKey),
-						zap.Int("block_index", i),
-						zap.String("block_type", fmt.Sprintf("%T", block)),
-					)
-				}
-			}
-		case *claudecode.ResultMessage:
-			p.logger.Info("Claude Code ResultMessage",
-				zap.String("session_key", sessionKey),
-				zap.Bool("is_error", m.IsError),
-			)
-			if m.SessionID != "" {
-				cliSessionIDResult = m.SessionID
-			}
-			if m.IsError && m.Result != nil {
-				result += fmt.Sprintf("\n[错误: %s]", *m.Result)
-			}
-			// 捕获 token usage（Claude CLI 在流式模式下 output_tokens 始终为 0）
-			// 使用所有可用 token 字段求和作为兜底方案
-			if m.Usage != nil && llmUsage != nil {
-				llmUsage.PromptTokens = getUsageInt(*m.Usage, "input_tokens")
-				llmUsage.CompletionTokens = getUsageInt(*m.Usage, "output_tokens")
-				cacheRead := getUsageInt(*m.Usage, "cache_read_input_tokens")
-				cacheCreate := getUsageInt(*m.Usage, "cache_creation_input_tokens")
-				llmUsage.TotalTokens = llmUsage.PromptTokens + llmUsage.CompletionTokens + cacheRead + cacheCreate
-				p.logger.Info("Token usage captured",
-					zap.Any("usage", m.Usage),
-					zap.Int("prompt", llmUsage.PromptTokens),
-					zap.Int("completion", llmUsage.CompletionTokens),
-					zap.Int("cache_read", cacheRead),
-					zap.Int("cache_create", cacheCreate),
-					zap.Int("total", llmUsage.TotalTokens),
-				)
-			} else {
-				p.logger.Warn("Token usage not available",
-					zap.Any("m.Usage", m.Usage),
-					zap.Any("llmUsage", llmUsage),
-				)
-			}
-			// ResultMessage 表示流式结束，立即调用 OnComplete 并退出
-			callback.OnComplete(result)
-			p.logger.Info("Claude Code 正常结束（收到 ResultMessage）",
-				zap.String("session_key", sessionKey),
-				zap.Int("total_messages", msgCount),
-				zap.Int("result_len", len(result)),
-			)
-			return cliSessionIDResult, llmUsage, nil
-		case *claudecode.SystemMessage:
-			p.logger.Info("Claude Code SystemMessage",
-				zap.String("session_key", sessionKey),
-				zap.String("subtype", m.Subtype),
-				zap.Any("data", m.Data),
-			)
-		case *claudecode.UserMessage:
-			// 用户消息，不处理
+		if tokenUsage != nil {
+			llmUsage.PromptTokens = tokenUsage.InputTokens
+			llmUsage.CompletionTokens = tokenUsage.OutputTokens
+			llmUsage.TotalTokens = tokenUsage.Total
 		}
+		return result, llmUsage, nil
 	}
 
-	p.logger.Info("Claude Code 流式接收完成",
-		zap.String("session_key", sessionKey),
-		zap.Duration("duration", time.Since(startTime)),
-		zap.Int("total_messages", msgCount),
-		zap.Int("result_len", len(result)),
-		zap.Any("stream_issues", client.GetStreamIssues()),
-		zap.Any("stream_stats", client.GetStreamStats()),
+	result, tokenUsage, _, err := cliProcessor.QueryStreaming(
+		ctx, msg, userInput, cliSessionID, traceID, provider, config, callback,
 	)
+	if err != nil {
+		return "", nil, err
+	}
+	if tokenUsage != nil {
+		llmUsage.PromptTokens = tokenUsage.InputTokens
+		llmUsage.CompletionTokens = tokenUsage.OutputTokens
+		llmUsage.TotalTokens = tokenUsage.Total
+	}
+	return result, llmUsage, nil
+}
 
-	// 如果循环正常结束（channel 关闭）但没有收到 ResultMessage，也调用 OnComplete
-	callback.OnComplete(result)
-	return cliSessionIDResult, llmUsage, nil
+// toolHookCallback 包装 StreamingCallback，桥接 tool hooks
+type toolHookCallback struct {
+	StreamingCallback
+	toolAdapter *hook.ToolHookBridge
+}
+
+func (c *toolHookCallback) OnToolCall(toolName string, input map[string]any) {
+	if c.toolAdapter != nil {
+		c.toolAdapter.PreToolCall(toolName, input)
+	}
+	c.StreamingCallback.OnToolCall(toolName, input)
+}
+
+func (c *toolHookCallback) OnToolResult(toolName string, result string) {
+	c.StreamingCallback.OnToolResult(toolName, result)
+	if c.toolAdapter != nil {
+		c.toolAdapter.PostToolCall(toolName, nil, result, true)
+	}
+}
+
+func (c *toolHookCallback) OnComplete(finalResult string) {
+	c.StreamingCallback.OnComplete(finalResult)
 }
 
 // queryClaudeCode 调用 Claude Code SDK

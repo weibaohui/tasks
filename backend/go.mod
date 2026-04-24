@@ -15,7 +15,6 @@ require (
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/severity1/claude-agent-sdk-go v0.6.12
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.26.0
