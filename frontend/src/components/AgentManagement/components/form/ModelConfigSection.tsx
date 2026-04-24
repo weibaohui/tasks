@@ -2,8 +2,8 @@
  * ModelConfigCard - 模型配置卡片
  */
 import React from 'react';
-import { Button, Card, Form, InputNumber, Select, Space } from 'antd';
-import { ThunderboltOutlined } from '@ant-design/icons';
+import { Button, Card, Form, InputNumber, Select, Space, Tooltip } from 'antd';
+import { ThunderboltOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
 
@@ -75,8 +75,11 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
               notFoundContent={llmProvidersLoading ? '正在加载...' : '没有可选 Provider'}
             />
           </Form.Item>
-          <Form.Item label="模型" name="model">
-            <Select showSearch allowClear options={modelOptions}
+          <Form.Item label={<Space>模型 <Tooltip title="留空将自动匹配 Provider 默认模型"><InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} /></Tooltip></Space>} name="model">
+            <Select
+              showSearch
+              allowClear
+              options={modelOptions}
               placeholder="自动匹配 (留空)"
               notFoundContent="没有可选模型"
               filterOption={(input, option) => {
@@ -84,7 +87,8 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
                 const v = String(option?.value || '').toLowerCase();
                 const l = String(option?.label || '').toLowerCase();
                 return v.includes(q) || l.includes(q);
-              }} />
+              }}
+            />
           </Form.Item>
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
             <Form.Item label="Max Tokens" name="max_tokens">
