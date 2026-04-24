@@ -81,7 +81,7 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
               allowClear
               value={form.getFieldValue('model')}
               onChange={(val) => form.setFieldsValue({ model: val || undefined })}
-              options={modelOptions}
+              options={[{ value: '', label: '空 (自动匹配)' }, ...modelOptions]}
               placeholder="自动匹配 (留空)"
               notFoundContent="没有可选模型"
               filterOption={(input, option) => {
