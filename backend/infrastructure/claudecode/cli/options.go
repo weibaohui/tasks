@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/weibh/taskmanager/domain"
 )
+
+// extraArgKeyPattern validates that ExtraArgs keys are safe CLI flags (alphanumeric, dash, underscore)
+var extraArgKeyPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
 // buildCLIArgs 构建 claude CLI 参数
 func buildCLIArgs(userInput, cliSessionID string, provider *domain.LLMProvider, config *domain.ClaudeCodeConfig) []string {
@@ -91,8 +95,12 @@ func buildCLIArgs(userInput, cliSessionID string, provider *domain.LLMProvider, 
 
 	// JSON Schema
 	if config != nil && len(config.JSONSchema) > 0 {
-		data, _ := json.Marshal(config.JSONSchema)
-		args = append(args, "--json-schema", string(data))
+		data, err := json.Marshal(config.JSONSchema)
+		if err != nil {
+			// 忽略错误，不添加参数
+		} else {
+			args = append(args, "--json-schema", string(data))
+		}
 	}
 
 	// 包含部分消息
@@ -119,7 +127,10 @@ func buildCLIArgs(userInput, cliSessionID string, provider *domain.LLMProvider, 
 				"args":    server.Args,
 				"env":     server.Env,
 			}
-			data, _ := json.Marshal(map[string]any{name: mcpData})
+			data, err := json.Marshal(map[string]any{name: mcpData})
+			if err != nil {
+				continue
+			}
 			args = append(args, "--mcp-config", string(data))
 		}
 	}
@@ -127,6 +138,10 @@ func buildCLIArgs(userInput, cliSessionID string, provider *domain.LLMProvider, 
 	// 额外参数
 	if config != nil && len(config.ExtraArgs) > 0 {
 		for key, val := range config.ExtraArgs {
+			// 校验 key 格式，防止命令注入
+			if !extraArgKeyPattern.MatchString(key) {
+				continue
+			}
 			args = append(args, "--"+key, val)
 		}
 	}
@@ -164,6 +179,10 @@ func buildEnv(provider *domain.LLMProvider, config *domain.ClaudeCodeConfig) []s
 	// 从配置中合并环境变量
 	if config != nil && len(config.Env) > 0 {
 		for k, v := range config.Env {
+			// 跳过空值，避免产生 KEY= 形式
+			if v == "" {
+				continue
+			}
 			env = append(env, k+"="+v)
 		}
 	}

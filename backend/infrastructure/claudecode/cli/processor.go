@@ -155,7 +155,9 @@ func (p *Processor) QueryStreaming(
 	// 等待完成或超时
 	select {
 	case <-queryCtx.Done():
-		cmd.Process.Kill()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
 		go func() { <-waitDone }()
 		return sc.result, sc.tokenUsage, sc.cliSessionID, queryCtx.Err()
 	case waitErr := <-waitDone:
