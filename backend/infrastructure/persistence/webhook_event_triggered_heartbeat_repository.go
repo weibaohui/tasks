@@ -19,8 +19,8 @@ func NewSQLiteWebhookEventTriggeredHeartbeatRepository(db *sql.DB) *SQLiteWebhoo
 func (r *SQLiteWebhookEventTriggeredHeartbeatRepository) Save(ctx context.Context, triggered *domain.WebhookEventTriggeredHeartbeat) error {
 	snap := triggered.ToSnapshot()
 	query := `
-		INSERT INTO webhook_event_triggered_heartbeats (id, webhook_event_log_id, heartbeat_id, requirement_id, triggered_at, source_type, source_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO webhook_event_triggered_heartbeats (id, webhook_event_log_id, heartbeat_id, requirement_id, triggered_at, created_at, source_type, source_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := r.db.ExecContext(
 		ctx,
@@ -30,6 +30,7 @@ func (r *SQLiteWebhookEventTriggeredHeartbeatRepository) Save(ctx context.Contex
 		snap.HeartbeatID.String(),
 		snap.RequirementID,
 		snap.TriggeredAt.Unix(),
+		snap.CreatedAt.Unix(),
 		snap.SourceType,
 		snap.SourceID,
 	)
@@ -38,7 +39,7 @@ func (r *SQLiteWebhookEventTriggeredHeartbeatRepository) Save(ctx context.Contex
 
 func (r *SQLiteWebhookEventTriggeredHeartbeatRepository) FindByEventLogID(ctx context.Context, eventLogID domain.WebhookEventLogID) ([]*domain.WebhookEventTriggeredHeartbeat, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, webhook_event_log_id, heartbeat_id, requirement_id, triggered_at, source_type, source_id
+		SELECT id, webhook_event_log_id, heartbeat_id, requirement_id, triggered_at, created_at, source_type, source_id
 		FROM webhook_event_triggered_heartbeats WHERE webhook_event_log_id = ? ORDER BY triggered_at`, eventLogID.String())
 	if err != nil {
 		return nil, err
@@ -73,10 +74,11 @@ func scanWebhookEventTriggeredHeartbeat(scanner rowScanner) (*domain.WebhookEven
 		heartbeatIDStr     string
 		requirementID      sql.NullString
 		triggeredAtUnix    int64
+		createdAtUnix      int64
 		sourceType         string
 		sourceID           string
 	)
-	err := scanner.Scan(&idStr, &eventLogIDStr, &heartbeatIDStr, &requirementID, &triggeredAtUnix, &sourceType, &sourceID)
+	err := scanner.Scan(&idStr, &eventLogIDStr, &heartbeatIDStr, &requirementID, &triggeredAtUnix, &createdAtUnix, &sourceType, &sourceID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -90,6 +92,7 @@ func scanWebhookEventTriggeredHeartbeat(scanner rowScanner) (*domain.WebhookEven
 		HeartbeatID:      domain.NewHeartbeatID(heartbeatIDStr),
 		RequirementID:    requirementID.String,
 		TriggeredAt:      time.Unix(triggeredAtUnix, 0),
+		CreatedAt:        time.Unix(createdAtUnix, 0),
 		SourceType:       sourceType,
 		SourceID:         sourceID,
 	})

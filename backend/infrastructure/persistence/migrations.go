@@ -304,6 +304,7 @@ func MigrateWebhookEventTriggeredHeartbeatsTable(db *sql.DB) error {
 		heartbeat_id TEXT NOT NULL,
 		requirement_id TEXT,
 		triggered_at INTEGER NOT NULL,
+		created_at INTEGER NOT NULL,
 		source_type TEXT NOT NULL DEFAULT 'webhook',
 		source_id TEXT NOT NULL DEFAULT '',
 		FOREIGN KEY (webhook_event_log_id) REFERENCES webhook_event_logs(id) ON DELETE CASCADE,
@@ -319,6 +320,11 @@ func MigrateWebhookEventTriggeredHeartbeatsTable(db *sql.DB) error {
 	columns, err := getTableColumns(db, "webhook_event_triggered_heartbeats")
 	if err != nil {
 		return fmt.Errorf("获取 webhook_event_triggered_heartbeats 表列信息失败: %w", err)
+	}
+	if _, exists := columns["created_at"]; !exists {
+		if _, err := db.Exec("ALTER TABLE webhook_event_triggered_heartbeats ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("添加 created_at 列失败: %w", err)
+		}
 	}
 	if _, exists := columns["source_type"]; !exists {
 		if _, err := db.Exec("ALTER TABLE webhook_event_triggered_heartbeats ADD COLUMN source_type TEXT NOT NULL DEFAULT 'webhook'"); err != nil {

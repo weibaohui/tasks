@@ -434,6 +434,7 @@ CREATE TABLE IF NOT EXISTS webhook_event_triggered_heartbeats (
     heartbeat_id TEXT NOT NULL,
     requirement_id TEXT,
     triggered_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
     source_type TEXT NOT NULL DEFAULT 'webhook',
     source_id TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (webhook_event_log_id) REFERENCES webhook_event_logs(id) ON DELETE CASCADE,
