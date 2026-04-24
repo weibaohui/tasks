@@ -566,10 +566,12 @@ func eventLogToMap(log *domain.WebhookEventLog, allTriggered []*domain.WebhookEv
 	for _, t := range allTriggered {
 		if t.WebhookEventLogID() == log.ID() {
 			triggeredHeartbeats = append(triggeredHeartbeats, map[string]interface{}{
-				"id":             t.ID().String(),
+				"id":              t.ID().String(),
 				"heartbeat_id":    t.HeartbeatID().String(),
-				"requirement_id": t.RequirementID(),
+				"requirement_id":  t.RequirementID(),
 				"triggered_at":    t.TriggeredAt().UnixMilli(),
+				"source_type":     t.SourceType(),
+				"source_id":       t.SourceID(),
 			})
 		}
 	}

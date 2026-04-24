@@ -101,6 +101,11 @@ type Requirement struct {
 	agentRuntimePrompt    string // Agent 执行提示词
 	agentRuntimeAgentType string // 执行使用的 Agent 类型，如 CodingAgent / OpenCodeAgent
 	traceId                string // Agent 执行时的 trace_id，用于关联对话记录
+	// 触发来源
+	sourceType    string // 触发来源类型：manual/cron/webhook
+	sourceID      string // 触发来源ID：如果是webhook，存WebhookEventLogID
+	heartbeatID   string // 心跳ID（仅心跳类型需求使用）
+	heartbeatName string // 心跳名称（仅心跳类型需求使用）
 	// Token 消耗统计（从对话记录计算）
 	promptTokens     int
 	completionTokens int
@@ -203,6 +208,22 @@ func (r *Requirement) TraceID() string { return r.traceId }
 func (r *Requirement) SetTraceID(traceId string) {
 	r.traceId = traceId
 	r.updatedAt = time.Now()
+}
+
+func (r *Requirement) SourceType() string { return r.sourceType }
+func (r *Requirement) SourceID() string   { return r.sourceID }
+
+func (r *Requirement) SetSource(sourceType, sourceID string) {
+	r.sourceType = sourceType
+	r.sourceID = sourceID
+}
+
+func (r *Requirement) HeartbeatID() string   { return r.heartbeatID }
+func (r *Requirement) HeartbeatName() string { return r.heartbeatName }
+
+func (r *Requirement) SetHeartbeatInfo(heartbeatID, heartbeatName string) {
+	r.heartbeatID = heartbeatID
+	r.heartbeatName = heartbeatName
 }
 
 func (r *Requirement) PromptTokens() int     { return r.promptTokens }
@@ -507,6 +528,10 @@ type RequirementSnapshot struct {
 	AgentRuntimePrompt      string
 	AgentRuntimeAgentType   string
 	TraceID                 string
+	SourceType             string
+	SourceID               string
+	HeartbeatID           string
+	HeartbeatName         string
 	PromptTokens           int
 	CompletionTokens       int
 	TotalTokens            int
@@ -543,6 +568,8 @@ func (r *Requirement) ToSnapshot() RequirementSnapshot {
 		AgentRuntimePrompt:      r.agentRuntimePrompt,
 		AgentRuntimeAgentType:   r.agentRuntimeAgentType,
 		TraceID:                 r.traceId,
+		SourceType:              r.sourceType,
+		SourceID:                r.sourceID,
 		PromptTokens:           r.promptTokens,
 		CompletionTokens:       r.completionTokens,
 		TotalTokens:            r.totalTokens,
@@ -579,6 +606,10 @@ func (r *Requirement) FromSnapshot(s RequirementSnapshot) error {
 	r.agentRuntimePrompt = s.AgentRuntimePrompt
 	r.agentRuntimeAgentType = s.AgentRuntimeAgentType
 	r.traceId = s.TraceID
+	r.sourceType = s.SourceType
+	r.sourceID = s.SourceID
+	r.heartbeatID = s.HeartbeatID
+	r.heartbeatName = s.HeartbeatName
 	r.promptTokens = s.PromptTokens
 	r.completionTokens = s.CompletionTokens
 	r.totalTokens = s.TotalTokens

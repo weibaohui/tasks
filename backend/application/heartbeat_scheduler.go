@@ -256,7 +256,7 @@ func (s *HeartbeatScheduler) RefreshSchedule(ctx context.Context, heartbeatID st
 
 // executeHeartbeat 执行心跳
 func (s *HeartbeatScheduler) executeHeartbeat(ctx context.Context, heartbeatID string) {
-	if _, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceScheduler); err != nil {
+	if _, err := s.triggerService.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceScheduler, ""); err != nil {
 		log.Printf("heartbeat: failed to execute heartbeat %s: %v", heartbeatID, err)
 	}
 }

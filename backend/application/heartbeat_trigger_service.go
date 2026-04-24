@@ -85,12 +85,13 @@ func NewHeartbeatTriggerService(
 
 // Trigger 触发指定心跳的执行
 func (s *HeartbeatTriggerService) Trigger(ctx context.Context, heartbeatID string) error {
-	_, err := s.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceManual)
+	_, err := s.TriggerWithSource(ctx, heartbeatID, HeartbeatTriggerSourceManual, "")
 	return err
 }
 
 // TriggerWithSource 按指定触发来源执行心跳，并返回创建的需求。
-func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbeatID string, source HeartbeatTriggerSource) (*domain.Requirement, error) {
+// sourceID 用于标识触发来源的具体ID，例如 webhook 触发时为 WebhookEventLogID
+func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbeatID string, source HeartbeatTriggerSource, sourceID string) (*domain.Requirement, error) {
 	hb, err := s.heartbeatRepo.FindByID(ctx, domain.NewHeartbeatID(heartbeatID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to find heartbeat %s: %w", heartbeatID, err)
@@ -156,7 +157,7 @@ func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbe
 		project.ID(),
 		fmt.Sprintf("[心跳][%s] %s - %s", triggerSource, hb.Name(), time.Now().Format("2006-01-02 15:04")),
 		prompt,
-		fmt.Sprintf("心跳自动生成\nheartbeat_id: %s\ntrigger_source: %s\ntrigger_time: %s", hb.ID().String(), triggerSource, time.Now().Format(time.RFC3339)),
+		"",
 		"",
 	)
 	if err != nil {
@@ -165,6 +166,10 @@ func (s *HeartbeatTriggerService) TriggerWithSource(ctx context.Context, heartbe
 
 	// 设置需求类型
 	requirement.SetRequirementType(domain.RequirementType(reqType))
+
+	// 设置触发来源和心跳信息
+	requirement.SetSource(string(source), sourceID)
+	requirement.SetHeartbeatInfo(hb.ID().String(), hb.Name())
 
 	// 保存需求
 	if err := s.requirementRepo.Save(ctx, requirement); err != nil {
@@ -248,7 +253,7 @@ func (s *HeartbeatTriggerService) ListRunsByHeartbeat(ctx context.Context, heart
 			HeartbeatID:   hb.ID().String(),
 			HeartbeatName: hb.Name(),
 			ProjectID:     hb.ProjectID().String(),
-			TriggerSource: parseTriggerSource(req),
+			TriggerSource: req.SourceType(),
 			Status:        string(req.Status()),
 			Title:         req.Title(),
 			LastError:     req.LastError(),
@@ -298,14 +303,12 @@ func (s *HeartbeatTriggerService) ListRunsByProject(ctx context.Context, project
 	}
 	records := make([]HeartbeatRunRecord, 0, len(reqs))
 	for _, req := range reqs {
-		heartbeatID := parseHeartbeatID(req)
-		heartbeatName := parseHeartbeatName(req)
 		records = append(records, HeartbeatRunRecord{
 			RequirementID: req.ID().String(),
-			HeartbeatID:   heartbeatID,
-			HeartbeatName: heartbeatName,
+			HeartbeatID:   req.HeartbeatID(),
+			HeartbeatName: req.HeartbeatName(),
 			ProjectID:     projectID,
-			TriggerSource: parseTriggerSource(req),
+			TriggerSource: req.SourceType(),
 			Status:        string(req.Status()),
 			Title:         req.Title(),
 			LastError:     req.LastError(),
@@ -339,70 +342,7 @@ func ptrProjectID(projectID domain.ProjectID) *domain.ProjectID {
 
 // isRequirementFromHeartbeat 判断需求是否由指定心跳触发产生。
 func isRequirementFromHeartbeat(req *domain.Requirement, hb *domain.Heartbeat) bool {
-	ac := req.AcceptanceCriteria()
-	if strings.Contains(ac, "heartbeat_id: "+hb.ID().String()) {
-		return true
-	}
-	legacyTitle := "[心跳] " + hb.Name()
-	return strings.Contains(req.Title(), legacyTitle)
-}
-
-// parseTriggerSource 从需求验收标准中提取触发来源。
-func parseTriggerSource(req *domain.Requirement) string {
-	lines := strings.Split(req.AcceptanceCriteria(), "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "trigger_source:") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "trigger_source:"))
-		}
-	}
-	title := req.Title()
-	if strings.Contains(title, "[心跳][") {
-		start := strings.Index(title, "[心跳][")
-		if start >= 0 {
-			rest := title[start+len("[心跳]["):]
-			end := strings.Index(rest, "]")
-			if end > 0 {
-				return strings.TrimSpace(rest[:end])
-			}
-		}
-	}
-	return "unknown"
-}
-
-// parseHeartbeatID 从需求文本中提取 heartbeat_id。
-func parseHeartbeatID(req *domain.Requirement) string {
-	lines := strings.Split(req.AcceptanceCriteria(), "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "heartbeat_id:") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "heartbeat_id:"))
-		}
-	}
-	return ""
-}
-
-// parseHeartbeatName 从需求标题中提取心跳名称。
-func parseHeartbeatName(req *domain.Requirement) string {
-	title := strings.TrimSpace(req.Title())
-	if strings.HasPrefix(title, "[心跳] ") {
-		rest := strings.TrimPrefix(title, "[心跳] ")
-		if idx := strings.LastIndex(rest, " - "); idx > 0 {
-			return strings.TrimSpace(rest[:idx])
-		}
-		return strings.TrimSpace(rest)
-	}
-	if strings.HasPrefix(title, "[心跳][") {
-		rest := title
-		if closeIdx := strings.Index(rest, "] "); closeIdx > 0 {
-			rest = strings.TrimSpace(rest[closeIdx+2:])
-		}
-		if idx := strings.LastIndex(rest, " - "); idx > 0 {
-			return strings.TrimSpace(rest[:idx])
-		}
-		return strings.TrimSpace(rest)
-	}
-	return title
+	return req.HeartbeatID() == hb.ID().String()
 }
 
 // classifyHeartbeatRunError 对执行错误进行粗分类，方便前端快速过滤排障。

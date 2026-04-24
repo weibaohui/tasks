@@ -97,7 +97,7 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 
 		trigger := func() {
 			bgCtx := context.Background()
-			requirement, err := s.triggerService.TriggerWithSource(bgCtx, heartbeatID, HeartbeatTriggerSourceWebhook)
+			requirement, err := s.triggerService.TriggerWithSource(bgCtx, heartbeatID, HeartbeatTriggerSourceWebhook, eventLog.ID().String())
 			if err != nil {
 				log.Printf("[WEBHOOK] failed to trigger heartbeat %s: %v", heartbeatID, err)
 				return
@@ -119,6 +119,8 @@ func (s *GitHubWebhookService) HandleWebhookEvent(ctx context.Context, configID,
 				eventLog.ID(),
 				binding.HeartbeatID(),
 				requirementID,
+				"webhook",
+				eventLog.ID().String(),
 			)
 			if err != nil {
 				log.Printf("[WEBHOOK] failed to create triggered heartbeat record: %v", err)

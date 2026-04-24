@@ -383,11 +383,13 @@ func (id WebhookEventTriggeredHeartbeatID) String() string {
 }
 
 type WebhookEventTriggeredHeartbeat struct {
-	id              WebhookEventTriggeredHeartbeatID
+	id               WebhookEventTriggeredHeartbeatID
 	webhookEventLogID WebhookEventLogID
-	heartbeatID     HeartbeatID
-	requirementID   string
-	triggeredAt     time.Time
+	heartbeatID      HeartbeatID
+	requirementID    string
+	triggeredAt      time.Time
+	sourceType       string // 触发来源类型：manual/cron/webhook
+	sourceID         string // 触发来源ID：如果是webhook，存WebhookEventLogID
 }
 
 func NewWebhookEventTriggeredHeartbeat(
@@ -395,16 +397,20 @@ func NewWebhookEventTriggeredHeartbeat(
 	webhookEventLogID WebhookEventLogID,
 	heartbeatID HeartbeatID,
 	requirementID string,
+	sourceType string,
+	sourceID string,
 ) (*WebhookEventTriggeredHeartbeat, error) {
 	if id.String() == "" {
 		return nil, errors.New("webhook event triggered heartbeat id is required")
 	}
 	return &WebhookEventTriggeredHeartbeat{
-		id:              id,
+		id:               id,
 		webhookEventLogID: webhookEventLogID,
-		heartbeatID:     heartbeatID,
-		requirementID:   requirementID,
-		triggeredAt:     time.Now(),
+		heartbeatID:      heartbeatID,
+		requirementID:    requirementID,
+		triggeredAt:      time.Now(),
+		sourceType:       sourceType,
+		sourceID:         sourceID,
 	}, nil
 }
 
@@ -413,6 +419,8 @@ func (t *WebhookEventTriggeredHeartbeat) WebhookEventLogID() WebhookEventLogID {
 func (t *WebhookEventTriggeredHeartbeat) HeartbeatID() HeartbeatID             { return t.heartbeatID }
 func (t *WebhookEventTriggeredHeartbeat) RequirementID() string                 { return t.requirementID }
 func (t *WebhookEventTriggeredHeartbeat) TriggeredAt() time.Time                { return t.triggeredAt }
+func (t *WebhookEventTriggeredHeartbeat) SourceType() string                   { return t.sourceType }
+func (t *WebhookEventTriggeredHeartbeat) SourceID() string                     { return t.sourceID }
 
 type WebhookEventTriggeredHeartbeatSnapshot struct {
 	ID                WebhookEventTriggeredHeartbeatID
@@ -420,6 +428,8 @@ type WebhookEventTriggeredHeartbeatSnapshot struct {
 	HeartbeatID       HeartbeatID
 	RequirementID     string
 	TriggeredAt       time.Time
+	SourceType        string
+	SourceID          string
 }
 
 func (t *WebhookEventTriggeredHeartbeat) ToSnapshot() WebhookEventTriggeredHeartbeatSnapshot {
@@ -429,6 +439,8 @@ func (t *WebhookEventTriggeredHeartbeat) ToSnapshot() WebhookEventTriggeredHeart
 		HeartbeatID:      t.heartbeatID,
 		RequirementID:    t.requirementID,
 		TriggeredAt:      t.triggeredAt,
+		SourceType:       t.sourceType,
+		SourceID:         t.sourceID,
 	}
 }
 
@@ -438,4 +450,6 @@ func (t *WebhookEventTriggeredHeartbeat) FromSnapshot(s WebhookEventTriggeredHea
 	t.heartbeatID = s.HeartbeatID
 	t.requirementID = s.RequirementID
 	t.triggeredAt = s.TriggeredAt
+	t.sourceType = s.SourceType
+	t.sourceID = s.SourceID
 }

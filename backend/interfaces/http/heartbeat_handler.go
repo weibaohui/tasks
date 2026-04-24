@@ -133,7 +133,7 @@ func (h *HeartbeatHandler) TriggerHeartbeat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, HTTPError{Code: http.StatusInternalServerError, Message: "trigger service not available"})
 		return
 	}
-	if _, err := h.triggerService.TriggerWithSource(c.Request.Context(), id, application.HeartbeatTriggerSourceManual); err != nil {
+	if _, err := h.triggerService.TriggerWithSource(c.Request.Context(), id, application.HeartbeatTriggerSourceManual, ""); err != nil {
 		c.JSON(http.StatusBadRequest, HTTPError{Code: http.StatusBadRequest, Message: err.Error()})
 		return
 	}

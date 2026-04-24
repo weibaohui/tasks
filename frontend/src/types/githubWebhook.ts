@@ -17,8 +17,6 @@ export interface WebhookEventLog {
   headers: string;
   payload: string;
   status: 'received' | 'processed' | 'failed';
-  trigger_heartbeat_id: string;
-  requirement_id: string;
   error_message: string;
   received_at: number;
   triggered_heartbeats?: TriggeredHeartbeat[];
@@ -29,6 +27,8 @@ export interface TriggeredHeartbeat {
   heartbeat_id: string;
   requirement_id: string;
   triggered_at: number;
+  source_type: string;
+  source_id: string;
 }
 
 export interface WebhookHeartbeatBinding {

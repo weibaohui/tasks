@@ -517,9 +517,6 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
         if (triggered.length > 0) {
           return triggered.length;
         }
-        if (record.trigger_heartbeat_id) {
-          return '1';
-        }
         return '-';
       },
     },
@@ -561,29 +558,17 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
       render: (_, record) => {
         const triggered = record.triggered_heartbeats || [];
         const hasTriggeredHeartbeats = triggered.length > 0;
-        const hasOldTriggerId = !!record.trigger_heartbeat_id;
-        const canTrigger = hasTriggeredHeartbeats || hasOldTriggerId;
         const firstTriggered = hasTriggeredHeartbeats ? triggered[0] : null;
-        const requirementId = firstTriggered?.requirement_id || record.requirement_id;
 
         return (
           <Space size="small" wrap>
-            {canTrigger && (
+            {hasTriggeredHeartbeats && (
               <Button
                 type="link"
                 size="small"
                 onClick={() => handleViewTriggeredHeartbeats(triggered, record.received_at)}
               >
-                查看心跳({hasTriggeredHeartbeats ? triggered.length : 1})
-              </Button>
-            )}
-            {requirementId && (
-              <Button
-                type="link"
-                size="small"
-                onClick={() => handleViewTrace(requirementId)}
-              >
-                链路
+                查看心跳({triggered.length})
               </Button>
             )}
             {firstTriggered ? (
@@ -591,14 +576,6 @@ export const ProjectWebhookPage: React.FC<ProjectWebhookPageProps> = ({ selected
                 type="link"
                 size="small"
                 onClick={() => handleRetrigger(firstTriggered.heartbeat_id)}
-              >
-                重试
-              </Button>
-            ) : hasOldTriggerId ? (
-              <Button
-                type="link"
-                size="small"
-                onClick={() => handleRetrigger(record.trigger_heartbeat_id)}
               >
                 重试
               </Button>
