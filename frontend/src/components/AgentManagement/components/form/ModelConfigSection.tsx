@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Button, Card, Form, InputNumber, Select, Space, Tooltip } from 'antd';
-import { ThunderboltOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, InfoCircleOutlined, StopOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import type { Agent } from '../../../../types/agent';
 
@@ -76,19 +76,31 @@ export const ModelConfigCard: React.FC<ModelConfigCardProps> = ({
             />
           </Form.Item>
           <Form.Item label={<Space>模型 <Tooltip title="留空将自动匹配 Provider 默认模型"><InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} /></Tooltip></Space>} name="model">
-            <Select
-              showSearch
-              allowClear
-              options={modelOptions}
-              placeholder="自动匹配 (留空)"
-              notFoundContent="没有可选模型"
-              filterOption={(input, option) => {
-                const q = input.toLowerCase();
-                const v = String(option?.value || '').toLowerCase();
-                const l = String(option?.label || '').toLowerCase();
-                return v.includes(q) || l.includes(q);
-              }}
-            />
+            <Space.Compact style={{ width: '100%' }}>
+              <Select
+                style={{ flex: 1 }}
+                showSearch
+                allowClear
+                options={modelOptions}
+                placeholder="自动匹配 (留空)"
+                notFoundContent="没有可选模型"
+                filterOption={(input, option) => {
+                  const q = input.toLowerCase();
+                  const v = String(option?.value || '').toLowerCase();
+                  const l = String(option?.label || '').toLowerCase();
+                  return v.includes(q) || l.includes(q);
+                }}
+              />
+              <Tooltip title="清除模型选择">
+                <Button
+                  icon={<StopOutlined />}
+                  onClick={() => {
+                    form.setFieldsValue({ model: undefined });
+                  }}
+                  style={{ flexShrink: 0 }}
+                />
+              </Tooltip>
+            </Space.Compact>
           </Form.Item>
           <div style={{ display: 'grid', gridTemplateColumns: screens.xs ? '1fr' : '1fr 1fr', gap: 12 }}>
             <Form.Item label="Max Tokens" name="max_tokens">
