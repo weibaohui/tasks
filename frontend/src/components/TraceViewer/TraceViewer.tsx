@@ -311,7 +311,7 @@ export const TraceViewer: React.FC<TraceViewerProps> = ({
         title={`对话详情 - ${traceId?.slice(0, 12) || ''}...`}
         open={chatVisible}
         onClose={() => setChatVisible(false)}
-        width="60%"
+        width="90%"
         styles={{
           body: {
             padding: '16px 24px',
