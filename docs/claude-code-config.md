@@ -25,7 +25,7 @@
 ### 1.3 Tools - 可用工具
 - **类型**: `[]string` 或 `ToolsPreset`
 - **说明**: 直接设置可用的工具列表，或使用预设配置
-- **CLI 参数**: `WithTools(tools ...string)` 或 `WithToolsPreset(preset string)`
+- **CLI 参数**: `--tools` 或 `--tools-preset`
 - **预设值**: `"claude_code"` - 启用 Claude Code 预设工具
 - **示例**: `WithTools("Read", "Write", "Edit", "Bash", "Glob", "Grep")`
 
@@ -36,30 +36,30 @@
 ### 2.1 Model - 模型
 - **类型**: `string`
 - **说明**: 设置要使用的 AI 模型
-- **CLI 参数**: `WithModel(model string)`
+- **CLI 参数**: `--model`
 - **当前值**: `"MiniMax-M2.7-highspeed"`
 - **示例**: `WithModel("MiniMax-M2.7-highspeed")`
 
 ### 2.2 FallbackModel - 备用模型
 - **类型**: `string`
 - **说明**: 当主模型不可用时使用的备用模型
-- **CLI 参数**: `WithFallbackModel(model string)`
+- **CLI 参数**: `--fallback-model`
 
 ### 2.3 SystemPrompt - 系统提示词
 - **类型**: `string`
 - **说明**: 设置系统级提示词，定义 Agent 的行为和角色
-- **CLI 参数**: `WithSystemPrompt(prompt string)`
+- **CLI 参数**: `--system-prompt`
 
 ### 2.4 AppendSystemPrompt - 追加系统提示词
 - **类型**: `string`
 - **说明**: 在现有系统提示词后追加内容
-- **CLI 参数**: `WithAppendSystemPrompt(prompt string)`
+- **CLI 参数**: `--append-system-prompt`
 
 ### 2.5 MaxThinkingTokens - 最大思考 Token 数
 - **类型**: `int`
 - **说明**: 允许模型用于思考的最大 Token 数量
 - **默认值**: `8000`
-- **CLI 参数**: `WithMaxThinkingTokens(tokens int)`
+- **CLI 参数**: `--max-thinking-tokens`
 - **示例**: `WithMaxThinkingTokens(10000)`
 
 ---
@@ -69,7 +69,7 @@
 ### 3.1 PermissionMode - 权限模式
 - **类型**: `PermissionMode` (枚举)
 - **说明**: 控制工具调用的权限处理方式
-- **CLI 参数**: `WithPermissionMode(mode PermissionMode)`
+- **CLI 参数**: `--permission-mode`
 - **可选值**:
   - `PermissionModeDefault` - 标准权限处理（默认）
   - `PermissionModeAcceptEdits` - 自动接受所有编辑操作
@@ -79,7 +79,7 @@
 ### 3.2 CanUseTool - 权限回调
 - **类型**: `CanUseToolCallback`
 - **说明**: 动态控制工具使用权限的回调函数
-- **CLI 参数**: `WithCanUseTool(callback CanUseToolCallback)`
+- **CLI 参数**: `--can-use-tool`
 - **返回**: `PermissionResultAllow` 或 `PermissionResultDeny`
 - **使用场景**:
   - 基于内容过滤（如检查文件路径）
@@ -93,24 +93,24 @@
 ### 4.1 Resume - 恢复会话
 - **类型**: `string` (Session ID)
 - **说明**: 通过 Session ID 恢复之前的会话上下文
-- **CLI 参数**: `WithResume(sessionID string)`
+- **CLI 参数**: `--resume`
 - **用途**: 实现多轮对话支持
 
 ### 4.2 MaxTurns - 最大对话轮次
 - **类型**: `int`
 - **说明**: 限制会话中的最大交互次数
-- **CLI 参数**: `WithMaxTurns(turns int)`
+- **CLI 参数**: `--max-turns`
 - **示例**: `WithMaxTurns(10)`
 
 ### 4.3 ContinueConversation - 继续会话
 - **类型**: `bool`
 - **说明**: 是否启用会话继续功能
-- **CLI 参数**: `WithContinueConversation(continueConversation bool)`
+- **CLI 参数**: `--continue-conversation`
 
 ### 4.4 ForkSession - Fork 会话
 - **类型**: `bool`
 - **说明**: 恢复会话时是否 fork 到新 Session ID
-- **CLI 参数**: `WithForkSession(fork bool)`
+- **CLI 参数**: `--fork-session`
 
 ---
 
@@ -119,18 +119,18 @@
 ### 5.1 Cwd - 工作目录
 - **类型**: `string`
 - **说明**: 设置 Claude Code 执行的工作目录
-- **CLI 参数**: `WithCwd(cwd string)`
+- **CLI 参数**: `--cwd`
 - **示例**: `WithCwd("/path/to/project")`
 
 ### 5.2 AddDirs - 添加目录
 - **类型**: `[]string`
 - **说明**: 将指定目录添加到上下文
-- **CLI 参数**: `WithAddDirs(dirs ...string)`
+- **CLI 参数**: `--add-dirs`
 
 ### 5.3 FileCheckpointing - 文件检查点
 - **类型**: `bool`
 - **说明**: 启用文件变更跟踪，支持回滚到之前状态
-- **CLI 参数**: `WithFileCheckpointing()` 或 `WithEnableFileCheckpointing(enable bool)`
+- **CLI 参数**: `--file-checkpointing` 或 `--enable-file-checkpointing`
 - **用途**: 撤销文件修改、文件历史管理
 
 ---
@@ -140,7 +140,7 @@
 ### 6.1 McpServers - MCP 服务器配置
 - **类型**: `map[string]McpServerConfig`
 - **说明**: 配置 MCP 服务器以扩展工具能力
-- **CLI 参数**: `WithMcpServers(servers map[string]McpServerConfig)`
+- **CLI 参数**: `--mcp-servers`
 - **服务器类型**:
   - `McpServerTypeStdio` - 标准输入/输出模式
   - `McpServerTypeSSE` - Server-Sent Events 模式
@@ -150,7 +150,7 @@
 ### 6.2 SdkMcpServer - SDK 内置 MCP 服务器
 - **类型**: `McpSdkServerConfig`
 - **说明**: 在进程中运行的 MCP 服务器
-- **CLI 参数**: `WithSdkMcpServer(name string, server *McpSdkServerConfig)`
+- **CLI 参数**: `--sdk-mcp-server`
 
 ---
 
@@ -159,24 +159,24 @@
 ### 7.1 SandboxEnabled - 启用沙箱
 - **类型**: `bool`
 - **说明**: 启用/禁用 Bash 命令沙箱隔离
-- **CLI 参数**: `WithSandboxEnabled(enabled bool)`
+- **CLI 参数**: `--sandbox-enabled`
 - **注意**: 仅支持 Linux 和 macOS
 
 ### 7.2 AutoAllowBashIfSandboxed - 沙箱模式下自动批准 Bash
 - **类型**: `bool`
 - **说明**: 沙箱模式下自动批准 Bash 命令执行
-- **CLI 参数**: `WithAutoAllowBashIfSandboxed(autoAllow bool)`
+- **CLI 参数**: `--auto-allow-bash-if-sandboxed`
 
 ### 7.3 ExcludedCommands - 排除命令
 - **类型**: `[]string`
 - **说明**: 始终绕过沙箱的命令列表
-- **CLI 参数**: `WithSandboxExcludedCommands(commands ...string)`
+- **CLI 参数**: `--sandbox-excluded-commands`
 - **示例**: `WithSandboxExcludedCommands("git", "docker", "npm")`
 
 ### 7.4 SandboxNetwork - 沙箱网络配置
 - **类型**: `SandboxNetworkConfig`
 - **说明**: 配置沙箱内的网络访问权限
-- **CLI 参数**: `WithSandboxNetwork(network *SandboxNetworkConfig)`
+- **CLI 参数**: `--sandbox-network`
 - **子配置**:
   - `AllowUnixSockets` - 允许的 Unix Socket 路径
   - `AllowAllUnixSockets` - 允许所有 Unix Socket
@@ -198,12 +198,12 @@
 ### 8.1 Plugins - 插件列表
 - **类型**: `[]SdkPluginConfig`
 - **说明**: 配置要加载的插件
-- **CLI 参数**: `WithPlugins(plugins []SdkPluginConfig)`
+- **CLI 参数**: `--plugins`
 
 ### 8.2 LocalPlugin - 本地插件
 - **类型**: `string` (路径)
 - **说明**: 从本地路径加载插件
-- **CLI 参数**: `WithLocalPlugin(path string)`
+- **CLI 参数**: `--local-plugin`
 
 ---
 
@@ -212,13 +212,13 @@
 ### 9.1 JSONSchema - JSON Schema 约束
 - **类型**: `map[string]any`
 - **说明**: 约束 Claude 响应符合指定 JSON Schema
-- **CLI 参数**: `WithJSONSchema(schema map[string]any)`
+- **CLI 参数**: `--json-schema`
 - **用途**: 提取结构化数据、类型安全响应
 
 ### 9.2 OutputFormat - 输出格式
 - **类型**: `OutputFormat`
 - **说明**: 设置响应输出格式
-- **CLI 参数**: `WithOutputFormat(format *OutputFormat)`
+- **CLI 参数**: `--output-format`
 
 ---
 
@@ -227,17 +227,17 @@
 ### 10.1 PreToolUse - 工具执行前钩子
 - **触发时机**: 工具执行前
 - **用途**: 阻止危险命令、修改输入参数、记录日志
-- **CLI 参数**: `WithPreToolUseHook(matcher string, callback HookCallback)`
+- **CLI 参数**: `--pre-tool-use-hook`
 
 ### 10.2 PostToolUse - 工具执行后钩子
 - **触发时机**: 工具执行后
 - **用途**: 添加上下文、修改输出、审计追踪
-- **CLI 参数**: `WithPostToolUseHook(matcher string, callback HookCallback)`
+- **CLI 参数**: `--post-tool-use-hook`
 
 ### 10.3 UserPromptSubmit - 用户提交提示时
 - **触发时机**: 用户提交提示词时
 - **用途**: 提示词验证、上下文注入
-- **CLI 参数**: `WithHook(HookEventUserPromptSubmit, matcher, callback)`
+- **CLI 参数**: `--hook`
 
 ### 10.4 Stop - 会话停止时
 - **触发时机**: 会话结束前
@@ -260,7 +260,7 @@
 ### 11.1 Betas - Beta 特性列表
 - **类型**: `[]SdkBeta`
 - **说明**: 启用实验性功能
-- **CLI 参数**: `WithBetas(betas ...SdkBeta)`
+- **CLI 参数**: `--betas`
 - **可用值**:
   - `SdkBetaContext1M` - 启用 1M 上下文窗口 (`"context-1m-2025-08-07"`)
 
@@ -271,49 +271,49 @@
 ### 12.1 MaxBudgetUSD - 最大预算
 - **类型**: `float64`
 - **说明**: API 使用的最大预算 (USD)
-- **CLI 参数**: `WithMaxBudgetUSD(budget float64)`
+- **CLI 参数**: `--max-budget-usd`
 
 ### 12.2 IncludePartialMessages - 部分消息流
 - **类型**: `bool`
 - **说明**: 启用流式部分消息更新
-- **CLI 参数**: `WithIncludePartialMessages(include bool)`
+- **CLI 参数**: `--include-partial-messages`
 
 ### 12.3 DebugWriter - 调试输出
 - **类型**: `io.Writer`
 - **说明**: CLI 调试输出目标
-- **CLI 参数**: `WithDebugWriter(w io.Writer)`
+- **CLI 参数**: `--debug-writer`
 - **常用值**: `os.Stderr`, `io.Discard`
 
 ### 12.4 StderrCallback - 标准错误回调
 - **类型**: `func(string)`
 - **说明**: 接收 CLI stderr 输出
-- **CLI 参数**: `WithStderrCallback(callback func(string))`
+- **CLI 参数**: `--stderr-callback`
 
 ### 12.5 CLIPath - CLI 路径
 - **类型**: `string`
 - **说明**: 自定义 Claude Code CLI 路径
-- **CLI 参数**: `WithCLIPath(path string)`
+- **CLI 参数**: `--cli-path`
 
 ### 12.6 Env - 环境变量
 - **类型**: `map[string]string`
 - **说明**: 为子进程设置环境变量
-- **CLI 参数**: `WithEnv(env map[string]string)`
+- **CLI 参数**: `--env`
 - **示例**: `WithEnv(map[string]string{"ANTHROPIC_API_KEY": "sk-xxx"})`
 
 ### 12.7 ExtraArgs - 额外 CLI 参数
 - **类型**: `map[string]*string`
 - **说明**: 传递额外 CLI 参数
-- **CLI 参数**: `WithExtraArgs(args map[string]*string)`
+- **CLI 参数**: `--extra-args`
 
 ### 12.8 Settings - 设置文件
 - **类型**: `string`
 - **说明**: 设置文件路径或 JSON 字符串
-- **CLI 参数**: `WithSettings(settings string)`
+- **CLI 参数**: `--settings`
 
 ### 12.9 SettingSources - 设置来源
 - **类型**: `[]SettingSource`
 - **说明**: 指定加载哪些设置源
-- **CLI 参数**: `WithSettingSources(sources ...SettingSource)`
+- **CLI 参数**: `--setting-sources`
 - **可用值**: `SettingSourceUser`, `SettingSourceProject`, `SettingSourceLocal`
 
 ---
